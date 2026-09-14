@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "study_id": "siglip2-model-card-zsic-001",
+  "evidence_class": "computational_reproduction",
+  "disclosure_mode": "overt_public_rep",
+  "claim": {
+    "source": "https://huggingface.co/google/siglip2-base-patch16-224",
+    "scope": "engineering_example",
+    "statement": "Reproduce the public model-card zero-shot image-classification usage surface for google/siglip2-base-patch16-224 on the documented parrot image and candidate labels animals, humans, and landscape.",
+    "limitations": [
+      "This is an engineering reproduction specimen, not a reproduction of the SigLIP 2 paper's benchmark tables.",
+      "The model card does not publish a required numeric score for this example; the study therefore records scores and uses the semantically expected top-label condition only as a bounded harness check.",
+      "The upstream image URL is mutable; the runtime must record the exact acquired-byte SHA-256 and realized-input SHA-256. A future Foundry benchmark/stimulus registration may pin the image more strongly."
+    ]
+  },
+  "model": {
+    "logical_id": "embed/siglip2/base-patch16-224",
+    "foundry_digest": "sha256:c93e953d44105c8cd59be4b893acee43858e9fcb8b4deb20f83535a2165c1c3d",
+    "upstream_repository": "google/siglip2-base-patch16-224",
+    "upstream_revision": "75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2"
+  },
+  "stimuli": [
+    {
+      "stimulus_id": "hf-documentation-images/parrots.png",
+      "source": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/hub/parrots.png",
+      "expected_sha256": null
+    }
+  ],
+  "dimensions": ["checkpoint", "implementation", "harness", "preprocessing", "metric"],
+  "acceptance": {
+    "execution_conditions": [
+      "The exact declared model revision loads without trust_remote_code.",
+      "Image and text logits are finite.",
+      "The acquired image bytes and realized model input are SHA-256 identified.",
+      "Selected vision-layer activation summaries are bounded and finite.",
+      "A result record separates execution disposition from scientific disposition."
+    ],
+    "scientific_conditions": [
+      "For the documented parrot image and labels, animals is the highest-scoring candidate label.",
+      "No claim beyond the public model-card usage example is inferred from this specimen."
+    ]
+  }
+}
