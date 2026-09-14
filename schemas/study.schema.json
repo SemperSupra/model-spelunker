@@ -48,12 +48,27 @@
     "model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["logical_id", "upstream_repository", "upstream_revision"],
+      "required": ["logical_id", "upstream_repository", "upstream_revision", "files"],
       "properties": {
         "logical_id": {"type": "string"},
         "foundry_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "foundry_evidence": {"type": "string"},
         "upstream_repository": {"type": "string"},
-        "upstream_revision": {"type": "string"}
+        "upstream_revision": {"type": "string"},
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "size_bytes": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
       }
     },
     "stimuli": {
