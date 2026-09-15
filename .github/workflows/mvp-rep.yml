@@ -1,4 +1,4 @@
-name: Model Spelunker Activation POKE
+name: Model Spelunker Activation Patch
 
 on:
   push:
@@ -7,7 +7,8 @@ on:
     paths:
       - "experiments/mvp/run_rep.py"
       - "experiments/mvp/run_activation_poke.py"
-      - "experiments/mvp/validate_activation_poke.py"
+      - "experiments/mvp/run_activation_patch.py"
+      - "experiments/mvp/validate_activation_patch.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -53,22 +54,22 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run activation POKE corpus
+      - name: Run direct activation patch corpus
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_activation_poke.py \
-            --output out/activation-poke.json \
+          /usr/bin/time -v python3 experiments/mvp/run_activation_patch.py \
+            --output out/activation-patch.json \
             2>&1 | tee out-run.log
 
       - name: Validate causal evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_activation_poke.py out/activation-poke.json \
+          python3 experiments/mvp/validate_activation_patch.py out/activation-patch.json \
             | tee out-validation.log
 
-      - name: Summarize intervention result
+      - name: Summarize patch result
         shell: bash
         run: |
           set -euo pipefail
@@ -77,7 +78,7 @@ jobs:
           import os
           from pathlib import Path
 
-          b = json.loads(Path("out/activation-poke.json").read_text())
+          b = json.loads(Path("out/activation-patch.json").read_text())
           variants = b["derived_metrics"]["aggregate_variants"]
           rows = []
           for name, m in sorted(variants.items()):
@@ -87,23 +88,29 @@ jobs:
                   "hidden_progress": m["mean_hidden_progress_to_start"],
                   "top1": m["top1_correct_rate"],
               })
-          best_surface = max(rows, key=lambda x: x["surface_progress"])
-          best_hidden = max(rows, key=lambda x: x["hidden_progress"])
-          random_rows = [x for x in rows if "random-matched" in x["variant"]]
+          direct = [x for x in rows if x["variant"].endswith(":direct")]
+          random = [x for x in rows if x["variant"].endswith(":random")]
+          best_direct_surface = max(direct, key=lambda x: x["surface_progress"])
+          best_direct_hidden = max(direct, key=lambda x: x["hidden_progress"])
+          best_random_surface = max(random, key=lambda x: x["surface_progress"])
           summary = {
               "run_id": b["provenance"]["run_id"],
               "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "cost": b["cost"],
-              "best_surface_progress": best_surface,
-              "best_hidden_progress": best_hidden,
-              "matched_random_controls": random_rows,
+              "self_patch_max_surface_logprob_delta": b["derived_metrics"]["self_patch_max_surface_logprob_delta"],
+              "self_patch_max_final_hidden_cosine_distance": b["derived_metrics"]["self_patch_max_final_hidden_cosine_distance"],
+              "best_direct_surface": best_direct_surface,
+              "best_direct_hidden": best_direct_hidden,
+              "best_random_surface": best_random_surface,
               "variants": rows,
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Activation POKE causal rep\n\n")
-              f.write(f"- best candidate-surface progress toward actual start-token state: `{best_surface['variant']}` = `{best_surface['surface_progress']:.3f}`\n")
-              f.write(f"- best final-hidden progress toward actual start-token state: `{best_hidden['variant']}` = `{best_hidden['hidden_progress']:.3f}`\n\n")
+              f.write("## Direct activation patch causal rep\n\n")
+              f.write(f"- best direct candidate-surface progress: `{best_direct_surface['variant']}` = `{best_direct_surface['surface_progress']:.3f}`\n")
+              f.write(f"- best direct final-hidden progress: `{best_direct_hidden['variant']}` = `{best_direct_hidden['hidden_progress']:.3f}`\n")
+              f.write(f"- best matched-random candidate-surface progress: `{best_random_surface['variant']}` = `{best_random_surface['surface_progress']:.3f}`\n")
+              f.write(f"- max self-patch score delta: `{summary['self_patch_max_surface_logprob_delta']:.3e}`\n\n")
               f.write("| Variant | Mean surface progress | Mean hidden progress | Top-1 correct rate |\n")
               f.write("|---|---:|---:|---:|\n")
               for row in rows:
@@ -114,9 +121,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-activation-poke-${{ github.run_id }}
+          name: model-spelunker-activation-patch-${{ github.run_id }}
           path: |
-            out/activation-poke.json
+            out/activation-patch.json
             out-summary.json
             out-validation.log
             out-run.log
