@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "corpus_id": "protocol-localization-v2",
+  "tasks": [
+    {"task_id": "arith-a", "expected_candidate": "A", "user": "Which answer is correct? 17 + 8 = ? A) 25 B) 26. Answer only A or B."},
+    {"task_id": "arith-b", "expected_candidate": "B", "user": "Which answer is correct? 9 x 6 = ? A) 45 B) 54. Answer only A or B."},
+    {"task_id": "factual-b", "expected_candidate": "B", "user": "What is the capital of France? A) Berlin B) Paris. Answer only A or B."},
+    {"task_id": "logic-a", "expected_candidate": "A", "user": "All glips are zorks. Luma is a glip. Which follows? A) Luma is a zork B) Luma is not a zork. Answer only A or B."},
+    {"task_id": "decimal-b", "expected_candidate": "B", "user": "Which number is larger? A) 0.65 B) 0.70. Answer only A or B."},
+    {"task_id": "symbolic-a", "expected_candidate": "A", "user": "A sequence is AB, AABB, AAABBB. Which is the natural next item? A) AAAABBBB B) AABBBB. Answer only A or B."}
+  ]
+}
