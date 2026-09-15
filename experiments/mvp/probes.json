@@ -1,72 +1,104 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "probes": [
     {
-      "probe_id": "protocol-arithmetic-001",
+      "probe_id": "protocol-arithmetic-a",
       "contrast_id": "native-vs-generic",
+      "expected_candidate": "A",
       "candidates": ["A", "B"],
       "conditions": [
-        {
-          "condition_id": "native",
-          "render": "native",
-          "user": "Which answer is correct? 17 + 8 = ? A) 25 B) 26. Answer only A or B."
-        },
-        {
-          "condition_id": "generic",
-          "render": "generic",
-          "user": "Which answer is correct? 17 + 8 = ? A) 25 B) 26. Answer only A or B."
-        }
+        {"condition_id": "native", "render": "native", "user": "Which answer is correct? 17 + 8 = ? A) 25 B) 26. Answer only A or B."},
+        {"condition_id": "generic", "render": "generic", "user": "Which answer is correct? 17 + 8 = ? A) 25 B) 26. Answer only A or B."}
       ]
     },
     {
-      "probe_id": "decomposition-001",
+      "probe_id": "protocol-arithmetic-b",
+      "contrast_id": "native-vs-generic",
+      "expected_candidate": "B",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {"condition_id": "native", "render": "native", "user": "Which answer is correct? 9 x 6 = ? A) 45 B) 54. Answer only A or B."},
+        {"condition_id": "generic", "render": "generic", "user": "Which answer is correct? 9 x 6 = ? A) 45 B) 54. Answer only A or B."}
+      ]
+    },
+    {
+      "probe_id": "protocol-factual-b",
+      "contrast_id": "native-vs-generic",
+      "expected_candidate": "B",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {"condition_id": "native", "render": "native", "user": "What is the capital of France? A) Berlin B) Paris. Answer only A or B."},
+        {"condition_id": "generic", "render": "generic", "user": "What is the capital of France? A) Berlin B) Paris. Answer only A or B."}
+      ]
+    },
+    {
+      "probe_id": "protocol-logic-a",
+      "contrast_id": "native-vs-generic",
+      "expected_candidate": "A",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {"condition_id": "native", "render": "native", "user": "All glips are zorks. Luma is a glip. Which follows? A) Luma is a zork B) Luma is not a zork. Answer only A or B."},
+        {"condition_id": "generic", "render": "generic", "user": "All glips are zorks. Luma is a glip. Which follows? A) Luma is a zork B) Luma is not a zork. Answer only A or B."}
+      ]
+    },
+    {
+      "probe_id": "protocol-decimal-b",
+      "contrast_id": "native-vs-generic",
+      "expected_candidate": "B",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {"condition_id": "native", "render": "native", "user": "Which number is larger? A) 0.65 B) 0.70. Answer only A or B."},
+        {"condition_id": "generic", "render": "generic", "user": "Which number is larger? A) 0.65 B) 0.70. Answer only A or B."}
+      ]
+    },
+    {
+      "probe_id": "protocol-symbolic-a",
+      "contrast_id": "native-vs-generic",
+      "expected_candidate": "A",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {"condition_id": "native", "render": "native", "user": "A sequence is AB, AABB, AAABBB. Which is the natural next item? A) AAAABBBB B) AABBBB. Answer only A or B."},
+        {"condition_id": "generic", "render": "generic", "user": "A sequence is AB, AABB, AAABBB. Which is the natural next item? A) AAAABBBB B) AABBBB. Answer only A or B."}
+      ]
+    },
+    {
+      "probe_id": "decomposition-a",
       "contrast_id": "direct-vs-decomposed",
+      "expected_candidate": "A",
       "candidates": ["A", "B"],
       "conditions": [
-        {
-          "condition_id": "direct",
-          "render": "native",
-          "user": "A machine makes 7 parts every 3 minutes. At the same constant rate, how many parts does it make in 12 minutes? A) 28 B) 21. Answer only A or B."
-        },
-        {
-          "condition_id": "decomposed",
-          "render": "native",
-          "user": "Solve the rate problem by first determining how many 3-minute intervals fit in 12 minutes, then multiply. A machine makes 7 parts every 3 minutes. How many parts in 12 minutes? A) 28 B) 21. Answer only A or B."
-        }
+        {"condition_id": "direct", "render": "native", "user": "A machine makes 7 parts every 3 minutes. At the same rate, how many parts in 12 minutes? A) 28 B) 21. Answer only A or B."},
+        {"condition_id": "decomposed", "render": "native", "user": "First determine how many 3-minute intervals fit in 12 minutes, then multiply by 7. How many parts are made? A) 28 B) 21. Answer only A or B."}
       ]
     },
     {
-      "probe_id": "paraphrase-001",
-      "contrast_id": "semantic-paraphrase",
+      "probe_id": "decomposition-b",
+      "contrast_id": "direct-vs-decomposed",
+      "expected_candidate": "B",
       "candidates": ["A", "B"],
       "conditions": [
-        {
-          "condition_id": "wording-a",
-          "render": "native",
-          "user": "Which item is heavier? A) one kilogram of iron B) one kilogram of feathers. Answer only A or B."
-        },
-        {
-          "condition_id": "wording-b",
-          "render": "native",
-          "user": "Choose the heavier quantity: A) 1 kg iron B) 1 kg feathers. Answer only A or B."
-        }
+        {"condition_id": "direct", "render": "native", "user": "Three boxes hold 5 items each. How many items total? A) 8 B) 15. Answer only A or B."},
+        {"condition_id": "decomposed", "render": "native", "user": "Compute the total by multiplying the number of boxes by the items per box. Three boxes hold 5 items each. A) 8 B) 15. Answer only A or B."}
       ]
     },
     {
-      "probe_id": "null-control-001",
+      "probe_id": "null-format-a",
       "contrast_id": "format-null-control",
+      "expected_candidate": "A",
       "candidates": ["A", "B"],
       "conditions": [
-        {
-          "condition_id": "base",
-          "render": "native",
-          "user": "Which number is larger? A) 41 B) 14. Answer only A or B."
-        },
-        {
-          "condition_id": "spacing",
-          "render": "native",
-          "user": "Which number is larger?  A) 41  B) 14.  Answer only A or B."
-        }
+        {"condition_id": "base", "render": "native", "user": "Which number is larger? A) 41 B) 14. Answer only A or B."},
+        {"condition_id": "spacing", "render": "native", "user": "Which number is larger?  A) 41  B) 14.  Answer only A or B."}
+      ]
+    },
+    {
+      "probe_id": "null-format-b",
+      "contrast_id": "format-null-control",
+      "expected_candidate": "B",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {"condition_id": "base", "render": "native", "user": "Which number is smaller? A) 31 B) 13. Answer only A or B."},
+        {"condition_id": "spacing", "render": "native", "user": "Which number is smaller?  A) 31  B) 13.  Answer only A or B."}
       ]
     }
   ]
