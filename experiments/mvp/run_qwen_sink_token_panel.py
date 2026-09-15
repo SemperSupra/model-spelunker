@@ -12,6 +12,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import run_cross_model_portability as portable
 import run_rep as base
@@ -61,6 +62,43 @@ def _qwen_snapshot_download(*args, **kwargs):
 panel.snapshot_download = _qwen_snapshot_download
 
 
+def _offset_prefix_region(tokenizer: Any, user: str, prompt: str) -> list[int]:
+    """Return token positions strictly before user content using character offsets.
+
+    Tokenizing `user` in isolation is not a portable alignment strategy: BPE
+    tokenization may change at whitespace/prefix boundaries. Fast-tokenizer
+    offset mappings instead align the actual full-prompt tokenization back to
+    the exact user-character span. Added special tokens with zero-width offsets
+    are naturally included when they occur before the first overlapping user
+    token because the returned region is `range(first_user_token)`.
+    """
+    if not getattr(tokenizer, "is_fast", False):
+        raise RuntimeError("offset-based prefix localization requires a fast tokenizer")
+    char_start = prompt.find(user)
+    if char_start < 0:
+        raise RuntimeError("user text not found in rendered prompt")
+    char_end = char_start + len(user)
+    encoded = tokenizer(prompt, add_special_tokens=True, return_offsets_mapping=True)
+    offsets = encoded["offset_mapping"]
+    user_positions: list[int] = []
+    for i, pair in enumerate(offsets):
+        start, end = int(pair[0]), int(pair[1])
+        if end <= start:
+            continue
+        if end > char_start and start < char_end:
+            user_positions.append(i)
+    if not user_positions:
+        raise RuntimeError(
+            f"no full-prompt token overlaps user character span {char_start}:{char_end}"
+        )
+    first_user_token = min(user_positions)
+    return list(range(first_user_token))
+
+# Evidence-earned portability correction: use the actual full-prompt token
+# offsets rather than requiring an isolated user tokenization subsequence.
+panel.prefix_region = _offset_prefix_region
+
+
 def _output_path(argv: list[str]) -> Path:
     if "--output" in argv:
         i = argv.index("--output")
@@ -87,6 +125,7 @@ def main() -> int:
     bundle["known_assumptions"] = [
         "Eligible panel strings that tokenize to one token are comparable under the common one-token-plus-newline layout.",
         "Qwen L11H13 prefix attention is used only as the independently localized sink-engagement sanity check, not as a capability metric.",
+        "Prefix/user region alignment uses fast-tokenizer full-prompt character offsets rather than isolated-substring token IDs."
     ]
 
     for split in ("calibration_tasks", "holdout_tasks"):
