@@ -1,4 +1,4 @@
-name: Model Spelunker Token-Aligned Patch
+name: Model Spelunker Attention Flow
 
 on:
   push:
@@ -8,7 +8,8 @@ on:
       - "experiments/mvp/run_rep.py"
       - "experiments/mvp/run_activation_poke.py"
       - "experiments/mvp/run_aligned_activation_patch.py"
-      - "experiments/mvp/validate_aligned_activation_patch.py"
+      - "experiments/mvp/run_attention_flow.py"
+      - "experiments/mvp/validate_attention_flow.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -54,22 +55,22 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run token-aligned activation patch corpus
+      - name: Run attention-flow localization corpus
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_aligned_activation_patch.py \
-            --output out/aligned-activation-patch.json \
+          /usr/bin/time -v python3 experiments/mvp/run_attention_flow.py \
+            --output out/attention-flow.json \
             2>&1 | tee out-run.log
 
-      - name: Validate causal evidence
+      - name: Validate relational evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_aligned_activation_patch.py out/aligned-activation-patch.json \
+          python3 experiments/mvp/validate_attention_flow.py out/attention-flow.json \
             | tee out-validation.log
 
-      - name: Summarize localization result
+      - name: Summarize information-flow result
         shell: bash
         run: |
           set -euo pipefail
@@ -78,52 +79,38 @@ jobs:
           import os
           from pathlib import Path
 
-          b = json.loads(Path("out/aligned-activation-patch.json").read_text())
-          variants = b["derived_metrics"]["aggregate_variants"]
-          rows = []
-          for name, m in sorted(variants.items()):
-              rows.append({
-                  "variant": name,
-                  "surface_progress": m["mean_surface_progress_to_start"],
-                  "hidden_progress": m["mean_hidden_progress_to_start"],
-                  "top1": m["top1_correct_rate"],
-              })
-          direct = [x for x in rows if x["variant"].endswith(":direct")]
-          random = [x for x in rows if x["variant"].endswith(":random")]
-          best_direct_surface = max(direct, key=lambda x: x["surface_progress"])
-          best_direct_hidden = max(direct, key=lambda x: x["hidden_progress"])
-          best_random_surface = max(random, key=lambda x: x["surface_progress"])
+          b = json.loads(Path("out/attention-flow.json").read_text())
+          d = b["derived_metrics"]
           summary = {
               "run_id": b["provenance"]["run_id"],
               "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "cost": b["cost"],
-              "self_patch_max_surface_logprob_delta": b["derived_metrics"]["self_patch_max_surface_logprob_delta"],
-              "self_patch_max_final_hidden_cosine_distance": b["derived_metrics"]["self_patch_max_final_hidden_cosine_distance"],
-              "best_direct_surface": best_direct_surface,
-              "best_direct_hidden": best_direct_hidden,
-              "best_random_surface": best_random_surface,
-              "variants": rows,
+              "top_user_attention_change_heads": d["top_user_attention_change_heads"],
+              "top_aligned_attention_tv_heads": d["top_aligned_attention_tv_heads"],
+              "top_user_hidden_divergence_layers": d["top_user_hidden_divergence_layers"],
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Token-aligned activation localization\n\n")
-              f.write(f"- best direct candidate-surface progress: `{best_direct_surface['variant']}` = `{best_direct_surface['surface_progress']:.3f}`\n")
-              f.write(f"- best direct final-hidden progress: `{best_direct_hidden['variant']}` = `{best_direct_hidden['hidden_progress']:.3f}`\n")
-              f.write(f"- best matched-random candidate-surface progress: `{best_random_surface['variant']}` = `{best_random_surface['surface_progress']:.3f}`\n")
-              f.write(f"- max self-patch score delta: `{summary['self_patch_max_surface_logprob_delta']:.3e}`\n\n")
-              f.write("| Variant | Mean surface progress | Mean hidden progress | Top-1 correct rate |\n")
-              f.write("|---|---:|---:|---:|\n")
-              for row in rows:
-                  f.write(f"| {row['variant']} | {row['surface_progress']:.3f} | {row['hidden_progress']:.3f} | {row['top1']:.3f} |\n")
+              f.write("## Attention / information-flow localization\n\n")
+              f.write("### Top user-attention changes\n\n")
+              f.write("| Layer | Head | mean |Δ user mass| | aligned TV |\n")
+              f.write("|---:|---:|---:|---:|\n")
+              for row in d["top_user_attention_change_heads"][:10]:
+                  f.write(f"| {row['layer']} | {row['head']} | {row['mean_abs_user_mass_delta']:.4f} | {row['mean_aligned_normalized_tv']:.4f} |\n")
+              f.write("\n### Top user-content residual divergence\n\n")
+              f.write("| Layer | User cosine distance | Boundary cosine distance |\n")
+              f.write("|---:|---:|---:|\n")
+              for row in d["top_user_hidden_divergence_layers"]:
+                  f.write(f"| {row['layer']} | {row['mean_user_hidden_cosine_distance']:.4f} | {row['mean_boundary_hidden_cosine_distance']:.4f} |\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-aligned-patch-${{ github.run_id }}
+          name: model-spelunker-attention-flow-${{ github.run_id }}
           path: |
-            out/aligned-activation-patch.json
+            out/attention-flow.json
             out-summary.json
             out-validation.log
             out-run.log
