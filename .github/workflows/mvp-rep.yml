@@ -1,4 +1,4 @@
-name: Model Spelunker Protocol Localization
+name: Model Spelunker Label Permutation
 
 on:
   push:
@@ -7,9 +7,9 @@ on:
     paths:
       - "experiments/mvp/run_rep.py"
       - "experiments/mvp/run_protocol_localization.py"
-      - "experiments/mvp/protocol-localization-spec.json"
+      - "experiments/mvp/run_label_permutation.py"
+      - "experiments/mvp/label-permutation-spec.json"
       - "experiments/mvp/validate_rep.py"
-      - "experiments/mvp/compare_equivalence.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -55,69 +55,22 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run normalized protocol-localization corpus
+      - name: Run label-permutation corpus
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_protocol_localization.py \
-            --output out/protocol-localization.json \
+          /usr/bin/time -v python3 experiments/mvp/run_label_permutation.py \
+            --output out/label-permutation.json \
             2>&1 | tee out-run.log
 
-      - name: Validate localization evidence
+      - name: Validate evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_rep.py out/protocol-localization.json --min-probes 18 \
+          python3 experiments/mvp/validate_rep.py out/label-permutation.json --min-probes 12 \
             | tee out-validation.log
 
-      - name: Build isolated localization probe
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-          sys.path.insert(0, "experiments/mvp")
-          import run_protocol_localization as loc
-          source = json.loads(loc.expand_spec().read_text())
-          probe_id = "arith-a-full-vs-no-system"
-          probes = [p for p in source["probes"] if p["probe_id"] == probe_id]
-          assert len(probes) == 1
-          Path("out/isolated-probes.json").write_text(json.dumps({
-              "schema_version": source["schema_version"],
-              "corpus_id": "protocol-localization-v2-isolated",
-              "probes": probes,
-          }, indent=2) + "\n")
-          PY
-
-      - name: Run fresh-process isolated localization probe
-        shell: bash
-        run: |
-          set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_protocol_localization.py \
-            --probes out/isolated-probes.json \
-            --model-dir /tmp/model-spelunker-smollm2 \
-            --output out/isolated-rep.json \
-            2>&1 | tee out-isolated-run.log
-
-      - name: Validate isolated evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 experiments/mvp/validate_rep.py out/isolated-rep.json --min-probes 1 \
-            | tee out-isolated-validation.log
-
-      - name: Recheck batching equivalence
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 experiments/mvp/compare_equivalence.py \
-            out/protocol-localization.json out/isolated-rep.json \
-            --probe-id arith-a-full-vs-no-system \
-            | tee out-equivalence.log
-
-      - name: Summarize localization results
+      - name: Summarize label-bias falsification
         shell: bash
         run: |
           set -euo pipefail
@@ -127,82 +80,88 @@ jobs:
           from collections import defaultdict
           from pathlib import Path
 
-          b = json.loads(Path("out/protocol-localization.json").read_text())
-          groups = defaultdict(list)
-          for p in b["observations"]["probes"]:
-              groups[p["contrast_id"]].append(p)
+          b = json.loads(Path("out/label-permutation.json").read_text())
+          probes = b["observations"]["probes"]
+          by_task = defaultdict(dict)
+          condition_stats = {
+              "user-wrapper": {"correct": 0, "total": 0, "a": 0, "b": 0},
+              "no-user-wrapper": {"correct": 0, "total": 0, "a": 0, "b": 0},
+          }
+          contrast_distances = defaultdict(list)
+
+          for p in probes:
+              task_id, labeling = p["probe_id"].rsplit("-correct-is-", 1)
+              labeling_id = "correct-is-" + labeling
+              by_task[task_id][labeling_id] = p
+              contrast_distances[labeling_id].append(p["activation_contrast"][-1]["cosine_distance"])
+              for c in p["conditions"]:
+                  s = condition_stats[c["condition_id"]]
+                  s["total"] += 1
+                  s["correct"] += int(c["candidate_correct"] is True)
+                  s[c["candidate_winner"].lower()] += 1
+
+          semantic_follow = {"user-wrapper": 0, "no-user-wrapper": 0}
+          complete_tasks = 0
+          task_rows = []
+          for task_id, labelings in sorted(by_task.items()):
+              if set(labelings) != {"correct-is-a", "correct-is-b"}:
+                  continue
+              complete_tasks += 1
+              row = {"task_id": task_id}
+              for index, condition_id in enumerate(("user-wrapper", "no-user-wrapper")):
+                  win_a = labelings["correct-is-a"]["conditions"][index]["candidate_winner"]
+                  win_b = labelings["correct-is-b"]["conditions"][index]["candidate_winner"]
+                  follows = win_a == "A" and win_b == "B"
+                  semantic_follow[condition_id] += int(follows)
+                  row[condition_id] = {
+                      "winner_when_correct_is_a": win_a,
+                      "winner_when_correct_is_b": win_b,
+                      "follows_semantic_answer_across_swap": follows,
+                  }
+              task_rows.append(row)
 
           summary = {
               "run_id": b["provenance"]["run_id"],
-              "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "corpus_id": b["probe_id"],
+              "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "cost": b["cost"],
-              "contrasts": {},
+              "condition_stats": condition_stats,
+              "complete_task_pairs": complete_tasks,
+              "semantic_follow_task_count": semantic_follow,
+              "semantic_follow_rate": {
+                  k: semantic_follow[k] / complete_tasks if complete_tasks else None
+                  for k in semantic_follow
+              },
+              "mean_wrapper_effect_final_cosine_distance": {
+                  k: sum(v) / len(v) for k, v in contrast_distances.items()
+              },
+              "tasks": task_rows,
           }
-          for contrast, probes in sorted(groups.items()):
-              final_distances = []
-              max_distances = []
-              rows = []
-              left_correct = right_correct = 0
-              agreement_seen = agreement_yes = 0
-              for p in probes:
-                  left, right = p["conditions"]
-                  left_correct += int(left["candidate_correct"] is True)
-                  right_correct += int(right["candidate_correct"] is True)
-                  final_distances.append(p["activation_contrast"][-1]["cosine_distance"])
-                  max_distances.append(max(x["cosine_distance"] for x in p["activation_contrast"]))
-                  for c in (left, right):
-                      if c["surface_generation_agree"] is not None:
-                          agreement_seen += 1
-                          agreement_yes += int(c["surface_generation_agree"] is True)
-                  rows.append({
-                      "probe_id": p["probe_id"],
-                      "expected": p["expected_candidate"],
-                      "left_winner": left["candidate_winner"],
-                      "right_winner": right["candidate_winner"],
-                      "left_expected_margin": left["expected_candidate_margin"],
-                      "right_expected_margin": right["expected_candidate_margin"],
-                      "left_input_tokens": left["input_tokens"],
-                      "right_input_tokens": right["input_tokens"],
-                  })
-              summary["contrasts"][contrast] = {
-                  "n": len(probes),
-                  "left_candidate_accuracy": left_correct / len(probes),
-                  "right_candidate_accuracy": right_correct / len(probes),
-                  "mean_final_layer_cosine_distance": sum(final_distances) / len(final_distances),
-                  "mean_max_layer_cosine_distance": sum(max_distances) / len(max_distances),
-                  "surface_generation_agreement_rate_when_parseable": agreement_yes / agreement_seen if agreement_seen else None,
-                  "rows": rows,
-              }
           print(json.dumps(summary, indent=2, sort_keys=True))
 
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Normalized protocol-localization result\n\n")
-              f.write(f"- run: `{summary['run_id']}`\n")
-              f.write(f"- artifact: `{summary['artifact_identity']}`\n")
-              f.write(f"- corpus: `{summary['corpus_id']}`\n")
-              f.write(f"- total experiment seconds: `{summary['cost']['experiment_seconds']:.2f}`\n\n")
-              f.write("| Contrast | N | Left accuracy | Right accuracy | Mean final cosine distance | Mean max cosine distance |\n")
-              f.write("|---|---:|---:|---:|---:|---:|\n")
-              for name, s in summary["contrasts"].items():
-                  f.write(f"| {name} | {s['n']} | {s['left_candidate_accuracy']:.3f} | {s['right_candidate_accuracy']:.3f} | {s['mean_final_layer_cosine_distance']:.6f} | {s['mean_max_layer_cosine_distance']:.6f} |\n")
+              f.write("## Label-permutation falsification\n\n")
+              for condition_id, stats in condition_stats.items():
+                  f.write(
+                      f"- **{condition_id}**: accuracy `{stats['correct']}/{stats['total']}`, "
+                      f"A winners `{stats['a']}`, B winners `{stats['b']}`, "
+                      f"semantic-follow pairs `{semantic_follow[condition_id]}/{complete_tasks}`\n"
+                  )
+              f.write("\n")
+              for labeling, distance in summary["mean_wrapper_effect_final_cosine_distance"].items():
+                  f.write(f"- mean wrapper-effect final cosine distance ({labeling}): `{distance:.6f}`\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-localization-${{ github.run_id }}
+          name: model-spelunker-label-permutation-${{ github.run_id }}
           path: |
-            out/protocol-localization.json
-            out/isolated-rep.json
-            out/isolated-probes.json
+            out/label-permutation.json
             out-summary.json
             out-validation.log
-            out-isolated-validation.log
-            out-equivalence.log
             out-run.log
-            out-isolated-run.log
           if-no-files-found: warn
           retention-days: 7
           compression-level: 9
