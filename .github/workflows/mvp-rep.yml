@@ -1,4 +1,4 @@
-name: Model Spelunker Attention Flow
+name: Model Spelunker Prefix Attention Factorial
 
 on:
   push:
@@ -7,9 +7,8 @@ on:
     paths:
       - "experiments/mvp/run_rep.py"
       - "experiments/mvp/run_activation_poke.py"
-      - "experiments/mvp/run_aligned_activation_patch.py"
-      - "experiments/mvp/run_attention_flow.py"
-      - "experiments/mvp/validate_attention_flow.py"
+      - "experiments/mvp/run_prefix_attention_factorial.py"
+      - "experiments/mvp/validate_prefix_attention_factorial.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -55,22 +54,22 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run attention-flow localization corpus
+      - name: Run prefix attention factorial corpus
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_attention_flow.py \
-            --output out/attention-flow.json \
+          /usr/bin/time -v python3 experiments/mvp/run_prefix_attention_factorial.py \
+            --output out/prefix-attention-factorial.json \
             2>&1 | tee out-run.log
 
-      - name: Validate relational evidence
+      - name: Validate causal evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_attention_flow.py out/attention-flow.json \
+          python3 experiments/mvp/validate_prefix_attention_factorial.py out/prefix-attention-factorial.json \
             | tee out-validation.log
 
-      - name: Summarize information-flow result
+      - name: Summarize factorial result
         shell: bash
         run: |
           set -euo pipefail
@@ -79,38 +78,50 @@ jobs:
           import os
           from pathlib import Path
 
-          b = json.loads(Path("out/attention-flow.json").read_text())
+          b = json.loads(Path("out/prefix-attention-factorial.json").read_text())
           d = b["derived_metrics"]
+          rows = []
+          for h in d["head_factor_summary"]:
+              rows.append({
+                  "layer": h["layer"],
+                  "head": h["head"],
+                  "user_marker": h["user_mass_factor_effects"]["marker_main_effect"],
+                  "user_role": h["user_mass_factor_effects"]["role_main_effect"],
+                  "user_interaction": h["user_mass_factor_effects"]["interaction"],
+                  "prefix_marker": h["control_prefix_mass_factor_effects"]["marker_main_effect"],
+                  "prefix_role": h["control_prefix_mass_factor_effects"]["role_main_effect"],
+                  "prefix_interaction": h["control_prefix_mass_factor_effects"]["interaction"],
+              })
           summary = {
               "run_id": b["provenance"]["run_id"],
               "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "cost": b["cost"],
-              "top_user_attention_change_heads": d["top_user_attention_change_heads"],
-              "top_aligned_attention_tv_heads": d["top_aligned_attention_tv_heads"],
-              "top_user_hidden_divergence_layers": d["top_user_hidden_divergence_layers"],
+              "prefix_tokenization": b["observations"]["prefix_tokenization"],
+              "behavior_summary": d["behavior_summary"],
+              "behavior_factor_effects": d["behavior_factor_effects"],
+              "heads": rows,
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Attention / information-flow localization\n\n")
-              f.write("### Top user-attention changes\n\n")
-              f.write("| Layer | Head | mean |Δ user mass| | aligned TV |\n")
-              f.write("|---:|---:|---:|---:|\n")
-              for row in d["top_user_attention_change_heads"][:10]:
-                  f.write(f"| {row['layer']} | {row['head']} | {row['mean_abs_user_mass_delta']:.4f} | {row['mean_aligned_normalized_tv']:.4f} |\n")
-              f.write("\n### Top user-content residual divergence\n\n")
-              f.write("| Layer | User cosine distance | Boundary cosine distance |\n")
-              f.write("|---:|---:|---:|\n")
-              for row in d["top_user_hidden_divergence_layers"]:
-                  f.write(f"| {row['layer']} | {row['mean_user_hidden_cosine_distance']:.4f} | {row['mean_boundary_hidden_cosine_distance']:.4f} |\n")
+              f.write("## Prefix attention factorial\n\n")
+              f.write("| Head | Marker effect on user mass | Role effect | Interaction | Marker effect on prefix mass |\n")
+              f.write("|---|---:|---:|---:|---:|\n")
+              for row in rows:
+                  f.write(f"| L{row['layer']}H{row['head']} | {row['user_marker']:.4f} | {row['user_role']:.4f} | {row['user_interaction']:.4f} | {row['prefix_marker']:.4f} |\n")
+              f.write("\n### Behavior\n\n")
+              f.write("| Condition | Top-1 | Mean rank | Mean correct margin |\n")
+              f.write("|---|---:|---:|---:|\n")
+              for name, row in d["behavior_summary"].items():
+                  f.write(f"| {name} | {row['top1_rate']:.3f} | {row['mean_correct_rank']:.3f} | {row['mean_correct_margin']:.4f} |\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-attention-flow-${{ github.run_id }}
+          name: model-spelunker-prefix-factorial-${{ github.run_id }}
           path: |
-            out/attention-flow.json
+            out/prefix-attention-factorial.json
             out-summary.json
             out-validation.log
             out-run.log
