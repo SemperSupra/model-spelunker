@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "corpus_id": "label-permutation-v1",
+  "tasks": [
+    {"task_id": "arith-add", "stem": "Which answer is correct? 17 + 8 = ?", "correct": "25", "wrong": "26"},
+    {"task_id": "arith-multiply", "stem": "Which answer is correct? 9 x 6 = ?", "correct": "54", "wrong": "45"},
+    {"task_id": "factual-capital", "stem": "What is the capital of France?", "correct": "Paris", "wrong": "Berlin"},
+    {"task_id": "logic-glip", "stem": "All glips are zorks. Luma is a glip. Which follows?", "correct": "Luma is a zork", "wrong": "Luma is not a zork"},
+    {"task_id": "decimal-compare", "stem": "Which number is larger?", "correct": "0.70", "wrong": "0.65"},
+    {"task_id": "symbolic-sequence", "stem": "A sequence is AB, AABB, AAABBB. Which is the natural next item?", "correct": "AAAABBBB", "wrong": "AABBBB"}
+  ]
+}
