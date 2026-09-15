@@ -1,4 +1,4 @@
-name: Model Spelunker Candidate Neighborhood
+name: Model Spelunker Arithmetic Wrapper Factorial
 
 on:
   push:
@@ -6,9 +6,9 @@ on:
       - impl/mvp-execution
     paths:
       - "experiments/mvp/run_rep.py"
-      - "experiments/mvp/run_protocol_localization.py"
       - "experiments/mvp/run_candidate_neighborhood.py"
-      - "experiments/mvp/candidate-neighborhood-spec.json"
+      - "experiments/mvp/run_arithmetic_wrapper_factorial.py"
+      - "experiments/mvp/arithmetic-wrapper-factorial-spec.json"
       - "experiments/mvp/validate_candidate_neighborhood.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
@@ -55,110 +55,152 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run candidate-neighborhood corpus
+      - name: Run arithmetic wrapper factorial corpus
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_candidate_neighborhood.py \
-            --output out/candidate-neighborhood.json \
+          /usr/bin/time -v python3 experiments/mvp/run_arithmetic_wrapper_factorial.py \
+            --output out/arithmetic-wrapper-factorial.json \
             2>&1 | tee out-run.log
 
       - name: Validate rank evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_candidate_neighborhood.py out/candidate-neighborhood.json \
+          python3 experiments/mvp/validate_candidate_neighborhood.py out/arithmetic-wrapper-factorial.json \
             | tee out-validation.log
 
-      - name: Summarize candidate ranks
+      - name: Summarize factorial effects
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY' | tee out-summary.json
           import json
           import os
+          from collections import defaultdict
           from pathlib import Path
 
-          b = json.loads(Path("out/candidate-neighborhood.json").read_text())
-          condition_stats = {
-              "user-wrapper": {"top1": 0, "total": 0, "rank_sum": 0, "rr_sum": 0.0, "total_mean_winner_agree": 0, "generation_seen": 0, "generation_mean_winner_agree": 0},
-              "no-user-wrapper": {"top1": 0, "total": 0, "rank_sum": 0, "rr_sum": 0.0, "total_mean_winner_agree": 0, "generation_seen": 0, "generation_mean_winner_agree": 0},
-          }
-          rows = []
-          final_distances = []
-          for p in b["observations"]["probes"]:
-              row = {"probe_id": p["probe_id"], "expected": p["expected_candidate"]}
-              for c in p["conditions"]:
-                  s = condition_stats[c["condition_id"]]
-                  rank = int(c["expected_candidate_rank_mean"])
-                  s["total"] += 1
-                  s["top1"] += int(rank == 1)
-                  s["rank_sum"] += rank
-                  s["rr_sum"] += 1.0 / rank
-                  s["total_mean_winner_agree"] += int(c["candidate_winner"] == c["candidate_winner_total_logprob"])
-                  if c["generation_candidate"] is not None:
-                      s["generation_seen"] += 1
-                      s["generation_mean_winner_agree"] += int(c["generation_candidate"] == c["candidate_winner"])
-                  row[c["condition_id"]] = {
-                      "mean_winner": c["candidate_winner"],
-                      "total_winner": c["candidate_winner_total_logprob"],
-                      "expected_rank_mean": c["expected_candidate_rank_mean"],
-                      "expected_rank_total": c["expected_candidate_rank_total"],
-                      "expected_mean_margin": c["expected_candidate_margin"],
-                      "generation": c["generation"],
-                      "generation_candidate": c["generation_candidate"],
-                      "candidate_token_counts": {x["candidate"]: x["token_count"] for x in c["candidate_scores"]},
-                  }
-              final_distances.append(p["activation_contrast"][-1]["cosine_distance"])
-              rows.append(row)
+          b = json.loads(Path("out/arithmetic-wrapper-factorial.json").read_text())
+          states = ("both", "start-only", "end-only", "neither")
+          state_records = defaultdict(lambda: defaultdict(dict))
+          contrast_geometry = defaultdict(lambda: defaultdict(list))
+          repeat_checks = 0
 
-          for s in condition_stats.values():
-              n = s["total"]
-              s["top1_rate"] = s["top1"] / n
-              s["mean_expected_rank"] = s["rank_sum"] / n
-              s["mean_reciprocal_rank"] = s["rr_sum"] / n
-              s["total_mean_winner_agreement_rate"] = s["total_mean_winner_agree"] / n
-              s["generation_mean_winner_agreement_rate_when_exact_candidate"] = (
-                  s["generation_mean_winner_agree"] / s["generation_seen"] if s["generation_seen"] else None
+          def snapshot(c):
+              return {
+                  "winner": c["candidate_winner"],
+                  "rank": int(c["expected_candidate_rank_mean"]),
+                  "rank_total": int(c["expected_candidate_rank_total"]),
+                  "margin": float(c["expected_candidate_margin"]),
+                  "generation": c["generation"],
+              }
+
+          for p in b["observations"]["probes"]:
+              contrast = p["contrast_id"]
+              task_id = p["probe_id"][:-(len(contrast) + 1)]
+              family = "multiply" if task_id.startswith("mul-") else "add"
+              contrast_geometry[family][contrast].append(p["activation_contrast"][-1]["cosine_distance"])
+              for c in p["conditions"]:
+                  state = c["condition_id"]
+                  assert state in states
+                  current = snapshot(c)
+                  prior = state_records[family][task_id].get(state)
+                  if prior is not None:
+                      repeat_checks += 1
+                      assert prior["winner"] == current["winner"]
+                      assert prior["rank"] == current["rank"]
+                      assert prior["rank_total"] == current["rank_total"]
+                      assert abs(prior["margin"] - current["margin"]) <= 1e-9
+                      assert prior["generation"] == current["generation"]
+                  else:
+                      state_records[family][task_id][state] = current
+
+          state_stats = {}
+          effects = {}
+          task_rows = []
+          for family in ("multiply", "add"):
+              state_stats[family] = {}
+              for state in states:
+                  values = [task[state] for task in state_records[family].values()]
+                  assert values, (family, state)
+                  state_stats[family][state] = {
+                      "n": len(values),
+                      "top1": sum(v["rank"] == 1 for v in values),
+                      "mean_rank": sum(v["rank"] for v in values) / len(values),
+                      "mrr": sum(1.0 / v["rank"] for v in values) / len(values),
+                      "mean_margin": sum(v["margin"] for v in values) / len(values),
+                  }
+
+              s = state_stats[family]
+              effects[family] = {
+                  "end_rank_improvement_when_start_present": s["start-only"]["mean_rank"] - s["both"]["mean_rank"],
+                  "end_rank_improvement_when_start_absent": s["neither"]["mean_rank"] - s["end-only"]["mean_rank"],
+                  "start_rank_improvement_when_end_present": s["end-only"]["mean_rank"] - s["both"]["mean_rank"],
+                  "start_rank_improvement_when_end_absent": s["neither"]["mean_rank"] - s["start-only"]["mean_rank"],
+                  "end_margin_effect_when_start_present": s["both"]["mean_margin"] - s["start-only"]["mean_margin"],
+                  "end_margin_effect_when_start_absent": s["end-only"]["mean_margin"] - s["neither"]["mean_margin"],
+                  "start_margin_effect_when_end_present": s["both"]["mean_margin"] - s["end-only"]["mean_margin"],
+                  "start_margin_effect_when_end_absent": s["start-only"]["mean_margin"] - s["neither"]["mean_margin"],
+              }
+              effects[family]["end_rank_interaction"] = (
+                  effects[family]["end_rank_improvement_when_start_present"]
+                  - effects[family]["end_rank_improvement_when_start_absent"]
               )
+              effects[family]["end_margin_interaction"] = (
+                  effects[family]["end_margin_effect_when_start_present"]
+                  - effects[family]["end_margin_effect_when_start_absent"]
+              )
+
+              for task_id, task in sorted(state_records[family].items()):
+                  assert set(task) == set(states), (task_id, task.keys())
+                  task_rows.append({"family": family, "task_id": task_id, "states": task})
+
+          geometry = {
+              family: {
+                  contrast: sum(values) / len(values)
+                  for contrast, values in contrasts.items()
+              }
+              for family, contrasts in contrast_geometry.items()
+          }
 
           summary = {
               "run_id": b["provenance"]["run_id"],
               "corpus_id": b["probe_id"],
               "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "cost": b["cost"],
-              "condition_stats": condition_stats,
-              "mean_wrapper_effect_final_cosine_distance": sum(final_distances) / len(final_distances),
-              "tasks": rows,
+              "repeat_consistency_checks": repeat_checks,
+              "state_stats": state_stats,
+              "effects": effects,
+              "mean_final_layer_cosine_distance_by_family_contrast": geometry,
+              "tasks": task_rows,
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
 
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Candidate-neighborhood rank result\n\n")
-              for condition_id, s in condition_stats.items():
-                  f.write(
-                      f"- **{condition_id}**: top-1 `{s['top1']}/{s['total']}`, "
-                      f"mean correct rank `{s['mean_expected_rank']:.3f}`, MRR `{s['mean_reciprocal_rank']:.3f}`, "
-                      f"total/mean winner agreement `{s['total_mean_winner_agreement_rate']:.3f}`\n"
-                  )
-              f.write(f"- mean wrapper-effect final cosine distance: `{summary['mean_wrapper_effect_final_cosine_distance']:.6f}`\n\n")
-              f.write("| Task | Expected | Wrapped mean rank/winner | Unwrapped mean rank/winner | Wrapped generation | Unwrapped generation |\n")
-              f.write("|---|---|---|---|---|---|\n")
-              for row in rows:
-                  a, z = row["user-wrapper"], row["no-user-wrapper"]
-                  f.write(
-                      f"| {row['probe_id']} | {row['expected']} | {a['expected_rank_mean']} / {a['mean_winner']} | "
-                      f"{z['expected_rank_mean']} / {z['mean_winner']} | {a['generation']} | {z['generation']} |\n"
-                  )
+              f.write("## Arithmetic user-wrapper factorial\n\n")
+              f.write(f"- duplicate-state consistency checks: `{repeat_checks}`\n")
+              for family in ("multiply", "add"):
+                  f.write(f"\n### {family}\n\n")
+                  f.write("| State | Top-1 | Mean rank | MRR | Mean correct margin |\n")
+                  f.write("|---|---:|---:|---:|---:|\n")
+                  for state in states:
+                      s = state_stats[family][state]
+                      f.write(f"| {state} | {s['top1']}/{s['n']} | {s['mean_rank']:.3f} | {s['mrr']:.3f} | {s['mean_margin']:.4f} |\n")
+                  e = effects[family]
+                  f.write(f"\n- end-token rank improvement with start present: `{e['end_rank_improvement_when_start_present']:.3f}`\n")
+                  f.write(f"- end-token rank improvement with start absent: `{e['end_rank_improvement_when_start_absent']:.3f}`\n")
+                  f.write(f"- start-token rank improvement with end present: `{e['start_rank_improvement_when_end_present']:.3f}`\n")
+                  f.write(f"- start-token rank improvement with end absent: `{e['start_rank_improvement_when_end_absent']:.3f}`\n")
+                  f.write(f"- end-token rank interaction: `{e['end_rank_interaction']:.3f}`\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-candidate-neighborhood-${{ github.run_id }}
+          name: model-spelunker-arithmetic-factorial-${{ github.run_id }}
           path: |
-            out/candidate-neighborhood.json
+            out/arithmetic-wrapper-factorial.json
             out-summary.json
             out-validation.log
             out-run.log
