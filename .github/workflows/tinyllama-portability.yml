@@ -1,0 +1,78 @@
+name: TinyLlama Portability Rep
+
+on:
+  push:
+    branches: [impl/tinyllama-portability-stage]
+    paths:
+      - "experiments/mvp/run_tinyllama_portability.py"
+      - "experiments/mvp/check_tinyllama_portability.py"
+      - ".github/workflows/tinyllama-portability.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tinyllama-portability-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  TOKENIZERS_PARALLELISM: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  rep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - id: py
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"tag={sys.implementation.cache_tag}")
+          PY
+
+      - id: runtime
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .runtime-venv
+          key: model-spelunker-venv-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.py.outputs.tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
+
+      - if: steps.runtime.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .runtime-venv
+          .runtime-venv/bin/python -m pip install --disable-pip-version-check --no-input --index-url https://download.pytorch.org/whl/cpu "torch==2.5.1"
+          .runtime-venv/bin/python -m pip install --disable-pip-version-check --no-input -r experiments/mvp/requirements.txt
+
+      - name: Run third-family portability
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          /usr/bin/time -v .runtime-venv/bin/python experiments/mvp/run_tinyllama_portability.py --output out/tinyllama-portability.json 2>&1 | tee out-run.log
+
+      - name: Validate result
+        shell: bash
+        run: |
+          set -euo pipefail
+          .runtime-venv/bin/python experiments/mvp/check_tinyllama_portability.py out/tinyllama-portability.json | tee out-validation.log
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tinyllama-portability-${{ github.run_id }}
+          path: |
+            out/tinyllama-portability.json
+            out-run.log
+            out-validation.log
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9
