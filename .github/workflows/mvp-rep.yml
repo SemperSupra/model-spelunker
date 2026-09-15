@@ -1,14 +1,18 @@
-name: Model Spelunker Prebuilt Runtime Qualification
+name: Model Spelunker Qwen Sink-Identity Replication
 
 on:
   push:
     branches:
       - impl/mvp-execution
     paths:
-      - "experiments/mvp/requirements.txt"
+      - "experiments/mvp/run_rep.py"
+      - "experiments/mvp/run_activation_poke.py"
+      - "experiments/mvp/run_sink_token_panel.py"
+      - "experiments/mvp/run_qwen_sink_token_panel.py"
+      - "experiments/mvp/validate_qwen_sink_token_panel.py"
       - "experiments/mvp/runtime_venv_probe.py"
-      - "experiments/mvp/check_runtime_venv.py"
-      - "experiments/mvp/runtime-venv-nonce.txt"
+      - "experiments/mvp/requirements.txt"
+      - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
 
@@ -20,39 +24,40 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  TOKENIZERS_PARALLELISM: "false"
   PYTHONUNBUFFERED: "1"
 
 jobs:
   rep:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
-      - name: Checkout exact qualification revision
+      - name: Checkout exact experiment revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
 
-      - name: Start ready-time timer and derive cache key inputs
+      - name: Start runtime-ready timer and derive exact key
         id: runtime-key
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
           date +%s%N > out/setup-start-ns.txt
-          python3 --version
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import sys
           print(f"python_tag={sys.implementation.cache_tag}")
           PY
 
-      - name: Restore complete prebuilt runtime
+      - name: Restore qualified prebuilt runtime
         id: runtime-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: .runtime-venv
           key: model-spelunker-venv-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
 
-      - name: Build exact runtime on cache miss
+      - name: Rebuild exact runtime on cache miss
         if: steps.runtime-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
@@ -64,7 +69,7 @@ jobs:
           .runtime-venv/bin/python -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Measure validated ready runtime
+      - name: Validate runtime before science
         shell: bash
         env:
           CACHE_HIT: ${{ steps.runtime-cache.outputs.cache-hit }}
@@ -76,42 +81,86 @@ jobs:
             --cache-hit "$CACHE_HIT" \
             --cache-key "$CACHE_KEY" \
             --venv .runtime-venv \
-            --output out/runtime-venv-metrics.json \
-            | tee out-runtime-venv.log
+            --output out/runtime-ready.json \
+            | tee out-runtime-ready.log
 
-      - name: Validate runtime identity
+      - name: Run Qwen sink-token cross-family panel
         shell: bash
         run: |
           set -euo pipefail
-          .runtime-venv/bin/python experiments/mvp/check_runtime_venv.py out/runtime-venv-metrics.json \
+          /usr/bin/time -v .runtime-venv/bin/python experiments/mvp/run_qwen_sink_token_panel.py \
+            --output out/qwen-sink-token-panel.json \
+            2>&1 | tee out-run.log
+
+      - name: Validate cross-family predictive evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          .runtime-venv/bin/python experiments/mvp/validate_qwen_sink_token_panel.py out/qwen-sink-token-panel.json \
             | tee out-validation.log
 
-      - name: Summarize prebuilt runtime qualification
+      - name: Summarize cross-family sink-token result
         shell: bash
         run: |
           set -euo pipefail
-          .runtime-venv/bin/python - <<'PY'
-          import json, os
+          .runtime-venv/bin/python - <<'PY' | tee out-summary.json
+          import json
+          import os
           from pathlib import Path
-          m = json.loads(Path('out/runtime-venv-metrics.json').read_text())
+          b = json.loads(Path('out/qwen-sink-token-panel.json').read_text())
+          ready = json.loads(Path('out/runtime-ready.json').read_text())
+          d = b['derived_metrics']
+          rows = []
+          for pid, row in d['panel_summary'].items():
+              if row['kind'] == 'one-token':
+                  rows.append({
+                      'panel_id': pid,
+                      'token_id': row.get('token_id'),
+                      'cal_margin': row['calibration_mean_margin'],
+                      'cal_rank': d['calibration_rank'][pid],
+                      'hold_margin': row['holdout_mean_margin'],
+                      'hold_rank': d['holdout_rank'][pid],
+                      'hold_top1': row['holdout_top1_rate'],
+                      'sink_mass': row['mean_sink_mass'],
+                  })
+          summary = {
+              'run_id': b['provenance']['run_id'],
+              'artifact_identity': b['artifact_provenance']['identity_digest'],
+              'runtime_cache_hit': ready['cache_hit'],
+              'runtime_ready_seconds': ready['restore_or_build_to_ready_seconds'],
+              'attention_sanity_head': d['attention_sanity_head'],
+              'frozen_calibration_top3': d['frozen_calibration_top3'],
+              'calibration_holdout_rank_correlation': d['calibration_holdout_rank_correlation'],
+              'calibration_holdout_margin_correlation': d['calibration_holdout_margin_correlation'],
+              'rows': sorted(rows, key=lambda x: (x['cal_rank'], x['panel_id'])),
+              'cost': b['cost'],
+          }
+          print(json.dumps(summary, indent=2, sort_keys=True))
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as f:
-              f.write('## Prebuilt runtime cache qualification\n\n')
-              f.write(f"- exact cache hit: `{m['cache_hit']}`\n")
-              f.write(f"- restore/build → validated ready: `{m['restore_or_build_to_ready_seconds']:.3f} s`\n")
-              f.write(f"- venv size: `{m['venv_size_bytes'] / (1024**2):.1f} MiB`\n")
-              f.write(f"- exact environment hash: `{m['pip_freeze_sha256']}`\n")
-              f.write(f"- integer Torch smoke: `{m['integer_torch_smoke_sha256']}`\n")
+              f.write('## Qwen cross-family sink-token identity panel\n\n')
+              f.write(f"- prebuilt runtime cache hit: `{ready['cache_hit']}`; validated-ready `{ready['restore_or_build_to_ready_seconds']:.3f} s`\n")
+              f.write(f"- attention sanity head: `L{d['attention_sanity_head']['layer']}H{d['attention_sanity_head']['head']}`\n")
+              f.write(f"- frozen calibration top-3: `{', '.join(d['frozen_calibration_top3'])}`\n")
+              f.write(f"- calibration↔holdout margin correlation: `{d['calibration_holdout_margin_correlation']}`\n")
+              f.write(f"- calibration↔holdout rank correlation: `{d['calibration_holdout_rank_correlation']}`\n\n")
+              f.write('| Token | ID | Cal margin | Cal rank | Hold margin | Hold rank | Hold top-1 | Sink mass |\n')
+              f.write('|---|---:|---:|---:|---:|---:|---:|---:|\n')
+              for r in sorted(rows, key=lambda x: (x['cal_rank'], x['panel_id'])):
+                  f.write(f"| {r['panel_id']} | {r['token_id']} | {r['cal_margin']:.4f} | {r['cal_rank']} | {r['hold_margin']:.4f} | {r['hold_rank']} | {r['hold_top1']:.3f} | {r['sink_mass']:.6f} |\n")
           PY
 
-      - name: Upload bounded qualification evidence
+      - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-runtime-venv-${{ github.run_id }}
+          name: model-spelunker-qwen-sink-panel-${{ github.run_id }}
           path: |
-            out/runtime-venv-metrics.json
-            out-runtime-venv.log
+            out/qwen-sink-token-panel.json
+            out/runtime-ready.json
+            out-summary.json
             out-validation.log
+            out-run.log
+            out-runtime-ready.log
           if-no-files-found: warn
           retention-days: 7
           compression-level: 9
