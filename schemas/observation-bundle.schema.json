@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://semper-supra.example/model-spelunker/observation-bundle.schema.json",
+  "title": "ObservationBundle",
+  "type": "object",
+  "required": ["probe_id", "instrument", "model_identity", "evidence_level", "observations", "provenance"],
+  "properties": {
+    "probe_id": {"type": "string"},
+    "instrument": {"type": "string"},
+    "instrument_version": {"type": ["string", "null"]},
+    "model_identity": {"type": "object", "additionalProperties": true},
+    "access_tier": {"enum": ["A0", "A1", "A2", "A3", "A4"]},
+    "evidence_level": {
+      "enum": ["OBSERVED", "REPRODUCED", "RELATIONAL", "PREDICTIVE", "CAUSAL", "FUNCTIONALLY_RECOVERED"]
+    },
+    "claim_tags": {"type": "array", "items": {"type": "string"}},
+    "observations": {"type": "object", "additionalProperties": true},
+    "derived_metrics": {"type": "object", "additionalProperties": true},
+    "artifacts": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "uncertainty": {"type": "object", "additionalProperties": true},
+    "known_assumptions": {"type": "array", "items": {"type": "string"}},
+    "known_failure_modes": {"type": "array", "items": {"type": "string"}},
+    "contradictions": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "cost": {"type": "object", "additionalProperties": true},
+    "provenance": {
+      "type": "object",
+      "required": ["run_id"],
+      "properties": {
+        "run_id": {"type": "string"},
+        "code_revision": {"type": ["string", "null"]},
+        "model_revision": {"type": ["string", "null"]},
+        "tokenizer_revision": {"type": ["string", "null"]},
+        "environment": {"type": "object", "additionalProperties": true},
+        "randomness": {"type": "object", "additionalProperties": true},
+        "raw_input_hash": {"type": ["string", "null"]},
+        "raw_output_hash": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
