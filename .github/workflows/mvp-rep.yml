@@ -79,10 +79,7 @@ jobs:
           import json, os, time
           from pathlib import Path
           start = int(Path('out/setup-start-ns.txt').read_text().strip())
-          payload = {
-              'cache_hit': os.environ.get('CACHE_HIT') == 'true',
-              'setup_to_runtime_ready_seconds': (time.time_ns() - start) / 1e9,
-          }
+          payload = {'cache_hit': os.environ.get('CACHE_HIT') == 'true', 'setup_to_runtime_ready_seconds': (time.time_ns() - start) / 1e9}
           Path('out/runtime-ready.json').write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n')
           print(json.dumps(payload, sort_keys=True))
           PY
