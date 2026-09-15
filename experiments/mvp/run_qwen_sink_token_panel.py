@@ -13,6 +13,7 @@ import json
 import sys
 from pathlib import Path
 
+import run_cross_model_portability as portable
 import run_rep as base
 import run_sink_token_panel as panel
 
@@ -31,12 +32,18 @@ NEW_HOLDOUT = [
     {"task_id": "qhold-days-week", "user": "How many days are in a week?", "correct": "7", "candidates": ["5", "6", "7", "8", "9"]},
 ]
 
-# Rebind only model/artifact identity. The shared base.content_manifest function
-# reads these values at runtime.
+# Rebind model/artifact identity. The shared sink-panel instrument uses the
+# standard base object, while the generic Rep-20 manifest implementation is
+# reused because it correctly handles a model-family file set discovered by
+# glob rather than SmolLM's explicit required-filename list.
 base.MODEL_REPO = QWEN_REPO
 base.MODEL_REVISION = QWEN_REVISION
 base.LOGICAL_ID = QWEN_LOGICAL_ID
 base.MODEL_FILES = ["*.json", "*.safetensors", "*.txt", "*.model", "*.jinja"]
+portable.MODEL_REPO = QWEN_REPO
+portable.MODEL_REVISION = QWEN_REVISION
+portable.LOGICAL_ID = QWEN_LOGICAL_ID
+base.content_manifest = portable.content_manifest
 
 # Rep 20 independently localized a near-saturated Qwen first-token sink here.
 panel.ATTENTION_LAYER = 11
