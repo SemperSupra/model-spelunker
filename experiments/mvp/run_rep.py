@@ -4,11 +4,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import platform
 import resource
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -21,6 +19,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 MODEL_REPO = "HuggingFaceTB/SmolLM2-135M-Instruct"
 MODEL_REVISION = "e2c3f7557efbdec707ae3a336371d169783f1da1"
 LOGICAL_ID = "llm/smollm2/135m-instruct"
+MODEL_FILES = [
+    "config.json",
+    "generation_config.json",
+    "merges.txt",
+    "model.safetensors",
+    "special_tokens_map.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+]
 
 
 def now() -> float:
@@ -37,17 +44,12 @@ def sha256_file(path: Path) -> str:
 
 def artifact_files(root: Path) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or ".cache" in path.relative_to(root).parts:
-            continue
-        rel = path.relative_to(root).as_posix()
-        records.append({
-            "path": rel,
-            "size_bytes": path.stat().st_size,
-            "sha256": sha256_file(path),
-        })
-    if not records:
-        raise RuntimeError("no model artifact files found")
+    for name in MODEL_FILES:
+        path = root / name
+        if not path.is_file():
+            raise RuntimeError(f"required model artifact file missing: {name}")
+        records.append({"path": name, "size_bytes": path.stat().st_size, "sha256": sha256_file(path)})
+    records.sort(key=lambda item: item["path"])
     return records
 
 
@@ -71,9 +73,7 @@ def render_prompt(tokenizer: Any, condition: dict[str, Any]) -> str:
     user = condition["user"]
     if condition["render"] == "native":
         return tokenizer.apply_chat_template(
-            [{"role": "user", "content": user}],
-            tokenize=False,
-            add_generation_prompt=True,
+            [{"role": "user", "content": user}], tokenize=False, add_generation_prompt=True
         )
     if condition["render"] == "generic":
         return f"User: {user}\nAssistant:"
@@ -104,8 +104,7 @@ def sequence_logprob(model: Any, tokenizer: Any, prompt: str, candidate: str) ->
 
 
 def summarize_hidden(hidden_states: tuple[torch.Tensor, ...]) -> tuple[list[dict[str, float]], list[torch.Tensor]]:
-    summaries = []
-    vectors = []
+    summaries, vectors = [], []
     for layer, tensor in enumerate(hidden_states):
         vec = tensor[0, -1, :].detach().float().cpu()
         vectors.append(vec)
@@ -144,18 +143,13 @@ def run_condition(model: Any, tokenizer: Any, condition: dict[str, Any], candida
         forward = model(**encoded, output_hidden_states=True, use_cache=False)
     hidden_summary, hidden_vectors = summarize_hidden(forward.hidden_states)
     scores = [sequence_logprob(model, tokenizer, prompt, candidate) for candidate in candidates]
-    score_map = {x["candidate"]: x["logprob"] for x in scores}
-    winner = max(score_map, key=score_map.get)
+    winner = max({x["candidate"]: x["logprob"] for x in scores}, key=lambda k: {x["candidate"]: x["logprob"] for x in scores}[k])
     with torch.inference_mode():
         generated = model.generate(
-            **encoded,
-            max_new_tokens=16,
-            do_sample=False,
-            use_cache=True,
+            **encoded, max_new_tokens=16, do_sample=False, use_cache=True,
             pad_token_id=tokenizer.eos_token_id,
         )
     new_ids = generated[0, encoded.input_ids.shape[1]:]
-    text = tokenizer.decode(new_ids, skip_special_tokens=True).strip()
     return ({
         "condition_id": condition["condition_id"],
         "render": condition["render"],
@@ -164,7 +158,7 @@ def run_condition(model: Any, tokenizer: Any, condition: dict[str, Any], candida
         "input_tokens": int(encoded.input_ids.numel()),
         "candidate_scores": scores,
         "candidate_winner": winner,
-        "generation": text,
+        "generation": tokenizer.decode(new_ids, skip_special_tokens=True).strip(),
         "hidden_summary": hidden_summary,
         "elapsed_seconds": now() - started,
     }, hidden_vectors)
@@ -172,9 +166,7 @@ def run_condition(model: Any, tokenizer: Any, condition: dict[str, Any], candida
 
 def peak_rss_mib() -> float:
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    if sys.platform == "darwin":
-        return rss / (1024 * 1024)
-    return rss / 1024
+    return rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
 
 
 def disk_free_mib(path: Path) -> float:
@@ -191,21 +183,19 @@ def main() -> int:
     parser.add_argument("--foundry-record-ref")
     args = parser.parse_args()
 
-    run_started_wall = time.time()
-    run_started = now()
+    run_started_wall, run_started = time.time(), now()
     timings: dict[str, float] = {}
-
     torch.set_num_threads(max(1, min(4, os.cpu_count() or 1)))
     torch.manual_seed(0)
 
     t = now()
     if args.model_dir:
-        model_dir = args.model_dir.resolve()
-        source = "prehydrated"
+        model_dir, source = args.model_dir.resolve(), "prehydrated"
     else:
         model_dir = Path(snapshot_download(
             repo_id=MODEL_REPO,
             revision=MODEL_REVISION,
+            allow_patterns=MODEL_FILES,
             local_dir="/tmp/model-spelunker-smollm2",
         )).resolve()
         source = "upstream-exact-revision"
@@ -217,11 +207,7 @@ def main() -> int:
 
     t = now()
     tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_dir,
-        local_files_only=True,
-        torch_dtype=torch.float32,
-    )
+    model = AutoModelForCausalLM.from_pretrained(model_dir, local_files_only=True, torch_dtype=torch.float32)
     model.eval()
     timings["model_load_seconds"] = now() - t
 
@@ -229,8 +215,7 @@ def main() -> int:
     observations = []
     execution_started = now()
     for probe in probes:
-        condition_results = []
-        vectors: dict[str, list[torch.Tensor]] = {}
+        condition_results, vectors = [], {}
         for condition in probe["conditions"]:
             result, hidden_vectors = run_condition(model, tokenizer, condition, probe["candidates"])
             condition_results.append(result)
@@ -262,17 +247,14 @@ def main() -> int:
         "verification_ref": "foundry-oci-plus-local-manifest" if args.foundry_digest else "foundry-compatible-local-content-manifest",
         "tokenizer_artifact": None,
     }
+    observation_hash = "sha256:" + hashlib.sha256(
+        json.dumps(observations, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     bundle = {
-        "schema_version": 1,
-        "run_id": str(run_id),
         "probe_id": "mvp-corpus-v1",
         "instrument": "shared-forward-behavior-logits-activation-summary",
         "instrument_version": "mvp-1",
-        "model_identity": {
-            "repository": MODEL_REPO,
-            "revision": MODEL_REVISION,
-            "logical_id": LOGICAL_ID,
-        },
+        "model_identity": {"repository": MODEL_REPO, "revision": MODEL_REVISION, "logical_id": LOGICAL_ID},
         "artifact_provenance": artifact_provenance,
         "access_tier": "A1",
         "evidence_level": "OBSERVED",
@@ -319,17 +301,14 @@ def main() -> int:
             },
             "randomness": {"torch_manual_seed": 0, "generation": "greedy"},
             "raw_input_hash": "sha256:" + hashlib.sha256(args.probes.read_bytes()).hexdigest(),
-            "raw_output_hash": None,
+            "raw_output_hash": observation_hash,
         },
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    encoded = json.dumps(bundle, indent=2, sort_keys=True) + "\n"
-    output_hash = "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-    bundle["provenance"]["raw_output_hash"] = output_hash
     args.output.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({
-        "run_id": bundle["run_id"],
+        "run_id": bundle["provenance"]["run_id"],
         "model_revision": MODEL_REVISION,
         "artifact_identity": artifact_provenance["identity_digest"],
         "probes": len(observations),
