@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "corpus_id": "candidate-neighborhood-v1",
+  "tasks": [
+    {"task_id": "arith-add", "user": "What is 17 + 8? Answer with the number only.", "correct": "25", "candidates": ["25", "26", "21", "24", "27"]},
+    {"task_id": "arith-multiply", "user": "What is 9 x 6? Answer with the number only.", "correct": "54", "candidates": ["54", "45", "60", "48", "56"]},
+    {"task_id": "factual-capital", "user": "What is the capital of France? Answer with the city name only.", "correct": "Paris", "candidates": ["Paris", "Berlin", "London", "Rome", "777"]},
+    {"task_id": "decimal-compare", "user": "Which number is larger, 0.70 or 0.65? Answer exactly one of those numbers.", "correct": "0.70", "candidates": ["0.70", "0.65", "0.75", "0.60", "0.80"]},
+    {"task_id": "animal-bark", "user": "Which animal typically barks, dog or cat? Answer exactly one word.", "correct": "dog", "candidates": ["dog", "cat", "wolf", "bird", "cow"]},
+    {"task_id": "sky-color", "user": "Which color is a clear daytime sky commonly described as, blue or green? Answer exactly one word.", "correct": "blue", "candidates": ["blue", "green", "red", "gray", "white"]}
+  ]
+}
