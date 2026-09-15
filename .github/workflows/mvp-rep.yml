@@ -1,4 +1,4 @@
-name: Model Spelunker Runtime Cache Qualification
+name: Model Spelunker Prebuilt Runtime Qualification
 
 on:
   push:
@@ -6,9 +6,9 @@ on:
       - impl/mvp-execution
     paths:
       - "experiments/mvp/requirements.txt"
-      - "experiments/mvp/runtime_cache_probe.py"
-      - "experiments/mvp/check_runtime_cache.py"
-      - "experiments/mvp/runtime-cache-nonce.txt"
+      - "experiments/mvp/runtime_venv_probe.py"
+      - "experiments/mvp/check_runtime_venv.py"
+      - "experiments/mvp/runtime-venv-nonce.txt"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
 
@@ -32,7 +32,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Start setup timer and derive exact cache key inputs
+      - name: Start ready-time timer and derive cache key inputs
         id: runtime-key
         shell: bash
         run: |
@@ -45,69 +45,72 @@ jobs:
           print(f"python_tag={sys.implementation.cache_tag}")
           PY
 
-      - name: Restore exact pip cache
-        id: pip-cache
+      - name: Restore complete prebuilt runtime
+        id: runtime-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          path: ~/.cache/pip
-          key: model-spelunker-pip-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
+          path: .runtime-venv
+          key: model-spelunker-venv-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
 
-      - name: Install exact CPU inference runtime
+      - name: Build exact runtime on cache miss
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --no-input \
+          python3 -m venv .runtime-venv
+          .runtime-venv/bin/python -m pip install --disable-pip-version-check --no-input \
             --index-url https://download.pytorch.org/whl/cpu \
             "torch==2.5.1"
-          python3 -m pip install --disable-pip-version-check --no-input \
+          .runtime-venv/bin/python -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Measure restored runtime
+      - name: Measure validated ready runtime
         shell: bash
         env:
-          CACHE_HIT: ${{ steps.pip-cache.outputs.cache-hit }}
-          CACHE_KEY: model-spelunker-pip-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
+          CACHE_HIT: ${{ steps.runtime-cache.outputs.cache-hit }}
+          CACHE_KEY: model-spelunker-venv-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
         run: |
           set -euo pipefail
-          python3 experiments/mvp/runtime_cache_probe.py \
+          .runtime-venv/bin/python experiments/mvp/runtime_venv_probe.py \
             --started-ns-file out/setup-start-ns.txt \
             --cache-hit "$CACHE_HIT" \
             --cache-key "$CACHE_KEY" \
-            --output out/runtime-cache-metrics.json \
-            | tee out-runtime-cache.log
+            --venv .runtime-venv \
+            --output out/runtime-venv-metrics.json \
+            | tee out-runtime-venv.log
 
       - name: Validate runtime identity
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/check_runtime_cache.py out/runtime-cache-metrics.json \
+          .runtime-venv/bin/python experiments/mvp/check_runtime_venv.py out/runtime-venv-metrics.json \
             | tee out-validation.log
 
-      - name: Summarize cache qualification run
+      - name: Summarize prebuilt runtime qualification
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          .runtime-venv/bin/python - <<'PY'
           import json, os
           from pathlib import Path
-          m = json.loads(Path('out/runtime-cache-metrics.json').read_text())
+          m = json.loads(Path('out/runtime-venv-metrics.json').read_text())
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as f:
-              f.write('## Runtime/pip cache qualification\n\n')
+              f.write('## Prebuilt runtime cache qualification\n\n')
               f.write(f"- exact cache hit: `{m['cache_hit']}`\n")
-              f.write(f"- restore + install elapsed: `{m['setup_restore_install_seconds']:.3f} s`\n")
-              f.write(f"- pip cache size: `{m['pip_cache_size_bytes'] / (1024**2):.1f} MiB`\n")
-              f.write(f"- pip environment hash: `{m['pip_freeze_sha256']}`\n")
-              f.write(f"- deterministic Torch smoke hash: `{m['torch_smoke_sha256']}`\n")
+              f.write(f"- restore/build → validated ready: `{m['restore_or_build_to_ready_seconds']:.3f} s`\n")
+              f.write(f"- venv size: `{m['venv_size_bytes'] / (1024**2):.1f} MiB`\n")
+              f.write(f"- exact environment hash: `{m['pip_freeze_sha256']}`\n")
+              f.write(f"- integer Torch smoke: `{m['integer_torch_smoke_sha256']}`\n")
           PY
 
       - name: Upload bounded qualification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-runtime-cache-${{ github.run_id }}
+          name: model-spelunker-runtime-venv-${{ github.run_id }}
           path: |
-            out/runtime-cache-metrics.json
-            out-runtime-cache.log
+            out/runtime-venv-metrics.json
+            out-runtime-venv.log
             out-validation.log
           if-no-files-found: warn
           retention-days: 7
