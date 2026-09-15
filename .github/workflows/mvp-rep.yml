@@ -103,40 +103,27 @@ jobs:
           import json
           from pathlib import Path
           import jsonschema
-
           b = json.loads(Path('out/tinyllama-portability.json').read_text())
-          schema = json.loads(Path('schemas/observation-bundle.schema.json').read_text())
-          jsonschema.validate(b, schema)
+          jsonschema.validate(b, json.loads(Path('schemas/observation-bundle.schema.json').read_text()))
           assert b['probe_id'] == 'cross-model-portability-tinyllama-v1'
-          assert b['access_tier'] == 'A2'
-          assert b['evidence_level'] == 'REPRODUCED'
+          assert b['access_tier'] == 'A2' and b['evidence_level'] == 'REPRODUCED'
           assert b['model_identity']['repository'] == 'TinyLlama/TinyLlama-1.1B-Chat-v1.0'
           assert b['model_identity']['revision'] == 'fe8a4ea1ffedaf415f4da2f062534de366a451e6'
           p = b['artifact_provenance']
-          assert p['tracked'] is True and p['verified'] is True
-          assert p['identity_kind'] == 'content-manifest'
+          assert p['tracked'] is True and p['verified'] is True and p['identity_kind'] == 'content-manifest'
           assert p['identity_digest'].startswith('sha256:')
           tasks = b['observations']['tasks']
           assert len(tasks) == 6
           for task in tasks:
               assert set(task['conditions']) == {'native', 'raw', 'newline_raw'}
               for row in task['conditions'].values():
-                  assert len(row['candidate_scores']) == 5
-                  assert len(row['hidden_summary']) > 4
-                  assert len(row['attention_heads']) > 0
+                  assert len(row['candidate_scores']) == 5 and len(row['hidden_summary']) > 4 and len(row['attention_heads']) > 0
           d = b['derived_metrics']
           assert set(d['condition_summary']) == {'native', 'raw', 'newline_raw'}
           assert all(d['portable_instrument_checks'].values())
           assert d['portability_rep']['family_ordinal'] == 3
           assert 0 < float(b['cost']['peak_rss_mib']) < 15000
-          print(json.dumps({
-              'validated': True,
-              'run_id': b['provenance']['run_id'],
-              'manifest': p['identity_digest'],
-              'conditions': d['condition_summary'],
-              'peak_rss_mib': b['cost']['peak_rss_mib'],
-              'total_seconds': b['cost']['total_seconds'],
-          }, sort_keys=True))
+          print(json.dumps({'validated': True, 'run_id': b['provenance']['run_id'], 'manifest': p['identity_digest'], 'conditions': d['condition_summary'], 'peak_rss_mib': b['cost']['peak_rss_mib'], 'total_seconds': b['cost']['total_seconds']}, sort_keys=True))
           PY
 
       - name: Summarize portability and resource envelope
@@ -148,18 +135,16 @@ jobs:
           from pathlib import Path
           b = json.loads(Path('out/tinyllama-portability.json').read_text())
           r = json.loads(Path('out/runtime-ready.json').read_text())
-          d = b['derived_metrics']
-          c = b['cost']
+          d, c = b['derived_metrics'], b['cost']
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as f:
               f.write('## TinyLlama third-family portability\n\n')
               f.write(f"- runtime cache hit: `{r['cache_hit']}`\n")
-              f.write(f"- setup → runtime ready: `{r['setup_to_runtime_ready_seconds']:.3f} s`\n")
+              f.write(f"- setup to runtime ready: `{r['setup_to_runtime_ready_seconds']:.3f} s`\n")
               f.write(f"- exact model revision: `{b['model_identity']['revision']}`\n")
               f.write(f"- content-manifest: `{b['artifact_provenance']['identity_digest']}`\n")
               f.write(f"- peak RSS: `{c['peak_rss_mib']:.1f} MiB`\n")
               f.write(f"- total script time: `{c['total_seconds']:.2f} s`\n\n")
-              f.write('| Condition | Top-1 | Mean rank | Mean margin |\n')
-              f.write('|---|---:|---:|---:|\n')
+              f.write('| Condition | Top-1 | Mean rank | Mean margin |\n|---|---:|---:|---:|\n')
               for cid, row in d['condition_summary'].items():
                   f.write(f"| {cid} | {row['top1_rate']:.3f} | {row['mean_correct_rank']:.3f} | {row['mean_correct_margin']:.4f} |\n")
           PY
