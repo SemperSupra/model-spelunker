@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "probe_set_id": "mvp-shared-probes-v1",
+  "cases": [
+    {
+      "probe_case_id": "protocol-native",
+      "contrast_id": "protocol-native-vs-generic",
+      "render": "chat",
+      "messages": [
+        {"role": "system", "content": "Follow the user's formatting instruction exactly."},
+        {"role": "user", "content": "Answer with exactly one word: What is the capital of France?"}
+      ],
+      "seed": 101
+    },
+    {
+      "probe_case_id": "protocol-generic",
+      "contrast_id": "protocol-native-vs-generic",
+      "render": "raw",
+      "prompt": "System: Follow the user's formatting instruction exactly.\nUser: Answer with exactly one word: What is the capital of France?\nAssistant:",
+      "seed": 101
+    },
+    {
+      "probe_case_id": "instruction-direct",
+      "contrast_id": "direct-vs-decomposed",
+      "render": "chat",
+      "messages": [
+        {"role": "user", "content": "Return only the digits for 17 + 25."}
+      ],
+      "seed": 202
+    },
+    {
+      "probe_case_id": "instruction-decomposed",
+      "contrast_id": "direct-vs-decomposed",
+      "render": "chat",
+      "messages": [
+        {"role": "user", "content": "Compute 17 + 25. Determine the sum, check it once, then return only the final digits."}
+      ],
+      "seed": 202
+    },
+    {
+      "probe_case_id": "semantic-a",
+      "contrast_id": "semantic-paraphrase",
+      "render": "chat",
+      "messages": [
+        {"role": "user", "content": "Reply yes or no only: Is a robin a bird?"}
+      ],
+      "seed": 303
+    },
+    {
+      "probe_case_id": "semantic-b",
+      "contrast_id": "semantic-paraphrase",
+      "render": "chat",
+      "messages": [
+        {"role": "user", "content": "Use only yes or no: Does the animal called a robin belong to the birds?"}
+      ],
+      "seed": 303
+    },
+    {
+      "probe_case_id": "null-a",
+      "contrast_id": "negative-null",
+      "render": "chat",
+      "messages": [
+        {"role": "user", "content": "Return ALPHA exactly."}
+      ],
+      "seed": 404
+    },
+    {
+      "probe_case_id": "null-b",
+      "contrast_id": "negative-null",
+      "render": "chat",
+      "messages": [
+        {"role": "user", "content": "Return ALPHA exactly.  "}
+      ],
+      "seed": 404
+    }
+  ]
+}
