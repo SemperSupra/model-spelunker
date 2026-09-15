@@ -1,14 +1,14 @@
-name: Model Spelunker Cross-Model Portability
+name: Model Spelunker Runtime Cache Qualification
 
 on:
   push:
     branches:
       - impl/mvp-execution
     paths:
-      - "experiments/mvp/run_rep.py"
-      - "experiments/mvp/run_cross_model_portability.py"
-      - "experiments/mvp/validate_cross_model_portability.py"
-      - "schemas/**"
+      - "experiments/mvp/requirements.txt"
+      - "experiments/mvp/runtime_cache_probe.py"
+      - "experiments/mvp/check_runtime_cache.py"
+      - "experiments/mvp/runtime-cache-nonce.txt"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
 
@@ -20,30 +20,39 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  HF_HUB_DISABLE_TELEMETRY: "1"
-  TOKENIZERS_PARALLELISM: "false"
   PYTHONUNBUFFERED: "1"
 
 jobs:
   rep:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
-      - name: Checkout exact experiment revision
+      - name: Checkout exact qualification revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
 
-      - name: Record runner baseline
+      - name: Start setup timer and derive exact cache key inputs
+        id: runtime-key
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p out
+          date +%s%N > out/setup-start-ns.txt
           python3 --version
-          uname -a
-          df -h /
-          free -h
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"python_tag={sys.implementation.cache_tag}")
+          PY
 
-      - name: Install CPU inference runtime
+      - name: Restore exact pip cache
+        id: pip-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.cache/pip
+          key: model-spelunker-pip-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
+
+      - name: Install exact CPU inference runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -53,66 +62,53 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run Qwen cross-model portability corpus
+      - name: Measure restored runtime
         shell: bash
+        env:
+          CACHE_HIT: ${{ steps.pip-cache.outputs.cache-hit }}
+          CACHE_KEY: model-spelunker-pip-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_cross_model_portability.py \
-            --output out/cross-model-portability.json \
-            2>&1 | tee out-run.log
+          python3 experiments/mvp/runtime_cache_probe.py \
+            --started-ns-file out/setup-start-ns.txt \
+            --cache-hit "$CACHE_HIT" \
+            --cache-key "$CACHE_KEY" \
+            --output out/runtime-cache-metrics.json \
+            | tee out-runtime-cache.log
 
-      - name: Validate portable instrument evidence
+      - name: Validate runtime identity
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_cross_model_portability.py out/cross-model-portability.json \
+          python3 experiments/mvp/check_runtime_cache.py out/runtime-cache-metrics.json \
             | tee out-validation.log
 
-      - name: Summarize cross-model result
+      - name: Summarize cache qualification run
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY' | tee out-summary.json
-          import json
-          import os
+          python3 - <<'PY'
+          import json, os
           from pathlib import Path
-          b = json.loads(Path("out/cross-model-portability.json").read_text())
-          d = b["derived_metrics"]
-          layers = d["mean_raw_native_layer_contrast"]
-          strongest = max(layers, key=lambda x: x["mean_raw_native_cosine_distance"])
-          summary = {
-              "run_id": b["provenance"]["run_id"],
-              "model": b["model_identity"],
-              "artifact_identity": b["artifact_provenance"]["identity_digest"],
-              "portable_instrument_checks": d["portable_instrument_checks"],
-              "condition_summary": d["condition_summary"],
-              "strongest_raw_native_layer": strongest,
-              "top_native_attention_heads": d["top_first_token_attention_heads"]["native"][:8],
-              "cost": b["cost"],
-          }
-          print(json.dumps(summary, indent=2, sort_keys=True))
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Cross-model portability: Qwen2.5-0.5B-Instruct\n\n")
-              f.write(f"- exact model revision: `{b['model_identity']['revision']}`\n")
-              f.write(f"- Foundry-compatible content manifest: `{b['artifact_provenance']['identity_digest']}`\n")
-              f.write(f"- strongest mean raw↔native residual contrast: layer `{strongest['layer']}` = `{strongest['mean_raw_native_cosine_distance']:.4f}` cosine distance\n")
-              f.write("- portable instruments: behavior/candidate surfaces, hidden states, attention tensors, greedy generation all passed\n\n")
-              f.write("| Condition | Mean margin | Mean rank | Top-1 | Mean prompt tokens |\n")
-              f.write("|---|---:|---:|---:|---:|\n")
-              for cid, row in d["condition_summary"].items():
-                  f.write(f"| {cid} | {row['mean_correct_margin']:.4f} | {row['mean_correct_rank']:.3f} | {row['top1_rate']:.3f} | {row['mean_input_tokens']:.1f} |\n")
+          m = json.loads(Path('out/runtime-cache-metrics.json').read_text())
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as f:
+              f.write('## Runtime/pip cache qualification\n\n')
+              f.write(f"- exact cache hit: `{m['cache_hit']}`\n")
+              f.write(f"- restore + install elapsed: `{m['setup_restore_install_seconds']:.3f} s`\n")
+              f.write(f"- pip cache size: `{m['pip_cache_size_bytes'] / (1024**2):.1f} MiB`\n")
+              f.write(f"- pip environment hash: `{m['pip_freeze_sha256']}`\n")
+              f.write(f"- deterministic Torch smoke hash: `{m['torch_smoke_sha256']}`\n")
           PY
 
-      - name: Upload bounded evidence
+      - name: Upload bounded qualification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-cross-model-portability-${{ github.run_id }}
+          name: model-spelunker-runtime-cache-${{ github.run_id }}
           path: |
-            out/cross-model-portability.json
-            out-summary.json
+            out/runtime-cache-metrics.json
+            out-runtime-cache.log
             out-validation.log
-            out-run.log
           if-no-files-found: warn
           retention-days: 7
           compression-level: 9
