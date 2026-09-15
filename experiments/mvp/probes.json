@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "probes": [
+    {
+      "probe_id": "protocol-arithmetic-001",
+      "contrast_id": "native-vs-generic",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {
+          "condition_id": "native",
+          "render": "native",
+          "user": "Which answer is correct? 17 + 8 = ? A) 25 B) 26. Answer only A or B."
+        },
+        {
+          "condition_id": "generic",
+          "render": "generic",
+          "user": "Which answer is correct? 17 + 8 = ? A) 25 B) 26. Answer only A or B."
+        }
+      ]
+    },
+    {
+      "probe_id": "decomposition-001",
+      "contrast_id": "direct-vs-decomposed",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {
+          "condition_id": "direct",
+          "render": "native",
+          "user": "A machine makes 7 parts every 3 minutes. At the same constant rate, how many parts does it make in 12 minutes? A) 28 B) 21. Answer only A or B."
+        },
+        {
+          "condition_id": "decomposed",
+          "render": "native",
+          "user": "Solve the rate problem by first determining how many 3-minute intervals fit in 12 minutes, then multiply. A machine makes 7 parts every 3 minutes. How many parts in 12 minutes? A) 28 B) 21. Answer only A or B."
+        }
+      ]
+    },
+    {
+      "probe_id": "paraphrase-001",
+      "contrast_id": "semantic-paraphrase",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {
+          "condition_id": "wording-a",
+          "render": "native",
+          "user": "Which item is heavier? A) one kilogram of iron B) one kilogram of feathers. Answer only A or B."
+        },
+        {
+          "condition_id": "wording-b",
+          "render": "native",
+          "user": "Choose the heavier quantity: A) 1 kg iron B) 1 kg feathers. Answer only A or B."
+        }
+      ]
+    },
+    {
+      "probe_id": "null-control-001",
+      "contrast_id": "format-null-control",
+      "candidates": ["A", "B"],
+      "conditions": [
+        {
+          "condition_id": "base",
+          "render": "native",
+          "user": "Which number is larger? A) 41 B) 14. Answer only A or B."
+        },
+        {
+          "condition_id": "spacing",
+          "render": "native",
+          "user": "Which number is larger?  A) 41  B) 14.  Answer only A or B."
+        }
+      ]
+    }
+  ]
+}
