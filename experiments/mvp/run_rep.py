@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import resource
 import sys
 import time
@@ -71,13 +72,17 @@ def content_manifest(root: Path) -> tuple[str, list[dict[str, Any]]]:
 
 def render_prompt(tokenizer: Any, condition: dict[str, Any]) -> str:
     user = condition["user"]
-    if condition["render"] == "native":
-        return tokenizer.apply_chat_template(
-            [{"role": "user", "content": user}], tokenize=False, add_generation_prompt=True
-        )
-    if condition["render"] == "generic":
+    mode = condition["render"]
+    messages = [{"role": "user", "content": user}]
+    if mode == "native":
+        return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    if mode == "native_no_generation":
+        return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+    if mode == "user_only":
+        return user
+    if mode == "generic":
         return f"User: {user}\nAssistant:"
-    raise ValueError(f"unsupported render mode: {condition['render']}")
+    raise ValueError(f"unsupported render mode: {mode}")
 
 
 def token_hash(ids: torch.Tensor) -> str:
@@ -135,7 +140,29 @@ def activation_contrast(left: list[torch.Tensor], right: list[torch.Tensor]) -> 
     return out
 
 
-def run_condition(model: Any, tokenizer: Any, condition: dict[str, Any], candidates: list[str]) -> tuple[dict[str, Any], list[torch.Tensor]]:
+def parse_generation_candidate(text: str) -> str | None:
+    stripped = text.strip()
+    if stripped in {"A", "B"}:
+        return stripped
+    patterns = [
+        r"(?i)\b(?:answer|choice|option)\s*(?:is|:)\s*([AB])(?:\b|\))",
+        r"(?i)^\s*([AB])\)",
+        r"(?i)^\s*([AB])\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, stripped)
+        if match:
+            return match.group(1).upper()
+    return None
+
+
+def run_condition(
+    model: Any,
+    tokenizer: Any,
+    condition: dict[str, Any],
+    candidates: list[str],
+    expected_candidate: str | None,
+) -> tuple[dict[str, Any], list[torch.Tensor]]:
     started = now()
     prompt = render_prompt(tokenizer, condition)
     encoded = tokenizer(prompt, return_tensors="pt")
@@ -143,22 +170,43 @@ def run_condition(model: Any, tokenizer: Any, condition: dict[str, Any], candida
         forward = model(**encoded, output_hidden_states=True, use_cache=False)
     hidden_summary, hidden_vectors = summarize_hidden(forward.hidden_states)
     scores = [sequence_logprob(model, tokenizer, prompt, candidate) for candidate in candidates]
-    winner = max({x["candidate"]: x["logprob"] for x in scores}, key=lambda k: {x["candidate"]: x["logprob"] for x in scores}[k])
+    score_map = {x["candidate"]: x["logprob"] for x in scores}
+    winner = max(score_map, key=score_map.get)
+    ordered = sorted(score_map.values(), reverse=True)
+    top_margin = ordered[0] - ordered[1] if len(ordered) > 1 else None
+    expected_margin = None
+    if expected_candidate in score_map:
+        alternatives = [score for label, score in score_map.items() if label != expected_candidate]
+        expected_margin = score_map[expected_candidate] - max(alternatives) if alternatives else None
+
     with torch.inference_mode():
         generated = model.generate(
-            **encoded, max_new_tokens=16, do_sample=False, use_cache=True,
+            **encoded,
+            max_new_tokens=16,
+            do_sample=False,
+            use_cache=True,
             pad_token_id=tokenizer.eos_token_id,
         )
     new_ids = generated[0, encoded.input_ids.shape[1]:]
+    generation = tokenizer.decode(new_ids, skip_special_tokens=True).strip()
+    generation_candidate = parse_generation_candidate(generation)
+
     return ({
         "condition_id": condition["condition_id"],
         "render": condition["render"],
+        "rendered_prompt": prompt,
         "prompt_sha256": "sha256:" + hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "input_token_ids_sha256": token_hash(encoded.input_ids),
         "input_tokens": int(encoded.input_ids.numel()),
         "candidate_scores": scores,
         "candidate_winner": winner,
-        "generation": tokenizer.decode(new_ids, skip_special_tokens=True).strip(),
+        "candidate_top_margin": top_margin,
+        "candidate_correct": winner == expected_candidate if expected_candidate else None,
+        "expected_candidate_margin": expected_margin,
+        "generation": generation,
+        "generation_candidate": generation_candidate,
+        "generation_correct": generation_candidate == expected_candidate if generation_candidate and expected_candidate else None,
+        "surface_generation_agree": generation_candidate == winner if generation_candidate else None,
         "hidden_summary": hidden_summary,
         "elapsed_seconds": now() - started,
     }, hidden_vectors)
@@ -211,13 +259,17 @@ def main() -> int:
     model.eval()
     timings["model_load_seconds"] = now() - t
 
-    probes = json.loads(args.probes.read_text(encoding="utf-8"))["probes"]
+    corpus = json.loads(args.probes.read_text(encoding="utf-8"))
+    probes = corpus["probes"]
     observations = []
     execution_started = now()
     for probe in probes:
+        expected_candidate = probe.get("expected_candidate")
         condition_results, vectors = [], {}
         for condition in probe["conditions"]:
-            result, hidden_vectors = run_condition(model, tokenizer, condition, probe["candidates"])
+            result, hidden_vectors = run_condition(
+                model, tokenizer, condition, probe["candidates"], expected_candidate
+            )
             condition_results.append(result)
             vectors[condition["condition_id"]] = hidden_vectors
         left_id = probe["conditions"][0]["condition_id"]
@@ -225,6 +277,7 @@ def main() -> int:
         observations.append({
             "probe_id": probe["probe_id"],
             "contrast_id": probe["contrast_id"],
+            "expected_candidate": expected_candidate,
             "conditions": condition_results,
             "activation_contrast": activation_contrast(vectors[left_id], vectors[right_id]),
         })
@@ -251,9 +304,9 @@ def main() -> int:
         json.dumps(observations, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     bundle = {
-        "probe_id": "mvp-corpus-v1",
+        "probe_id": corpus.get("corpus_id", "mvp-corpus-v1"),
         "instrument": "shared-forward-behavior-logits-activation-summary",
-        "instrument_version": "mvp-1",
+        "instrument_version": "mvp-2",
         "model_identity": {"repository": MODEL_REPO, "revision": MODEL_REVISION, "logical_id": LOGICAL_ID},
         "artifact_provenance": artifact_provenance,
         "access_tier": "A1",
@@ -275,8 +328,8 @@ def main() -> int:
             "Content-manifest identity uses the Foundry canonical SHA-256 material shape."
         ],
         "known_failure_modes": [
-            "Generic rendering is intentionally non-native and may create protocol artifacts.",
-            "Candidate scoring and free generation can disagree because they answer different measurement questions."
+            "Protocol rendering can materially change continuation-token priors.",
+            "Candidate scoring and free generation answer different measurement questions and may disagree."
         ],
         "contradictions": [],
         "cost": {
@@ -309,6 +362,7 @@ def main() -> int:
     args.output.write_text(json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({
         "run_id": bundle["provenance"]["run_id"],
+        "corpus_id": bundle["probe_id"],
         "model_revision": MODEL_REVISION,
         "artifact_identity": artifact_provenance["identity_digest"],
         "probes": len(observations),

@@ -1,11 +1,14 @@
-name: Model Spelunker MVP Rep
+name: Model Spelunker Protocol Ablation
 
 on:
   push:
     branches:
       - impl/mvp-execution
     paths:
-      - "experiments/mvp/**"
+      - "experiments/mvp/run_rep.py"
+      - "experiments/mvp/protocol-ablation.json"
+      - "experiments/mvp/validate_rep.py"
+      - "experiments/mvp/compare_equivalence.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -51,35 +54,41 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run counterbalanced shared-probe rep
+      - name: Run protocol-ablation corpus
         shell: bash
         run: |
           set -euo pipefail
           /usr/bin/time -v python3 experiments/mvp/run_rep.py \
-            --output out/mvp-rep.json \
+            --probes experiments/mvp/protocol-ablation.json \
+            --output out/protocol-ablation.json \
             2>&1 | tee out-run.log
 
-      - name: Validate batched evidence
+      - name: Validate ablation evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_rep.py out/mvp-rep.json --min-probes 10 | tee out-validation.log
+          python3 experiments/mvp/validate_rep.py out/protocol-ablation.json --min-probes 18 \
+            | tee out-validation.log
 
-      - name: Build isolated single-probe corpus
+      - name: Build isolated ablation probe
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
           from pathlib import Path
-          source = json.loads(Path("experiments/mvp/probes.json").read_text())
-          probe_id = "protocol-arithmetic-a"
+          source = json.loads(Path("experiments/mvp/protocol-ablation.json").read_text())
+          probe_id = "arith-a-native-vs-no-gen"
           probes = [p for p in source["probes"] if p["probe_id"] == probe_id]
           assert len(probes) == 1
-          Path("out/isolated-probes.json").write_text(json.dumps({"schema_version": source["schema_version"], "probes": probes}, indent=2) + "\n")
+          Path("out/isolated-probes.json").write_text(json.dumps({
+              "schema_version": source["schema_version"],
+              "corpus_id": "protocol-ablation-v1-isolated",
+              "probes": probes,
+          }, indent=2) + "\n")
           PY
 
-      - name: Run fresh-process isolated rep from hydrated bytes
+      - name: Run fresh-process isolated ablation probe
         shell: bash
         run: |
           set -euo pipefail
@@ -93,61 +102,94 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_rep.py out/isolated-rep.json --min-probes 1 | tee out-isolated-validation.log
+          python3 experiments/mvp/validate_rep.py out/isolated-rep.json --min-probes 1 \
+            | tee out-isolated-validation.log
 
-      - name: Qualify batching equivalence
+      - name: Recheck batching equivalence
         shell: bash
         run: |
           set -euo pipefail
           python3 experiments/mvp/compare_equivalence.py \
-            out/mvp-rep.json out/isolated-rep.json \
-            --probe-id protocol-arithmetic-a \
+            out/protocol-ablation.json out/isolated-rep.json \
+            --probe-id arith-a-native-vs-no-gen \
             | tee out-equivalence.log
 
-      - name: Summarize scientific and execution results
+      - name: Summarize protocol-control results
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY' | tee out-summary.json
           import json
+          import os
+          from collections import defaultdict
           from pathlib import Path
-          b = json.loads(Path("out/mvp-rep.json").read_text())
-          cfg = json.loads(Path("experiments/mvp/probes.json").read_text())
-          expected = {p["probe_id"]: p["expected_candidate"] for p in cfg["probes"]}
-          eq = json.loads(Path("out-equivalence.log").read_text().strip())
-          print("## Model Spelunker MVP result")
-          print()
-          print(f"- run: `{b['provenance']['run_id']}`")
-          print(f"- model revision: `{b['model_identity']['revision']}`")
-          print(f"- artifact identity: `{b['artifact_provenance']['identity_digest']}`")
-          print(f"- total program seconds: `{b['cost']['total_seconds']:.2f}`")
-          print(f"- cold hydration seconds: `{b['cost']['hydrate_seconds']:.2f}`")
-          print(f"- batched experiment seconds: `{b['cost']['experiment_seconds']:.2f}`")
-          print(f"- isolated-vs-batched equivalence: `{eq['equivalent']}`")
-          print(f"- isolated prehydrated selection seconds: `{eq['isolated_hydrate_seconds']:.4f}`")
-          print()
-          print("| Probe | Expected | Left winner | Right winner | Max activation cosine distance |")
-          print("|---|---:|---:|---:|---:|")
+
+          b = json.loads(Path("out/protocol-ablation.json").read_text())
+          groups = defaultdict(list)
           for p in b["observations"]["probes"]:
-              c = p["conditions"]
-              maximum = max(x["cosine_distance"] for x in p["activation_contrast"])
-              print(f"| {p['probe_id']} | {expected[p['probe_id']]} | {c[0]['candidate_winner']} | {c[1]['candidate_winner']} | {maximum:.6f} |")
-          protocol = [p for p in b["observations"]["probes"] if p["contrast_id"] == "native-vs-generic"]
-          native_correct = sum(p["conditions"][0]["candidate_winner"] == expected[p["probe_id"]] for p in protocol)
-          generic_correct = sum(p["conditions"][1]["candidate_winner"] == expected[p["probe_id"]] for p in protocol)
-          print()
-          print(f"Protocol candidate-score accuracy: native `{native_correct}/{len(protocol)}`, generic `{generic_correct}/{len(protocol)}`.")
+              groups[p["contrast_id"]].append(p)
+
+          summary = {
+              "run_id": b["provenance"]["run_id"],
+              "artifact_identity": b["artifact_provenance"]["identity_digest"],
+              "corpus_id": b["probe_id"],
+              "contrasts": {},
+          }
+          for contrast, probes in sorted(groups.items()):
+              left_correct = sum(p["conditions"][0]["candidate_correct"] is True for p in probes)
+              right_correct = sum(p["conditions"][1]["candidate_correct"] is True for p in probes)
+              left_winners = defaultdict(int)
+              right_winners = defaultdict(int)
+              generation_seen = 0
+              surface_generation_agree = 0
+              final_distances = []
+              max_distances = []
+              for p in probes:
+                  left, right = p["conditions"]
+                  left_winners[left["candidate_winner"]] += 1
+                  right_winners[right["candidate_winner"]] += 1
+                  for c in (left, right):
+                      if c["generation_candidate"] is not None:
+                          generation_seen += 1
+                          surface_generation_agree += int(c["surface_generation_agree"] is True)
+                  final_distances.append(p["activation_contrast"][-1]["cosine_distance"])
+                  max_distances.append(max(x["cosine_distance"] for x in p["activation_contrast"]))
+              summary["contrasts"][contrast] = {
+                  "n": len(probes),
+                  "left_candidate_accuracy": left_correct / len(probes),
+                  "right_candidate_accuracy": right_correct / len(probes),
+                  "left_winners": dict(left_winners),
+                  "right_winners": dict(right_winners),
+                  "mean_final_layer_cosine_distance": sum(final_distances) / len(final_distances),
+                  "mean_max_layer_cosine_distance": sum(max_distances) / len(max_distances),
+                  "generation_candidate_parse_count": generation_seen,
+                  "surface_generation_agreement_rate_when_parseable": (
+                      surface_generation_agree / generation_seen if generation_seen else None
+                  ),
+              }
+          print(json.dumps(summary, indent=2, sort_keys=True))
+
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
+              f.write("## Protocol-ablation result\n\n")
+              f.write(f"- run: `{summary['run_id']}`\n")
+              f.write(f"- artifact: `{summary['artifact_identity']}`\n")
+              f.write(f"- corpus: `{summary['corpus_id']}`\n\n")
+              f.write("| Contrast | N | Left accuracy | Right accuracy | Mean final cosine distance | Left winners | Right winners |\n")
+              f.write("|---|---:|---:|---:|---:|---|---|\n")
+              for name, s in summary["contrasts"].items():
+                  f.write(f"| {name} | {s['n']} | {s['left_candidate_accuracy']:.3f} | {s['right_candidate_accuracy']:.3f} | {s['mean_final_layer_cosine_distance']:.6f} | {s['left_winners']} | {s['right_winners']} |\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-mvp-${{ github.run_id }}
+          name: model-spelunker-protocol-${{ github.run_id }}
           path: |
-            out/mvp-rep.json
+            out/protocol-ablation.json
             out/isolated-rep.json
             out/isolated-probes.json
+            out-summary.json
             out-validation.log
             out-isolated-validation.log
             out-equivalence.log
