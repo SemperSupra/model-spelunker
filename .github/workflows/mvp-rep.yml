@@ -1,0 +1,106 @@
+name: Model Spelunker MVP Rep
+
+on:
+  push:
+    branches:
+      - impl/mvp-execution
+    paths:
+      - "experiments/mvp/**"
+      - "schemas/**"
+      - ".github/workflows/mvp-rep.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-spelunker-mvp-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  TOKENIZERS_PARALLELISM: "false"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  rep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact experiment revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Record runner baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          uname -a
+          df -h /
+          free -h
+
+      - name: Install CPU inference runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch==2.5.1"
+          python3 -m pip install --disable-pip-version-check --no-input \
+            -r experiments/mvp/requirements.txt
+
+      - name: Run shared-probe rep
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v python3 experiments/mvp/run_rep.py \
+            --output out/mvp-rep.json \
+            2>&1 | tee out-run.log
+
+      - name: Independently validate evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/mvp/validate_rep.py out/mvp-rep.json | tee out-validation.log
+
+      - name: Summarize first results
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          b = json.loads(Path("out/mvp-rep.json").read_text())
+          print("## Model Spelunker MVP result")
+          print()
+          print(f"- run: `{b['provenance']['run_id']}`")
+          print(f"- model revision: `{b['model_identity']['revision']}`")
+          print(f"- artifact identity: `{b['artifact_provenance']['identity_digest']}`")
+          print(f"- identity kind: `{b['artifact_provenance']['identity_kind']}`")
+          print(f"- total seconds: `{b['cost']['total_seconds']:.2f}`")
+          print(f"- hydration seconds: `{b['cost']['hydrate_seconds']:.2f}`")
+          print(f"- model load seconds: `{b['cost']['model_load_seconds']:.2f}`")
+          print(f"- experiment seconds: `{b['cost']['experiment_seconds']:.2f}`")
+          print()
+          print("| Probe | Left winner | Right winner | Max activation cosine distance |")
+          print("|---|---:|---:|---:|")
+          for p in b["observations"]["probes"]:
+              c = p["conditions"]
+              maximum = max(x["cosine_distance"] for x in p["activation_contrast"])
+              print(f"| {p['probe_id']} | {c[0]['candidate_winner']} | {c[1]['candidate_winner']} | {maximum:.6f} |")
+          PY
+
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-spelunker-mvp-${{ github.run_id }}
+          path: |
+            out/mvp-rep.json
+            out-validation.log
+            out-run.log
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9
