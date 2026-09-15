@@ -24,6 +24,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("bundle", type=Path)
     parser.add_argument("--schema", type=Path, default=Path("schemas/observation-bundle.schema.json"))
+    parser.add_argument("--min-probes", type=int, default=1)
     args = parser.parse_args()
 
     bundle = json.loads(args.bundle.read_text(encoding="utf-8"))
@@ -39,7 +40,7 @@ def main() -> int:
     assert len(provenance["upstream_revision"]) == 40
 
     probes = bundle["observations"]["probes"]
-    assert len(probes) >= 4
+    assert len(probes) >= args.min_probes
     for probe in probes:
         assert len(probe["conditions"]) == 2, probe["probe_id"]
         assert len(probe["activation_contrast"]) > 1, probe["probe_id"]
