@@ -1,14 +1,14 @@
-name: Model Spelunker Prebuilt Runtime Qualification
+name: Model Spelunker TinyLlama Portability
 
 on:
   push:
     branches:
       - impl/mvp-execution
     paths:
+      - "experiments/mvp/run_cross_model_portability.py"
+      - "experiments/mvp/run_tinyllama_portability.py"
       - "experiments/mvp/requirements.txt"
-      - "experiments/mvp/runtime_venv_probe.py"
-      - "experiments/mvp/check_runtime_venv.py"
-      - "experiments/mvp/runtime-venv-nonce.txt"
+      - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
 
@@ -20,19 +20,21 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  TOKENIZERS_PARALLELISM: "false"
   PYTHONUNBUFFERED: "1"
 
 jobs:
   rep:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
-      - name: Checkout exact qualification revision
+      - name: Checkout exact experiment revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
 
-      - name: Start ready-time timer and derive cache key inputs
+      - name: Record runner baseline and derive runtime key
         id: runtime-key
         shell: bash
         run: |
@@ -40,12 +42,15 @@ jobs:
           mkdir -p out
           date +%s%N > out/setup-start-ns.txt
           python3 --version
+          uname -a
+          df -h /
+          free -h
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import sys
           print(f"python_tag={sys.implementation.cache_tag}")
           PY
 
-      - name: Restore complete prebuilt runtime
+      - name: Restore qualified prebuilt runtime
         id: runtime-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -64,54 +69,111 @@ jobs:
           .runtime-venv/bin/python -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Measure validated ready runtime
+      - name: Record runtime ready latency
         shell: bash
         env:
           CACHE_HIT: ${{ steps.runtime-cache.outputs.cache-hit }}
-          CACHE_KEY: model-spelunker-venv-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-torch2.5.1-${{ hashFiles('experiments/mvp/requirements.txt') }}
         run: |
           set -euo pipefail
-          .runtime-venv/bin/python experiments/mvp/runtime_venv_probe.py \
-            --started-ns-file out/setup-start-ns.txt \
-            --cache-hit "$CACHE_HIT" \
-            --cache-key "$CACHE_KEY" \
-            --venv .runtime-venv \
-            --output out/runtime-venv-metrics.json \
-            | tee out-runtime-venv.log
+          .runtime-venv/bin/python - <<'PY'
+          import json, os, time
+          from pathlib import Path
+          start = int(Path('out/setup-start-ns.txt').read_text().strip())
+          payload = {
+              'cache_hit': os.environ.get('CACHE_HIT') == 'true',
+              'setup_to_runtime_ready_seconds': (time.time_ns() - start) / 1e9,
+          }
+          Path('out/runtime-ready.json').write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(payload, sort_keys=True))
+          PY
 
-      - name: Validate runtime identity
+      - name: Run TinyLlama third-family portability rep
         shell: bash
         run: |
           set -euo pipefail
-          .runtime-venv/bin/python experiments/mvp/check_runtime_venv.py out/runtime-venv-metrics.json \
-            | tee out-validation.log
+          /usr/bin/time -v .runtime-venv/bin/python experiments/mvp/run_tinyllama_portability.py \
+            --output out/tinyllama-portability.json \
+            2>&1 | tee out-run.log
 
-      - name: Summarize prebuilt runtime qualification
+      - name: Validate portable evidence contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          .runtime-venv/bin/python - <<'PY' | tee out-validation.log
+          import json
+          from pathlib import Path
+          import jsonschema
+
+          b = json.loads(Path('out/tinyllama-portability.json').read_text())
+          schema = json.loads(Path('schemas/observation-bundle.schema.json').read_text())
+          jsonschema.validate(b, schema)
+          assert b['probe_id'] == 'cross-model-portability-tinyllama-v1'
+          assert b['access_tier'] == 'A2'
+          assert b['evidence_level'] == 'REPRODUCED'
+          assert b['model_identity']['repository'] == 'TinyLlama/TinyLlama-1.1B-Chat-v1.0'
+          assert b['model_identity']['revision'] == 'fe8a4ea1ffedaf415f4da2f062534de366a451e6'
+          p = b['artifact_provenance']
+          assert p['tracked'] is True and p['verified'] is True
+          assert p['identity_kind'] == 'content-manifest'
+          assert p['identity_digest'].startswith('sha256:')
+          tasks = b['observations']['tasks']
+          assert len(tasks) == 6
+          for task in tasks:
+              assert set(task['conditions']) == {'native', 'raw', 'newline_raw'}
+              for row in task['conditions'].values():
+                  assert len(row['candidate_scores']) == 5
+                  assert len(row['hidden_summary']) > 4
+                  assert len(row['attention_heads']) > 0
+          d = b['derived_metrics']
+          assert set(d['condition_summary']) == {'native', 'raw', 'newline_raw'}
+          assert all(d['portable_instrument_checks'].values())
+          assert d['portability_rep']['family_ordinal'] == 3
+          assert 0 < float(b['cost']['peak_rss_mib']) < 15000
+          print(json.dumps({
+              'validated': True,
+              'run_id': b['provenance']['run_id'],
+              'manifest': p['identity_digest'],
+              'conditions': d['condition_summary'],
+              'peak_rss_mib': b['cost']['peak_rss_mib'],
+              'total_seconds': b['cost']['total_seconds'],
+          }, sort_keys=True))
+          PY
+
+      - name: Summarize portability and resource envelope
         shell: bash
         run: |
           set -euo pipefail
           .runtime-venv/bin/python - <<'PY'
           import json, os
           from pathlib import Path
-          m = json.loads(Path('out/runtime-venv-metrics.json').read_text())
+          b = json.loads(Path('out/tinyllama-portability.json').read_text())
+          r = json.loads(Path('out/runtime-ready.json').read_text())
+          d = b['derived_metrics']
+          c = b['cost']
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as f:
-              f.write('## Prebuilt runtime cache qualification\n\n')
-              f.write(f"- exact cache hit: `{m['cache_hit']}`\n")
-              f.write(f"- restore/build → validated ready: `{m['restore_or_build_to_ready_seconds']:.3f} s`\n")
-              f.write(f"- venv size: `{m['venv_size_bytes'] / (1024**2):.1f} MiB`\n")
-              f.write(f"- exact environment hash: `{m['pip_freeze_sha256']}`\n")
-              f.write(f"- integer Torch smoke: `{m['integer_torch_smoke_sha256']}`\n")
+              f.write('## TinyLlama third-family portability\n\n')
+              f.write(f"- runtime cache hit: `{r['cache_hit']}`\n")
+              f.write(f"- setup → runtime ready: `{r['setup_to_runtime_ready_seconds']:.3f} s`\n")
+              f.write(f"- exact model revision: `{b['model_identity']['revision']}`\n")
+              f.write(f"- content-manifest: `{b['artifact_provenance']['identity_digest']}`\n")
+              f.write(f"- peak RSS: `{c['peak_rss_mib']:.1f} MiB`\n")
+              f.write(f"- total script time: `{c['total_seconds']:.2f} s`\n\n")
+              f.write('| Condition | Top-1 | Mean rank | Mean margin |\n')
+              f.write('|---|---:|---:|---:|\n')
+              for cid, row in d['condition_summary'].items():
+                  f.write(f"| {cid} | {row['top1_rate']:.3f} | {row['mean_correct_rank']:.3f} | {row['mean_correct_margin']:.4f} |\n")
           PY
 
-      - name: Upload bounded qualification evidence
+      - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-runtime-venv-${{ github.run_id }}
+          name: model-spelunker-tinyllama-portability-${{ github.run_id }}
           path: |
-            out/runtime-venv-metrics.json
-            out-runtime-venv.log
+            out/tinyllama-portability.json
+            out/runtime-ready.json
             out-validation.log
+            out-run.log
           if-no-files-found: warn
           retention-days: 7
           compression-level: 9
