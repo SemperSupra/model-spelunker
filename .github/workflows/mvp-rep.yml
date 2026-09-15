@@ -51,7 +51,7 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run shared-probe rep
+      - name: Run counterbalanced shared-probe rep
         shell: bash
         run: |
           set -euo pipefail
@@ -59,13 +59,52 @@ jobs:
             --output out/mvp-rep.json \
             2>&1 | tee out-run.log
 
-      - name: Independently validate evidence
+      - name: Validate batched evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_rep.py out/mvp-rep.json | tee out-validation.log
+          python3 experiments/mvp/validate_rep.py out/mvp-rep.json --min-probes 10 | tee out-validation.log
 
-      - name: Summarize first results
+      - name: Build isolated single-probe corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          source = json.loads(Path("experiments/mvp/probes.json").read_text())
+          probe_id = "protocol-arithmetic-a"
+          probes = [p for p in source["probes"] if p["probe_id"] == probe_id]
+          assert len(probes) == 1
+          Path("out/isolated-probes.json").write_text(json.dumps({"schema_version": source["schema_version"], "probes": probes}, indent=2) + "\n")
+          PY
+
+      - name: Run fresh-process isolated rep from hydrated bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v python3 experiments/mvp/run_rep.py \
+            --probes out/isolated-probes.json \
+            --model-dir /tmp/model-spelunker-smollm2 \
+            --output out/isolated-rep.json \
+            2>&1 | tee out-isolated-run.log
+
+      - name: Validate isolated evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/mvp/validate_rep.py out/isolated-rep.json --min-probes 1 | tee out-isolated-validation.log
+
+      - name: Qualify batching equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 experiments/mvp/compare_equivalence.py \
+            out/mvp-rep.json out/isolated-rep.json \
+            --probe-id protocol-arithmetic-a \
+            | tee out-equivalence.log
+
+      - name: Summarize scientific and execution results
         shell: bash
         run: |
           set -euo pipefail
@@ -73,23 +112,31 @@ jobs:
           import json
           from pathlib import Path
           b = json.loads(Path("out/mvp-rep.json").read_text())
+          cfg = json.loads(Path("experiments/mvp/probes.json").read_text())
+          expected = {p["probe_id"]: p["expected_candidate"] for p in cfg["probes"]}
+          eq = json.loads(Path("out-equivalence.log").read_text().strip())
           print("## Model Spelunker MVP result")
           print()
           print(f"- run: `{b['provenance']['run_id']}`")
           print(f"- model revision: `{b['model_identity']['revision']}`")
           print(f"- artifact identity: `{b['artifact_provenance']['identity_digest']}`")
-          print(f"- identity kind: `{b['artifact_provenance']['identity_kind']}`")
-          print(f"- total seconds: `{b['cost']['total_seconds']:.2f}`")
-          print(f"- hydration seconds: `{b['cost']['hydrate_seconds']:.2f}`")
-          print(f"- model load seconds: `{b['cost']['model_load_seconds']:.2f}`")
-          print(f"- experiment seconds: `{b['cost']['experiment_seconds']:.2f}`")
+          print(f"- total program seconds: `{b['cost']['total_seconds']:.2f}`")
+          print(f"- cold hydration seconds: `{b['cost']['hydrate_seconds']:.2f}`")
+          print(f"- batched experiment seconds: `{b['cost']['experiment_seconds']:.2f}`")
+          print(f"- isolated-vs-batched equivalence: `{eq['equivalent']}`")
+          print(f"- isolated prehydrated selection seconds: `{eq['isolated_hydrate_seconds']:.4f}`")
           print()
-          print("| Probe | Left winner | Right winner | Max activation cosine distance |")
-          print("|---|---:|---:|---:|")
+          print("| Probe | Expected | Left winner | Right winner | Max activation cosine distance |")
+          print("|---|---:|---:|---:|---:|")
           for p in b["observations"]["probes"]:
               c = p["conditions"]
               maximum = max(x["cosine_distance"] for x in p["activation_contrast"])
-              print(f"| {p['probe_id']} | {c[0]['candidate_winner']} | {c[1]['candidate_winner']} | {maximum:.6f} |")
+              print(f"| {p['probe_id']} | {expected[p['probe_id']]} | {c[0]['candidate_winner']} | {c[1]['candidate_winner']} | {maximum:.6f} |")
+          protocol = [p for p in b["observations"]["probes"] if p["contrast_id"] == "native-vs-generic"]
+          native_correct = sum(p["conditions"][0]["candidate_winner"] == expected[p["probe_id"]] for p in protocol)
+          generic_correct = sum(p["conditions"][1]["candidate_winner"] == expected[p["probe_id"]] for p in protocol)
+          print()
+          print(f"Protocol candidate-score accuracy: native `{native_correct}/{len(protocol)}`, generic `{generic_correct}/{len(protocol)}`.")
           PY
 
       - name: Upload bounded evidence
@@ -99,8 +146,13 @@ jobs:
           name: model-spelunker-mvp-${{ github.run_id }}
           path: |
             out/mvp-rep.json
+            out/isolated-rep.json
+            out/isolated-probes.json
             out-validation.log
+            out-isolated-validation.log
+            out-equivalence.log
             out-run.log
+            out-isolated-run.log
           if-no-files-found: warn
           retention-days: 7
           compression-level: 9
