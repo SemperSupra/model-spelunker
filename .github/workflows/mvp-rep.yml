@@ -1,4 +1,4 @@
-name: Model Spelunker Sink Token Replication
+name: Model Spelunker Cross-Model Portability
 
 on:
   push:
@@ -6,9 +6,8 @@ on:
       - impl/mvp-execution
     paths:
       - "experiments/mvp/run_rep.py"
-      - "experiments/mvp/run_activation_poke.py"
-      - "experiments/mvp/run_sink_token_replication.py"
-      - "experiments/mvp/validate_sink_token_replication.py"
+      - "experiments/mvp/run_cross_model_portability.py"
+      - "experiments/mvp/validate_cross_model_portability.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -54,22 +53,22 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run frozen sink-token replication
+      - name: Run Qwen cross-model portability corpus
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_sink_token_replication.py \
-            --output out/sink-token-replication.json \
+          /usr/bin/time -v python3 experiments/mvp/run_cross_model_portability.py \
+            --output out/cross-model-portability.json \
             2>&1 | tee out-run.log
 
-      - name: Validate preregistered replication
+      - name: Validate portable instrument evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_sink_token_replication.py out/sink-token-replication.json \
+          python3 experiments/mvp/validate_cross_model_portability.py out/cross-model-portability.json \
             | tee out-validation.log
 
-      - name: Summarize frozen A replication
+      - name: Summarize cross-model result
         shell: bash
         run: |
           set -euo pipefail
@@ -77,37 +76,40 @@ jobs:
           import json
           import os
           from pathlib import Path
-          b = json.loads(Path("out/sink-token-replication.json").read_text())
-          p = b["derived_metrics"]["primary_A_vs_newline"]
-          s = b["derived_metrics"]["condition_summary"]
+          b = json.loads(Path("out/cross-model-portability.json").read_text())
+          d = b["derived_metrics"]
+          layers = d["mean_raw_native_layer_contrast"]
+          strongest = max(layers, key=lambda x: x["mean_raw_native_cosine_distance"])
           summary = {
               "run_id": b["provenance"]["run_id"],
+              "model": b["model_identity"],
               "artifact_identity": b["artifact_provenance"]["identity_digest"],
-              "primary_A_vs_newline": p,
-              "condition_summary": s,
+              "portable_instrument_checks": d["portable_instrument_checks"],
+              "condition_summary": d["condition_summary"],
+              "strongest_raw_native_layer": strongest,
+              "top_native_attention_heads": d["top_first_token_attention_heads"]["native"][:8],
               "cost": b["cost"],
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Frozen sink-token A replication\n\n")
-              f.write(f"- A vs newline mean correct-margin delta: `{p['mean_margin_delta']:.4f}`\n")
-              f.write(f"- top-1 rate delta: `{p['top1_rate_delta']:.4f}`\n")
-              f.write(f"- mean correct-rank delta (negative is better): `{p['mean_rank_delta']:.4f}`\n")
-              f.write(f"- tasks improved/worsened by margin: `{p['positive_margin_delta_tasks']}/{p['negative_margin_delta_tasks']}`\n")
-              f.write(f"- adverse shifts > {p['adverse_margin_threshold']}: `{p['adverse_gt_threshold_tasks']}`\n\n")
-              f.write("| Condition | Mean margin | Mean rank | Top-1 | L18H8 sink mass |\n")
+              f.write("## Cross-model portability: Qwen2.5-0.5B-Instruct\n\n")
+              f.write(f"- exact model revision: `{b['model_identity']['revision']}`\n")
+              f.write(f"- Foundry-compatible content manifest: `{b['artifact_provenance']['identity_digest']}`\n")
+              f.write(f"- strongest mean raw↔native residual contrast: layer `{strongest['layer']}` = `{strongest['mean_raw_native_cosine_distance']:.4f}` cosine distance\n")
+              f.write("- portable instruments: behavior/candidate surfaces, hidden states, attention tensors, greedy generation all passed\n\n")
+              f.write("| Condition | Mean margin | Mean rank | Top-1 | Mean prompt tokens |\n")
               f.write("|---|---:|---:|---:|---:|\n")
-              for cid, row in s.items():
-                  f.write(f"| {cid} | {row['mean_correct_margin']:.4f} | {row['mean_correct_rank']:.3f} | {row['top1_rate']:.3f} | {row['mean_sink_mass']:.6f} |\n")
+              for cid, row in d["condition_summary"].items():
+                  f.write(f"| {cid} | {row['mean_correct_margin']:.4f} | {row['mean_correct_rank']:.3f} | {row['top1_rate']:.3f} | {row['mean_input_tokens']:.1f} |\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-sink-token-replication-${{ github.run_id }}
+          name: model-spelunker-cross-model-portability-${{ github.run_id }}
           path: |
-            out/sink-token-replication.json
+            out/cross-model-portability.json
             out-summary.json
             out-validation.log
             out-run.log
