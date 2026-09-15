@@ -5,7 +5,7 @@ on:
     branches:
       - impl/siglip2-portability-stage
     paths:
-      - "experiments/mvp/run_siglip2_portability.py"
+      - "experiments/mvp/run_siglip2_portability_v2.py"
       - "experiments/mvp/validate_siglip2_portability.py"
       - ".github/workflows/siglip2-portability.yml"
   workflow_dispatch:
@@ -84,14 +84,15 @@ jobs:
           set -euo pipefail
           .siglip2-venv/bin/python - <<'PY' | tee out/runtime.json
           import json, os, platform
-          import PIL, torch, transformers, jsonschema
+          import PIL, torch, transformers
+          from importlib.metadata import version
           print(json.dumps({
               "cache_hit": os.environ.get("CACHE_HIT") == "true",
               "python": platform.python_version(),
               "torch": torch.__version__,
               "transformers": transformers.__version__,
               "pillow": PIL.__version__,
-              "jsonschema": getattr(jsonschema, "__version__", "unknown"),
+              "jsonschema": version("jsonschema"),
           }, sort_keys=True))
           PY
 
@@ -125,11 +126,11 @@ jobs:
             --cache-root /tmp/model-spelunker-foundry-siglip2 \
             --oras /bin/false | tail -n1)"
           test "${MODEL1}" = "${MODEL2}"
-          SECONDS="$(python3 -c "print((${END_NS}-${START_NS})/1e9)")"
+          HYDRATE_SECONDS="$(python3 -c "print((${END_NS}-${START_NS})/1e9)")"
           echo "model_dir=${MODEL2}" >> "$GITHUB_OUTPUT"
-          echo "hydrate_seconds=${SECONDS}" >> "$GITHUB_OUTPUT"
+          echo "hydrate_seconds=${HYDRATE_SECONDS}" >> "$GITHUB_OUTPUT"
           echo "model_dir=${MODEL2}" | tee out/hydration.txt
-          echo "hydrate_seconds=${SECONDS}" | tee -a out/hydration.txt
+          echo "hydrate_seconds=${HYDRATE_SECONDS}" | tee -a out/hydration.txt
 
       - name: Run non-generative multimodal portability rep
         shell: bash
@@ -138,7 +139,7 @@ jobs:
           FOUNDRY_HYDRATE_SECONDS: ${{ steps.hydrate.outputs.hydrate_seconds }}
         run: |
           set -euo pipefail
-          /usr/bin/time -v .siglip2-venv/bin/python experiments/mvp/run_siglip2_portability.py \
+          /usr/bin/time -v .siglip2-venv/bin/python experiments/mvp/run_siglip2_portability_v2.py \
             --model-dir "${MODEL_DIR}" \
             --output out/siglip2-portability.json \
             2>&1 | tee out/run.log
@@ -163,6 +164,7 @@ jobs:
           with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as f:
               f.write('## SigLIP2 multimodal portability\n\n')
               f.write(f"- exact Foundry digest: `{b['artifact_provenance']['identity_digest']}`\n")
+              f.write(f"- text mask adapter: `{b['observations']['text_mask_source']}`\n")
               f.write(f"- primary color-text top-1: `{d['primary_top1_rate']:.3f}`\n")
               f.write(f"- paraphrase color-text top-1: `{d['paraphrase_top1_rate']:.3f}`\n")
               f.write(f"- image/text pairwise RSA: `{d['cross_modal_rsa_pairwise_pearson']}`\n")
