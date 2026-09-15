@@ -1,0 +1,146 @@
+name: Model Spelunker MVP public batch
+
+on:
+  push:
+    branches:
+      - mvp/shared-probe-harness
+    paths:
+      - ".github/workflows/mvp-public-batch.yml"
+
+permissions:
+  contents: read
+
+env:
+  FOUNDRY_EVIDENCE_COMMIT: d1a62b202fcfbcd8b883ad0b4cef91c7fe661183
+  FOUNDRY_EVIDENCE_PATH: candidates/llm-smollm2-135m-instruct/12fd25f77366fa6b3b4b768ec3050bf629380bac/aeabe9988a26818aa309d65de79314562a862357/content-manifest-candidate.json
+
+jobs:
+  probe-batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout exact experiment branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Install CPU inference stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          python3 -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            "torch==2.14.0"
+          python3 -m pip install --disable-pip-version-check --no-input \
+            "transformers==5.16.1"
+          end=$(date +%s)
+          echo "DEPENDENCY_SETUP_SECONDS=$((end-start))" >> "$GITHUB_ENV"
+
+      - name: Fetch immutable Foundry candidate evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://raw.githubusercontent.com/SemperSupra/model-artifact-foundry/${FOUNDRY_EVIDENCE_COMMIT}/${FOUNDRY_EVIDENCE_PATH}"
+          curl --fail --silent --show-error --location "$url" --output /tmp/foundry-candidate.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          c = json.loads(Path('/tmp/foundry-candidate.json').read_text())
+          assert c['artifact_identity']['kind'] == 'content-manifest'
+          assert c['artifact_identity']['digest'] == 'sha256:1bba5bfa8fdd564ed1097b2f48d0e6c56d5ad1507a9c327c32982505af41480f'
+          assert c['upstream']['exact_revision'] == '12fd25f77366fa6b3b4b768ec3050bf629380bac'
+          PY
+
+      - name: Hydrate exact model bytes from upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          rm -rf /tmp/smollm2-model
+          mkdir -p /tmp/smollm2-model
+          python3 - <<'PY'
+          import json, urllib.request
+          from pathlib import Path
+          c = json.loads(Path('/tmp/foundry-candidate.json').read_text())
+          repo = c['upstream']['repository']
+          rev = c['upstream']['exact_revision']
+          root = Path('/tmp/smollm2-model')
+          for entry in c['files']:
+              name = entry['path']
+              url = f'https://huggingface.co/{repo}/resolve/{rev}/{name}?download=true'
+              req = urllib.request.Request(url, headers={'User-Agent': 'SemperSupra-model-spelunker/1'})
+              with urllib.request.urlopen(req, timeout=600) as response, (root / name).open('wb') as output:
+                  while True:
+                      chunk = response.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      output.write(chunk)
+          PY
+          end=$(date +%s)
+          echo "ARTIFACT_HYDRATION_SECONDS=$((end-start))" >> "$GITHUB_ENV"
+
+      - name: Independently verify hydration and bind Foundry selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          python3 scripts/prepare_foundry_selection.py \
+            --candidate /tmp/foundry-candidate.json \
+            --model-dir /tmp/smollm2-model \
+            --foundry-ref "SemperSupra/model-artifact-foundry@${FOUNDRY_EVIDENCE_COMMIT}:${FOUNDRY_EVIDENCE_PATH}" \
+            --output /tmp/foundry-selection.json
+          end=$(date +%s)
+          echo "ARTIFACT_VERIFICATION_SECONDS=$((end-start))" >> "$GITHUB_ENV"
+
+      - name: Execute shared probe batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python3 scripts/run_shared_probe.py \
+            --model-dir /tmp/smollm2-model \
+            --foundry-identity /tmp/foundry-selection.json \
+            --run-id "github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --dependency-setup-seconds "${DEPENDENCY_SETUP_SECONDS}" \
+            --artifact-hydration-seconds "${ARTIFACT_HYDRATION_SECONDS}" \
+            --artifact-verification-seconds "${ARTIFACT_VERIFICATION_SECONDS}" \
+            --output out/result.json
+
+      - name: Independently validate result consistency
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_mvp_result.py --result out/result.json
+          cp /tmp/foundry-selection.json out/foundry-selection.json
+
+      - name: Emit compact run summary
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          r = json.loads(Path('out/result.json').read_text())
+          e = r['batch_economics']
+          print('## Model Spelunker MVP public-safe qualification batch')
+          print()
+          print(f"- run: `{r['run_id']}`")
+          print(f"- model identity: `{r['model_artifact']['identity_digest']}`")
+          print(f"- probes: `{e['probe_count']}`")
+          print(f"- fixed setup seconds: `{e['fixed_setup_seconds']:.3f}`")
+          print(f"- mean marginal probe seconds: `{e['mean_marginal_probe_seconds']:.3f}`")
+          print(f"- setup fraction: `{e['setup_fraction']:.3f}`")
+          print(f"- throughput probes/minute: `{e['throughput_probes_per_minute']:.3f}`")
+          print(f"- break-even batch size @20% setup: `{e['break_even_batch_size_at_20pct_setup']}`")
+          print('- result classification: `PUBLIC_SAFE_HARNESS_QUALIFICATION`')
+          print('- this run is evidence; it is not Model Spelunker acceptance or Foundry promotion')
+          PY
+
+      - name: Upload bounded public-safe evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-spelunker-mvp-${{ github.run_id }}-${{ github.run_attempt }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
