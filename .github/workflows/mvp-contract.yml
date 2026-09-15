@@ -1,0 +1,24 @@
+name: Model Spelunker MVP contract
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install test dependency
+        run: python3 -m pip install --disable-pip-version-check pytest==8.3.5
+      - name: Contract tests
+        run: python3 -m pytest -q
+      - name: Plan-only smoke
+        run: |
+          python3 scripts/run_shared_probe.py --plan-only --output /tmp/plan.json
+          cat /tmp/plan.json
