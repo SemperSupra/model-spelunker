@@ -1,4 +1,4 @@
-name: Model Spelunker Neutral Prefix Challenge
+name: Model Spelunker Sink Token Panel
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     paths:
       - "experiments/mvp/run_rep.py"
       - "experiments/mvp/run_activation_poke.py"
-      - "experiments/mvp/run_neutral_prefix_challenge.py"
-      - "experiments/mvp/validate_neutral_prefix_challenge.py"
+      - "experiments/mvp/run_sink_token_panel.py"
+      - "experiments/mvp/validate_sink_token_panel.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -54,22 +54,22 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run neutral-prefix challenge corpus
+      - name: Run sink-token identity panel
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_neutral_prefix_challenge.py \
-            --output out/neutral-prefix-challenge.json \
+          /usr/bin/time -v python3 experiments/mvp/run_sink_token_panel.py \
+            --output out/sink-token-panel.json \
             2>&1 | tee out-run.log
 
-      - name: Validate causal evidence
+      - name: Validate predictive evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_neutral_prefix_challenge.py out/neutral-prefix-challenge.json \
+          python3 experiments/mvp/validate_sink_token_panel.py out/sink-token-panel.json \
             | tee out-validation.log
 
-      - name: Summarize specificity result
+      - name: Summarize screen-to-holdout transfer
         shell: bash
         run: |
           set -euo pipefail
@@ -78,51 +78,53 @@ jobs:
           import os
           from pathlib import Path
 
-          b = json.loads(Path("out/neutral-prefix-challenge.json").read_text())
+          b = json.loads(Path("out/sink-token-panel.json").read_text())
           d = b["derived_metrics"]
           rows = []
-          for head in d["head_condition_summary"]:
-              key = f"L{head['layer']}H{head['head']}"
-              for condition, m in head["conditions"].items():
-                  rows.append({
-                      "head": key,
-                      "condition": condition,
-                      "prefix_mass": m["mean_prefix_mass"],
-                      "user_mass": m["mean_user_mass"],
-                      "boundary_mass": m["mean_boundary_mass"],
-                  })
+          for pid, row in d["panel_summary"].items():
+              rows.append({
+                  "panel_id": pid,
+                  "kind": row["kind"],
+                  "token_id": row.get("token_id"),
+                  "cal_margin": row["calibration_mean_margin"],
+                  "cal_top1": row["calibration_top1_rate"],
+                  "hold_margin": row["holdout_mean_margin"],
+                  "hold_top1": row["holdout_top1_rate"],
+                  "sink_mass": row["mean_sink_mass"],
+              })
+          eligible = [x for x in rows if x["kind"] == "one-token"]
+          eligible.sort(key=lambda x: (-x["cal_margin"], x["panel_id"]))
           summary = {
               "run_id": b["provenance"]["run_id"],
               "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "cost": b["cost"],
-              "tokenizer_metadata": b["observations"]["tokenizer_metadata"],
-              "prefix_tokenization": b["observations"]["prefix_tokenization"],
-              "condition_summary": d["condition_summary"],
-              "head_conditions": rows,
+              "eligible_panel": b["observations"]["eligible_panel"],
+              "ineligible_preregistered_panel": b["observations"]["ineligible_preregistered_panel"],
+              "frozen_calibration_top3": d["frozen_calibration_top3"],
+              "calibration_holdout_rank_correlation": d["calibration_holdout_rank_correlation"],
+              "calibration_holdout_margin_correlation": d["calibration_holdout_margin_correlation"],
+              "transfer": d["transfer"],
+              "rows": rows,
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Neutral-prefix attention-sink challenge\n\n")
-              f.write("### Behavior\n\n")
-              f.write("| Condition | Top-1 | Mean rank | Mean correct margin |\n")
-              f.write("|---|---:|---:|---:|\n")
-              for name, row in d["condition_summary"].items():
-                  f.write(f"| {name} | {row['top1_rate']:.3f} | {row['mean_correct_rank']:.3f} | {row['mean_correct_margin']:.4f} |\n")
-              f.write("\n### L18H8 routing\n\n")
-              f.write("| Condition | Prefix mass | User mass | Boundary mass |\n")
-              f.write("|---|---:|---:|---:|\n")
-              target = next(x for x in d["head_condition_summary"] if x["layer"] == 18 and x["head"] == 8)
-              for name, m in target["conditions"].items():
-                  f.write(f"| {name} | {m['mean_prefix_mass']:.6f} | {m['mean_user_mass']:.6f} | {m['mean_boundary_mass']:.6f} |\n")
+              f.write("## Attention-sink token identity screen → holdout\n\n")
+              f.write(f"- frozen calibration top-3: `{', '.join(d['frozen_calibration_top3'])}`\n")
+              f.write(f"- rank correlation calibration↔holdout: `{d['calibration_holdout_rank_correlation']}`\n")
+              f.write(f"- margin correlation calibration↔holdout: `{d['calibration_holdout_margin_correlation']}`\n\n")
+              f.write("| Token condition | Token ID | Cal margin | Cal top-1 | Holdout margin | Holdout top-1 | L18H8 sink mass |\n")
+              f.write("|---|---:|---:|---:|---:|---:|---:|\n")
+              for row in sorted(rows, key=lambda x: (x['kind'] != 'one-token', -x['cal_margin'], x['panel_id'])):
+                  f.write(f"| {row['panel_id']} | {row['token_id'] if row['token_id'] is not None else ''} | {row['cal_margin']:.4f} | {row['cal_top1']:.3f} | {row['hold_margin']:.4f} | {row['hold_top1']:.3f} | {row['sink_mass']:.6f} |\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-neutral-prefix-${{ github.run_id }}
+          name: model-spelunker-sink-token-panel-${{ github.run_id }}
           path: |
-            out/neutral-prefix-challenge.json
+            out/sink-token-panel.json
             out-summary.json
             out-validation.log
             out-run.log
