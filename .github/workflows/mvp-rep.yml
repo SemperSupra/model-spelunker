@@ -1,4 +1,4 @@
-name: Model Spelunker Arithmetic Wrapper Factorial
+name: Model Spelunker Activation POKE
 
 on:
   push:
@@ -6,10 +6,8 @@ on:
       - impl/mvp-execution
     paths:
       - "experiments/mvp/run_rep.py"
-      - "experiments/mvp/run_candidate_neighborhood.py"
-      - "experiments/mvp/run_arithmetic_wrapper_factorial.py"
-      - "experiments/mvp/arithmetic-wrapper-factorial-spec.json"
-      - "experiments/mvp/validate_candidate_neighborhood.py"
+      - "experiments/mvp/run_activation_poke.py"
+      - "experiments/mvp/validate_activation_poke.py"
       - "schemas/**"
       - ".github/workflows/mvp-rep.yml"
   workflow_dispatch:
@@ -55,152 +53,70 @@ jobs:
           python3 -m pip install --disable-pip-version-check --no-input \
             -r experiments/mvp/requirements.txt
 
-      - name: Run arithmetic wrapper factorial corpus
+      - name: Run activation POKE corpus
         shell: bash
         run: |
           set -euo pipefail
-          /usr/bin/time -v python3 experiments/mvp/run_arithmetic_wrapper_factorial.py \
-            --output out/arithmetic-wrapper-factorial.json \
+          /usr/bin/time -v python3 experiments/mvp/run_activation_poke.py \
+            --output out/activation-poke.json \
             2>&1 | tee out-run.log
 
-      - name: Validate rank evidence
+      - name: Validate causal evidence
         shell: bash
         run: |
           set -euo pipefail
-          python3 experiments/mvp/validate_candidate_neighborhood.py out/arithmetic-wrapper-factorial.json \
+          python3 experiments/mvp/validate_activation_poke.py out/activation-poke.json \
             | tee out-validation.log
 
-      - name: Summarize factorial effects
+      - name: Summarize intervention result
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY' | tee out-summary.json
           import json
           import os
-          from collections import defaultdict
           from pathlib import Path
 
-          b = json.loads(Path("out/arithmetic-wrapper-factorial.json").read_text())
-          states = ("both", "start-only", "end-only", "neither")
-          state_records = defaultdict(lambda: defaultdict(dict))
-          contrast_geometry = defaultdict(lambda: defaultdict(list))
-          repeat_checks = 0
-
-          def snapshot(c):
-              return {
-                  "winner": c["candidate_winner"],
-                  "rank": int(c["expected_candidate_rank_mean"]),
-                  "rank_total": int(c["expected_candidate_rank_total"]),
-                  "margin": float(c["expected_candidate_margin"]),
-                  "generation": c["generation"],
-              }
-
-          for p in b["observations"]["probes"]:
-              contrast = p["contrast_id"]
-              task_id = p["probe_id"][:-(len(contrast) + 1)]
-              family = "multiply" if task_id.startswith("mul-") else "add"
-              contrast_geometry[family][contrast].append(p["activation_contrast"][-1]["cosine_distance"])
-              for c in p["conditions"]:
-                  state = c["condition_id"]
-                  assert state in states
-                  current = snapshot(c)
-                  prior = state_records[family][task_id].get(state)
-                  if prior is not None:
-                      repeat_checks += 1
-                      assert prior["winner"] == current["winner"]
-                      assert prior["rank"] == current["rank"]
-                      assert prior["rank_total"] == current["rank_total"]
-                      assert abs(prior["margin"] - current["margin"]) <= 1e-9
-                      assert prior["generation"] == current["generation"]
-                  else:
-                      state_records[family][task_id][state] = current
-
-          state_stats = {}
-          effects = {}
-          task_rows = []
-          for family in ("multiply", "add"):
-              state_stats[family] = {}
-              for state in states:
-                  values = [task[state] for task in state_records[family].values()]
-                  assert values, (family, state)
-                  state_stats[family][state] = {
-                      "n": len(values),
-                      "top1": sum(v["rank"] == 1 for v in values),
-                      "mean_rank": sum(v["rank"] for v in values) / len(values),
-                      "mrr": sum(1.0 / v["rank"] for v in values) / len(values),
-                      "mean_margin": sum(v["margin"] for v in values) / len(values),
-                  }
-
-              s = state_stats[family]
-              effects[family] = {
-                  "end_rank_improvement_when_start_present": s["start-only"]["mean_rank"] - s["both"]["mean_rank"],
-                  "end_rank_improvement_when_start_absent": s["neither"]["mean_rank"] - s["end-only"]["mean_rank"],
-                  "start_rank_improvement_when_end_present": s["end-only"]["mean_rank"] - s["both"]["mean_rank"],
-                  "start_rank_improvement_when_end_absent": s["neither"]["mean_rank"] - s["start-only"]["mean_rank"],
-                  "end_margin_effect_when_start_present": s["both"]["mean_margin"] - s["start-only"]["mean_margin"],
-                  "end_margin_effect_when_start_absent": s["end-only"]["mean_margin"] - s["neither"]["mean_margin"],
-                  "start_margin_effect_when_end_present": s["both"]["mean_margin"] - s["end-only"]["mean_margin"],
-                  "start_margin_effect_when_end_absent": s["start-only"]["mean_margin"] - s["neither"]["mean_margin"],
-              }
-              effects[family]["end_rank_interaction"] = (
-                  effects[family]["end_rank_improvement_when_start_present"]
-                  - effects[family]["end_rank_improvement_when_start_absent"]
-              )
-              effects[family]["end_margin_interaction"] = (
-                  effects[family]["end_margin_effect_when_start_present"]
-                  - effects[family]["end_margin_effect_when_start_absent"]
-              )
-
-              for task_id, task in sorted(state_records[family].items()):
-                  assert set(task) == set(states), (task_id, task.keys())
-                  task_rows.append({"family": family, "task_id": task_id, "states": task})
-
-          geometry = {
-              family: {
-                  contrast: sum(values) / len(values)
-                  for contrast, values in contrasts.items()
-              }
-              for family, contrasts in contrast_geometry.items()
-          }
-
+          b = json.loads(Path("out/activation-poke.json").read_text())
+          variants = b["derived_metrics"]["aggregate_variants"]
+          rows = []
+          for name, m in sorted(variants.items()):
+              rows.append({
+                  "variant": name,
+                  "surface_progress": m["mean_surface_progress_to_start"],
+                  "hidden_progress": m["mean_hidden_progress_to_start"],
+                  "top1": m["top1_correct_rate"],
+              })
+          best_surface = max(rows, key=lambda x: x["surface_progress"])
+          best_hidden = max(rows, key=lambda x: x["hidden_progress"])
+          random_rows = [x for x in rows if "random-matched" in x["variant"]]
           summary = {
               "run_id": b["provenance"]["run_id"],
-              "corpus_id": b["probe_id"],
               "artifact_identity": b["artifact_provenance"]["identity_digest"],
               "cost": b["cost"],
-              "repeat_consistency_checks": repeat_checks,
-              "state_stats": state_stats,
-              "effects": effects,
-              "mean_final_layer_cosine_distance_by_family_contrast": geometry,
-              "tasks": task_rows,
+              "best_surface_progress": best_surface,
+              "best_hidden_progress": best_hidden,
+              "matched_random_controls": random_rows,
+              "variants": rows,
           }
           print(json.dumps(summary, indent=2, sort_keys=True))
-
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as f:
-              f.write("## Arithmetic user-wrapper factorial\n\n")
-              f.write(f"- duplicate-state consistency checks: `{repeat_checks}`\n")
-              for family in ("multiply", "add"):
-                  f.write(f"\n### {family}\n\n")
-                  f.write("| State | Top-1 | Mean rank | MRR | Mean correct margin |\n")
-                  f.write("|---|---:|---:|---:|---:|\n")
-                  for state in states:
-                      s = state_stats[family][state]
-                      f.write(f"| {state} | {s['top1']}/{s['n']} | {s['mean_rank']:.3f} | {s['mrr']:.3f} | {s['mean_margin']:.4f} |\n")
-                  e = effects[family]
-                  f.write(f"\n- end-token rank improvement with start present: `{e['end_rank_improvement_when_start_present']:.3f}`\n")
-                  f.write(f"- end-token rank improvement with start absent: `{e['end_rank_improvement_when_start_absent']:.3f}`\n")
-                  f.write(f"- start-token rank improvement with end present: `{e['start_rank_improvement_when_end_present']:.3f}`\n")
-                  f.write(f"- start-token rank improvement with end absent: `{e['start_rank_improvement_when_end_absent']:.3f}`\n")
-                  f.write(f"- end-token rank interaction: `{e['end_rank_interaction']:.3f}`\n")
+              f.write("## Activation POKE causal rep\n\n")
+              f.write(f"- best candidate-surface progress toward actual start-token state: `{best_surface['variant']}` = `{best_surface['surface_progress']:.3f}`\n")
+              f.write(f"- best final-hidden progress toward actual start-token state: `{best_hidden['variant']}` = `{best_hidden['hidden_progress']:.3f}`\n\n")
+              f.write("| Variant | Mean surface progress | Mean hidden progress | Top-1 correct rate |\n")
+              f.write("|---|---:|---:|---:|\n")
+              for row in rows:
+                  f.write(f"| {row['variant']} | {row['surface_progress']:.3f} | {row['hidden_progress']:.3f} | {row['top1']:.3f} |\n")
           PY
 
       - name: Upload bounded evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: model-spelunker-arithmetic-factorial-${{ github.run_id }}
+          name: model-spelunker-activation-poke-${{ github.run_id }}
           path: |
-            out/arithmetic-wrapper-factorial.json
+            out/activation-poke.json
             out-summary.json
             out-validation.log
             out-run.log
