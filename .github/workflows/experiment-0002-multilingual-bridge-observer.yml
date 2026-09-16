@@ -1,4 +1,4 @@
-name: experiment-0002-multilingual-bridge-cloze
+name: experiment-0002-multilingual-bridge-specificity
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  multilingual-bridge-cloze:
+  multilingual-bridge-specificity:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -23,7 +23,7 @@ jobs:
       - name: Check one-shot arm
         id: arm
         run: |
-          if [ -f .ci/run-experiment-0002-multilingual-bridge-cloze ]; then
+          if [ -f .ci/run-experiment-0002-multilingual-bridge-specificity ]; then
             echo 'armed=true' >> "$GITHUB_OUTPUT"
           else
             echo 'armed=false' >> "$GITHUB_OUTPUT"
@@ -39,7 +39,9 @@ jobs:
 
       - name: Syntax check harness
         if: steps.arm.outputs.armed == 'true'
-        run: python -m py_compile tools/run_multilingual_bridge_cloze.py
+        run: |
+          python -m py_compile tools/run_multilingual_bridge_cloze.py
+          python -m py_compile tools/run_multilingual_bridge_specificity.py
 
       - name: Install CPU PyTorch
         if: steps.arm.outputs.armed == 'true'
@@ -51,39 +53,40 @@ jobs:
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Run multilingual indirect bridge cloze
+      - name: Run matched-foil bridge specificity control
         if: steps.arm.outputs.armed == 'true'
         run: |
-          python tools/run_multilingual_bridge_cloze.py \
+          python tools/run_multilingual_bridge_specificity.py \
             --model Qwen/Qwen3.5-0.8B \
             --lens-repo neuronpedia/jacobian-lens \
             --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
             --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
             --positions 8 \
-            --output-dir artifacts/experiment-0002-multilingual-bridge-cloze
+            --output-dir artifacts/experiment-0002-multilingual-bridge-specificity
 
-      - name: Summarize observer evidence
+      - name: Summarize specificity evidence
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          s = json.loads(Path('artifacts/experiment-0002-multilingual-bridge-cloze/summary.json').read_text())
+          s = json.loads(Path('artifacts/experiment-0002-multilingual-bridge-specificity/summary.json').read_text())
           print(f"model={s['model']} revision={s['resolved_model_revision']}")
           print(f"evaluated={s['evaluated_cases']} skipped={s['skipped_cases']}")
-          print(f"behavior_accuracy={s['behavior_accuracy']:.3f}")
-          print(f"jlens_best_rank_beats_vanilla={s['cases_where_jlens_best_rank_beats_vanilla']}/{s['evaluated_cases']}")
+          print('overall', s['overall'])
           for lang, row in s['language_summary'].items():
               print(lang, row)
           for concept, row in s['concept_summary'].items():
               print(concept, row)
+          print('promotion_concepts', s['promotion_concepts'])
+          print('causal_cross_language_write_earned', s['causal_cross_language_write_earned'])
           PY
 
       - name: Upload evidence
         if: steps.arm.outputs.armed == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-multilingual-bridge-cloze-${{ github.run_id }}
-          path: artifacts/experiment-0002-multilingual-bridge-cloze
+          name: experiment-0002-multilingual-bridge-specificity-${{ github.run_id }}
+          path: artifacts/experiment-0002-multilingual-bridge-specificity
           if-no-files-found: error
           retention-days: 14
