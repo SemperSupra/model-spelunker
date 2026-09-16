@@ -1,0 +1,149 @@
+name: Faster Whisper Audio Shift Equivariance Rep
+
+on:
+  push:
+    branches:
+      - impl/audio-asr-portability-stage
+    paths:
+      - "experiments/mvp/run_audio_shift_equivariance.py"
+      - "experiments/mvp/validate_audio_shift_equivariance.py"
+      - ".github/workflows/audio-shift-equivariance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  LOGICAL_ID: asr/faster-whisper/tiny
+  EXPECTED_DIGEST: sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42
+  FIXTURE_COMMIT: 6e3be77e1a105e59086e3e21ff5f609fd6fa89a5
+  FIXTURE_SHA256: sha256:63a4b1e4c1dc655ac70961ffbf518acd249df237e5a0152faae9a4a836949715
+
+jobs:
+  rep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact Model Spelunker revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Checkout exact approved Foundry revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: SemperSupra/model-artifact-foundry
+          ref: 6622753fd5914be87fb1b6d987ceb7cae46c7ff5
+          path: foundry
+          persist-credentials: false
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+      - name: Derive runtime cache key
+        id: runtime-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out fixture
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"python_tag={sys.implementation.cache_tag}")
+          PY
+      - name: Restore exact ASR runtime
+        id: runtime-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .asr-venv
+          key: model-spelunker-faster-whisper-tiny-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-fw1.2.1-ct2-4.6.0
+      - name: Build exact CPU ASR runtime on cache miss
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .asr-venv
+          .asr-venv/bin/python -m pip install --disable-pip-version-check --no-input "faster-whisper==1.2.1" "ctranslate2==4.6.0"
+      - name: Verify exact approved Foundry selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=json.loads(Path("foundry/catalog/approved.json").read_text())["artifacts"][os.environ["LOGICAL_ID"]]
+          assert e["approved_digest"]==os.environ["EXPECTED_DIGEST"]
+          assert e["upstream_exact_revision"]=="d90ca5fe260221311c53c58e660288d3deb8d356"
+          PY
+      - name: Acquire and hard-verify pinned JFK fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import hashlib,json,os,urllib.request
+          from pathlib import Path
+          c=os.environ["FIXTURE_COMMIT"]; u=f"https://raw.githubusercontent.com/openai/whisper/{c}/tests/jfk.flac"
+          d=urllib.request.urlopen(urllib.request.Request(u,headers={"User-Agent":"SemperSupra-model-spelunker/1"}),timeout=120).read()
+          s="sha256:"+hashlib.sha256(d).hexdigest(); assert s==os.environ["FIXTURE_SHA256"]
+          Path("fixture/jfk.flac").write_bytes(d); Path("fixture/jfk.json").write_text(json.dumps({"repository":"openai/whisper","commit_sha":c,"path":"tests/jfk.flac","source_url":u,"size_bytes":len(d),"sha256":s},indent=2,sort_keys=True)+"\n")
+          PY
+      - name: Authenticate bounded Foundry read
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GHCR_TOKEN}" | oras login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+      - name: Hydrate approved model and prove offline reuse
+        id: hydrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/model-spelunker-asr-approved
+          MODEL1="$(.asr-venv/bin/python foundry/tools/hydrate.py --catalog foundry/catalog/approved.json --id "${LOGICAL_ID}" --cache-root /tmp/model-spelunker-asr-approved --oras "$(command -v oras)" | tail -n1)"
+          MODEL2="$(.asr-venv/bin/python foundry/tools/hydrate.py --catalog foundry/catalog/approved.json --id "${LOGICAL_ID}" --cache-root /tmp/model-spelunker-asr-approved --oras /bin/false | tail -n1)"
+          test "${MODEL1}" = "${MODEL2}"; echo "model_dir=${MODEL2}" >> "$GITHUB_OUTPUT"
+      - name: Run shift-equivariance falsification rep
+        shell: bash
+        env:
+          MODEL_DIR: ${{ steps.hydrate.outputs.model_dir }}
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v .asr-venv/bin/python experiments/mvp/run_audio_shift_equivariance.py --model-dir "${MODEL_DIR}" --fixture fixture/jfk.flac --fixture-meta fixture/jfk.json --output out/audio-shift-equivariance.json 2>&1 | tee out/run.log
+      - name: Validate evidence independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python -m pip install --disable-pip-version-check --no-input "jsonschema==4.25.1"
+          .asr-venv/bin/python experiments/mvp/validate_audio_shift_equivariance.py out/audio-shift-equivariance.json | tee out/validation.log
+      - name: Summarize descriptive result
+        shell: bash
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          b=json.loads(Path("out/audio-shift-equivariance.json").read_text()); d=b["derived_metrics"]
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as f:
+            f.write("## Faster-Whisper shift equivariance\n\n")
+            f.write(f"- feature best offsets exact: `{d['all_feature_best_offsets_equal_expected']}`\n")
+            f.write(f"- encoder best offset deltas: `{d['encoder_best_offset_deltas']}`\n")
+            f.write(f"- encoder best mean cosine distances: `{d['encoder_best_mean_cosine_distances']}`\n")
+            f.write(f"- encoder interior best distances: `{d['encoder_interior_best_mean_cosine_distances']}`\n")
+            f.write(f"- exact baseline encoder repeat: `{d['baseline_repeat_encoder_hash_equal']}`\n")
+          PY
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-spelunker-audio-shift-equivariance-${{ github.run_id }}
+          path: |
+            out/audio-shift-equivariance.json
+            out/validation.log
+            out/run.log
+            fixture/jfk.json
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9
