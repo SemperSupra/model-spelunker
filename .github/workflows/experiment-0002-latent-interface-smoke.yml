@@ -1,0 +1,75 @@
+name: experiment-0002-latent-interface-smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/experiment-0002-latent-interface-smoke.yml'
+      - 'tools/run_latent_interface_smoke.py'
+      - 'fixtures/experiment-0001/reciprocity-semantic-smoke.jsonl'
+      - 'fixtures/experiment-0001/reciprocity-semantic-heldout.jsonl'
+      - 'requirements-experiment-0001.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  latent-interface-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: 'false'
+      TORCH_NUM_THREADS: '2'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements-experiment-0001.txt
+
+      - name: Install CPU PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
+
+      - name: Install experiment dependencies
+        run: python -m pip install -r requirements-experiment-0001.txt
+
+      - name: Run latent read-write smoke
+        run: |
+          python tools/run_latent_interface_smoke.py \
+            --model EleutherAI/pythia-70m \
+            --train-fixture fixtures/experiment-0001/reciprocity-semantic-smoke.jsonl \
+            --heldout-fixture fixtures/experiment-0001/reciprocity-semantic-heldout.jsonl \
+            --output-dir artifacts/experiment-0002-latent-interface
+
+      - name: Summarize evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('artifacts/experiment-0002-latent-interface/summary.json')
+          summary = json.loads(path.read_text(encoding='utf-8'))
+          for key in (
+              'chosen_layer',
+              'chosen_train_accuracy',
+              'chosen_heldout_accuracy',
+              'direction_norm',
+              'intervention_probe_count',
+              'mean_positive_alpha_concept_delta',
+              'mean_positive_alpha_random_delta',
+          ):
+              print(f'{key}={summary[key]}')
+          PY
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-0002-latent-interface-${{ github.run_id }}
+          path: artifacts/experiment-0002-latent-interface
+          if-no-files-found: error
+          retention-days: 14
