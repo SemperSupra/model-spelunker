@@ -2,13 +2,6 @@ name: experiment-0002-latent-interface-smoke
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.github/workflows/experiment-0002-latent-interface-smoke.yml'
-      - 'tools/run_latent_interface_smoke.py'
-      - 'fixtures/experiment-0001/reciprocity-semantic-smoke.jsonl'
-      - 'fixtures/experiment-0001/reciprocity-semantic-heldout.jsonl'
-      - 'requirements-experiment-0001.txt'
 
 permissions:
   contents: read
