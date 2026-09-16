@@ -1,0 +1,144 @@
+name: Chronos Bolt Complete Patch Offset Map
+
+on:
+  push:
+    branches:
+      - impl/chronos-bolt-portability-stage
+    paths:
+      - "experiments/mvp/run_chronos_patch_offset_map.py"
+      - "experiments/mvp/validate_chronos_patch_offset_map.py"
+      - ".github/workflows/chronos-patch-offset-map.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  LOGICAL_ID: forecast/chronos/bolt-tiny
+  EXPECTED_DIGEST: sha256:515724650b6cdf6d860ade66faf970b50cc64e1d089db405963162aae908adef
+  FOUNDRY_EVIDENCE_SHA: 42954f2680391a600db189a960c7c18fc5390921
+  CANDIDATE_PATH: candidates/forecast-chronos-bolt-tiny/a0e552de83495b5c28c14c71c374f3e33280b340/3d14a8cb903deefc3bee0b496ab6151122112866/candidate.json
+
+jobs:
+  rep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact Model Spelunker revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Checkout exact Foundry candidate evidence revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: SemperSupra/model-artifact-foundry
+          ref: 42954f2680391a600db189a960c7c18fc5390921
+          path: foundry
+          persist-credentials: false
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+      - name: Derive runtime cache key
+        id: runtime-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"python_tag={sys.implementation.cache_tag}")
+          PY
+      - name: Restore exact Chronos runtime
+        id: runtime-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .chronos-venv
+          key: model-spelunker-chronos-bolt-tiny-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-chronos2.3.2-torch2.14.0-transformers5.16.1
+      - name: Build exact CPU runtime on cache miss
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .chronos-venv
+          .chronos-venv/bin/python -m pip install --disable-pip-version-check --no-input --index-url https://download.pytorch.org/whl/cpu "torch==2.14.0"
+          .chronos-venv/bin/python -m pip install --disable-pip-version-check --no-input "chronos-forecasting==2.3.2" "transformers==5.16.1" "jsonschema==4.25.1"
+      - name: Verify exact Foundry candidate evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          .chronos-venv/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          c=json.loads((Path('foundry')/os.environ['CANDIDATE_PATH']).read_text())
+          assert c['logical_id']==os.environ['LOGICAL_ID']
+          assert c['oci']['digest']==os.environ['EXPECTED_DIGEST']
+          assert c['oci']['pullback_verified'] and c['state']=='candidate'
+          PY
+      - name: Authenticate bounded Foundry read
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Hydrate exact candidate digest and prove local reuse
+        id: hydrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          .chronos-venv/bin/python foundry/tools/harvest_chronos_bolt_tiny.py temporary-catalog --candidate "foundry/${CANDIDATE_PATH}" --output /tmp/chronos-candidate-catalog.json
+          rm -rf /tmp/model-spelunker-chronos-offset
+          MODEL1="$(.chronos-venv/bin/python foundry/tools/hydrate.py --catalog /tmp/chronos-candidate-catalog.json --id "$LOGICAL_ID" --cache-root /tmp/model-spelunker-chronos-offset --oras "$(command -v oras)" | tail -n1)"
+          MODEL2="$(.chronos-venv/bin/python foundry/tools/hydrate.py --catalog /tmp/chronos-candidate-catalog.json --id "$LOGICAL_ID" --cache-root /tmp/model-spelunker-chronos-offset --oras /bin/false | tail -n1)"
+          test "$MODEL1" = "$MODEL2"
+          echo "model_dir=$MODEL2" >> "$GITHUB_OUTPUT"
+      - name: Run complete patch-offset map
+        shell: bash
+        env:
+          MODEL_DIR: ${{ steps.hydrate.outputs.model_dir }}
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v .chronos-venv/bin/python experiments/mvp/run_chronos_patch_offset_map.py \
+            --model-dir "$MODEL_DIR" \
+            --candidate "foundry/${CANDIDATE_PATH}" \
+            --candidate-ref "SemperSupra/model-artifact-foundry@${FOUNDRY_EVIDENCE_SHA}:${CANDIDATE_PATH}" \
+            --output out/chronos-patch-offset-map.json 2>&1 | tee out/run.log
+      - name: Validate offset evidence independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          .chronos-venv/bin/python experiments/mvp/validate_chronos_patch_offset_map.py \
+            out/chronos-patch-offset-map.json "foundry/${CANDIDATE_PATH}" | tee out/validation.log
+      - name: Summarize descriptive result
+        shell: bash
+        run: |
+          set -euo pipefail
+          .chronos-venv/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          b=json.loads(Path('out/chronos-patch-offset-map.json').read_text());d=b['derived_metrics'];c=b['cost']
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a') as f:
+            f.write('## Chronos-Bolt complete patch-offset map\n\n')
+            f.write(f"- positions: `{d['position_count']}`; final-patch offsets: `{d['final_patch_offset_count']}`; patch terminals: `{d['patch_terminal_count']}`\n")
+            f.write(f"- terminal / max nonterminal median-magnitude ratio: `{d['terminal_to_max_nonterminal_magnitude_ratio']}`\n")
+            f.write(f"- same-batch repeat exact: `{d['same_batch_repeat_exact']}`\n")
+            f.write(f"- quantile-crossing lags: `{d['quantile_crossing_positions']}`\n")
+            f.write(f"- science: `{c['experiment_seconds']:.4f}s`; RSS: `{c['peak_rss_mib']:.1f} MiB`\n")
+          PY
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-spelunker-chronos-patch-offset-${{ github.run_id }}
+          path: |
+            out/chronos-patch-offset-map.json
+            out/validation.log
+            out/run.log
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9
