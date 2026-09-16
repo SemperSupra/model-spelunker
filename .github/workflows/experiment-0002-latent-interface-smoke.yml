@@ -15,8 +15,17 @@ permissions:
 
 jobs:
   latent-interface-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model_id: pythia-70m
+            model: EleutherAI/pythia-70m
+          - model_id: qwen3-0.6b-base
+            model: Qwen/Qwen3-0.6B-Base
+    name: latent-interface-${{ matrix.model_id }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: 'false'
@@ -41,19 +50,22 @@ jobs:
       - name: Run latent read-write smoke
         run: |
           python tools/run_latent_interface_smoke.py \
-            --model EleutherAI/pythia-70m \
+            --model '${{ matrix.model }}' \
             --train-fixture fixtures/experiment-0001/reciprocity-semantic-smoke.jsonl \
             --heldout-fixture fixtures/experiment-0001/reciprocity-semantic-heldout.jsonl \
-            --output-dir artifacts/experiment-0002-latent-interface
+            --output-dir 'artifacts/experiment-0002-${{ matrix.model_id }}'
 
       - name: Summarize evidence
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          path = Path('artifacts/experiment-0002-latent-interface/summary.json')
+          path = Path('artifacts/experiment-0002-${{ matrix.model_id }}/summary.json')
           summary = json.loads(path.read_text(encoding='utf-8'))
           for key in (
+              'model',
+              'model_class',
+              'num_layers',
               'chosen_layer',
               'chosen_train_accuracy',
               'chosen_heldout_accuracy',
@@ -69,7 +81,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-latent-interface-${{ github.run_id }}
-          path: artifacts/experiment-0002-latent-interface
+          name: experiment-0002-${{ matrix.model_id }}-${{ github.run_id }}
+          path: artifacts/experiment-0002-${{ matrix.model_id }}
           if-no-files-found: error
           retention-days: 14
