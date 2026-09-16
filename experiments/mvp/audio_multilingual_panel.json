@@ -1,0 +1,18 @@
+{
+  "source_repository": "wudale/whisper-asr-server",
+  "source_commit": "f86a51a04e5c9e6b82dc9f22c01ada4cb8c40c5f",
+  "repository_license": "MIT",
+  "repository_license_blob_sha1": "083467f47e5a7883716ade294e60e551d3059ee3",
+  "scope_note": "Repository-pinned functional multilingual samples. Speaker provenance is not documented, so this panel must not be interpreted as a human speaker-demographics benchmark.",
+  "samples": [
+    {"id":"en","expected_language":"en","path":"samples/en.wav","git_blob_sha1":"17296f2421c3fa9cf2ea529edc2152764b829e74","readme_prefix":"Hello, this is a test of the Whisper speech recognition system"},
+    {"id":"zh","expected_language":"zh","path":"samples/zh.wav","git_blob_sha1":"b15ead43eeb42c02d55bcdb6a0c6cfab7abcbb76","readme_prefix":"你好，这是一个语音识别测试"},
+    {"id":"ja","expected_language":"ja","path":"samples/ja.wav","git_blob_sha1":"25d87cb9005bcc8b5e37824423454f0dcd034b1c","readme_prefix":"こんにちは、これは音声認識のテストです"},
+    {"id":"ko","expected_language":"ko","path":"samples/ko.wav","git_blob_sha1":"6f8d20d67da5e5bf515a1bcc6782f19971f45491","readme_prefix":"안녕하세요, 이것은 음성 인식 테스트입니다"},
+    {"id":"fr","expected_language":"fr","path":"samples/fr.wav","git_blob_sha1":"6f74558e9409d4ee476f0d2f27e188adc611c180","readme_prefix":"Bonjour, ceci est un test du système"},
+    {"id":"de","expected_language":"de","path":"samples/de.wav","git_blob_sha1":"13addc2cd885b8eb70b86e951807f15720651f6d","readme_prefix":"Hallo, dies ist ein Test des Spracherkennungssystems"},
+    {"id":"es","expected_language":"es","path":"samples/es.wav","git_blob_sha1":"1462dd14b90300e70ecca3bfa874afeba96bbdc8","readme_prefix":"Hola, esta es una prueba del sistema"},
+    {"id":"ru","expected_language":"ru","path":"samples/ru.wav","git_blob_sha1":"fbd554f6bbfd015510eb1275fd707d7475008e6a","readme_prefix":"Здравствуйте, это тест системы распознавания речи"},
+    {"id":"ar","expected_language":"ar","path":"samples/ar.wav","git_blob_sha1":"170c3c09b0578442b32b443f39e2c1fd83bbc8c4","readme_prefix":"مرحباً، هذا اختبار لنظام التعرف على الكلام"}
+  ]
+}
