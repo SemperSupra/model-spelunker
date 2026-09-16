@@ -2,15 +2,6 @@ name: experiment-0001-smoke
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'research/multilingual-concept-geometry'
-    paths:
-      - '.github/workflows/experiment-0001-smoke.yml'
-      - 'tools/run_behavioral_smoke.py'
-      - 'schemas/concept-geometry-record.schema.json'
-      - 'fixtures/experiment-0001/**'
-      - 'requirements-experiment-0001.txt'
   pull_request:
     paths:
       - '.github/workflows/experiment-0001-smoke.yml'
@@ -58,7 +49,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
-          from collections import Counter
+          from collections import Counter, defaultdict
           from pathlib import Path
 
           path = Path('artifacts/experiment-0001/concept-geometry-records.jsonl')
@@ -66,9 +57,18 @@ jobs:
           print(f'records={len(rows)}')
           print('languages=', dict(Counter(row['probe']['language'] for row in rows)))
           print('classes=', dict(Counter(row['probe']['class'] for row in rows)))
+
           scored = [row['behavior']['score'] for row in rows if row['behavior']['score'] is not None]
           if scored:
               print(f'labeled_accuracy={sum(scored)/len(scored):.3f}')
+
+          groups = defaultdict(list)
+          for row in rows:
+              groups[row['behavior']['consistency_group']].append(row['behavior']['selected_option'])
+          paired = [values for values in groups.values() if len(values) == 2]
+          consistent = [values for values in paired if values[0] == values[1]]
+          if paired:
+              print(f'counterbalanced_consistency={len(consistent)/len(paired):.3f}')
           PY
 
       - name: Upload evidence
