@@ -122,12 +122,45 @@ Mean answer-minus-counterfactual margin change became increasingly negative with
 
 The free-generation behavior check was 0/12, but continuations frequently emitted model thinking/chat scaffolding or repeated prompt text, making that behavioral metric confounded rather than a clean knowledge test.
 
-**Decision:** Qwen3.5-0.8B + published J-lens earns the next behavior-valid calibration. Do not interpret the 0/12 free-generation result as absence of bridge knowledge. A forced-choice continuation-likelihood cloze rep is the current gate before causal multilingual patching.
+**Decision:** Qwen3.5-0.8B + published J-lens earns the next behavior-valid calibration. Do not interpret the 0/12 free-generation result as absence of bridge knowledge.
+
+## E0002-R6 — Qwen3.5 behavior-valid multilingual bridge cloze
+
+**Workflow run:** `35056626692`
+
+**Artifact ID:** `10430563022`
+
+**Model/lens:** identical pinned Qwen3.5/J-lens pair to E0002-R5.
+
+**Executed changes from R5:**
+
+1. replaced confounded free generation with forced-choice continuation likelihood;
+2. allowed multiple single-token lexicalizations of the same hidden bridge rather than forcing English-only decoder labels;
+3. retained the same four hidden country bridges across English, German, and Thai.
+
+**Result:** 12/12 cases evaluated; overall behavioral accuracy 9/12 (75%). J-lens best hidden-bridge rank beat vanilla in 12/12.
+
+| Language | Behavior | Median behavior margin | Median J-lens best rank | Median vanilla best rank |
+| --- | ---: | ---: | ---: | ---: |
+| English | 4/4 | +2.155 | 1 | 35.5 |
+| German | 4/4 | +3.116 | 1 | 41 |
+| Thai | 1/4 | -1.172 | 25 | 9405.5 |
+
+Concept-level tension is informative:
+
+- **Canada:** behaviorally correct in all three languages, but Thai hidden-bridge rank was 446;
+- **Japan:** hidden bridge ranked 1 in all three languages, but the Thai downstream cloze was wrong;
+- **France:** English/German hidden rank 1; Thai rank 22 and Thai downstream cloze wrong;
+- **Germany:** English/German hidden rank 1; Thai rank 28 and Thai downstream cloze wrong.
+
+**Interpretation:** English and German are simultaneously behavior-valid and strongly observable for all four bridge concepts. Thai remains a valuable stress condition but currently mixes weaker task competence with weaker/noisier bridge readout. It should not gate proof that the causal apparatus works in languages where both prerequisites are present.
+
+**Decision:** promote an **English↔German causal cross-language smoke** on the same Qwen3.5/lens pair. Do not yet claim a three-language shared Neuralese representation. Thai returns immediately after causal transfer is established and can then distinguish representation failure from downstream-language/task failure.
 
 ## Current promotion gate
 
-1. Complete behavior-valid Qwen3.5 multilingual bridge cloze calibration.
-2. If Qwen demonstrates usable surface competence, run a small causal probe-swap rep on the same already-qualified model/lens pair.
-3. Require strong top-1 causal swaps where baseline correctness permits; retain pairwise preference flips only as secondary evidence.
-4. If causal swapping works, build the first English/German/Thai cross-language patch using the same hidden bridge identities.
-5. Only after cross-language causal transfer succeeds, promote a candidate toward `addressable Neuralese`; downstream reuse remains required.
+1. Run the smallest Qwen3.5 J-space causal bridge swap using only behavior-valid English/German cases and the already-qualified hidden country representations.
+2. Require the intervention to move the downstream forced-choice result toward the replacement country's capital; top-1/forced-choice reversal is strong evidence, margin movement is secondary evidence.
+3. Include no-intervention, wrong-layer/early-band, and norm-matched-random controls; add a direct-answer positive control only if needed to diagnose apparatus failure.
+4. If the same bridge write transfers across English and German, extend the exact intervention to Thai without retuning the representation first.
+5. Only after cross-language causal transfer succeeds may a candidate move toward `addressable Neuralese`; downstream reuse in a second function remains required before promotion.
