@@ -3,6 +3,8 @@
   "source_commit": "f86a51a04e5c9e6b82dc9f22c01ada4cb8c40c5f",
   "repository_license": "MIT",
   "repository_license_blob_sha1": "083467f47e5a7883716ade294e60e551d3059ee3",
+  "speaker_identity_available": false,
+  "speaker_claims_permitted": false,
   "scope_note": "Repository-pinned functional multilingual samples. Speaker provenance is not documented, so this panel must not be interpreted as a human speaker-demographics benchmark.",
   "samples": [
     {"id":"en","expected_language":"en","path":"samples/en.wav","git_blob_sha1":"17296f2421c3fa9cf2ea529edc2152764b829e74","readme_prefix":"Hello, this is a test of the Whisper speech recognition system"},
