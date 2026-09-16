@@ -2,6 +2,15 @@ name: experiment-0001-smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'research/multilingual-concept-geometry'
+    paths:
+      - '.github/workflows/experiment-0001-smoke.yml'
+      - 'tools/run_behavioral_smoke.py'
+      - 'schemas/concept-geometry-record.schema.json'
+      - 'fixtures/experiment-0001/**'
+      - 'requirements-experiment-0001.txt'
   pull_request:
     paths:
       - '.github/workflows/experiment-0001-smoke.yml'
