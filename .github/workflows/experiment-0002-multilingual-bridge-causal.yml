@@ -11,7 +11,7 @@ permissions:
 jobs:
   multilingual-bridge-causal:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: 'false'
@@ -39,14 +39,15 @@ jobs:
       - name: Syntax check harness
         if: steps.arm.outputs.armed == 'true'
         run: |
+          python -m py_compile tools/jspace_interventions.py
           python -m py_compile tools/run_multilingual_bridge_cloze.py
-          python -m py_compile tools/run_qwen35_4b_jlens_compat.py
+          python -m py_compile tools/run_qwen35_4b_cross_task_causal.py
 
       - name: Install CPU PyTorch
         if: steps.arm.outputs.armed == 'true'
         run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
 
-      - name: Install compatibility dependencies
+      - name: Install causal dependencies
         if: steps.arm.outputs.armed == 'true'
         run: |
           python -m pip install -r requirements-experiment-0001.txt
@@ -59,40 +60,40 @@ jobs:
           df -h .
           free -h
 
-      - name: Run all-fit-position observer diagnostic
+      - name: Run paired cross-task causal reuse smoke
         if: steps.arm.outputs.armed == 'true'
         run: |
-          python tools/run_qwen35_4b_jlens_compat.py \
-            --positions 0 \
-            --output-dir artifacts/experiment-0002-qwen35-4b-jlens-all-positions
+          python tools/run_qwen35_4b_cross_task_causal.py \
+            --output-dir artifacts/experiment-0002-qwen35-4b-cross-task-causal
 
-      - name: Apply observer usefulness gate
+      - name: Summarize causal reuse evidence
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           s = json.loads(Path(
-              'artifacts/experiment-0002-qwen35-4b-jlens-all-positions/summary.json'
+              'artifacts/experiment-0002-qwen35-4b-cross-task-causal/summary.json'
           ).read_text())
-          print('model_class', s['model_class'])
-          print('adapter_layout', s['adapter_layout'])
-          print('model_shape', s['model_n_layers'], s['model_d_model'])
-          print('lens_shape', s['lens_d_model'], s['lens_source_layers'])
+          print('model', s['model'], s['resolved_model_revision'])
           print('lens_n_prompts', s['lens_n_prompts'])
-          print('hidden_bridge_best_ranks', s['median_like_best_ranks'])
-          print('cases_top20', s['cases_top20'])
-          earned = s['compatibility_pass'] and s['cases_top20'] == 4
-          print('causal_rep_earned', earned)
-          if not earned:
-              raise SystemExit('Observer usefulness gate failed; causal rep remains blocked')
+          print('intervention_layers', s['intervention_layers'])
+          print('baseline_valid_cases', s['baseline_valid_cases'])
+          print('record_count', s['record_count'])
+          print('function_summary')
+          for name, row in s['function_summary'].items():
+              print(name, row)
+          print('reusable_directions')
+          for name, row in s['reusable_directions'].items():
+              print(name, row)
+          print('promotion_pass', s['promotion_pass'])
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-qwen35-4b-jlens-all-positions-${{ github.run_id }}
-          path: artifacts/experiment-0002-qwen35-4b-jlens-all-positions
+          name: experiment-0002-qwen35-4b-cross-task-causal-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen35-4b-cross-task-causal
           if-no-files-found: error
           retention-days: 14
