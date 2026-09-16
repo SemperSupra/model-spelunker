@@ -59,20 +59,21 @@ jobs:
           df -h .
           free -h
 
-      - name: Run Qwen3.5-4B J-lens compatibility smoke
+      - name: Run all-fit-position observer diagnostic
         if: steps.arm.outputs.armed == 'true'
         run: |
           python tools/run_qwen35_4b_jlens_compat.py \
-            --output-dir artifacts/experiment-0002-qwen35-4b-jlens-compat
+            --positions 0 \
+            --output-dir artifacts/experiment-0002-qwen35-4b-jlens-all-positions
 
-      - name: Apply compatibility gate
+      - name: Apply observer usefulness gate
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           s = json.loads(Path(
-              'artifacts/experiment-0002-qwen35-4b-jlens-compat/summary.json'
+              'artifacts/experiment-0002-qwen35-4b-jlens-all-positions/summary.json'
           ).read_text())
           print('model_class', s['model_class'])
           print('adapter_layout', s['adapter_layout'])
@@ -81,16 +82,17 @@ jobs:
           print('lens_n_prompts', s['lens_n_prompts'])
           print('hidden_bridge_best_ranks', s['median_like_best_ranks'])
           print('cases_top20', s['cases_top20'])
-          print('compatibility_pass', s['compatibility_pass'])
-          if not s['compatibility_pass']:
-              raise SystemExit('Qwen3.5-4B/published J-lens compatibility gate failed')
+          earned = s['compatibility_pass'] and s['cases_top20'] == 4
+          print('causal_rep_earned', earned)
+          if not earned:
+              raise SystemExit('Observer usefulness gate failed; causal rep remains blocked')
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-qwen35-4b-jlens-compat-${{ github.run_id }}
-          path: artifacts/experiment-0002-qwen35-4b-jlens-compat
+          name: experiment-0002-qwen35-4b-jlens-all-positions-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen35-4b-jlens-all-positions
           if-no-files-found: error
           retention-days: 14
