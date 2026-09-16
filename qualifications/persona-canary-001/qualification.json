@@ -1,0 +1,113 @@
+{
+  "acceptance": {
+    "execution_conditions": [
+      "the pinned framework and runtime install",
+      "the expected Ollama model manifest id prefix resolves",
+      "both matched persona/workload pairings execute twice",
+      "each run emits a bounded tool trace and independent oracle result"
+    ],
+    "scientific_conditions": [
+      "at least one of two repetitions passes for each matched persona/workload pairing"
+    ]
+  },
+  "pairings": [
+    {
+      "persona_id": "rtl-engineer-smolagents-qwen35-4b-v1",
+      "workload_id": "rtl-popcount4-v1"
+    },
+    {
+      "persona_id": "binary-reverser-smolagents-qwen35-4b-v1",
+      "workload_id": "binary-unlock-v1"
+    }
+  ],
+  "personas": [
+    {
+      "authority": {
+        "arbitrary_shell": false,
+        "filesystem": "fixture-only through supplied tools",
+        "network_tools": false
+      },
+      "controller": {
+        "expected_manifest_id_prefix": "2a654d98e6fb",
+        "inference": {
+          "max_tokens": 768,
+          "num_ctx": 4096,
+          "temperature": 0.0
+        },
+        "model": "qwen3.5:4b",
+        "provider": "ollama",
+        "runtime_version": "0.34.0"
+      },
+      "framework": {
+        "agent": "ToolCallingAgent",
+        "name": "smolagents",
+        "version": "1.26.0"
+      },
+      "instructions": "You are a bounded RTL engineer. Use only the supplied tools. Read the specification, write the smallest synthesizable Verilog solution, run the test, and repair only if needed. Do not invent external dependencies. Finish with a short statement of the verified result.",
+      "limits": {
+        "max_steps": 6
+      },
+      "mission": "Implement and verify small synthesizable Verilog from a bounded specification.",
+      "persona_id": "rtl-engineer-smolagents-qwen35-4b-v1",
+      "tools": [
+        "read_spec",
+        "write_solution",
+        "run_tests"
+      ]
+    },
+    {
+      "authority": {
+        "arbitrary_shell": false,
+        "filesystem": "read-only inspection plus bounded challenge execution through supplied tools",
+        "network_tools": false
+      },
+      "controller": {
+        "expected_manifest_id_prefix": "2a654d98e6fb",
+        "inference": {
+          "max_tokens": 768,
+          "num_ctx": 4096,
+          "temperature": 0.0
+        },
+        "model": "qwen3.5:4b",
+        "provider": "ollama",
+        "runtime_version": "0.34.0"
+      },
+      "framework": {
+        "agent": "ToolCallingAgent",
+        "name": "smolagents",
+        "version": "1.26.0"
+      },
+      "instructions": "You are a bounded binary reverse engineer working only on the supplied benign fixture. Use the supplied read-only inspection tools and the bounded try_unlock oracle. Recover the numeric unlock code, verify it, and finish with the code. Do not request or use network access.",
+      "limits": {
+        "max_steps": 6
+      },
+      "mission": "Recover one fact from a benign purpose-built binary using bounded static-analysis and execution tools.",
+      "persona_id": "binary-reverser-smolagents-qwen35-4b-v1",
+      "tools": [
+        "read_spec",
+        "inspect_strings",
+        "disassemble_main",
+        "try_unlock"
+      ]
+    }
+  ],
+  "purpose": "Minimal proof that a complete persona realization can be sealed, executed on a public CPU runner, and objectively scored without adding a new scheduler or catalog service.",
+  "qualification_id": "persona-canary-001-qwen35-challenger",
+  "record_type": "persona-qualification-plan",
+  "repetitions": 2,
+  "schema_version": 1,
+  "workloads": [
+    {
+      "kind": "rtl",
+      "oracle": "iverilog compile plus exhaustive 16-vector testbench; PASS marker required",
+      "task": "Create solution.v containing a synthesizable SystemVerilog module named popcount4 with input logic [3:0] bits and output logic [2:0] count. count must equal the number of set bits in bits for all 16 input values. Use the tools to write the solution and verify it.",
+      "workload_id": "rtl-popcount4-v1"
+    },
+    {
+      "kind": "binary_re",
+      "oracle": "purpose-built executable prints ACCESS GRANTED only for the correct code",
+      "task": "Analyze the supplied benign ELF executable and recover its numeric unlock code. Use the inspection tools and verify the candidate with try_unlock. Finish with the numeric code.",
+      "workload_id": "binary-unlock-v1"
+    }
+  ]
+}

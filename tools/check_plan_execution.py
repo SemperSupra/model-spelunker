@@ -43,12 +43,7 @@ def compare_value(
 
 
 def result_layout(result_dir: Path) -> tuple[Path, Path]:
-    """Return (transport root, project files directory).
-
-    Trusted Agent Dispatch decryption produces execution.json at the root and
-    study-owned files beneath files/. Accept files/ directly as a convenience,
-    but keep the transport record in the comparison when it is available.
-    """
+    """Return (transport root, project files directory)."""
     if (result_dir / "execution.json").is_file():
         project_dir = result_dir / "files" if (result_dir / "files").is_dir() else result_dir
         return result_dir, project_dir
@@ -63,7 +58,8 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
     execution_path = transport_dir / "execution.json"
     receipt_path = project_dir / "execution-receipt.json"
     result_path = project_dir / "result.json"
-    study_path = project_dir / "study.json"
+    plan_name = str(manifest.get("plan_file") or "study.json")
+    plan_path = project_dir / plan_name
 
     deviations: list[dict[str, Any]] = []
     planned_files = manifest.get("files", {})
@@ -86,7 +82,6 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
     else:
         deviations.append({"subject": "result.json", "planned": "present", "actual": "missing"})
 
-    # Bind the pre-dispatch plan to the exact capsule Agent Dispatch says it executed.
     compare_value(
         deviations,
         "execution:capsule_sha256",
@@ -98,22 +93,22 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
     for name, planned in planned_files.items():
         compare_identity(deviations, f"input:{name}", planned, executed_inputs.get(name))
 
-    # The materialized outputs must agree with the study-owned execution receipt.
     outputs = receipt.get("outputs", {})
-    for name, path in (("study.json", study_path), ("result.json", result_path)):
+    for name, path in ((plan_name, plan_path), ("result.json", result_path)):
         actual = identity(path) if path.is_file() else None
         compare_identity(deviations, f"output:{name}", outputs.get(name), actual)
 
-    planned_study_sha = planned_files.get("study.json", {}).get("sha256")
-    result_study_sha = result.get("study_declaration_sha256")
+    planned_plan_sha = planned_files.get(plan_name, {}).get("sha256")
+    result_plan_sha = result.get("plan_sha256")
+    if result_plan_sha is None and plan_name == "study.json":
+        result_plan_sha = result.get("study_declaration_sha256")
     compare_value(
         deviations,
-        "result:study_declaration_sha256",
-        planned_study_sha,
-        result_study_sha,
+        "result:plan_sha256",
+        planned_plan_sha,
+        result_plan_sha,
     )
 
-    # The project wrapper's verdict should be the task verdict observed by Agent Dispatch.
     compare_value(
         deviations,
         "execution:task_exit_code",
@@ -126,7 +121,9 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
         "record_type": "plan-execution-check",
         "status": "MATCH" if not deviations else "DEVIATION",
         "capsule_sha256": manifest.get("capsule_sha256"),
+        "plan_file": plan_name,
         "study_id": result.get("study_id"),
+        "qualification_id": result.get("qualification_id"),
         "run_id": execution.get("run_id"),
         "worker_revision": execution.get("worker_revision"),
         "task_exit_code": receipt.get("task_exit_code"),
