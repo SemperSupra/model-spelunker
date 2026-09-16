@@ -127,10 +127,11 @@ jobs:
             f.write(f"- candidate digest: `{b['artifact_provenance']['identity_digest']}`\n")
             f.write(f"- amplitude rescaled max delta: `{d['positive_amplitude_rescaled_max_delta']}`\n")
             f.write(f"- negative sign symmetry max delta: `{d['negative_sign_symmetry_max_delta']}`\n")
-            f.write(f"- within-final-patch mean position effect: `{d['within_final_patch_median_delta_mean']}`\n")
+            f.write(f"- nonterminal within-final-patch mean position effect: `{d['nonterminal_within_final_patch_median_delta_mean']}`\n")
             f.write(f"- cross-patch mean position effect: `{d['cross_patch_median_delta_mean']}`\n")
             f.write(f"- largest position effect lag: `{d['largest_position_effect']}`\n")
-            f.write(f"- exact repeat: `{d['reference_repeat_exact']}`\n")
+            f.write(f"- same-batch repeat exact: `{d['same_batch_repeat_exact']}`\n")
+            f.write(f"- cross-batch max delta: `{max(d['cross_batch_position_max_abs_delta'], d['cross_batch_singleton_max_abs_delta'])}`\n")
           PY
       - name: Upload bounded evidence
         if: always()
