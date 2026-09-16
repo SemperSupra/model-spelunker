@@ -13,8 +13,13 @@ export TOKENIZERS_PARALLELISM=false
 export STUDY_JSON="$PWD/study.json"
 export RESULT_JSON="$SEALED_RESULT_DIR/result.json"
 
+set +e
 python3 run_reproduction.py
+task_rc=$?
+set -e
+
 cp study.json "$SEALED_RESULT_DIR/study.json"
+export TASK_RC="$task_rc"
 
 python3 - <<'PY'
 import hashlib
@@ -22,13 +27,36 @@ import json
 import os
 from pathlib import Path
 
-out = Path(os.environ["SEALED_RESULT_DIR"])
-receipt = {}
-for name in ("study.json", "result.json"):
-    path = out / name
-    receipt[name] = {
+
+def identity(path: Path) -> dict[str, object]:
+    return {
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "bytes": path.stat().st_size,
     }
-(out / "study-receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+
+
+out = Path(os.environ["SEALED_RESULT_DIR"])
+inputs = {
+    name: identity(Path(name))
+    for name in ("study.json", "run.sh", "run_reproduction.py")
+}
+outputs = {}
+for name in ("study.json", "result.json"):
+    path = out / name
+    if path.is_file():
+        outputs[name] = identity(path)
+
+receipt = {
+    "schema_version": 1,
+    "record_type": "execution-receipt",
+    "task_exit_code": int(os.environ["TASK_RC"]),
+    "inputs": inputs,
+    "outputs": outputs,
+}
+(out / "execution-receipt.json").write_text(
+    json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
 PY
+
+exit "$task_rc"
