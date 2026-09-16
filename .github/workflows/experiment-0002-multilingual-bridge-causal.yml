@@ -40,10 +40,7 @@ jobs:
 
       - name: Syntax check harness
         if: steps.arm.outputs.armed == 'true'
-        run: |
-          python -m py_compile tools/jspace_interventions.py
-          python -m py_compile tools/run_multilingual_bridge_cloze.py
-          python -m py_compile tools/run_multilingual_bridge_causal.py
+        run: python -m py_compile tools/run_multilingual_bridge_cloze.py
 
       - name: Install CPU PyTorch
         if: steps.arm.outputs.armed == 'true'
@@ -55,94 +52,62 @@ jobs:
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Behavior-calibrate demonym downstream function
+      - name: Build batched multifunction preflight fixture
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          mkdir -p artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight
+          cat \
+            fixtures/experiment-0002/multilingual-indirect-bridge-cloze.jsonl \
+            fixtures/experiment-0002/multilingual-indirect-bridge-demonym.jsonl \
+            > artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/combined.jsonl
+
+      - name: Run Qwen3-1.7B multifunction preflight
         if: steps.arm.outputs.armed == 'true'
         run: |
           python tools/run_multilingual_bridge_cloze.py \
-            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-demonym.jsonl \
-            --model Qwen/Qwen3.5-0.8B \
+            --fixture artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/combined.jsonl \
+            --model Qwen/Qwen3-1.7B \
             --lens-repo neuronpedia/jacobian-lens \
             --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
-            --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
+            --lens-file qwen3-1.7b/jlens/Salesforce-wikitext/Qwen3-1.7B_jacobian_lens.pt \
             --positions 8 \
-            --output-dir artifacts/experiment-0002-demonym-reuse/preflight
+            --output-dir artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/results
 
-      - name: Apply second-function promotion gate
-        id: gate
-        if: steps.arm.outputs.armed == 'true'
-        run: |
-          python - <<'PY'
-          import json, os
-          from pathlib import Path
-          s = json.loads(Path('artifacts/experiment-0002-demonym-reuse/preflight/summary.json').read_text())
-          langs = s['language_summary']
-          earned = (
-              s['evaluated_cases'] == 8
-              and s['skipped_cases'] == 0
-              and s['behavior_accuracy'] == 1.0
-              and langs.get('en', {}).get('n') == 4
-              and langs.get('de', {}).get('n') == 4
-              and langs['en']['behavior_accuracy'] == 1.0
-              and langs['de']['behavior_accuracy'] == 1.0
-          )
-          print('preflight_overall_accuracy', s['behavior_accuracy'])
-          print('preflight_language_summary', langs)
-          print('causal_reuse_earned', earned)
-          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
-              handle.write(f"earned={'true' if earned else 'false'}\n")
-          PY
-
-      - name: Run demonym second-function causal reuse matrix
-        if: steps.arm.outputs.armed == 'true' && steps.gate.outputs.earned == 'true'
-        run: |
-          python tools/run_multilingual_bridge_causal.py \
-            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-demonym.jsonl \
-            --model Qwen/Qwen3.5-0.8B \
-            --lens-repo neuronpedia/jacobian-lens \
-            --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
-            --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
-            --languages en,de \
-            --late-layers 18-22 \
-            --early-layers 0-4 \
-            --strength 1.0 \
-            --target-mode all-other \
-            --output-dir artifacts/experiment-0002-demonym-reuse/causal
-
-      - name: Summarize second-function reuse
+      - name: Apply multifunction behavior gate
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          pre = json.loads(Path('artifacts/experiment-0002-demonym-reuse/preflight/summary.json').read_text())
-          print('preflight', {
-              'evaluated': pre['evaluated_cases'],
-              'skipped': pre['skipped_cases'],
-              'accuracy': pre['behavior_accuracy'],
-              'languages': pre['language_summary'],
-          })
-          causal_path = Path('artifacts/experiment-0002-demonym-reuse/causal/summary.json')
-          if not causal_path.exists():
-              print('causal matrix not executed: behavior gate did not pass')
-          else:
-              s = json.loads(causal_path.read_text())
-              print(f"model={s['model']} revision={s['resolved_model_revision']}")
-              print(
-                  f"source_cases={s['source_case_count']} target_pairs={s['target_pair_count']} "
-                  f"baseline_valid={s['baseline_valid_source_cases']}"
-              )
-              for name, row in s['conditions'].items():
-                  print(name, row)
-              print('cross_language_transfer')
-              for direction, row in s['cross_language_transfer'].items():
-                  print(direction, row)
+          rows = [json.loads(line) for line in Path(
+              'artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/results/records.jsonl'
+          ).read_text().splitlines() if line]
+
+          groups = {
+              'capital_en_de': [r for r in rows if r['case_id'].startswith('bridge-cloze-') and r['language'] in {'en','de'}],
+              'capital_th': [r for r in rows if r['case_id'].startswith('bridge-cloze-') and r['language'] == 'th'],
+              'demonym_en_de': [r for r in rows if r['case_id'].startswith('bridge-demonym-') and r['language'] in {'en','de'}],
+          }
+          for name, group in groups.items():
+              correct = sum(bool(r['behavior_correct']) for r in group)
+              print(name, {'n': len(group), 'correct': correct, 'accuracy': correct / max(1, len(group))})
+              for r in group:
+                  print(r['case_id'], r['predicted_answer'], r['correct_answer'], r['behavior_margin_mean_logprob'])
+
+          earned = (
+              len(groups['capital_en_de']) == 8
+              and all(r['behavior_correct'] for r in groups['capital_en_de'])
+              and len(groups['demonym_en_de']) == 8
+              and all(r['behavior_correct'] for r in groups['demonym_en_de'])
+          )
+          print('paired_cross_task_causal_rep_earned', earned)
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-demonym-reuse-${{ github.run_id }}
-          path: artifacts/experiment-0002-demonym-reuse
+          name: experiment-0002-qwen3-1.7b-multifunction-preflight-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight
           if-no-files-found: error
           retention-days: 14
