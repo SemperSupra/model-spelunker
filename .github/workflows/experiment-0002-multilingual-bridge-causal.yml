@@ -54,7 +54,7 @@ jobs:
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Run full EN/DE target-address matrix
+      - name: Run Thai target-address reuse stress test
         if: steps.arm.outputs.armed == 'true'
         run: |
           python tools/run_multilingual_bridge_causal.py \
@@ -62,20 +62,20 @@ jobs:
             --lens-repo neuronpedia/jacobian-lens \
             --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
             --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
-            --languages en,de \
+            --languages th \
             --late-layers 18-22 \
             --early-layers 0-4 \
             --strength 1.0 \
             --target-mode all-other \
-            --output-dir artifacts/experiment-0002-en-de-target-address-matrix
+            --output-dir artifacts/experiment-0002-thai-target-address-transfer
 
-      - name: Summarize EN/DE target-address matrix
+      - name: Summarize Thai stress test
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          s = json.loads(Path('artifacts/experiment-0002-en-de-target-address-matrix/summary.json').read_text())
+          s = json.loads(Path('artifacts/experiment-0002-thai-target-address-transfer/summary.json').read_text())
           print(f"model={s['model']} revision={s['resolved_model_revision']}")
           print(
               f"source_cases={s['source_case_count']} target_pairs={s['target_pair_count']} "
@@ -83,19 +83,17 @@ jobs:
           )
           for name, row in s['conditions'].items():
               print(name, row)
-          print('cross_language_transfer')
-          for direction, row in s['cross_language_transfer'].items():
-              print(direction, row)
           print('source_specificity')
           for case_id, row in s['source_specificity'].items():
               print(case_id, row)
+          print('interpretation', s['interpretation'])
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-en-de-target-address-matrix-${{ github.run_id }}
-          path: artifacts/experiment-0002-en-de-target-address-matrix
+          name: experiment-0002-thai-target-address-transfer-${{ github.run_id }}
+          path: artifacts/experiment-0002-thai-target-address-transfer
           if-no-files-found: error
           retention-days: 14
