@@ -1,0 +1,38 @@
+{
+  "dataset_repository": "facebook/multilingual_librispeech",
+  "dataset_revision": "2e83e61823b4c47dcbcb1980bb88601274127609",
+  "license_spdx": "CC-BY-4.0",
+  "split": "1_hours",
+  "utterances_per_speaker": 3,
+  "selection_rule": {
+    "description": "for each speaker frozen by Rep 31, first three eligible utterances in pinned parquet row order with embedded audio bytes and 2 <= audio_duration <= 15 seconds",
+    "min_duration_seconds": 2.0,
+    "max_duration_seconds": 15.0
+  },
+  "languages": [
+    {
+      "config": "german",
+      "expected_language": "de",
+      "parquet_path": "german/1_hours-00000-of-00001.parquet",
+      "speaker_ids": ["8337", "7579", "10433"]
+    },
+    {
+      "config": "french",
+      "expected_language": "fr",
+      "parquet_path": "french/1_hours-00000-of-00001.parquet",
+      "speaker_ids": ["3344", "6381", "1649"]
+    },
+    {
+      "config": "spanish",
+      "expected_language": "es",
+      "parquet_path": "spanish/1_hours-00000-of-00001.parquet",
+      "speaker_ids": ["12921", "11772", "6615"]
+    }
+  ],
+  "speaker_freeze_provenance": {
+    "source_rep": "Rep 31",
+    "source_run_id": "35054188355",
+    "source_commit": "e03e207362f6a1575b601626be6aa916c6ed0490",
+    "source_artifact_digest": "sha256:a08bf931df7bc7ca94c7b568e09d89ba912f28469b71d2db7f7fea3182b734ee"
+  }
+}
