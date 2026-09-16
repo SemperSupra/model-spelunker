@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
-import random
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -65,6 +63,28 @@ def labeled_pn(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [row for row in rows if row.get("expected") in {"positive", "negative"}]
 
 
+def resolve_layers(model):
+    """Return decoder block list for common Hugging Face causal-LM layouts.
+
+    Keep this deliberately small and explicit. It covers the current plumbing models
+    (GPT-NeoX/Pythia and modern Llama/Qwen/Mistral/Gemma/OLMo-style layouts) without
+    pretending to be a universal model adapter.
+    """
+    candidates = [
+        getattr(getattr(model, "gpt_neox", None), "layers", None),
+        getattr(getattr(model, "model", None), "layers", None),
+        getattr(getattr(getattr(model, "model", None), "model", None), "layers", None),
+        getattr(getattr(model, "transformer", None), "h", None),
+    ]
+    for layers in candidates:
+        if layers is not None and len(layers) > 0:
+            return layers
+    raise RuntimeError(
+        f"Unsupported transformer block layout for {model.__class__.__name__}; "
+        "add an explicit adapter rather than guessing a module path."
+    )
+
+
 def capture_last_token_states(model, tokenizer, prompt: str) -> list[torch.Tensor]:
     ids = tokenizer(prompt, add_special_tokens=False, return_tensors="pt").input_ids
     with torch.inference_mode():
@@ -73,8 +93,13 @@ def capture_last_token_states(model, tokenizer, prompt: str) -> list[torch.Tenso
     return [state[0, -1].detach().cpu().float() for state in out.hidden_states[1:]]
 
 
-def accuracy(rows: list[dict[str, Any]], vectors: list[list[torch.Tensor]], layer: int,
-             direction: torch.Tensor, midpoint: torch.Tensor) -> tuple[float, list[dict[str, Any]]]:
+def accuracy(
+    rows: list[dict[str, Any]],
+    vectors: list[list[torch.Tensor]],
+    layer: int,
+    direction: torch.Tensor,
+    midpoint: torch.Tensor,
+) -> tuple[float, list[dict[str, Any]]]:
     unit = direction / direction.norm().clamp_min(1e-12)
     results: list[dict[str, Any]] = []
     correct = 0
@@ -101,8 +126,16 @@ def derive_layer_stats(train_rows, train_vectors, heldout_rows, heldout_vectors)
     learned: list[tuple[torch.Tensor, torch.Tensor]] = []
 
     for layer in range(num_layers):
-        pos = [vecs[layer] for row, vecs in zip(train_rows, train_vectors) if row["expected"] == "positive"]
-        neg = [vecs[layer] for row, vecs in zip(train_rows, train_vectors) if row["expected"] == "negative"]
+        pos = [
+            vecs[layer]
+            for row, vecs in zip(train_rows, train_vectors)
+            if row["expected"] == "positive"
+        ]
+        neg = [
+            vecs[layer]
+            for row, vecs in zip(train_rows, train_vectors)
+            if row["expected"] == "negative"
+        ]
         p_mean = torch.stack(pos).mean(dim=0)
         n_mean = torch.stack(neg).mean(dim=0)
         direction = p_mean - n_mean
@@ -145,7 +178,9 @@ def conditional_mean_logprob_with_delta(
     delta: torch.Tensor,
 ) -> float:
     prompt_ids = tokenizer(prompt, add_special_tokens=False, return_tensors="pt").input_ids
-    full_ids = tokenizer(prompt + continuation, add_special_tokens=False, return_tensors="pt").input_ids
+    full_ids = tokenizer(
+        prompt + continuation, add_special_tokens=False, return_tensors="pt"
+    ).input_ids
     prompt_len = prompt_ids.shape[1]
     full_len = full_ids.shape[1]
     if full_len <= prompt_len:
@@ -153,13 +188,7 @@ def conditional_mean_logprob_with_delta(
     if not torch.equal(full_ids[:, :prompt_len], prompt_ids):
         raise ValueError("Prompt/continuation tokenization boundary is not prefix-stable")
 
-    layers = getattr(getattr(model, "gpt_neox", None), "layers", None)
-    if layers is None:
-        raise RuntimeError(
-            "Experiment 0002 smoke intervention currently supports GPT-NeoX/Pythia models; "
-            "generalize the layer adapter before changing model families."
-        )
-
+    layers = resolve_layers(model)
     target_pos = prompt_len - 1
     delta_cpu = delta.detach().cpu()
 
@@ -176,7 +205,7 @@ def conditional_mean_logprob_with_delta(
     try:
         with torch.inference_mode():
             logits = model(full_ids, use_cache=False).logits
-            log_probs = torch.log_softmax(logits, dim=-1)
+            log_probs = torch.log_softmax(logits.float(), dim=-1)
     finally:
         handle.remove()
 
@@ -211,7 +240,6 @@ def choose_intervention_probes(rows: list[dict[str, Any]]) -> list[dict[str, Any
 
 def main() -> int:
     args = parse_args()
-    rng = random.Random(args.seed)
     torch.manual_seed(args.seed)
     torch.set_num_threads(max(1, int(os.environ.get("TORCH_NUM_THREADS", "2"))))
     alphas = [float(value) for value in args.alphas.split(",") if value.strip()]
@@ -235,9 +263,15 @@ def main() -> int:
     model = AutoModelForCausalLM.from_pretrained(args.model, revision=resolved_revision)
     model.eval()
     model.to("cpu")
+    layers = resolve_layers(model)
 
-    print(f"capturing train={len(train_rows)} heldout={len(heldout_rows)}")
-    train_vectors = [capture_last_token_states(model, tokenizer, row["prompt"]) for row in train_rows]
+    print(
+        f"model={args.model} class={model.__class__.__name__} layers={len(layers)} "
+        f"capturing train={len(train_rows)} heldout={len(heldout_rows)}"
+    )
+    train_vectors = [
+        capture_last_token_states(model, tokenizer, row["prompt"]) for row in train_rows
+    ]
     heldout_vectors = [
         capture_last_token_states(model, tokenizer, row["prompt"]) for row in heldout_rows
     ]
@@ -249,7 +283,9 @@ def main() -> int:
 
     generator = torch.Generator(device="cpu")
     generator.manual_seed(args.seed + 1)
-    random_direction = torch.randn(direction.shape, generator=generator, dtype=direction.dtype)
+    random_direction = torch.randn(
+        direction.shape, generator=generator, dtype=direction.dtype
+    )
     random_direction = random_direction / random_direction.norm().clamp_min(1e-12)
     random_direction = random_direction * direction.norm()
 
@@ -298,12 +334,14 @@ def main() -> int:
     summary = {
         "experiment": "0002-external-to-latent-interface-discovery",
         "model": args.model,
+        "model_class": model.__class__.__name__,
         "requested_revision": args.revision,
         "resolved_revision": resolved_revision,
         "train_fixture": args.train_fixture,
         "heldout_fixture": args.heldout_fixture,
         "train_probe_count": len(train_rows),
         "heldout_probe_count": len(heldout_rows),
+        "num_layers": len(layers),
         "chosen_layer": chosen_layer,
         "chosen_train_accuracy": per_layer[chosen_layer]["train_accuracy"],
         "chosen_heldout_accuracy": per_layer[chosen_layer]["heldout_accuracy"],
