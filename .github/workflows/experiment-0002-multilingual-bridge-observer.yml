@@ -1,13 +1,14 @@
-name: experiment-0002-multilingual-bridge-observer
+name: experiment-0002-multilingual-bridge-cloze
 
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  multilingual-bridge-observer:
+  multilingual-bridge-cloze:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -19,7 +20,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check one-shot arm
+        id: arm
+        run: |
+          if [ -f .ci/run-experiment-0002-multilingual-bridge-cloze ]; then
+            echo 'armed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'armed=false' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Python
+        if: steps.arm.outputs.armed == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -27,32 +38,37 @@ jobs:
           cache-dependency-path: requirements-experiment-0001.txt
 
       - name: Syntax check harness
-        run: python -m py_compile tools/run_multilingual_bridge_observer.py
+        if: steps.arm.outputs.armed == 'true'
+        run: python -m py_compile tools/run_multilingual_bridge_cloze.py
 
       - name: Install CPU PyTorch
+        if: steps.arm.outputs.armed == 'true'
         run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
 
       - name: Install experiment dependencies
+        if: steps.arm.outputs.armed == 'true'
         run: |
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Run multilingual indirect bridge observer
+      - name: Run multilingual indirect bridge cloze
+        if: steps.arm.outputs.armed == 'true'
         run: |
-          python tools/run_multilingual_bridge_observer.py \
+          python tools/run_multilingual_bridge_cloze.py \
             --model Qwen/Qwen3.5-0.8B \
             --lens-repo neuronpedia/jacobian-lens \
             --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
             --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
             --positions 8 \
-            --output-dir artifacts/experiment-0002-multilingual-bridge-observer
+            --output-dir artifacts/experiment-0002-multilingual-bridge-cloze
 
       - name: Summarize observer evidence
+        if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          s = json.loads(Path('artifacts/experiment-0002-multilingual-bridge-observer/summary.json').read_text())
+          s = json.loads(Path('artifacts/experiment-0002-multilingual-bridge-cloze/summary.json').read_text())
           print(f"model={s['model']} revision={s['resolved_model_revision']}")
           print(f"evaluated={s['evaluated_cases']} skipped={s['skipped_cases']}")
           print(f"behavior_accuracy={s['behavior_accuracy']:.3f}")
@@ -64,10 +80,10 @@ jobs:
           PY
 
       - name: Upload evidence
-        if: always()
+        if: steps.arm.outputs.armed == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-multilingual-bridge-observer-${{ github.run_id }}
-          path: artifacts/experiment-0002-multilingual-bridge-observer
+          name: experiment-0002-multilingual-bridge-cloze-${{ github.run_id }}
+          path: artifacts/experiment-0002-multilingual-bridge-cloze
           if-no-files-found: error
           retention-days: 14
