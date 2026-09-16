@@ -1,0 +1,152 @@
+{
+  "schema_version": "1.0",
+  "adopted_standards": [
+    "NeurIPS Reproducibility Checklist v2024",
+    "AAAI Reproducibility Checklist",
+    "Domain-Neutral Study Spine (Claim -> Study -> Factors -> Protocol -> Inputs -> Metrics -> Parameters -> Variability -> Claimed Result)"
+  ],
+  "claim_id": "CLAIM_1_AGENT_REFINING_PERFORMANCE",
+  "experiment_id": "EXP_II_AGENT_REFINING_EFFECTIVENESS",
+  "method_fields": {
+    "study_objective": {
+      "value": "Evaluate the effectiveness of RICE refining scheme compared to baselines (PPO fine-tuning, JSRL, StateMask-R) across representative RL tasks.",
+      "status": "EXPLICIT_PAPER",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 4.2 Experiment II",
+        "excerpt": "Experiment II. To show the effectiveness of the refining method, we compare the agent's performance after refining using our method and three aforementioned baseline methods...",
+        "excerpt_sha256": "5fb35dd086d493ab33f77d1dbe98ab6fe6be0e413b8c3335b3d8f3ab2b0c9c1a"
+      }
+    },
+    "treatment_factors": {
+      "value": "Refining methods: [RICE (Ours), PPO fine-tuning, JSRL, StateMask-R]. Fixed explanation method: Ours (mask network).",
+      "status": "EXPLICIT_PAPER",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 4 Table 1",
+        "excerpt": "For the first group of experiments (left), we fixed the explanation method to our method (mask network) and varied the refining methods.",
+        "excerpt_sha256": "1bc5ab7c19690623d457aebe38bde074ea1453e46226e37208876f4f4933280a"
+      }
+    },
+    "environments_eval_set": {
+      "value": "Evaluation tasks in scope for Table 1: MuJoCo (Hopper, Walker2d, Reacher, HalfCheetah), Selfish Mining, Network Defense, Autonomous Driving (Cage Challenge 2 included in Table 1; Malware Mutation explicitly excluded by addendum).",
+      "status": "EXPLICIT_PAPER",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 4.1 Environment Selection / Section 4 Table 1",
+        "excerpt": "We select eight representative environments to demonstrate the effectiveness of RICE across two categories: simulated games... and realworld applications...",
+        "excerpt_sha256": "12aa18c99fbb32da6659a563b96877971e0a8831d4fbceccb23db95ff22408be"
+      }
+    },
+    "policy_architecture_default": {
+      "value": "Default RL agent policy compatible with environments. Addendum specifies Stable Baselines 3 'MlpPolicy' for MuJoCo dense/sparse, MLP [128,128,128,128] for selfish mining, MLP [64,64,64] for cage challenge, DI-engine VAC default for autonomous driving.",
+      "status": "EXPLICIT_ADDENDUM",
+      "evidence": {
+        "artifact": "addendum.md",
+        "locator": "Architectures section",
+        "excerpt": "We utilized the default setting ('MlpPolicy') in stable baselines 3 library for the policy network and SAC networks in dense/sparse MuJoCo tasks.",
+        "excerpt_sha256": "4d355a02021d4dfa1736dcabbd6a69aa89fdcc65646fa86eaf8d6606f0e8ccdc"
+      }
+    },
+    "pre_trained_agent_weights_and_checkpoint_states": {
+      "value": "Pre-trained target policies/checkpoints for each environment before refining (e.g. converged 100 epochs or locally optimal policy).",
+      "status": "MISSING",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 4.1 / Appendix C",
+        "excerpt": "No exact pre-trained target agent checkpoint binaries, exact seeds, or initial policy weights provided in paper or addendum.",
+        "excerpt_sha256": "1fa06365c87175c1aec3cd03b9b051cdcb86d719e0c31493f2702e00e5141014"
+      }
+    },
+    "explanation_mask_network_training_protocol": {
+      "value": "Mask network trained to identify critical states/steps using step-level explanation reformulation with reward bonus for blinding.",
+      "status": "EXPLICIT_PAPER",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 3.3 StateMask Redesign",
+        "excerpt": "We reformulate the objective function and add a new reward bonus for encouraging blinding when training...",
+        "excerpt_sha256": "e7fa6238910c2ca6525179e4fff65673279b84c66447f430be48cc007c8b444c"
+      }
+    },
+    "explanation_mask_network_hyperparameters": {
+      "value": "Exact network architecture, optimizer, learning rate, training epochs, number of trajectory samples, and loss weights for training the mask network.",
+      "status": "MISSING",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 3.3 / Appendix C.1",
+        "excerpt": "Specific architecture, learning rate, and epoch count for training the explanation mask network across each task are omitted.",
+        "excerpt_sha256": "1e5a41554bdfd2e092428115ed997b8a0af308e50b72db5b6026ff8f6d993838"
+      }
+    },
+    "mixed_initial_state_distribution_parameter_p": {
+      "value": "Parameter $p$ controlling the mixing ratio between default initial states $S_0$ and critical states $S_c$. Paper text specifies $p=0.5$ in Section 3.2, but Figure 8 caption/plot ranges $p \\in \\{0, 0.25, 0.5, 0.75, 1\\}$, and addendum notes Figure 8 plots $p$.",
+      "status": "AMBIGUOUS",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 3.2 / Addendum Hyperparameter figures",
+        "excerpt": "Figure 8 is plotting p for p in {0, 0.25, 0.5, 0.75, 1}. Specific default p used for each task in Table 1 is not explicitly confirmed per task.",
+        "excerpt_sha256": "1b320479e05f1b384282cf635af8c38b5bc24b5a7497333102a78f7e9354acf0"
+      }
+    },
+    "exploration_bonus_parameter_lambda": {
+      "value": "Exploration bonus coefficient $\\lambda$. Addendum specifies Figure 7 plots $\\lambda \\in \\{0, 0.1, 0.01, 0.001\\}$. Exact default $\\lambda$ per task in Table 1 is not explicitly listed.",
+      "status": "AMBIGUOUS",
+      "evidence": {
+        "artifact": "addendum.md",
+        "locator": "Hyperparameter figures section",
+        "excerpt": "Figure 7 is plotting lambda for lambda in {0, 0.1, 0.01, 0.001}",
+        "excerpt_sha256": "6d83446e416c9b10b2dfb936caccddbbf890a2d564e25921e2e49e9c2c074d4d"
+      }
+    },
+    "refining_training_steps_and_optimizer": {
+      "value": "Total training timesteps, batch size, learning rate, entropy coefficient, and discount factor $\\gamma$ during RICE refining for each environment.",
+      "status": "MISSING",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 4 / Appendix C.1",
+        "excerpt": "Refining hyper-parameter specifics (timesteps, learning rate, PPO hyperparameters) per environment are omitted.",
+        "excerpt_sha256": "db513957e0ac5dcfac90eec4feea1785fecec78e891656be2a45f1177ce211dc"
+      }
+    },
+    "evaluation_metric": {
+      "value": "Final mean reward (and standard deviation) of the refined agent evaluated after refining.",
+      "status": "EXPLICIT_PAPER",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 4 Table 1 caption",
+        "excerpt": "We report the mean value (standard deviations) of the final reward after refining. A higher value is better.",
+        "excerpt_sha256": "d804df2fc77326526c10faee19a41c3fb1430b7d3353975e2fac8423500dd186"
+      }
+    },
+    "evaluation_trials_and_random_seeds": {
+      "value": "3 independent runs with various random seeds reported as mean (standard deviation).",
+      "status": "EXPLICIT_PAPER",
+      "evidence": {
+        "artifact": "paper.md",
+        "locator": "Section 4.2 Experiment I & Table 1",
+        "excerpt": "We repeat each experiment 3 times with various random seeds and report the mean and standard deviation.",
+        "excerpt_sha256": "8e5aee3f5a89a8d83a8dd6608793c4bf84949156f1f71398ff2bc6bca77b0d6d"
+      }
+    },
+    "fidelity_score_formula_details": {
+      "value": "Fidelity score pipeline defined as $\\text{Fidelity Score} = \\log(d / d_{\\max}) - \\log(l / L)$ with sliding window $l = L \\times K$.",
+      "status": "EXPLICIT_ADDENDUM",
+      "evidence": {
+        "artifact": "addendum.md",
+        "locator": "Clarifying the Fidelity Score and Top-K Critical Steps",
+        "excerpt": "The fidelity score is calculated using the formula: Fidelity Score = log(d / d_max) - log(l / L).",
+        "excerpt_sha256": "1b8368fd000403b6d13d9ae6c578d930e97021c038d4e265456c9ded0c4bd246"
+      }
+    },
+    "theoretical_suboptimality_bound_section3_4": {
+      "value": "Section 3.4 theoretical sub-optimality analysis.",
+      "status": "NOT_APPLICABLE",
+      "evidence": {
+        "artifact": "addendum.md",
+        "locator": "Out of scope for reproduction section",
+        "excerpt": "Section 3.4 is out of scope for the reproduction of this paper.",
+        "excerpt_sha256": "a0ed36fbe2217997162fefe7dd8f065312155d9bff3a525ac82744adb647113f"
+      }
+    }
+  }
+}
