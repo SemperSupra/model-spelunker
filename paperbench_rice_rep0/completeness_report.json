@@ -1,0 +1,49 @@
+{
+  "terminal_state": "METHOD_INCOMPLETE",
+  "model_spelunker_revision": "dadd1c731c347d484815bda25ad3b2298a2413d1",
+  "independent_reimplementation_runnable_from_publication_inputs_alone": false,
+  "needed_field_family_outside_adopted_checklist_spine": false,
+  "claim_and_experiment": {
+    "claim_id": "CLAIM_1_AGENT_REFINING_PERFORMANCE",
+    "experiment_id": "EXP_II_AGENT_REFINING_EFFECTIVENESS",
+    "claim_selection_path": "paperbench_rice_rep0/claim_selection.json"
+  },
+  "source_manifest_path": "paperbench_rice_rep0/source_manifest.json",
+  "method_ir_path": "paperbench_rice_rep0/method_ir.json",
+  "field_status_summary": {
+    "EXPLICIT_PAPER": 6,
+    "EXPLICIT_ADDENDUM": 2,
+    "AMBIGUOUS": 2,
+    "MISSING": 3,
+    "NOT_APPLICABLE": 1
+  },
+  "ambiguity_list": [
+    {
+      "field": "mixed_initial_state_distribution_parameter_p",
+      "issue": "Paper text specifies p=0.5 in Section 3.2, but Figure 8 tests p in {0, 0.25, 0.5, 0.75, 1}. The exact p used per task for Table 1 results is not explicitly stated per task."
+    },
+    {
+      "field": "exploration_bonus_parameter_lambda",
+      "issue": "Figure 7 plots lambda in {0, 0.1, 0.01, 0.001}, but the exact lambda choice per task for Table 1 results is omitted."
+    }
+  ],
+  "missing_details_list": [
+    {
+      "field": "pre_trained_agent_weights_and_checkpoint_states",
+      "description": "Pre-trained target policies/checkpoints for each environment before refining are not provided in publication inputs."
+    },
+    {
+      "field": "explanation_mask_network_hyperparameters",
+      "description": "Exact network architecture, learning rate, training epochs, number of trajectory samples, and loss weights for training the mask network per task."
+    },
+    {
+      "field": "refining_training_steps_and_optimizer",
+      "description": "Total refining timesteps, batch size, learning rate, and PPO hyperparameters for each environment."
+    }
+  ],
+  "minimum_execution_blocking_unknowns": [
+    "Target agent initial pre-trained policy weights/checkpoints for each evaluation task.",
+    "Explanation mask network training hyperparameters and sample trajectory count per task.",
+    "RICE refining hyperparameters (learning rate, total training timesteps, batch size, exact p and lambda per task)."
+  ]
+}
