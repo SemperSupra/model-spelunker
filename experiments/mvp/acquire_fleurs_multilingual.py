@@ -2,9 +2,10 @@
 """Acquire a tiny, bounded FLEURS multilingual corpus through Dataset Viewer.
 
 This is deliberately an acquisition/identity adapter, not a dataset framework. It
-fetches one public FLEURS test row for one language in each of the seven FLEURS
-geographic groups, records the observed Hub revision before and after acquisition,
-and hashes the exact audio bytes and reference text consumed by the experiment.
+fetches the first public FLEURS test row for one language in each of the seven
+FLEURS geographic groups, records the observed Hub revision before and after
+acquisition, and hashes the exact audio bytes and reference text consumed by the
+experiment.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from typing import Any
 
 DATASET = "google/fleurs"
 DATASET_API = f"https://huggingface.co/api/datasets/{DATASET}"
-ROWS_API = "https://datasets-server.huggingface.co/rows"
+FIRST_ROWS_API = "https://datasets-server.huggingface.co/first-rows"
 SPLIT = "test"
 ROW_OFFSET = 0
 USER_AGENT = "SemperSupra-model-spelunker/1"
@@ -90,13 +91,11 @@ def validate_dataset_meta(meta: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def row_url(config: str) -> str:
-    return ROWS_API + "?" + urllib.parse.urlencode({
+def first_rows_url(config: str) -> str:
+    return FIRST_ROWS_API + "?" + urllib.parse.urlencode({
         "dataset": DATASET,
         "config": config,
         "split": SPLIT,
-        "offset": ROW_OFFSET,
-        "length": 1,
     })
 
 
@@ -128,10 +127,10 @@ def main() -> int:
     samples: list[dict[str, Any]] = []
 
     for spec in LANGUAGES:
-        payload = request_json(row_url(spec["config"]))
+        payload = request_json(first_rows_url(spec["config"]))
         rows = payload.get("rows") or []
-        if len(rows) != 1:
-            raise RuntimeError(f"expected exactly one row for {spec['config']}, got {len(rows)}")
+        if not rows:
+            raise RuntimeError(f"first-rows returned no rows for {spec['config']}")
         item = rows[0]
         row = item.get("row") or {}
         row_idx = int(item.get("row_idx", ROW_OFFSET))
@@ -144,12 +143,11 @@ def main() -> int:
         dest = args.output_dir / f"{spec['config']}-{SPLIT}-{row_idx}.wav"
         dest.write_bytes(audio_bytes)
         reference_bytes = transcript.encode("utf-8")
-        sample_id = row.get("id")
         samples.append({
             **spec,
             "split": SPLIT,
             "row_idx": row_idx,
-            "dataset_row_id": sample_id,
+            "dataset_row_id": row.get("id"),
             "reference": transcript,
             "reference_sha256_utf8": sha256_bytes(reference_bytes),
             "audio_file": dest.name,
@@ -177,8 +175,8 @@ def main() -> int:
         "schema_version": 1,
         "dataset": before,
         "acquisition": {
-            "method": "huggingface-dataset-viewer-rows",
-            "rows_endpoint": ROWS_API,
+            "method": "huggingface-dataset-viewer-first-rows",
+            "rows_endpoint": FIRST_ROWS_API,
             "split": SPLIT,
             "offset": ROW_OFFSET,
             "revision_stable_during_acquisition": True,
