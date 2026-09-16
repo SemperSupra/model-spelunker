@@ -32,7 +32,7 @@ jobs:
           mkdir -p "$RESULT_DIR"
           cd qualifications/persona-canary-001
           set +e
-          SEALED_RESULT_DIR="$RESULT_DIR" ./run.sh
+          SEALED_RESULT_DIR="$RESULT_DIR" bash run.sh
           rc=$?
           set -e
           echo "task_rc=$rc" >> "$GITHUB_OUTPUT"
