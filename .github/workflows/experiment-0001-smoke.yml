@@ -5,8 +5,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/experiment-0001-smoke.yml'
-      - 'tools/run_behavioral_smoke.py'
       - 'tools/run_calibrated_semantic_smoke.py'
+      - 'tools/run_calibration_robustness.py'
       - 'schemas/concept-geometry-record.schema.json'
       - 'fixtures/experiment-0001/**'
       - 'requirements-experiment-0001.txt'
@@ -39,61 +39,47 @@ jobs:
       - name: Install experiment dependencies
         run: python -m pip install -r requirements-experiment-0001.txt
 
-      - name: Run counterbalanced choice control
-        run: |
-          python tools/run_behavioral_smoke.py \
-            --model EleutherAI/pythia-70m \
-            --fixture fixtures/experiment-0001/reciprocity-smoke.jsonl \
-            --output-dir artifacts/experiment-0001-choice
-
-      - name: Run calibrated semantic scorer
+      - name: Run calibrated semantic baseline
         run: |
           python tools/run_calibrated_semantic_smoke.py \
             --model EleutherAI/pythia-70m \
             --fixture fixtures/experiment-0001/reciprocity-semantic-smoke.jsonl \
             --output-dir artifacts/experiment-0001-semantic
 
-      - name: Summarize records
+      - name: Run held-out multi-stem robustness check
+        run: |
+          python tools/run_calibration_robustness.py \
+            --model EleutherAI/pythia-70m \
+            --fixture fixtures/experiment-0001/reciprocity-semantic-heldout.jsonl \
+            --output-dir artifacts/experiment-0001-robustness
+
+      - name: Summarize evidence
         run: |
           python - <<'PY'
           import json
-          from collections import Counter, defaultdict
+          from collections import Counter
           from pathlib import Path
 
-          def load(name):
-              path = Path(name) / 'concept-geometry-records.jsonl'
-              return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line]
-
-          choice = load('artifacts/experiment-0001-choice')
-          semantic = load('artifacts/experiment-0001-semantic')
-
-          print('choice_records=', len(choice))
-          print('choice_languages=', dict(Counter(row['probe']['language'] for row in choice)))
-          print('choice_classes=', dict(Counter(row['probe']['class'] for row in choice)))
-          scored = [row['behavior']['score'] for row in choice if row['behavior']['score'] is not None]
-          if scored:
-              print(f'choice_labeled_accuracy={sum(scored)/len(scored):.3f}')
-          groups = defaultdict(list)
-          for row in choice:
-              groups[row['behavior']['consistency_group']].append(row['behavior']['selected_option'])
-          paired = [values for values in groups.values() if len(values) == 2]
-          consistent = [values for values in paired if values[0] == values[1]]
-          if paired:
-              print(f'choice_counterbalanced_consistency={len(consistent)/len(paired):.3f}')
-
-          print('semantic_records=', len(semantic))
-          print('semantic_languages=', dict(Counter(row['probe']['language'] for row in semantic)))
-          print('semantic_classes=', dict(Counter(row['probe']['class'] for row in semantic)))
+          path = Path('artifacts/experiment-0001-semantic/concept-geometry-records.jsonl')
+          semantic = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line]
           semantic_scored = [row['behavior']['score'] for row in semantic if row['behavior']['score'] is not None]
+          print('baseline_records=', len(semantic))
           if semantic_scored:
-              print(f'semantic_labeled_accuracy={sum(semantic_scored)/len(semantic_scored):.3f}')
+              print(f'baseline_labeled_accuracy={sum(semantic_scored)/len(semantic_scored):.3f}')
           for language in sorted({row['probe']['language'] for row in semantic}):
               rows = [row for row in semantic if row['probe']['language'] == language]
               labeled = [row['behavior']['score'] for row in rows if row['behavior']['score'] is not None]
               if labeled:
-                  print(f'semantic_{language}_labeled_accuracy={sum(labeled)/len(labeled):.3f}')
-              selections = Counter(row['behavior']['selected_option'] for row in rows)
-              print(f'semantic_{language}_selections={dict(selections)}')
+                  print(f'baseline_{language}_accuracy={sum(labeled)/len(labeled):.3f}')
+              print(f'baseline_{language}_selections={dict(Counter(row["behavior"]["selected_option"] for row in rows))}')
+
+          robust = json.loads(Path('artifacts/experiment-0001-robustness/summary.json').read_text(encoding='utf-8'))
+          print(f'heldout_accuracy={robust["accuracy"]:.3f}')
+          print(f'heldout_stem_unanimous_rate={robust["stem_unanimous_rate"]:.3f}')
+          print(f'heldout_mean_stem_stability={robust["mean_stem_stability"]:.3f}')
+          print(f'heldout_cross_language_unanimous_rate={robust["cross_language_unanimous_rate"]:.3f}')
+          for language, stats in robust['by_language'].items():
+              print(f'heldout_{language}={json.dumps(stats, ensure_ascii=False, sort_keys=True)}')
           PY
 
       - name: Upload evidence
