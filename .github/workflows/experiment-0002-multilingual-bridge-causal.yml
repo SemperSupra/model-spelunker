@@ -11,7 +11,7 @@ permissions:
 jobs:
   multilingual-bridge-causal:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: 'false'
@@ -40,7 +40,9 @@ jobs:
 
       - name: Syntax check harness
         if: steps.arm.outputs.armed == 'true'
-        run: python -m py_compile tools/run_multilingual_bridge_cloze.py
+        run: |
+          python -m py_compile tools/run_multilingual_bridge_cloze.py
+          python -m py_compile tools/run_multilingual_bridge_behavior.py
 
       - name: Install CPU PyTorch
         if: steps.arm.outputs.armed == 'true'
@@ -52,26 +54,22 @@ jobs:
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Build batched multifunction preflight fixture
+      - name: Build batched multifunction fixture
         if: steps.arm.outputs.armed == 'true'
         run: |
-          mkdir -p artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight
+          mkdir -p artifacts/experiment-0002-qwen3.5-2b-base-behavior-preflight
           cat \
             fixtures/experiment-0002/multilingual-indirect-bridge-cloze.jsonl \
             fixtures/experiment-0002/multilingual-indirect-bridge-demonym.jsonl \
-            > artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/combined.jsonl
+            > artifacts/experiment-0002-qwen3.5-2b-base-behavior-preflight/combined.jsonl
 
-      - name: Run Qwen3-1.7B multifunction preflight
+      - name: Run Qwen3.5-2B-Base behavior-only preflight
         if: steps.arm.outputs.armed == 'true'
         run: |
-          python tools/run_multilingual_bridge_cloze.py \
-            --fixture artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/combined.jsonl \
-            --model Qwen/Qwen3-1.7B \
-            --lens-repo neuronpedia/jacobian-lens \
-            --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
-            --lens-file qwen3-1.7b/jlens/Salesforce-wikitext/Qwen3-1.7B_jacobian_lens.pt \
-            --positions 8 \
-            --output-dir artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/results
+          python tools/run_multilingual_bridge_behavior.py \
+            --fixture artifacts/experiment-0002-qwen3.5-2b-base-behavior-preflight/combined.jsonl \
+            --model Qwen/Qwen3.5-2B-Base \
+            --output-dir artifacts/experiment-0002-qwen3.5-2b-base-behavior-preflight/results
 
       - name: Apply multifunction behavior gate
         if: steps.arm.outputs.armed == 'true'
@@ -80,9 +78,8 @@ jobs:
           import json
           from pathlib import Path
           rows = [json.loads(line) for line in Path(
-              'artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight/results/records.jsonl'
+              'artifacts/experiment-0002-qwen3.5-2b-base-behavior-preflight/results/records.jsonl'
           ).read_text().splitlines() if line]
-
           groups = {
               'capital_en_de': [r for r in rows if r['case_id'].startswith('bridge-cloze-') and r['language'] in {'en','de'}],
               'capital_th': [r for r in rows if r['case_id'].startswith('bridge-cloze-') and r['language'] == 'th'],
@@ -93,21 +90,20 @@ jobs:
               print(name, {'n': len(group), 'correct': correct, 'accuracy': correct / max(1, len(group))})
               for r in group:
                   print(r['case_id'], r['predicted_answer'], r['correct_answer'], r['behavior_margin_mean_logprob'])
-
           earned = (
               len(groups['capital_en_de']) == 8
               and all(r['behavior_correct'] for r in groups['capital_en_de'])
               and len(groups['demonym_en_de']) == 8
               and all(r['behavior_correct'] for r in groups['demonym_en_de'])
           )
-          print('paired_cross_task_causal_rep_earned', earned)
+          print('observer_causal_rep_earned', earned)
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-qwen3-1.7b-multifunction-preflight-${{ github.run_id }}
-          path: artifacts/experiment-0002-qwen3-1.7b-multifunction-preflight
+          name: experiment-0002-qwen3.5-2b-base-behavior-preflight-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen3.5-2b-base-behavior-preflight
           if-no-files-found: error
           retention-days: 14
