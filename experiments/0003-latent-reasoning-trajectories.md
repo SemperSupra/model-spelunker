@@ -57,6 +57,20 @@ Coconut-style systems replace some serialized reasoning tokens with continuous h
 
 Methods such as soft-token reasoning and SeLaR use mixtures of token embeddings or activate latent reasoning selectively at uncertain steps. Treat these as additional conditions once the passive/intervention harness is sound.
 
+## Adopted continuous-thought comparison primitive
+
+Pin Meta/Facebook Research's official Coconut implementation rather than reproducing the mechanism from scratch:
+
+- repository: `facebookresearch/coconut`
+- pinned commit: `27273cb8cca4bb763c041a63b036d0c3b7cbbb48`
+- license: MIT
+
+Coconut remains a **later comparison condition**, not the first implementation dependency. The official reproduction instructions assume 4 × A100 80-GB GPUs and stage training from a CoT-tuned checkpoint. That cost is not justified until our passive hidden-state and causal-patching baseline demonstrates that the trajectory question is measurable with our apparatus.
+
+When Coconut enters the experiment, retain its native conditions (`coconut`, `cot`, `no_thoughts`, `no_cot`) where useful and map them onto our compute-matched C0-C5 conditions rather than inventing new names or retraining schemes.
+
+Do not require Weights & Biases for our harness merely because the reference repository uses it for logging; logging infrastructure must earn its keep independently.
+
 ## Initial tasks
 
 Start with tasks where intermediate computational state is well-defined and machine-checkable:
@@ -205,6 +219,6 @@ Do not start by training Coconut from scratch.
 4. Test whether the known intermediate state is linearly/nonlinearly readable before it is emitted.
 5. Patch a counterfactual intermediate state and measure whether the downstream answer follows it.
 6. Repeat the patch cross-lingually.
-7. Only after this works, introduce an existing continuous-thought implementation/checkpoint or train the smallest feasible controlled model.
+7. Only after this works, introduce the pinned Coconut implementation/checkpoint or train the smallest feasible controlled model.
 
 This gives the research program a causal baseline before continuous-CoT complexity is added.
