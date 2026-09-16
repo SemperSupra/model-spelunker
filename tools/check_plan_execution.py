@@ -37,17 +37,27 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
     receipt_path = result_dir / "execution-receipt.json"
     result_path = result_dir / "result.json"
     study_path = result_dir / "study.json"
-    receipt = load_json(receipt_path)
-    result = load_json(result_path)
 
     deviations: list[dict[str, Any]] = []
     planned_files = manifest.get("files", {})
-    executed_inputs = receipt.get("inputs", {})
 
+    receipt: dict[str, Any] = {}
+    if receipt_path.is_file():
+        receipt = load_json(receipt_path)
+    else:
+        deviations.append({"subject": "execution-receipt.json", "planned": "present", "actual": "missing"})
+
+    result: dict[str, Any] = {}
+    if result_path.is_file():
+        result = load_json(result_path)
+    else:
+        deviations.append({"subject": "result.json", "planned": "present", "actual": "missing"})
+
+    executed_inputs = receipt.get("inputs", {})
     for name, planned in planned_files.items():
         compare_identity(deviations, f"input:{name}", planned, executed_inputs.get(name))
 
-    # The executed study copy and result bytes must agree with the execution receipt.
+    # The materialized outputs must agree with the execution receipt when present.
     outputs = receipt.get("outputs", {})
     for name, path in (("study.json", study_path), ("result.json", result_path)):
         actual = identity(path) if path.is_file() else None
@@ -68,6 +78,7 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
         "status": "MATCH" if not deviations else "DEVIATION",
         "capsule_sha256": manifest.get("capsule_sha256"),
         "study_id": result.get("study_id"),
+        "task_exit_code": receipt.get("task_exit_code"),
         "execution_disposition": result.get("execution_disposition"),
         "scientific_disposition": result.get("scientific_disposition"),
         "deviations": deviations,
