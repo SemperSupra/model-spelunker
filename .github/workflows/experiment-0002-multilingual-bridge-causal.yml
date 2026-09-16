@@ -1,0 +1,93 @@
+name: experiment-0002-multilingual-bridge-causal
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  multilingual-bridge-causal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: 'false'
+      TORCH_NUM_THREADS: '2'
+      HF_HUB_DISABLE_XET: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check one-shot arm
+        id: arm
+        run: |
+          if [ -f .ci/run-experiment-0002-multilingual-bridge-causal ]; then
+            echo 'armed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'armed=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.arm.outputs.armed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-experiment-0001.txt
+
+      - name: Syntax check harness
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python -m py_compile tools/jspace_interventions.py
+          python -m py_compile tools/run_multilingual_bridge_causal.py
+
+      - name: Install CPU PyTorch
+        if: steps.arm.outputs.armed == 'true'
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
+
+      - name: Install experiment dependencies
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python -m pip install -r requirements-experiment-0001.txt
+          python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
+
+      - name: Run EN-DE causal hidden-bridge write
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python tools/run_multilingual_bridge_causal.py \
+            --model Qwen/Qwen3.5-0.8B \
+            --lens-repo neuronpedia/jacobian-lens \
+            --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
+            --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
+            --languages en,de \
+            --late-layers 18-22 \
+            --early-layers 0-4 \
+            --strength 1.0 \
+            --output-dir artifacts/experiment-0002-multilingual-bridge-causal
+
+      - name: Summarize causal evidence
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path('artifacts/experiment-0002-multilingual-bridge-causal/summary.json').read_text())
+          print(f"model={s['model']} revision={s['resolved_model_revision']}")
+          print(f"cases={s['case_count']} baseline_valid={s['baseline_valid_count']}")
+          for name, row in s['conditions'].items():
+              print(name, row)
+          for direction, row in s['cross_language_transfer'].items():
+              print(direction, row)
+          PY
+
+      - name: Upload evidence
+        if: always() && steps.arm.outputs.armed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-0002-multilingual-bridge-causal-${{ github.run_id }}
+          path: artifacts/experiment-0002-multilingual-bridge-causal
+          if-no-files-found: error
+          retention-days: 14
