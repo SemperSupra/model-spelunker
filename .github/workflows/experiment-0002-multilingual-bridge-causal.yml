@@ -11,7 +11,7 @@ permissions:
 jobs:
   multilingual-bridge-causal:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: 'false'
@@ -42,6 +42,7 @@ jobs:
         if: steps.arm.outputs.armed == 'true'
         run: |
           python -m py_compile tools/jspace_interventions.py
+          python -m py_compile tools/run_multilingual_bridge_cloze.py
           python -m py_compile tools/run_multilingual_bridge_causal.py
 
       - name: Install CPU PyTorch
@@ -54,46 +55,94 @@ jobs:
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Run Thai target-address reuse stress test
+      - name: Behavior-calibrate ccTLD downstream function
         if: steps.arm.outputs.armed == 'true'
         run: |
-          python tools/run_multilingual_bridge_causal.py \
+          python tools/run_multilingual_bridge_cloze.py \
+            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-cctld.jsonl \
             --model Qwen/Qwen3.5-0.8B \
             --lens-repo neuronpedia/jacobian-lens \
             --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
             --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
-            --languages th \
+            --positions 8 \
+            --output-dir artifacts/experiment-0002-cctld-reuse/preflight
+
+      - name: Apply second-function promotion gate
+        id: gate
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          s = json.loads(Path('artifacts/experiment-0002-cctld-reuse/preflight/summary.json').read_text())
+          langs = s['language_summary']
+          earned = (
+              s['evaluated_cases'] == 8
+              and s['skipped_cases'] == 0
+              and s['behavior_accuracy'] == 1.0
+              and langs.get('en', {}).get('n') == 4
+              and langs.get('de', {}).get('n') == 4
+              and langs['en']['behavior_accuracy'] == 1.0
+              and langs['de']['behavior_accuracy'] == 1.0
+          )
+          print('preflight_overall_accuracy', s['behavior_accuracy'])
+          print('preflight_language_summary', langs)
+          print('causal_reuse_earned', earned)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as handle:
+              handle.write(f"earned={'true' if earned else 'false'}\n")
+          PY
+
+      - name: Run ccTLD second-function causal reuse matrix
+        if: steps.arm.outputs.armed == 'true' && steps.gate.outputs.earned == 'true'
+        run: |
+          python tools/run_multilingual_bridge_causal.py \
+            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-cctld.jsonl \
+            --model Qwen/Qwen3.5-0.8B \
+            --lens-repo neuronpedia/jacobian-lens \
+            --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
+            --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
+            --languages en,de \
             --late-layers 18-22 \
             --early-layers 0-4 \
             --strength 1.0 \
             --target-mode all-other \
-            --output-dir artifacts/experiment-0002-thai-target-address-transfer
+            --output-dir artifacts/experiment-0002-cctld-reuse/causal
 
-      - name: Summarize Thai stress test
+      - name: Summarize second-function reuse
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          s = json.loads(Path('artifacts/experiment-0002-thai-target-address-transfer/summary.json').read_text())
-          print(f"model={s['model']} revision={s['resolved_model_revision']}")
-          print(
-              f"source_cases={s['source_case_count']} target_pairs={s['target_pair_count']} "
-              f"baseline_valid={s['baseline_valid_source_cases']}"
-          )
-          for name, row in s['conditions'].items():
-              print(name, row)
-          print('source_specificity')
-          for case_id, row in s['source_specificity'].items():
-              print(case_id, row)
-          print('interpretation', s['interpretation'])
+          pre = json.loads(Path('artifacts/experiment-0002-cctld-reuse/preflight/summary.json').read_text())
+          print('preflight', {
+              'evaluated': pre['evaluated_cases'],
+              'skipped': pre['skipped_cases'],
+              'accuracy': pre['behavior_accuracy'],
+              'languages': pre['language_summary'],
+          })
+          causal_path = Path('artifacts/experiment-0002-cctld-reuse/causal/summary.json')
+          if not causal_path.exists():
+              print('causal matrix not executed: behavior gate did not pass')
+          else:
+              s = json.loads(causal_path.read_text())
+              print(f"model={s['model']} revision={s['resolved_model_revision']}")
+              print(
+                  f"source_cases={s['source_case_count']} target_pairs={s['target_pair_count']} "
+                  f"baseline_valid={s['baseline_valid_source_cases']}"
+              )
+              for name, row in s['conditions'].items():
+                  print(name, row)
+              print('cross_language_transfer')
+              for direction, row in s['cross_language_transfer'].items():
+                  print(direction, row)
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-thai-target-address-transfer-${{ github.run_id }}
-          path: artifacts/experiment-0002-thai-target-address-transfer
+          name: experiment-0002-cctld-reuse-${{ github.run_id }}
+          path: artifacts/experiment-0002-cctld-reuse
           if-no-files-found: error
           retention-days: 14
