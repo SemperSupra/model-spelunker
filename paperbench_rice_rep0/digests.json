@@ -1,0 +1,9 @@
+{
+  "claim_selection.json": "b1e6338eec1b9246fb43dab21825db941860395fc98339fd45cb549424bd7f7d",
+  "completeness_report.json": "92ebe9dd75b315d13607a5f0178dc7e6755a2b193be4420af795c156047cae37",
+  "method_ir.json": "9feae6d328d64e1be6b574602265c735a58e960ff3ae88bced9464886e59bd55",
+  "source_manifest.json": "8fabd408457d3635df2006596ed0a05f295ef30d0ce648e6b2645bc3b75ab2be",
+  "inputs/addendum.md": "d62c727e9aaac69165d0bbeb2b1c4df7f1c8a183c5906d9b0e44cf9401153b43",
+  "inputs/config.yaml": "d1c4d2e713877c647f97a6bb323814175ffc8bd604b9b136afc2a328282732e1",
+  "inputs/paper.md": "e69c502c0c16f860160da8368e5b4fc5ee3da36275fe0571350bdd03b3477e03"
+}
