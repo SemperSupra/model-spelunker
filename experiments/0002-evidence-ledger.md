@@ -157,10 +157,61 @@ Concept-level tension is informative:
 
 **Decision:** promote an **English↔German causal cross-language smoke** on the same Qwen3.5/lens pair. Do not yet claim a three-language shared Neuralese representation. Thai returns immediately after causal transfer is established and can then distinguish representation failure from downstream-language/task failure.
 
+## E0002-R7 — Qwen3.5 English/German causal hidden-bridge write
+
+**Workflow run:** `35057192234`
+
+**Artifact ID:** `10431580456`
+
+**Artifact SHA-256:** `fbeb040369833dcf5390c56435a9f49967e85c57a0ea1eb9f211a11bd3f7437b`
+
+**Model/lens:** identical pinned Qwen3.5/J-lens pair to E0002-R5/R6.
+
+**Executed:** eight behavior-valid cases: four hidden country bridges × English/German. The same canonical **English** J-space token coordinate was used in both languages, so German received no language-specific latent-address retuning. Four fixed source→target swaps were tested:
+
+- France→Canada;
+- Canada→France;
+- Germany→Japan;
+- Japan→Germany.
+
+For every case the intervention edited prompt positions only; teacher-forced answer tokens were never patched. Conditions were:
+
+- clean baseline;
+- J-space coordinate swap at layers 18–22;
+- identical coordinate swap at layers 0–4;
+- layers 18–22 with a deterministic norm-matched random displacement.
+
+**Baseline:** 8/8 source capitals selected correctly.
+
+**Results:**
+
+| Condition | Strong target-capital switches | Pairwise preference flips | Mean target-minus-source margin change |
+| --- | ---: | ---: | ---: |
+| J-space layers 18–22 | 4/8 | 4/8 | +4.712 |
+| J-space layers 0–4 | 4/8 | 4/8 | +5.704 |
+| norm-matched random, layers 18–22 | 0/8 | 0/8 | +0.366 |
+
+The late-band strong successes were:
+
+- Canada→France in English;
+- Canada→France in German;
+- Germany→Japan in English;
+- Japan→Germany in German.
+
+Thus **Canada→France transferred strongly across both languages using exactly the same latent coordinate pair**. France→Canada moved the target margin substantially in both languages but did not cross the decision boundary. The other two directions were asymmetric across languages.
+
+Per-case inspection showed that the early-band effect was itself target-semantic rather than random: for example Japan→Germany flipped the English Osaka case to Berlin early while the late band did not, whereas Germany→Japan flipped the English Munich case to Tokyo late while the early band did not.
+
+**Interpretation:** this is the first strong causal evidence in this program that a specific J-space concept-coordinate write can redirect a hidden intermediate and downstream answer, including one bidirectionally observed **same-address cross-language transfer direction** (Canada→France across EN/DE). The norm-matched random control did not reproduce any strong or pairwise flips.
+
+However, the planned `late workspace` localization hypothesis is not supported: early-layer writes were at least as influential in aggregate. That does **not** falsify latent addressability; it falsifies the narrower assumption that the usable country representation is writable only in the late observer-selected band. A writable latent interface may span multiple stages or early edits may propagate into later computation.
+
+**Decision:** do not tune a late band to rescue the workspace-localization story. The next earned falsifier is **target specificity**: for each source bridge, write each alternative country coordinate and test whether downstream probability moves specifically toward that target country's capital rather than merely away from the source. Run the same matrix in English and German using the same canonical latent addresses. Preserve early and late bands as separate writable-stage conditions; random displacement remains a corruption control. Thai stays held out until target specificity is established.
+
 ## Current promotion gate
 
-1. Run the smallest Qwen3.5 J-space causal bridge swap using only behavior-valid English/German cases and the already-qualified hidden country representations.
-2. Require the intervention to move the downstream forced-choice result toward the replacement country's capital; top-1/forced-choice reversal is strong evidence, margin movement is secondary evidence.
-3. Include no-intervention, wrong-layer/early-band, and norm-matched-random controls; add a direct-answer positive control only if needed to diagnose apparatus failure.
-4. If the same bridge write transfers across English and German, extend the exact intervention to Thai without retuning the representation first.
-5. Only after cross-language causal transfer succeeds may a candidate move toward `addressable Neuralese`; downstream reuse in a second function remains required before promotion.
+1. Run a 4-country × 3-alternative-target × 2-language target-address matrix on the already behavior-valid English/German bridge cases.
+2. A useful latent address must preferentially move output toward the **chosen target's** capital, not merely suppress the source capital or promote arbitrary alternatives.
+3. Compare early and late writable stages descriptively; do not require late-only effects.
+4. If target specificity transfers across English/German, apply the exact same canonical coordinates to Thai **without retuning**.
+5. A candidate reaches the next `addressable Neuralese` evidence grade only after target-specific cross-language writes survive random/unrelated-target controls and then reuse the same latent address in a second downstream function (for example language/currency/continent rather than capital alone).
