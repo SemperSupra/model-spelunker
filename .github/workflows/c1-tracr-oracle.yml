@@ -1,0 +1,166 @@
+name: C1 Tracr Oracle Calibration Rep
+
+on:
+  push:
+    branches:
+      - impl/c1-tracr-calibration-stage
+    paths:
+      - "experiments/mvp/run_tracr_oracle.py"
+      - "experiments/mvp/validate_tracr_oracle.py"
+      - ".github/workflows/c1-tracr-oracle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-spelunker-public-model-lane
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: "1"
+  TRACR_REVISION: 9ce2b8c82b6ba10e62e86cf6f390e7536d4fd2cd
+
+jobs:
+  rep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact Model Spelunker revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact archived Tracr revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: google-deepmind/tracr
+          ref: 9ce2b8c82b6ba10e62e86cf6f390e7536d4fd2cd
+          path: tracr-src
+          persist-credentials: false
+
+      - name: Verify exact Tracr source and license
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C tracr-src rev-parse HEAD)" = "${TRACR_REVISION}"
+          grep -q "Apache License" tracr-src/LICENSE
+          printf 'tracr_revision=%s\nlicense=Apache-2.0\n' "${TRACR_REVISION}" | tee tracr-source.txt
+
+      - name: Derive exact C1 runtime cache key
+        id: runtime-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"python_tag={sys.implementation.cache_tag}")
+          PY
+
+      - name: Restore exact C1 runtime
+        id: runtime-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .tracr-venv
+          key: model-spelunker-tracr-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-jax0.4.38-haiku0.0.13-np1.26.4-${{ env.TRACR_REVISION }}
+
+      - name: Build exact CPU C1 runtime on cache miss
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .tracr-venv
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input \
+            "numpy==1.26.4" \
+            "jax==0.4.38" \
+            "jaxlib==0.4.38" \
+            "dm-haiku==0.0.13" \
+            "chex==0.1.88" \
+            "einops==0.8.0" \
+            "networkx==3.4.2" \
+            "typing_extensions==4.12.2"
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input --no-deps ./tracr-src
+
+      - name: Verify cached runtime source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reinstall the tiny local source package without resolving dependencies so the
+          # executable code is always the exact checked-out revision even on a cache hit.
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input --no-deps --force-reinstall ./tracr-src >/dev/null
+          .tracr-venv/bin/python - <<'PY' | tee out/runtime.json
+          import importlib.metadata, json, platform
+          import chex, haiku, jax, jaxlib, networkx, numpy
+          print(json.dumps({
+              "python": platform.python_version(),
+              "numpy": numpy.__version__,
+              "jax": jax.__version__,
+              "jaxlib": jaxlib.__version__,
+              "dm_haiku": importlib.metadata.version("dm-haiku"),
+              "chex": importlib.metadata.version("chex"),
+              "networkx": networkx.__version__,
+              "tracr": importlib.metadata.version("tracr"),
+          }, sort_keys=True))
+          assert numpy.__version__ == "1.26.4"
+          assert jax.__version__ == "0.4.38"
+          assert jaxlib.__version__ == "0.4.38"
+          assert importlib.metadata.version("dm-haiku") == "0.0.13"
+          assert importlib.metadata.version("chex") == "0.1.88"
+          PY
+
+      - name: Run compiled-oracle calibration
+        shell: bash
+        env:
+          JAX_PLATFORMS: cpu
+          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v .tracr-venv/bin/python experiments/mvp/run_tracr_oracle.py \
+            --output out/tracr-oracle.json \
+            2>&1 | tee out/run.log
+
+      - name: Validate oracle evidence independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input "jsonschema==4.25.1" >/dev/null
+          .tracr-venv/bin/python experiments/mvp/validate_tracr_oracle.py \
+            out/tracr-oracle.json | tee out/validation.log
+
+      - name: Summarize calibration result
+        shell: bash
+        run: |
+          set -euo pipefail
+          .tracr-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          b=json.loads(Path('out/tracr-oracle.json').read_text())
+          d=b['derived_metrics']; c=b['cost']
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as f:
+              f.write('## C1 Tracr compiled-oracle calibration\n\n')
+              f.write(f"- Tracr source: `google-deepmind/tracr@{b['observations']['source']['exact_revision']}`\n")
+              f.write(f"- behavior oracle: `{d['all_behavior_correct']}` across `{d['case_count']}` cases\n")
+              f.write(f"- repeated compiled parameter identity: `{d['all_parameter_repeats_exact']}`\n")
+              f.write(f"- oracle output labels found: `{d['ground_truth_output_labels_found']}`\n")
+              for p in b['observations']['programs']:
+                  cfg=p['model_config']
+                  f.write(f"- {p['program_id']}: `{p['parameter_count']}` params, `{cfg['num_layers']}` layers, `{cfg['num_heads']}` heads, `{len(p['residual_labels'])}` residual basis dims, digest `{p['parameter_sha256']}`\n")
+              f.write(f"- science `{c['experiment_seconds']:.3f}s`; peak RSS `{c['peak_rss_mib']:.1f} MiB`\n")
+              f.write('- This qualifies the oracle substrate only; mechanism-recovery methods are not yet credited.\n')
+          PY
+
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-spelunker-c1-tracr-oracle-${{ github.run_id }}
+          path: |
+            out/tracr-oracle.json
+            out/runtime.json
+            out/validation.log
+            out/run.log
+            tracr-source.txt
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9
