@@ -12,17 +12,27 @@ from pathlib import Path
 MAX_AGENT_DISPATCH_B64 = 60_000
 
 
-def build(study_dir: Path, out_dir: Path) -> dict[str, object]:
-    required = ["run.sh", "run_reproduction.py", "study.json"]
+def _plan_file(root: Path) -> str:
+    present = [name for name in ("study.json", "qualification.json") if (root / name).is_file()]
+    if len(present) != 1:
+        raise SystemExit(
+            f"expected exactly one plan file (study.json or qualification.json), found: {present}"
+        )
+    return present[0]
+
+
+def build(plan_dir: Path, out_dir: Path) -> dict[str, object]:
+    plan_name = _plan_file(plan_dir)
+    required = ["run.sh", "run_reproduction.py", plan_name]
     for name in required:
-        if not (study_dir / name).is_file():
-            raise SystemExit(f"missing required capsule file: {study_dir / name}")
+        if not (plan_dir / name).is_file():
+            raise SystemExit(f"missing required capsule file: {plan_dir / name}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w:gz", compresslevel=9) as tf:
         for name in required:
-            path = study_dir / name
+            path = plan_dir / name
             info = tf.gettarinfo(str(path), arcname=name)
             info.uid = 0
             info.gid = 0
@@ -44,15 +54,16 @@ def build(study_dir: Path, out_dir: Path) -> dict[str, object]:
     (out_dir / "capsule.b64").write_text(encoded + "\n", encoding="ascii")
     manifest = {
         "schema_version": 1,
-        "study_dir": study_dir.as_posix(),
+        "plan_dir": plan_dir.as_posix(),
+        "plan_file": plan_name,
         "capsule_sha256": sha,
         "capsule_bytes": len(capsule),
         "capsule_b64_chars": len(encoded),
         "agent_dispatch_contract": "SemperSupra/agent-dispatch:.github/workflows/sealed-public-execution.yml",
         "files": {
             name: {
-                "sha256": hashlib.sha256((study_dir / name).read_bytes()).hexdigest(),
-                "bytes": (study_dir / name).stat().st_size,
+                "sha256": hashlib.sha256((plan_dir / name).read_bytes()).hexdigest(),
+                "bytes": (plan_dir / name).stat().st_size,
             }
             for name in required
         },
@@ -65,10 +76,10 @@ def build(study_dir: Path, out_dir: Path) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("study_dir", type=Path)
+    parser.add_argument("plan_dir", type=Path)
     parser.add_argument("--out", type=Path, default=Path(".capsule"))
     args = parser.parse_args()
-    manifest = build(args.study_dir, args.out)
+    manifest = build(args.plan_dir, args.out)
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0
 
