@@ -32,14 +32,47 @@ def compare_identity(
         deviations.append({"subject": subject, "planned": planned, "actual": actual})
 
 
+def compare_value(
+    deviations: list[dict[str, Any]],
+    subject: str,
+    planned: Any,
+    actual: Any,
+) -> None:
+    if planned != actual:
+        deviations.append({"subject": subject, "planned": planned, "actual": actual})
+
+
+def result_layout(result_dir: Path) -> tuple[Path, Path]:
+    """Return (transport root, project files directory).
+
+    Trusted Agent Dispatch decryption produces execution.json at the root and
+    study-owned files beneath files/. Accept files/ directly as a convenience,
+    but keep the transport record in the comparison when it is available.
+    """
+    if (result_dir / "execution.json").is_file():
+        project_dir = result_dir / "files" if (result_dir / "files").is_dir() else result_dir
+        return result_dir, project_dir
+    if result_dir.name == "files" and (result_dir.parent / "execution.json").is_file():
+        return result_dir.parent, result_dir
+    return result_dir, result_dir
+
+
 def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
     manifest = load_json(capsule_manifest)
-    receipt_path = result_dir / "execution-receipt.json"
-    result_path = result_dir / "result.json"
-    study_path = result_dir / "study.json"
+    transport_dir, project_dir = result_layout(result_dir)
+    execution_path = transport_dir / "execution.json"
+    receipt_path = project_dir / "execution-receipt.json"
+    result_path = project_dir / "result.json"
+    study_path = project_dir / "study.json"
 
     deviations: list[dict[str, Any]] = []
     planned_files = manifest.get("files", {})
+
+    execution: dict[str, Any] = {}
+    if execution_path.is_file():
+        execution = load_json(execution_path)
+    else:
+        deviations.append({"subject": "execution.json", "planned": "present", "actual": "missing"})
 
     receipt: dict[str, Any] = {}
     if receipt_path.is_file():
@@ -53,11 +86,19 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
     else:
         deviations.append({"subject": "result.json", "planned": "present", "actual": "missing"})
 
+    # Bind the pre-dispatch plan to the exact capsule Agent Dispatch says it executed.
+    compare_value(
+        deviations,
+        "execution:capsule_sha256",
+        manifest.get("capsule_sha256"),
+        execution.get("capsule_sha256"),
+    )
+
     executed_inputs = receipt.get("inputs", {})
     for name, planned in planned_files.items():
         compare_identity(deviations, f"input:{name}", planned, executed_inputs.get(name))
 
-    # The materialized outputs must agree with the execution receipt when present.
+    # The materialized outputs must agree with the study-owned execution receipt.
     outputs = receipt.get("outputs", {})
     for name, path in (("study.json", study_path), ("result.json", result_path)):
         actual = identity(path) if path.is_file() else None
@@ -65,12 +106,20 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
 
     planned_study_sha = planned_files.get("study.json", {}).get("sha256")
     result_study_sha = result.get("study_declaration_sha256")
-    if planned_study_sha != result_study_sha:
-        deviations.append({
-            "subject": "result:study_declaration_sha256",
-            "planned": planned_study_sha,
-            "actual": result_study_sha,
-        })
+    compare_value(
+        deviations,
+        "result:study_declaration_sha256",
+        planned_study_sha,
+        result_study_sha,
+    )
+
+    # The project wrapper's verdict should be the task verdict observed by Agent Dispatch.
+    compare_value(
+        deviations,
+        "execution:task_exit_code",
+        receipt.get("task_exit_code"),
+        execution.get("task_exit_code"),
+    )
 
     return {
         "schema_version": 1,
@@ -78,6 +127,8 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
         "status": "MATCH" if not deviations else "DEVIATION",
         "capsule_sha256": manifest.get("capsule_sha256"),
         "study_id": result.get("study_id"),
+        "run_id": execution.get("run_id"),
+        "worker_revision": execution.get("worker_revision"),
         "task_exit_code": receipt.get("task_exit_code"),
         "execution_disposition": result.get("execution_disposition"),
         "scientific_disposition": result.get("scientific_disposition"),
@@ -87,7 +138,7 @@ def check(capsule_manifest: Path, result_dir: Path) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Compare a sealed pre-execution capsule manifest with one executed result bundle."
+        description="Compare a sealed pre-execution capsule manifest with one decrypted Agent Dispatch result."
     )
     parser.add_argument("capsule_manifest", type=Path)
     parser.add_argument("result_dir", type=Path)
