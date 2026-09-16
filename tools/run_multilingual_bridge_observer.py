@@ -58,8 +58,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lens-repo", default=DEFAULT_LENS_REPO)
     parser.add_argument("--lens-revision", default=DEFAULT_LENS_REVISION)
     parser.add_argument("--lens-file", default=DEFAULT_LENS_FILE)
-    parser.add_argument("--positions", type=int, default=8,
-                        help="score only this many trailing fitted-range prompt positions")
+    parser.add_argument(
+        "--positions",
+        type=int,
+        default=8,
+        help="score only this many trailing fitted-range prompt positions",
+    )
     parser.add_argument("--max-new-tokens", type=int, default=8)
     parser.add_argument(
         "--output-dir", default="artifacts/experiment-0002-multilingual-bridge-observer"
@@ -79,7 +83,9 @@ def rank_of(logits: torch.Tensor, token_id: int) -> int:
 def target_token_id(tokenizer, surface: str) -> int:
     ids = tokenizer(surface, add_special_tokens=False).input_ids
     if len(ids) != 1:
-        raise ValueError(f"Intermediate must be one token for vocabulary-rank readout: {surface!r} -> {ids}")
+        raise ValueError(
+            f"Intermediate must be one token for vocabulary-rank readout: {surface!r} -> {ids}"
+        )
     return int(ids[0])
 
 
@@ -88,7 +94,7 @@ def normalize_text(text: str) -> str:
 
 
 def answer_matches(text: str, aliases: list[str]) -> bool:
-    clean = normalize_text(text).lstrip('"\'`.,:;!?-— ')
+    clean = normalize_text(text).lstrip("\"'`.,:;!?-— ")
     return any(normalize_text(alias) in clean for alias in aliases)
 
 
@@ -122,14 +128,18 @@ def generate_text(hf_model, tokenizer, prompt: str, max_new_tokens: int) -> str:
     encoded = tokenizer(prompt, return_tensors="pt")
     input_ids = encoded.input_ids.to("cpu")
     attention_mask = getattr(encoded, "attention_mask", None)
-    kwargs = {"input_ids": input_ids, "max_new_tokens": max_new_tokens, "do_sample": False}
+    kwargs = {
+        "input_ids": input_ids,
+        "max_new_tokens": max_new_tokens,
+        "do_sample": False,
+    }
     if attention_mask is not None:
         kwargs["attention_mask"] = attention_mask.to("cpu")
     if tokenizer.eos_token_id is not None:
         kwargs["pad_token_id"] = tokenizer.eos_token_id
     with torch.inference_mode():
         generated = hf_model.generate(**kwargs)
-    continuation = generated[0, input_ids.shape[-1]:]
+    continuation = generated[0, input_ids.shape[-1] :]
     return tokenizer.decode(continuation, skip_special_tokens=True)
 
 
@@ -148,7 +158,9 @@ def score_lens_output(
                 "best_position": int(positions[best_idx]),
             }
         )
-        all_cells.extend((int(rank), int(layer), int(positions[i])) for i, rank in enumerate(ranks))
+        all_cells.extend(
+            (int(rank), int(layer), int(positions[i])) for i, rank in enumerate(ranks)
+        )
 
     best_rank, best_layer, best_position = min(all_cells, key=lambda row: row[0])
     layer_best = [row["best_rank"] for row in per_layer]
@@ -174,7 +186,9 @@ def main() -> int:
     info = model_info(args.model, revision=args.revision)
     resolved_revision = info.sha
     if not resolved_revision:
-        raise RuntimeError(f"Could not resolve immutable revision for {args.model}@{args.revision}")
+        raise RuntimeError(
+            f"Could not resolve immutable revision for {args.model}@{args.revision}"
+        )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, revision=resolved_revision)
     hf_model = load_hf_model(args.model, resolved_revision)
@@ -188,7 +202,9 @@ def main() -> int:
     )
     lens = jlens.JacobianLens.load(lens_path)
     if lens.d_model != model.d_model:
-        raise ValueError(f"Lens/model d_model mismatch: {lens.d_model} != {model.d_model}")
+        raise ValueError(
+            f"Lens/model d_model mismatch: {lens.d_model} != {model.d_model}"
+        )
 
     records: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
@@ -201,7 +217,12 @@ def main() -> int:
     for case in cases:
         stripped_intermediate = case["intermediate"].strip().casefold()
         if stripped_intermediate in case["prompt"].casefold():
-            skipped.append({"case_id": case["case_id"], "reason": "intermediate_surface_present_in_prompt"})
+            skipped.append(
+                {
+                    "case_id": case["case_id"],
+                    "reason": "intermediate_surface_present_in_prompt",
+                }
+            )
             continue
 
         token_id = target_token_id(tokenizer, case["intermediate"])
@@ -217,7 +238,7 @@ def main() -> int:
                 }
             )
             continue
-        positions = valid_positions[-args.positions:]
+        positions = valid_positions[-args.positions :]
 
         lens_logits, _, _ = lens.apply(model, case["prompt"], positions=positions)
         jlens_score = score_lens_output(lens_logits, token_id, positions)
@@ -229,7 +250,9 @@ def main() -> int:
         vanilla_score = score_lens_output(vanilla_logits, token_id, positions)
         del vanilla_logits
 
-        continuation = generate_text(hf_model, tokenizer, case["prompt"], args.max_new_tokens)
+        continuation = generate_text(
+            hf_model, tokenizer, case["prompt"], args.max_new_tokens
+        )
         behavior_correct = answer_matches(continuation, case["answer_aliases"])
 
         record = {
@@ -247,9 +270,12 @@ def main() -> int:
             "behavior_correct": behavior_correct,
             "jlens": jlens_score,
             "vanilla": vanilla_score,
-            "best_rank_improvement": vanilla_score["best_rank"] - jlens_score["best_rank"],
+            "best_rank_improvement": (
+                vanilla_score["best_rank"] - jlens_score["best_rank"]
+            ),
             "median_layer_best_rank_improvement": (
-                vanilla_score["median_layer_best_rank"] - jlens_score["median_layer_best_rank"]
+                vanilla_score["median_layer_best_rank"]
+                - jlens_score["median_layer_best_rank"]
             ),
         }
         records.append(record)
@@ -263,7 +289,9 @@ def main() -> int:
                     "jlens_best": jlens_score["best_rank"],
                     "vanilla_best": vanilla_score["best_rank"],
                     "jlens_median_layer_best": jlens_score["median_layer_best_rank"],
-                    "vanilla_median_layer_best": vanilla_score["median_layer_best_rank"],
+                    "vanilla_median_layer_best": vanilla_score[
+                        "median_layer_best_rank"
+                    ],
                 },
                 ensure_ascii=False,
             )
@@ -279,12 +307,18 @@ def main() -> int:
     for language, rows in sorted(by_language.items()):
         language_summary[language] = {
             "n": len(rows),
-            "behavior_accuracy": sum(row["behavior_correct"] for row in rows) / max(1, len(rows)),
+            "behavior_accuracy": sum(row["behavior_correct"] for row in rows)
+            / max(1, len(rows)),
             "jlens_beats_vanilla_best_rank": sum(
-                row["jlens"]["best_rank"] < row["vanilla"]["best_rank"] for row in rows
+                row["jlens"]["best_rank"] < row["vanilla"]["best_rank"]
+                for row in rows
             ),
-            "median_jlens_best_rank": float(median(row["jlens"]["best_rank"] for row in rows)),
-            "median_vanilla_best_rank": float(median(row["vanilla"]["best_rank"] for row in rows)),
+            "median_jlens_best_rank": float(
+                median(row["jlens"]["best_rank"] for row in rows)
+            ),
+            "median_vanilla_best_rank": float(
+                median(row["vanilla"]["best_rank"] for row in rows)
+            ),
             "median_jlens_layer_best_rank": float(
                 median(row["jlens"]["median_layer_best_rank"] for row in rows)
             ),
@@ -299,11 +333,13 @@ def main() -> int:
         concept_summary[concept_id] = {
             "languages": sorted(langs),
             "all_three_languages_present": langs == {"en", "de", "th"},
-            "all_languages_behavior_correct": bool(rows) and all(row["behavior_correct"] for row in rows),
-            "all_languages_jlens_top20_somewhere": bool(rows) and all(
-                row["jlens"]["best_rank"] <= 20 for row in rows
-            ),
-            "best_ranks": {row["language"]: row["jlens"]["best_rank"] for row in rows},
+            "all_languages_behavior_correct": bool(rows)
+            and all(row["behavior_correct"] for row in rows),
+            "all_languages_jlens_top20_somewhere": bool(rows)
+            and all(row["jlens"]["best_rank"] <= 20 for row in rows),
+            "best_ranks": {
+                row["language"]: row["jlens"]["best_rank"] for row in rows
+            },
         }
 
     summary = {
@@ -323,9 +359,11 @@ def main() -> int:
         "case_count": len(cases),
         "evaluated_cases": len(records),
         "skipped_cases": len(skipped),
-        "behavior_accuracy": sum(row["behavior_correct"] for row in records) / max(1, len(records)),
+        "behavior_accuracy": sum(row["behavior_correct"] for row in records)
+        / max(1, len(records)),
         "cases_where_jlens_best_rank_beats_vanilla": sum(
-            row["jlens"]["best_rank"] < row["vanilla"]["best_rank"] for row in records
+            row["jlens"]["best_rank"] < row["vanilla"]["best_rank"]
+            for row in records
         ),
         "language_summary": language_summary,
         "concept_summary": concept_summary,
@@ -343,7 +381,8 @@ def main() -> int:
         for row in skipped:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
     (out_dir / "summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
