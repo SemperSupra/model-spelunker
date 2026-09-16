@@ -11,7 +11,7 @@ permissions:
 jobs:
   multilingual-bridge-causal:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: 'false'
@@ -42,6 +42,7 @@ jobs:
           python -m py_compile tools/jspace_interventions.py
           python -m py_compile tools/run_multilingual_bridge_cloze.py
           python -m py_compile tools/run_qwen35_4b_cross_task_causal.py
+          python -m py_compile tools/run_qwen35_4b_random_null_ensemble.py
 
       - name: Install CPU PyTorch
         if: steps.arm.outputs.armed == 'true'
@@ -60,40 +61,40 @@ jobs:
           df -h .
           free -h
 
-      - name: Run paired cross-task causal reuse smoke
+      - name: Run R17 matched-random null ensemble
         if: steps.arm.outputs.armed == 'true'
         run: |
-          python tools/run_qwen35_4b_cross_task_causal.py \
-            --output-dir artifacts/experiment-0002-qwen35-4b-cross-task-causal
+          python tools/run_qwen35_4b_random_null_ensemble.py \
+            --output-dir artifacts/experiment-0002-qwen35-4b-random-null-ensemble
 
-      - name: Summarize causal reuse evidence
+      - name: Summarize R17 null calibration
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           s = json.loads(Path(
-              'artifacts/experiment-0002-qwen35-4b-cross-task-causal/summary.json'
+              'artifacts/experiment-0002-qwen35-4b-random-null-ensemble/summary.json'
           ).read_text())
           print('model', s['model'], s['resolved_model_revision'])
-          print('lens_n_prompts', s['lens_n_prompts'])
+          print('seeds', s['seeds'])
           print('intervention_layers', s['intervention_layers'])
-          print('baseline_valid_cases', s['baseline_valid_cases'])
-          print('record_count', s['record_count'])
-          print('function_summary')
-          for name, row in s['function_summary'].items():
-              print(name, row)
-          print('reusable_directions')
-          for name, row in s['reusable_directions'].items():
-              print(name, row)
-          print('promotion_pass', s['promotion_pass'])
+          print('seed1729_reproduction_pass', s['seed1729_reproduction_pass'])
+          print('casewise_jspace_gain_exceeds_max_random', s['casewise_jspace_gain_exceeds_max_random'])
+          print('jspace_mean_target_gain_r16', s['jspace_mean_target_gain_r16'])
+          print('max_seed_mean_random_target_gain', s['max_seed_mean_random_target_gain'])
+          print('seed_summary')
+          for seed, row in s['seed_summary'].items():
+              print(seed, row)
+          print('null_calibration_pass', s['null_calibration_pass'])
+          print('R16 remains non-pass:', s['r16_remains_non_pass'])
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-qwen35-4b-cross-task-causal-${{ github.run_id }}
-          path: artifacts/experiment-0002-qwen35-4b-cross-task-causal
+          name: experiment-0002-qwen35-4b-random-null-ensemble-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen35-4b-random-null-ensemble
           if-no-files-found: error
           retention-days: 14
