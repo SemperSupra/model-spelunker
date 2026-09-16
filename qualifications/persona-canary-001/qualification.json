@@ -12,11 +12,11 @@
   },
   "pairings": [
     {
-      "persona_id": "rtl-engineer-smolagents-qwen25coder15-v1",
+      "persona_id": "rtl-engineer-smolagents-qwen35-4b-v1",
       "workload_id": "rtl-popcount4-v1"
     },
     {
-      "persona_id": "binary-reverser-smolagents-qwen25coder15-v1",
+      "persona_id": "binary-reverser-smolagents-qwen35-4b-v1",
       "workload_id": "binary-unlock-v1"
     }
   ],
@@ -28,13 +28,13 @@
         "network_tools": false
       },
       "controller": {
-        "expected_manifest_id_prefix": "d7372fd82851",
+        "expected_manifest_id_prefix": "2a654d98e6fb",
         "inference": {
           "max_tokens": 768,
           "num_ctx": 4096,
           "temperature": 0.0
         },
-        "model": "qwen2.5-coder:1.5b-instruct-q4_K_M",
+        "model": "qwen3.5:4b",
         "provider": "ollama",
         "runtime_version": "0.34.0"
       },
@@ -48,7 +48,7 @@
         "max_steps": 6
       },
       "mission": "Implement and verify small synthesizable Verilog from a bounded specification.",
-      "persona_id": "rtl-engineer-smolagents-qwen25coder15-v1",
+      "persona_id": "rtl-engineer-smolagents-qwen35-4b-v1",
       "tools": [
         "read_spec",
         "write_solution",
@@ -62,13 +62,13 @@
         "network_tools": false
       },
       "controller": {
-        "expected_manifest_id_prefix": "d7372fd82851",
+        "expected_manifest_id_prefix": "2a654d98e6fb",
         "inference": {
           "max_tokens": 768,
           "num_ctx": 4096,
           "temperature": 0.0
         },
-        "model": "qwen2.5-coder:1.5b-instruct-q4_K_M",
+        "model": "qwen3.5:4b",
         "provider": "ollama",
         "runtime_version": "0.34.0"
       },
@@ -82,7 +82,7 @@
         "max_steps": 6
       },
       "mission": "Recover one fact from a benign purpose-built binary using bounded static-analysis and execution tools.",
-      "persona_id": "binary-reverser-smolagents-qwen25coder15-v1",
+      "persona_id": "binary-reverser-smolagents-qwen35-4b-v1",
       "tools": [
         "read_spec",
         "inspect_strings",
@@ -92,7 +92,7 @@
     }
   ],
   "purpose": "Minimal proof that a complete persona realization can be sealed, executed on a public CPU runner, and objectively scored without adding a new scheduler or catalog service.",
-  "qualification_id": "persona-canary-001",
+  "qualification_id": "persona-canary-001-qwen35-challenger",
   "record_type": "persona-qualification-plan",
   "repetitions": 2,
   "schema_version": 1,
