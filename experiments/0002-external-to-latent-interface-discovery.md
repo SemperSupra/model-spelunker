@@ -81,6 +81,64 @@ For first integration, fit a small lens on a plumbing model with a bounded gener
 
 The first strong J-space-style replication target is not merely readable vocabulary. It is a representation that survives a **read -> write -> reuse** sequence across more than one downstream function.
 
+## Adopted causal calibration: released probe-swap
+
+Before inventing a new causal-write benchmark, reproduce the released J-space probe-swap protocol.
+
+Pinned upstream source:
+
+- repository: `anthropics/jacobian-lens`
+- commit: `581d398613e5602a5af361e1c34d3a92ea82ba8e`
+- data: `data/experiments/probe-swap.json`
+- released item count: 90 two-hop prompts
+
+Do not vendor or hand-copy the published dataset unless a future availability problem earns that duplication. The CPU harness downloads the exact raw file from the immutable upstream commit, records its SHA-256, and stores that provenance with the result.
+
+### Intervention primitive
+
+For source concept token `s`, replacement concept token `t`, and layer `l`, use the released two-coordinate J-lens swap:
+
+`v_s = J_l^T w_s`
+
+`v_t = J_l^T w_t`
+
+`V = [v_s, v_t]`
+
+`c = V^+ h`
+
+`h' = h + alpha * V * (swap(c) - c)`
+
+where `V^+` is the pseudoinverse and `swap(c)` exchanges only the source and target coordinates.
+
+This edits only the 2-D span of the two J-lens directions; the remainder of the residual vector is left unchanged. Apply the hook at every prompt-token position in each selected layer, matching the released demonstration.
+
+### Calibration metrics
+
+Keep the paper-faithful result and one weaker diagnostic separate:
+
+1. **causal top-1 success** — clean greedy next token is the published `answer`, while the intervened greedy next token is the published `swap_answer`;
+2. **preference flip** — clean logits prefer `answer` over `swap_answer`, while the intervention reverses that pairwise preference.
+
+A preference flip is evidence of directional causal influence but does not count as the stronger top-1 swap result.
+
+### Minimal red-team controls
+
+The plumbing-model calibration adds only controls that directly falsify common artifacts:
+
+- strength sweep (`alpha` = 0.5, 1.0, 2.0 initially);
+- early-half versus late-half fitted-layer ablations;
+- clean no-intervention baseline;
+- single-token eligibility accounting and explicit skips;
+- baseline-answer correctness and baseline pairwise preference denominators.
+
+For Pythia-70m the primary apparatus condition is `all_fitted` layers. Do **not** call this a discovered workspace band. The early/late split is an ablation control only. If causal effects survive, a model-specific workspace-band search can be earned later.
+
+### Calibration promotion rule
+
+The released probe-swap apparatus is considered operational when it produces reproducible causal effects on at least some baseline-correct items and those effects show layer and/or strength structure distinguishable from the ablations. No fixed success-rate threshold is invented in advance for the plumbing model.
+
+A null result on Pythia-70m means the plumbing model or intervention/model pairing is insufficient; it does not falsify the broader latent-interface hypothesis. Promotion then requires a stronger open model with an available fitted lens before bespoke representation machinery is considered.
+
 ## Phase A — read / convergence
 
 Questions:
