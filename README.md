@@ -21,9 +21,10 @@ Keep the hot path small. Reuse artifacts the study already needs rather than add
 
 - the study declaration is the planned methodology;
 - the pre-dispatch capsule manifest seals the exact plan and method bytes;
+- Agent Dispatch records the exact capsule SHA it actually executed;
 - execution emits a receipt for the actual plan/method bytes plus the result bytes;
 - the result records the actual environment, resolved artifacts/inputs, execution outcome, and scientific outcome;
-- `tools/check_plan_execution.py` compares the sealed plan with the executed receipt and reports only material deviations.
+- `tools/check_plan_execution.py` binds those records and reports only material deviations.
 
 Exploration is not blocked by extra ceremony. Promotion of a run as durable evidence requires enough of this chain to identify what was planned, what actually executed, and the resulting evidence. Add fields or mechanisms only when they improve rerunnability, interpretation, falsification, provenance, or evidence preservation.
 
@@ -67,10 +68,10 @@ Build the capsule locally or in an authorized coordinator environment:
 python3 tools/build_sealed_capsule.py studies/siglip2-model-card-zsic-001 --out .capsule
 ```
 
-After execution and trusted result pickup, compare the sealed pre-execution manifest with the executed result bundle:
+After execution, trusted pickup, and decryption, compare the sealed pre-execution manifest with the decrypted result root (the directory containing `execution.json` and `files/`):
 
 ```bash
-python3 tools/check_plan_execution.py .capsule/capsule-manifest.json <result-dir>
+python3 tools/check_plan_execution.py .capsule/capsule-manifest.json <decrypted-result-root>
 ```
 
 The generated capsule is execution material, not durable research authority. The public Agent Dispatch worker should execute it; substantive result interpretation belongs to the study's owning research authority.
