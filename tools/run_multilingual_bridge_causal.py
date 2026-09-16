@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Experiment 0002: causal multilingual hidden-bridge write smoke.
+"""Experiment 0002: causal multilingual hidden-bridge writes.
 
-This is the first direct test of the desired external -> latent -> downstream
-interface on a behavior-valid multilingual task.  It deliberately starts with
-English and German because Qwen3.5-0.8B was 4/4 behaviorally correct in both
-languages and J-lens ranked every hidden bridge at 1.  Thai remains a held-out
-stress lane until the causal apparatus works where both prerequisites hold.
+Two execution modes share the same apparatus:
 
-The same canonical English J-space country coordinate is used in both input
-languages.  This is stricter than choosing a different decoder lexicalization
-per language: a successful intervention must transfer across the surface
-language without retuning the latent address.
+``paired``
+    Reproduces the first eight-case EN/DE causal smoke with one predetermined
+    counterfactual target per source concept.
+
+``all-other``
+    For every behavior-valid source bridge, write each of the other country
+    coordinates in turn.  This is the target-address specificity test: a useful
+    latent address should preferentially increase the downstream answer tied to
+    the coordinate that was actually written, not merely suppress the source.
+
+Canonical English J-space token coordinates are used unchanged in every input
+language.  Only prompt positions are patched; candidate answer tokens are never
+intervened on.
 """
 
 from __future__ import annotations
@@ -44,12 +49,13 @@ DEFAULT_LENS_FILE = (
     "Qwen3.5-0.8B_jacobian_lens.pt"
 )
 
-TARGET_CONCEPT = {
+PAIRED_TARGET = {
     "country-france": "country-canada",
     "country-canada": "country-france",
     "country-germany": "country-japan",
     "country-japan": "country-germany",
 }
+CONCEPT_IDS = tuple(PAIRED_TARGET)
 
 
 def parse_layers(text: str) -> list[int]:
@@ -83,6 +89,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--strength", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=1729)
     parser.add_argument(
+        "--target-mode",
+        choices=("paired", "all-other"),
+        default="paired",
+        help="paired reproduces R7; all-other runs the target-address matrix",
+    )
+    parser.add_argument(
         "--output-dir",
         default="artifacts/experiment-0002-multilingual-bridge-causal",
     )
@@ -100,14 +112,7 @@ def candidate_map(scores: list[dict[str, Any]]) -> dict[str, float]:
     return {row["candidate"]: float(row["mean_logprob"]) for row in scores}
 
 
-def score_condition(
-    hf_model,
-    tokenizer,
-    case: dict[str, Any],
-    *,
-    source_answer: str,
-    target_answer: str,
-) -> dict[str, Any]:
+def score_candidates(hf_model, tokenizer, case: dict[str, Any]) -> dict[str, Any]:
     scores = candidate_logprob_scores(
         hf_model,
         tokenizer,
@@ -115,23 +120,71 @@ def score_condition(
         case["language"],
         case["answer_candidates"],
     )
-    by_candidate = candidate_map(scores)
-    if source_answer not in by_candidate or target_answer not in by_candidate:
-        raise ValueError(
-            f"Source/target answers missing from candidates for {case['case_id']}: "
-            f"{source_answer!r}, {target_answer!r}"
-        )
     ordered = sorted(scores, key=lambda row: row["mean_logprob"], reverse=True)
-    target_minus_source = by_candidate[target_answer] - by_candidate[source_answer]
     return {
         "predicted_answer": ordered[0]["candidate"],
         "candidate_scores": scores,
-        "source_mean_logprob": by_candidate[source_answer],
-        "target_mean_logprob": by_candidate[target_answer],
-        "target_minus_source_margin": target_minus_source,
-        "prefers_source": by_candidate[source_answer] > by_candidate[target_answer],
-        "prefers_target": by_candidate[target_answer] > by_candidate[source_answer],
+        "by_candidate": candidate_map(scores),
     }
+
+
+def targets_for(source_concept: str, mode: str) -> list[str]:
+    if mode == "paired":
+        return [PAIRED_TARGET[source_concept]]
+    return [concept for concept in CONCEPT_IDS if concept != source_concept]
+
+
+def enrich_result(
+    result: dict[str, Any],
+    baseline: dict[str, Any],
+    *,
+    source_answer: str,
+    target_answer: str,
+) -> dict[str, Any]:
+    base = baseline["by_candidate"]
+    post = result["by_candidate"]
+    source_logit = post[source_answer]
+    target_logit = post[target_answer]
+    base_margin = base[target_answer] - base[source_answer]
+    post_margin = target_logit - source_logit
+
+    gains = {candidate: post[candidate] - base[candidate] for candidate in post}
+    non_source_gains = {
+        candidate: gain for candidate, gain in gains.items() if candidate != source_answer
+    }
+    ordered_gains = sorted(non_source_gains.items(), key=lambda item: item[1], reverse=True)
+    best_gain_answer, best_gain = ordered_gains[0]
+    target_gain = gains[target_answer]
+    other_gains = [gain for candidate, gain in non_source_gains.items() if candidate != target_answer]
+    next_best_gain = max(other_gains) if other_gains else float("-inf")
+
+    result.update(
+        {
+            "source_mean_logprob": source_logit,
+            "target_mean_logprob": target_logit,
+            "target_minus_source_margin": post_margin,
+            "margin_change_from_baseline": post_margin - base_margin,
+            "candidate_gain_from_baseline": gains,
+            "intended_target_gain": target_gain,
+            "best_gained_non_source_answer": best_gain_answer,
+            "best_gained_non_source_gain": best_gain,
+            "target_specificity_margin": target_gain - next_best_gain,
+            "target_specificity_hit": best_gain_answer == target_answer,
+            "prefers_source": source_logit > target_logit,
+            "prefers_target": target_logit > source_logit,
+            "strong_causal_success": (
+                baseline["predicted_answer"] == source_answer
+                and result["predicted_answer"] == target_answer
+            ),
+            "preference_flip": (
+                base[source_answer] > base[target_answer]
+                and target_logit > source_logit
+            ),
+        }
+    )
+    # The compact records need the score list, not a duplicated lookup map.
+    result.pop("by_candidate", None)
+    return result
 
 
 def main() -> int:
@@ -146,10 +199,10 @@ def main() -> int:
     selected = [
         case
         for case in cases
-        if case["language"] in languages and case["concept_id"] in TARGET_CONCEPT
+        if case["language"] in languages and case["concept_id"] in CONCEPT_IDS
     ]
     if not selected:
-        raise ValueError("No cases selected for causal bridge smoke")
+        raise ValueError("No cases selected for causal bridge experiment")
 
     info = model_info(args.model, revision=args.revision)
     resolved_revision = info.sha
@@ -175,122 +228,118 @@ def main() -> int:
         if layer not in lens.source_layers:
             raise ValueError(f"Requested layer {layer} not present in fitted lens")
 
-    # The first listed bridge surface in the validated fixture is the canonical
-    # English lexicalization.  Use the same token coordinate in every language.
+    # Force one canonical English lexicalization per concept, then reuse the
+    # same token coordinate in every surface language.
     canonical_surface: dict[str, str] = {}
     canonical_token: dict[str, int] = {}
-    for concept_id in TARGET_CONCEPT:
-        exemplars = [case for case in cases if case["concept_id"] == concept_id]
-        if not exemplars:
-            raise ValueError(f"Missing concept in fixture: {concept_id}")
-        surface = exemplars[0]["intermediate_surfaces"][0]
+    for concept_id in CONCEPT_IDS:
+        english_case = case_by_key[(concept_id, "en")]
+        surface = english_case["intermediate_surfaces"][0]
         canonical_surface[concept_id] = surface
         canonical_token[concept_id] = single_token_id(tokenizer, surface)
 
-    records: list[dict[str, Any]] = []
     conditions = {
         "late_bridge": (late_layers, "coordinate_swap"),
         "early_bridge": (early_layers, "coordinate_swap"),
         "late_random": (late_layers, "random_norm_matched"),
     }
 
+    baseline_by_case: dict[str, dict[str, Any]] = {}
+    prompt_len_by_case: dict[str, int] = {}
+    for case in selected:
+        baseline_by_case[case["case_id"]] = score_candidates(hf_model, tokenizer, case)
+        prompt_len_by_case[case["case_id"]] = len(
+            tokenizer(case["prompt"], add_special_tokens=False).input_ids
+        )
+
+    records: list[dict[str, Any]] = []
+    pair_count = sum(len(targets_for(case["concept_id"], args.target_mode)) for case in selected)
     print(
-        f"model={args.model} revision={resolved_revision} cases={len(selected)} "
-        f"late={late_layers} early={early_layers} strength={args.strength}"
+        f"model={args.model} revision={resolved_revision} source_cases={len(selected)} "
+        f"target_pairs={pair_count} mode={args.target_mode} late={late_layers} "
+        f"early={early_layers} strength={args.strength}",
+        flush=True,
     )
 
     for case in selected:
         source_concept = case["concept_id"]
-        target_concept = TARGET_CONCEPT[source_concept]
-        target_case = case_by_key[(target_concept, case["language"])]
         source_answer = case["correct_answer"]
-        target_answer = target_case["correct_answer"]
-        prompt_len = len(
-            tokenizer(case["prompt"], add_special_tokens=False).input_ids
-        )
-
-        baseline = score_condition(
-            hf_model,
-            tokenizer,
-            case,
-            source_answer=source_answer,
-            target_answer=target_answer,
-        )
-        row: dict[str, Any] = {
-            "case_id": case["case_id"],
-            "language": case["language"],
-            "prompt_sha256": hashlib.sha256(case["prompt"].encode("utf-8")).hexdigest(),
-            "source_concept": source_concept,
-            "target_concept": target_concept,
-            "source_latent_surface": canonical_surface[source_concept],
-            "target_latent_surface": canonical_surface[target_concept],
-            "source_latent_token_id": canonical_token[source_concept],
-            "target_latent_token_id": canonical_token[target_concept],
-            "source_answer": source_answer,
-            "target_answer": target_answer,
-            "prompt_tokens": prompt_len,
-            "baseline": baseline,
-            "conditions": {},
+        baseline_internal = baseline_by_case[case["case_id"]]
+        baseline = {
+            "predicted_answer": baseline_internal["predicted_answer"],
+            "candidate_scores": baseline_internal["candidate_scores"],
         }
+        prompt_len = prompt_len_by_case[case["case_id"]]
 
-        for name, (layers, mode) in conditions.items():
-            with jspace_swap(
-                model,
-                lens,
-                canonical_token[source_concept],
-                canonical_token[target_concept],
-                layers,
-                strength=args.strength,
-                mode=mode,
-                seed=args.seed,
-                key=f"{case['case_id']}|{name}",
-                position_limit=prompt_len,
-            ):
-                result = score_condition(
-                    hf_model,
-                    tokenizer,
-                    case,
+        for target_concept in targets_for(source_concept, args.target_mode):
+            target_case = case_by_key[(target_concept, case["language"])]
+            target_answer = target_case["correct_answer"]
+            row: dict[str, Any] = {
+                "case_id": case["case_id"],
+                "language": case["language"],
+                "prompt_sha256": hashlib.sha256(case["prompt"].encode("utf-8")).hexdigest(),
+                "source_concept": source_concept,
+                "target_concept": target_concept,
+                "source_latent_surface": canonical_surface[source_concept],
+                "target_latent_surface": canonical_surface[target_concept],
+                "source_latent_token_id": canonical_token[source_concept],
+                "target_latent_token_id": canonical_token[target_concept],
+                "source_answer": source_answer,
+                "target_answer": target_answer,
+                "prompt_tokens": prompt_len,
+                "baseline": baseline,
+                "conditions": {},
+            }
+
+            for name, (layers, mode) in conditions.items():
+                with jspace_swap(
+                    model,
+                    lens,
+                    canonical_token[source_concept],
+                    canonical_token[target_concept],
+                    layers,
+                    strength=args.strength,
+                    mode=mode,
+                    seed=args.seed,
+                    key=f"{case['case_id']}|{target_concept}|{name}",
+                    position_limit=prompt_len,
+                ):
+                    result = score_candidates(hf_model, tokenizer, case)
+                result = enrich_result(
+                    result,
+                    baseline_internal,
                     source_answer=source_answer,
                     target_answer=target_answer,
                 )
-            result["layers"] = layers
-            result["mode"] = mode
-            result["strength"] = args.strength
-            result["margin_change_from_baseline"] = (
-                result["target_minus_source_margin"]
-                - baseline["target_minus_source_margin"]
-            )
-            result["strong_causal_success"] = (
-                baseline["predicted_answer"] == source_answer
-                and result["predicted_answer"] == target_answer
-            )
-            result["preference_flip"] = (
-                baseline["prefers_source"] and result["prefers_target"]
-            )
-            row["conditions"][name] = result
+                result["layers"] = layers
+                result["mode"] = mode
+                result["strength"] = args.strength
+                row["conditions"][name] = result
 
-        records.append(row)
-        print(
-            json.dumps(
-                {
-                    "case_id": row["case_id"],
-                    "language": row["language"],
-                    "swap": f"{source_concept}->{target_concept}",
-                    "baseline": baseline["predicted_answer"],
-                    "target": target_answer,
-                    "late": row["conditions"]["late_bridge"]["predicted_answer"],
-                    "late_margin_delta": row["conditions"]["late_bridge"]["margin_change_from_baseline"],
-                    "early_margin_delta": row["conditions"]["early_bridge"]["margin_change_from_baseline"],
-                    "random_margin_delta": row["conditions"]["late_random"]["margin_change_from_baseline"],
-                },
-                ensure_ascii=False,
-            ),
-            flush=True,
-        )
+            records.append(row)
+            print(
+                json.dumps(
+                    {
+                        "case_id": row["case_id"],
+                        "language": row["language"],
+                        "swap": f"{source_concept}->{target_concept}",
+                        "baseline": baseline["predicted_answer"],
+                        "target": target_answer,
+                        "late": row["conditions"]["late_bridge"]["predicted_answer"],
+                        "late_specific": row["conditions"]["late_bridge"]["target_specificity_hit"],
+                        "early": row["conditions"]["early_bridge"]["predicted_answer"],
+                        "early_specific": row["conditions"]["early_bridge"]["target_specificity_hit"],
+                        "random": row["conditions"]["late_random"]["predicted_answer"],
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
 
-    baseline_valid = [
-        row for row in records if row["baseline"]["predicted_answer"] == row["source_answer"]
-    ]
+    baseline_valid_cases = sum(
+        baseline_by_case[case["case_id"]]["predicted_answer"] == case["correct_answer"]
+        for case in selected
+    )
     condition_summary: dict[str, Any] = {}
     for name in conditions:
         values = [row["conditions"][name] for row in records]
@@ -298,31 +347,64 @@ def main() -> int:
             "n": len(values),
             "strong_causal_successes": sum(v["strong_causal_success"] for v in values),
             "preference_flips": sum(v["preference_flip"] for v in values),
+            "target_specificity_hits": sum(v["target_specificity_hit"] for v in values),
+            "target_specificity_rate": mean(float(v["target_specificity_hit"]) for v in values),
+            "mean_target_specificity_margin": mean(v["target_specificity_margin"] for v in values),
+            "mean_intended_target_gain": mean(v["intended_target_gain"] for v in values),
             "mean_margin_change": mean(v["margin_change_from_baseline"] for v in values),
         }
 
     by_direction: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in records:
-        by_direction[f"{row['source_concept']}->{row['target_concept']}"] .append(row)
+        by_direction[f"{row['source_concept']}->{row['target_concept']}"].append(row)
     transfer_summary: dict[str, Any] = {}
-    for direction, rows in sorted(by_direction.items()):
-        late = [row["conditions"]["late_bridge"] for row in rows]
+    for direction, direction_rows in sorted(by_direction.items()):
+        late = [row["conditions"]["late_bridge"] for row in direction_rows]
+        early = [row["conditions"]["early_bridge"] for row in direction_rows]
         transfer_summary[direction] = {
-            "languages": sorted(row["language"] for row in rows),
+            "languages": sorted(row["language"] for row in direction_rows),
             "all_languages_baseline_valid": all(
-                row["baseline"]["predicted_answer"] == row["source_answer"] for row in rows
+                baseline_by_case[row["case_id"]]["predicted_answer"] == row["source_answer"]
+                for row in direction_rows
             ),
-            "all_languages_strong_causal_success": all(
-                value["strong_causal_success"] for value in late
+            "late_all_languages_target_specific": all(v["target_specificity_hit"] for v in late),
+            "late_all_languages_strong_causal_success": all(v["strong_causal_success"] for v in late),
+            "early_all_languages_target_specific": all(v["target_specificity_hit"] for v in early),
+            "early_all_languages_strong_causal_success": all(v["strong_causal_success"] for v in early),
+            "mean_late_target_specificity_margin": mean(v["target_specificity_margin"] for v in late),
+            "mean_late_margin_change": mean(v["margin_change_from_baseline"] for v in late),
+        }
+
+    by_source_case: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in records:
+        by_source_case[row["case_id"]].append(row)
+    source_specificity: dict[str, Any] = {}
+    for case_id, source_rows in sorted(by_source_case.items()):
+        source_specificity[case_id] = {
+            "language": source_rows[0]["language"],
+            "source_concept": source_rows[0]["source_concept"],
+            "n_targets": len(source_rows),
+            "late_target_specificity_hits": sum(
+                row["conditions"]["late_bridge"]["target_specificity_hit"]
+                for row in source_rows
             ),
-            "all_languages_preference_flip": all(value["preference_flip"] for value in late),
-            "mean_late_margin_change": mean(
-                value["margin_change_from_baseline"] for value in late
+            "early_target_specificity_hits": sum(
+                row["conditions"]["early_bridge"]["target_specificity_hit"]
+                for row in source_rows
+            ),
+            "late_strong_target_switches": sum(
+                row["conditions"]["late_bridge"]["strong_causal_success"]
+                for row in source_rows
+            ),
+            "early_strong_target_switches": sum(
+                row["conditions"]["early_bridge"]["strong_causal_success"]
+                for row in source_rows
             ),
         }
 
     summary = {
         "experiment": "0002-multilingual-hidden-bridge-causal-write",
+        "target_mode": args.target_mode,
         "model": args.model,
         "resolved_model_revision": resolved_revision,
         "model_class": hf_model.__class__.__name__,
@@ -335,20 +417,21 @@ def main() -> int:
         "late_layers": late_layers,
         "early_layers": early_layers,
         "strength": args.strength,
-        "case_count": len(records),
-        "baseline_valid_count": len(baseline_valid),
+        "source_case_count": len(selected),
+        "target_pair_count": len(records),
+        "baseline_valid_source_cases": baseline_valid_cases,
         "canonical_latent_surfaces": canonical_surface,
         "conditions": condition_summary,
         "cross_language_transfer": transfer_summary,
-        "strong_evidence_rule": (
-            "same canonical latent coordinate redirects behavior-valid English and German "
-            "prompts to the counterfactual downstream capital while early-layer and "
-            "norm-matched-random controls do not reproduce the effect"
+        "source_specificity": source_specificity,
+        "target_specificity_definition": (
+            "intended target capital has the largest mean-logprob gain from baseline among "
+            "all non-source capital candidates"
         ),
         "interpretation": (
-            "Causal write calibration only. Even a positive English/German result does not "
-            "establish a general Neuralese ontology; Thai transfer and downstream function "
-            "reuse remain separate promotion gates."
+            "Target-address calibration. A target-specific gain is stronger evidence than "
+            "source suppression. Early/late bands are treated as alternate writable stages, "
+            "not as a promotion criterion. Thai and downstream-function reuse remain later gates."
         ),
     }
 
