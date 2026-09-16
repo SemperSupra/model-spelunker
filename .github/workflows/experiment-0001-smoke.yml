@@ -26,6 +26,7 @@ jobs:
       OMP_NUM_THREADS: '1'
       MKL_NUM_THREADS: '1'
       OPENBLAS_NUM_THREADS: '1'
+      PIP_NO_CACHE_DIR: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,8 +35,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: requirements-experiment-0001.txt
 
       - name: Install pinned CPU PyTorch
         run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.14.0+cpu'
@@ -43,14 +42,14 @@ jobs:
       - name: Install pinned experiment dependencies
         run: python -m pip install -r requirements-experiment-0001.txt
 
-      - name: Run reference repeatability gate
+      - name: Run affirmative reference repeatability gate
         run: |
           python tools/run_reference_robustness.py \
             --model EleutherAI/pythia-70m \
             --revision a39f36b100fe8a5377810d56c3f4789b9c53ac42 \
-            --fixture fixtures/experiment-0001/reciprocity-semantic-heldout.jsonl \
+            --fixture fixtures/experiment-0001/reciprocity-affirmative-heldout.jsonl \
             --repeats 2 \
-            --output-dir artifacts/experiment-0001-reference
+            --output-dir artifacts/experiment-0001-affirmative-reference
 
       - name: Summarize reference evidence
         run: |
@@ -58,9 +57,10 @@ jobs:
           import json
           from pathlib import Path
 
-          summary = json.loads(Path('artifacts/experiment-0001-reference/summary.json').read_text(encoding='utf-8'))
+          summary = json.loads(Path('artifacts/experiment-0001-affirmative-reference/summary.json').read_text(encoding='utf-8'))
           primary = summary['primary']
           repeat = summary['intra_runner_repeatability']
+          print('fixture=', summary['fixture'])
           print('numeric_mode=', summary['numeric_mode'])
           print('cpu_model=', summary['runtime']['cpu_model'])
           print('torch_version=', summary['runtime']['torch_version'])
@@ -78,7 +78,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0001-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          name: experiment-0001-affirmative-reference-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts
           if-no-files-found: error
           retention-days: 14
