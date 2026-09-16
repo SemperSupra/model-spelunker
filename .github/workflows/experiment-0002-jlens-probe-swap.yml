@@ -1,7 +1,6 @@
 name: experiment-0002-jlens-probe-swap
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -19,17 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check one-shot arm
-        id: arm
-        run: |
-          if [ -f .ci/run-experiment-0002-jlens-probe-swap ]; then
-            echo 'armed=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'armed=false' >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up Python
-        if: steps.arm.outputs.armed == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -37,17 +26,14 @@ jobs:
           cache-dependency-path: requirements-experiment-0001.txt
 
       - name: Install CPU PyTorch
-        if: steps.arm.outputs.armed == 'true'
         run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
 
       - name: Install experiment dependencies
-        if: steps.arm.outputs.armed == 'true'
         run: |
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
       - name: Run causal J-space probe swap
-        if: steps.arm.outputs.armed == 'true'
         run: |
           python tools/run_jlens_probe_swap.py \
             --model EleutherAI/pythia-70m-deduped \
@@ -59,7 +45,6 @@ jobs:
             --output-dir artifacts/experiment-0002-jlens-probe-swap
 
       - name: Summarize causal calibration
-        if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
@@ -72,7 +57,7 @@ jobs:
           PY
 
       - name: Upload evidence
-        if: steps.arm.outputs.armed == 'true' && always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: experiment-0002-jlens-probe-swap-${{ github.run_id }}
