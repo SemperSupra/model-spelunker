@@ -1,0 +1,29 @@
+{
+  "dataset_repository": "facebook/multilingual_librispeech",
+  "dataset_revision": "2e83e61823b4c47dcbcb1980bb88601274127609",
+  "license_spdx": "CC-BY-4.0",
+  "split": "1_hours",
+  "speakers_per_language": 3,
+  "selection_rule": {
+    "description": "first distinct speaker IDs in parquet row order with embedded audio bytes and 2 <= audio_duration <= 15 seconds",
+    "min_duration_seconds": 2.0,
+    "max_duration_seconds": 15.0
+  },
+  "languages": [
+    {
+      "config": "german",
+      "expected_language": "de",
+      "parquet_path": "german/1_hours-00000-of-00001.parquet"
+    },
+    {
+      "config": "french",
+      "expected_language": "fr",
+      "parquet_path": "french/1_hours-00000-of-00001.parquet"
+    },
+    {
+      "config": "spanish",
+      "expected_language": "es",
+      "parquet_path": "spanish/1_hours-00000-of-00001.parquet"
+    }
+  ]
+}
