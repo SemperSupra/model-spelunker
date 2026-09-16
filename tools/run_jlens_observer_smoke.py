@@ -44,7 +44,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
 
 
 def single_token_id(tokenizer, text: str) -> int:
@@ -61,6 +65,30 @@ def rank_of(logits: torch.Tensor, token_id: int) -> int:
     return int((logits > target).sum().item()) + 1
 
 
+def explicit_layout_for(hf_model) -> jlens.Layout | None:
+    """Bridge known API drift without modifying the pinned upstream package.
+
+    Anthropic's 2026-07 reference adapter names GPT-NeoX/Pythia's unembedding
+    ``embed_out``. Current Transformers exposes the same CausalLM head as
+    ``lm_head``. Detect that narrow compatibility case and provide the explicit
+    upstream Layout object; all other families continue through upstream
+    auto-detection.
+    """
+    if (
+        hf_model.__class__.__name__ == "GPTNeoXForCausalLM"
+        and hasattr(hf_model, "gpt_neox")
+        and hasattr(hf_model, "lm_head")
+    ):
+        return jlens.Layout(
+            path="gpt_neox",
+            layers="layers",
+            norm="final_layer_norm",
+            embed="embed_in",
+            lm_head="lm_head",
+        )
+    return None
+
+
 def main() -> int:
     args = parse_args()
     out_dir = Path(args.output_dir)
@@ -70,12 +98,17 @@ def main() -> int:
     info = model_info(args.model, revision=args.revision)
     resolved_revision = info.sha
     if not resolved_revision:
-        raise RuntimeError(f"Could not resolve immutable revision for {args.model}@{args.revision}")
+        raise RuntimeError(
+            f"Could not resolve immutable revision for {args.model}@{args.revision}"
+        )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, revision=resolved_revision)
-    hf_model = AutoModelForCausalLM.from_pretrained(args.model, revision=resolved_revision)
+    hf_model = AutoModelForCausalLM.from_pretrained(
+        args.model, revision=resolved_revision
+    )
     hf_model.eval().to("cpu")
-    model = jlens.from_hf(hf_model, tokenizer)
+    explicit_layout = explicit_layout_for(hf_model)
+    model = jlens.from_hf(hf_model, tokenizer, layout=explicit_layout)
     lens = jlens.JacobianLens.from_pretrained(
         args.lens_repo,
         filename=args.lens_file,
@@ -89,7 +122,9 @@ def main() -> int:
     records: list[dict[str, Any]] = []
     for case in cases:
         target_id = single_token_id(tokenizer, case["intermediate"])
-        lens_logits, _, input_ids = lens.apply(model, case["prompt"], positions=[-1])
+        lens_logits, _, input_ids = lens.apply(
+            model, case["prompt"], positions=[-1]
+        )
         vanilla_logits, _, _ = lens.apply(
             model, case["prompt"], positions=[-1], use_jacobian=False
         )
@@ -128,15 +163,18 @@ def main() -> int:
         records.append(record)
         print(
             json.dumps(
-                {k: record[k] for k in (
-                    "case_id",
-                    "intermediate",
-                    "best_jlens_rank",
-                    "best_jlens_layer",
-                    "best_vanilla_rank",
-                    "best_vanilla_layer",
-                    "best_rank_improvement",
-                )},
+                {
+                    k: record[k]
+                    for k in (
+                        "case_id",
+                        "intermediate",
+                        "best_jlens_rank",
+                        "best_jlens_layer",
+                        "best_vanilla_rank",
+                        "best_vanilla_layer",
+                        "best_rank_improvement",
+                    )
+                },
                 ensure_ascii=False,
             )
         )
@@ -144,13 +182,27 @@ def main() -> int:
     improved_cases = sum(
         1 for row in records if row["best_jlens_rank"] < row["best_vanilla_rank"]
     )
-    median_best_jlens = sorted(row["best_jlens_rank"] for row in records)[len(records) // 2]
-    median_best_vanilla = sorted(row["best_vanilla_rank"] for row in records)[len(records) // 2]
+    median_best_jlens = sorted(row["best_jlens_rank"] for row in records)[
+        len(records) // 2
+    ]
+    median_best_vanilla = sorted(row["best_vanilla_rank"] for row in records)[
+        len(records) // 2
+    ]
     summary = {
         "experiment": "0002-jlens-observer-calibration",
         "model": args.model,
+        "model_class": hf_model.__class__.__name__,
         "resolved_model_revision": resolved_revision,
         "jlens_upstream_commit": "581d398613e5602a5af361e1c34d3a92ea82ba8e",
+        "adapter_layout": None
+        if explicit_layout is None
+        else {
+            "path": explicit_layout.path,
+            "layers": explicit_layout.layers,
+            "norm": explicit_layout.norm,
+            "embed": explicit_layout.embed,
+            "lm_head": explicit_layout.lm_head,
+        },
         "lens_repo": args.lens_repo,
         "lens_revision": args.lens_revision,
         "lens_file": args.lens_file,
@@ -170,7 +222,8 @@ def main() -> int:
         for row in records:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
     (out_dir / "summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
