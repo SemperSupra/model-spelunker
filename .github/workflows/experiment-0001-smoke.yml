@@ -5,9 +5,10 @@ on:
   pull_request:
     paths:
       - '.github/workflows/experiment-0001-smoke.yml'
-      - 'tools/run_calibrated_semantic_smoke.py'
+      - 'tools/reference_cpu.py'
+      - 'tools/run_reference_robustness.py'
       - 'tools/run_calibration_robustness.py'
-      - 'schemas/concept-geometry-record.schema.json'
+      - 'tools/run_calibrated_semantic_smoke.py'
       - 'fixtures/experiment-0001/**'
       - 'requirements-experiment-0001.txt'
 
@@ -15,13 +16,16 @@ permissions:
   contents: read
 
 jobs:
-  behavioral-smoke:
+  reference-repeatability:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: 'false'
-      TORCH_NUM_THREADS: '2'
+      TORCH_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,60 +37,48 @@ jobs:
           cache: 'pip'
           cache-dependency-path: requirements-experiment-0001.txt
 
-      - name: Install CPU PyTorch
-        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
+      - name: Install pinned CPU PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.14.0+cpu'
 
-      - name: Install experiment dependencies
+      - name: Install pinned experiment dependencies
         run: python -m pip install -r requirements-experiment-0001.txt
 
-      - name: Run calibrated semantic baseline
+      - name: Run reference repeatability gate
         run: |
-          python tools/run_calibrated_semantic_smoke.py \
+          python tools/run_reference_robustness.py \
             --model EleutherAI/pythia-70m \
-            --fixture fixtures/experiment-0001/reciprocity-semantic-smoke.jsonl \
-            --output-dir artifacts/experiment-0001-semantic
-
-      - name: Run held-out multi-stem robustness check
-        run: |
-          python tools/run_calibration_robustness.py \
-            --model EleutherAI/pythia-70m \
+            --revision a39f36b100fe8a5377810d56c3f4789b9c53ac42 \
             --fixture fixtures/experiment-0001/reciprocity-semantic-heldout.jsonl \
-            --output-dir artifacts/experiment-0001-robustness
+            --repeats 2 \
+            --output-dir artifacts/experiment-0001-reference
 
-      - name: Summarize evidence
+      - name: Summarize reference evidence
         run: |
           python - <<'PY'
           import json
-          from collections import Counter
           from pathlib import Path
 
-          path = Path('artifacts/experiment-0001-semantic/concept-geometry-records.jsonl')
-          semantic = [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines() if line]
-          semantic_scored = [row['behavior']['score'] for row in semantic if row['behavior']['score'] is not None]
-          print('baseline_records=', len(semantic))
-          if semantic_scored:
-              print(f'baseline_labeled_accuracy={sum(semantic_scored)/len(semantic_scored):.3f}')
-          for language in sorted({row['probe']['language'] for row in semantic}):
-              rows = [row for row in semantic if row['probe']['language'] == language]
-              labeled = [row['behavior']['score'] for row in rows if row['behavior']['score'] is not None]
-              if labeled:
-                  print(f'baseline_{language}_accuracy={sum(labeled)/len(labeled):.3f}')
-              print(f'baseline_{language}_selections={dict(Counter(row["behavior"]["selected_option"] for row in rows))}')
-
-          robust = json.loads(Path('artifacts/experiment-0001-robustness/summary.json').read_text(encoding='utf-8'))
-          print(f'heldout_accuracy={robust["accuracy"]:.3f}')
-          print(f'heldout_stem_unanimous_rate={robust["stem_unanimous_rate"]:.3f}')
-          print(f'heldout_mean_stem_stability={robust["mean_stem_stability"]:.3f}')
-          print(f'heldout_cross_language_unanimous_rate={robust["cross_language_unanimous_rate"]:.3f}')
-          for language, stats in robust['by_language'].items():
-              print(f'heldout_{language}={json.dumps(stats, ensure_ascii=False, sort_keys=True)}')
+          summary = json.loads(Path('artifacts/experiment-0001-reference/summary.json').read_text(encoding='utf-8'))
+          primary = summary['primary']
+          repeat = summary['intra_runner_repeatability']
+          print('numeric_mode=', summary['numeric_mode'])
+          print('cpu_model=', summary['runtime']['cpu_model'])
+          print('torch_version=', summary['runtime']['torch_version'])
+          print(f'reference_accuracy={primary["accuracy"]:.3f}')
+          print(f'reference_stem_unanimous_rate={primary["stem_unanimous_rate"]:.3f}')
+          print(f'reference_cross_language_unanimous_rate={primary["cross_language_unanimous_rate"]:.3f}')
+          print(f'intra_runner_selection_agreement={repeat["selection_agreement_rate"]:.3f}')
+          print(f'intra_runner_max_margin_drift={repeat["max_margin_drift"]:.12g}')
+          print(f'intra_runner_mean_margin_drift={repeat["mean_margin_drift"]:.12g}')
+          for language, stats in primary['by_language'].items():
+              print(f'reference_{language}={json.dumps(stats, ensure_ascii=False, sort_keys=True)}')
           PY
 
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0001-smoke-${{ github.run_id }}
+          name: experiment-0001-reference-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts
           if-no-files-found: error
           retention-days: 14
