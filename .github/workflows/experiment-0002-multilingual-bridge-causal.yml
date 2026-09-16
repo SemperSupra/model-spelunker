@@ -55,17 +55,17 @@ jobs:
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Behavior-calibrate ISO alpha-2 downstream function
+      - name: Behavior-calibrate demonym downstream function
         if: steps.arm.outputs.armed == 'true'
         run: |
           python tools/run_multilingual_bridge_cloze.py \
-            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-iso-alpha2.jsonl \
+            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-demonym.jsonl \
             --model Qwen/Qwen3.5-0.8B \
             --lens-repo neuronpedia/jacobian-lens \
             --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
             --lens-file qwen3.5-0.8b/jlens/Salesforce-wikitext/Qwen3.5-0.8B_jacobian_lens.pt \
             --positions 8 \
-            --output-dir artifacts/experiment-0002-iso-alpha2-reuse/preflight
+            --output-dir artifacts/experiment-0002-demonym-reuse/preflight
 
       - name: Apply second-function promotion gate
         id: gate
@@ -74,7 +74,7 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
-          s = json.loads(Path('artifacts/experiment-0002-iso-alpha2-reuse/preflight/summary.json').read_text())
+          s = json.loads(Path('artifacts/experiment-0002-demonym-reuse/preflight/summary.json').read_text())
           langs = s['language_summary']
           earned = (
               s['evaluated_cases'] == 8
@@ -92,11 +92,11 @@ jobs:
               handle.write(f"earned={'true' if earned else 'false'}\n")
           PY
 
-      - name: Run ISO alpha-2 second-function causal reuse matrix
+      - name: Run demonym second-function causal reuse matrix
         if: steps.arm.outputs.armed == 'true' && steps.gate.outputs.earned == 'true'
         run: |
           python tools/run_multilingual_bridge_causal.py \
-            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-iso-alpha2.jsonl \
+            --fixture fixtures/experiment-0002/multilingual-indirect-bridge-demonym.jsonl \
             --model Qwen/Qwen3.5-0.8B \
             --lens-repo neuronpedia/jacobian-lens \
             --lens-revision 4f30bb8c97e696115d4a2ef359923b5005fc860c \
@@ -106,7 +106,7 @@ jobs:
             --early-layers 0-4 \
             --strength 1.0 \
             --target-mode all-other \
-            --output-dir artifacts/experiment-0002-iso-alpha2-reuse/causal
+            --output-dir artifacts/experiment-0002-demonym-reuse/causal
 
       - name: Summarize second-function reuse
         if: steps.arm.outputs.armed == 'true'
@@ -114,14 +114,14 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          pre = json.loads(Path('artifacts/experiment-0002-iso-alpha2-reuse/preflight/summary.json').read_text())
+          pre = json.loads(Path('artifacts/experiment-0002-demonym-reuse/preflight/summary.json').read_text())
           print('preflight', {
               'evaluated': pre['evaluated_cases'],
               'skipped': pre['skipped_cases'],
               'accuracy': pre['behavior_accuracy'],
               'languages': pre['language_summary'],
           })
-          causal_path = Path('artifacts/experiment-0002-iso-alpha2-reuse/causal/summary.json')
+          causal_path = Path('artifacts/experiment-0002-demonym-reuse/causal/summary.json')
           if not causal_path.exists():
               print('causal matrix not executed: behavior gate did not pass')
           else:
@@ -142,7 +142,7 @@ jobs:
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-iso-alpha2-reuse-${{ github.run_id }}
-          path: artifacts/experiment-0002-iso-alpha2-reuse
+          name: experiment-0002-demonym-reuse-${{ github.run_id }}
+          path: artifacts/experiment-0002-demonym-reuse
           if-no-files-found: error
           retention-days: 14
