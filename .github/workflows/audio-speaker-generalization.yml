@@ -1,0 +1,214 @@
+name: Faster Whisper Speaker-Aware Generalization Rep
+
+on:
+  push:
+    branches:
+      - impl/audio-asr-portability-stage
+    paths:
+      - "experiments/mvp/audio_mls_speaker_panel.json"
+      - "experiments/mvp/prepare_mls_speaker_panel.py"
+      - "experiments/mvp/run_audio_speaker_generalization.py"
+      - "experiments/mvp/validate_audio_speaker_generalization.py"
+      - ".github/workflows/audio-speaker-generalization.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  PYTHONUNBUFFERED: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  LOGICAL_ID: asr/faster-whisper/tiny
+  EXPECTED_DIGEST: sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42
+  MLS_REVISION: 2e83e61823b4c47dcbcb1980bb88601274127609
+
+jobs:
+  rep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact Model Spelunker revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact approved Foundry revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: SemperSupra/model-artifact-foundry
+          ref: 6622753fd5914be87fb1b6d987ceb7cae46c7ff5
+          path: foundry
+          persist-credentials: false
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+
+      - name: Derive runtime cache keys
+        id: runtime-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out mls-parquet mls-samples
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"python_tag={sys.implementation.cache_tag}")
+          PY
+
+      - name: Restore exact ASR runtime
+        id: asr-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .asr-venv
+          key: model-spelunker-faster-whisper-tiny-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-fw1.2.1-ct2-4.6.0
+
+      - name: Build exact CPU ASR runtime on cache miss
+        if: steps.asr-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .asr-venv
+          .asr-venv/bin/python -m pip install --disable-pip-version-check --no-input \
+            "faster-whisper==1.2.1" "ctranslate2==4.6.0"
+
+      - name: Restore exact MLS panel parser runtime
+        id: panel-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .panel-venv
+          key: model-spelunker-mls-panel-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-pyarrow21.0.0
+
+      - name: Build MLS panel parser runtime on cache miss
+        if: steps.panel-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .panel-venv
+          .panel-venv/bin/python -m pip install --disable-pip-version-check --no-input "pyarrow==21.0.0"
+
+      - name: Verify exact approved Foundry selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          c=json.loads(Path('foundry/catalog/approved.json').read_text())
+          e=c['artifacts'][os.environ['LOGICAL_ID']]
+          assert e['approved_digest']==os.environ['EXPECTED_DIGEST']
+          assert e['upstream_exact_revision']=='d90ca5fe260221311c53c58e660288d3deb8d356'
+          PY
+
+      - name: Acquire exact pinned MLS 1-hour source parquets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for lang in german french spanish; do
+            url="https://huggingface.co/datasets/facebook/multilingual_librispeech/resolve/${MLS_REVISION}/${lang}/1_hours-00000-of-00001.parquet?download=true"
+            curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
+              "$url" -o "mls-parquet/${lang}.parquet"
+          done
+          python3 - <<'PY' | tee out/mls-source-downloads.json
+          import hashlib, json, os
+          from pathlib import Path
+          rows={}
+          for lang in ('german','french','spanish'):
+              p=Path('mls-parquet')/f'{lang}.parquet'
+              b=p.read_bytes()
+              rows[lang]={'bytes':len(b),'sha256':'sha256:'+hashlib.sha256(b).hexdigest()}
+              assert len(b)>10_000_000
+          print(json.dumps({'repository':'facebook/multilingual_librispeech','revision':os.environ['MLS_REVISION'],'files':rows},sort_keys=True))
+          PY
+
+      - name: Deterministically select three distinct speakers per language
+        shell: bash
+        run: |
+          set -euo pipefail
+          .panel-venv/bin/python experiments/mvp/prepare_mls_speaker_panel.py \
+            --manifest experiments/mvp/audio_mls_speaker_panel.json \
+            --parquet-dir mls-parquet \
+            --samples-dir mls-samples \
+            --output out/mls-speaker-panel-resolved.json \
+            | tee out/panel-selection.log
+
+      - name: Authenticate bounded Foundry read
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Hydrate approved model and prove offline reuse
+        id: hydrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/model-spelunker-asr-speaker-panel
+          START_NS="$(date +%s%N)"
+          MODEL1="$(.asr-venv/bin/python foundry/tools/hydrate.py --catalog foundry/catalog/approved.json --id "$LOGICAL_ID" --cache-root /tmp/model-spelunker-asr-speaker-panel --oras "$(command -v oras)" | tail -n1)"
+          END_NS="$(date +%s%N)"
+          MODEL2="$(.asr-venv/bin/python foundry/tools/hydrate.py --catalog foundry/catalog/approved.json --id "$LOGICAL_ID" --cache-root /tmp/model-spelunker-asr-speaker-panel --oras /bin/false | tail -n1)"
+          test "$MODEL1" = "$MODEL2"
+          echo "model_dir=$MODEL2" >> "$GITHUB_OUTPUT"
+          echo "hydrate_seconds=$(python3 -c "print((${END_NS}-${START_NS})/1e9)")" >> "$GITHUB_OUTPUT"
+
+      - name: Run speaker-aware generalization rep
+        shell: bash
+        env:
+          MODEL_DIR: ${{ steps.hydrate.outputs.model_dir }}
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v .asr-venv/bin/python experiments/mvp/run_audio_speaker_generalization.py \
+            --model-dir "$MODEL_DIR" \
+            --samples-dir mls-samples \
+            --panel out/mls-speaker-panel-resolved.json \
+            --output out/audio-speaker-generalization.json \
+            2>&1 | tee out/run.log
+
+      - name: Validate evidence independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python -m pip install --disable-pip-version-check --no-input "jsonschema==4.25.1" >/dev/null
+          .asr-venv/bin/python experiments/mvp/validate_audio_speaker_generalization.py \
+            out/audio-speaker-generalization.json | tee out/validation.log
+
+      - name: Summarize descriptive result
+        shell: bash
+        env:
+          HYDRATE_SECONDS: ${{ steps.hydrate.outputs.hydrate_seconds }}
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          b=json.loads(Path('out/audio-speaker-generalization.json').read_text())
+          d,c=b['derived_metrics'],b['cost']
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a',encoding='utf-8') as f:
+              f.write('## MLS speaker-aware audio generalization\n\n')
+              f.write(f"- languages: `{d['language_count']}`, distinct speakers: `{d['speaker_count']}`\n")
+              f.write(f"- exact baseline encoder/transcript repeats: `{d['all_baseline_encoder_repeats_exact']}` / `{d['all_baseline_transcript_repeats_exact']}`\n")
+              for lang,s in d['per_language'].items():
+                  f.write(f"- {lang} speakers `{s['speaker_ids']}`; baseline CER mean/std `{s['baseline_speaker_cer_spread']['mean']:.3f}/{s['baseline_speaker_cer_spread']['std']:.3f}`; 20dB GT CER `{s['conditions']['snr_20db']['ground_truth_cer']['mean']:.3f}`; 10dB GT CER `{s['conditions']['snr_10db']['ground_truth_cer']['mean']:.3f}`\n")
+              f.write(f"- hydration `{float(os.environ['HYDRATE_SECONDS']):.3f}s`, science `{c['experiment_seconds']:.3f}s`, RSS `{c['peak_rss_mib']:.1f} MiB`\n")
+          PY
+
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-spelunker-audio-speaker-generalization-${{ github.run_id }}
+          path: |
+            out/audio-speaker-generalization.json
+            out/mls-speaker-panel-resolved.json
+            out/mls-source-downloads.json
+            out/panel-selection.log
+            out/validation.log
+            out/run.log
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9
