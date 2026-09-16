@@ -208,10 +208,133 @@ However, the planned `late workspace` localization hypothesis is not supported: 
 
 **Decision:** do not tune a late band to rescue the workspace-localization story. The next earned falsifier is **target specificity**: for each source bridge, write each alternative country coordinate and test whether downstream probability moves specifically toward that target country's capital rather than merely away from the source. Run the same matrix in English and German using the same canonical latent addresses. Preserve early and late bands as separate writable-stage conditions; random displacement remains a corruption control. Thai stays held out until target specificity is established.
 
+## E0002-R8 — paired source/J-space/raw/random falsification controls
+
+**Workflow run:** `35063115753`
+
+**Artifact ID:** `10433870065`
+
+**Artifact SHA-256:** `19e8b977bce8c95632b0ddf63723fc3de3ed618057af601e7843eb7b778b07d7`
+
+**Model/lens:** same pinned Qwen3.5/J-lens pair as E0002-R5–R7.
+
+**Executed:** the same eight EN/DE behavior-valid source→target cases from R7, now with additional falsifiers:
+
+- actual-source J-space swap;
+- an absent/unrelated source coordinate (` piano`) to the same target;
+- raw residual/unembedding-direction swap with matched source/target semantics;
+- deterministic norm-matched random displacement;
+- early and late J-space bands retained separately.
+
+**Results:**
+
+| Condition | Target-specific | Strong target switches | Mean intended-target gain |
+| --- | ---: | ---: | ---: |
+| late J-space | 8/8 | 4/8 | +2.883 |
+| early J-space | 8/8 | 4/8 | +2.939 |
+| late raw residual | 8/8 | 3/8 | +2.086 |
+| late random | 1/8 | 0/8 | -0.645 |
+| late absent-source | 0/8 | 0/8 | -2.244 |
+
+Pairwise control comparisons:
+
+- actual-source J-space beat absent-source target gain in 8/8 cases;
+- actual-source J-space beat norm-matched random in 8/8;
+- J-space beat the raw residual direction in 7/8;
+- mean J-space advantage over absent-source was +5.126 target-logprob points;
+- mean J-space advantage over raw was +0.796;
+- mean J-space advantage over random was +3.527.
+
+**Interpretation:** the effect cannot be explained by merely writing any source coordinate or by generic norm-matched corruption. Raw semantic residual steering is itself effective, so J-space is not uniquely privileged, but J-space usually adds causal leverage beyond the raw direction. Early and late J-space writes remain similarly effective, so no late-only workspace localization is supported.
+
+**Decision:** paired-control apparatus passes its promotion rule. Advance to the all-target EN/DE specificity matrix without changing the latent addresses or intervention method.
+
+## E0002-R9 — full EN/DE target-address specificity matrix
+
+**Workflow run:** `35063516547`
+
+**Artifact ID:** `10433127488`
+
+**Artifact SHA-256:** `81e399d542011db87c4f5049cd8eaf6136be041b8942ab97eb94ae03825c3a5e`
+
+**Executed:** all 24 source→alternative-target pairs over the four country concepts in English and German. Canonical English country coordinates were unchanged across both languages. Each source case was behavior-valid before intervention. Early J-space, late J-space, and late norm-matched-random conditions were retained.
+
+**Baseline:** 8/8 source cases behaviorally correct.
+
+**Results:**
+
+| Condition | Target-specific writes | Strong target switches | Mean target-specificity margin | Mean intended-target gain |
+| --- | ---: | ---: | ---: | ---: |
+| late J-space | 24/24 | 13/24 | +2.588 | +2.929 |
+| early J-space | 24/24 | 12/24 | +1.948 | +2.650 |
+| late random | 5/24 | 0/24 | -0.548 | -0.384 |
+
+Every one of the 12 semantic source→target directions was target-specific in **both English and German** under both early and late J-space writes. Late-band strong answer switching occurred across both languages for Canada→France, Canada→Germany, Germany→France, and Japan→France. Other directions often moved the intended target most strongly without always crossing the final answer boundary.
+
+**Interpretation:** this is substantially stronger than source suppression. The written country coordinate selects the intended downstream capital across all tested source/target directions and both prompt languages, while random displacement does not. The effect remains distributed across early and late writable stages.
+
+**Decision:** target specificity has earned two stress tests: unchanged-address reuse in Thai, and reuse of the same country addresses in a second downstream function.
+
+## E0002-R10 — Thai unchanged-address stress test
+
+**Workflow run:** `35063935111`
+
+**Artifact ID:** `10433442919`
+
+**Artifact SHA-256:** `1c69ee32a4417c78bdc20467070dd1d0da3b33673ebc6ff491a552ffcf7eb553`
+
+**Executed:** the same canonical English country coordinates and same all-target causal apparatus were applied to the four Thai bridge prompts with no Thai-specific retuning.
+
+**Baseline:** only 1/4 Thai source cases was behaviorally correct, matching the earlier R6 weakness.
+
+**Results:**
+
+| Condition | Target-specific writes | Strong target switches | Mean specificity margin | Mean intended-target gain |
+| --- | ---: | ---: | ---: | ---: |
+| late J-space | 6/12 | 0/12 | -0.041 | -0.016 |
+| early J-space | 5/12 | 0/12 | -0.035 | -0.046 |
+| late random | 3/12 | 0/12 | -0.069 | -0.039 |
+
+For the sole behavior-valid Thai source (Canada), late J-space was target-specific for Canada→France and Canada→Germany but not Canada→Japan; none crossed the output decision boundary.
+
+**Interpretation:** Thai does not robustly reproduce the EN/DE causal-address result under unchanged coordinates. Because the Thai baseline itself is weak, this does not cleanly distinguish representation mismatch from downstream-language/task failure. It is useful negative/stress evidence, not support for a three-language shared-address claim.
+
+**Decision:** keep Thai outside the promotion gate. Do not retune Thai coordinates to rescue the effect; revisit with a stronger multilingual behavioral surface or stronger model only after the EN/DE second-function reuse question is resolved.
+
+## E0002-R11 — ccTLD second-function behavior gate
+
+**Workflow run:** `35064444598`
+
+**Artifact ID:** `10433228131`
+
+**Artifact SHA-256:** `f09d876aaa1c5dc5a8d3035d0b60e847cc46412f244409d9f782a1ebfbe0f14f`
+
+**Executed:** a second downstream function from the same hidden country bridge to country-code top-level domains (`.fr/.ca/.de/.jp`). Causal execution was hard-gated on 8/8 correct EN/DE baselines.
+
+**Result:** behavior accuracy was 7/8 overall: English 4/4, German 3/4. The only miss was German Osaka→`.jp`, where `.ca` won by a very small mean-logprob margin of 0.0201. J-lens still beat vanilla bridge rank in 8/8 cases. Because the behavior gate failed, the causal matrix was automatically skipped.
+
+**Decision:** preserve the 7/8 near-miss rather than prompt-tuning around it. ccTLD does not qualify as the second-function proof surface for this model.
+
+## E0002-R12 — ISO alpha-2 second-function behavior gate
+
+**Workflow run:** `35064888561`
+
+**Artifact ID:** `10433353101`
+
+**Artifact SHA-256:** `0236f95d4c2da32873d201f138fbdc4073175a64594c554fbbe1d4ee45965db2`
+
+**Executed:** a second code-like downstream function from country to ISO 3166-1 alpha-2 (`FR/CA/DE/JP`), again with an 8/8 EN/DE behavior gate before any causal work.
+
+**Result:** behavior accuracy was only 3/8 overall: English 1/4 and German 2/4. Canada was correct in both languages; Germany was correct only in German; France and Japan failed in both languages. J-lens bridge rank still beat vanilla in all 8 cases, but the downstream task was not behaviorally competent. The causal matrix was automatically skipped.
+
+**Interpretation:** the observer can still expose country-related hidden state while the small model fails a code-like downstream mapping. This is exactly why the behavior gate exists.
+
+**Decision:** retire code-like mappings as the immediate second-function route for Qwen3.5-0.8B. The next candidate should be a natural semantic one-to-one function, not another notation/code task. Demonym/nationality is the leading cheap candidate because France, Canada, Germany, and Japan remain distinct and it tests a different semantic consequence of the same hidden country.
+
 ## Current promotion gate
 
-1. Run a 4-country × 3-alternative-target × 2-language target-address matrix on the already behavior-valid English/German bridge cases.
-2. A useful latent address must preferentially move output toward the **chosen target's** capital, not merely suppress the source capital or promote arbitrary alternatives.
-3. Compare early and late writable stages descriptively; do not require late-only effects.
-4. If target specificity transfers across English/German, apply the exact same canonical coordinates to Thai **without retuning**.
-5. A candidate reaches the next `addressable Neuralese` evidence grade only after target-specific cross-language writes survive random/unrelated-target controls and then reuse the same latent address in a second downstream function (for example language/currency/continent rather than capital alone).
+1. Behavior-calibrate one **natural semantic, one-to-one** second downstream function over the same four countries and EN/DE prompts. Require 8/8 clean baselines; do not tune the country coordinates or intervention method.
+2. If the behavior gate passes, run the same 24 source→target J-space matrix on that downstream function, retaining early/late stages and norm-matched-random controls.
+3. The same canonical English country addresses must preferentially move the second function toward the selected target in both English and German. A second-function pass is required before using the phrase `reusable addressable concept coordinate` without qualification.
+4. Thai remains a stress condition, not a promotion gate, until its baseline task competence improves.
+5. Do not add more observer types, languages, models, or governance until they answer a specific falsification question that the current apparatus cannot answer.
