@@ -54,7 +54,7 @@ jobs:
           python -m pip install -r requirements-experiment-0001.txt
           python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
-      - name: Run EN-DE causal hidden-bridge write
+      - name: Run EN-DE target-address matrix
         if: steps.arm.outputs.armed == 'true'
         run: |
           python tools/run_multilingual_bridge_causal.py \
@@ -66,19 +66,24 @@ jobs:
             --late-layers 18-22 \
             --early-layers 0-4 \
             --strength 1.0 \
-            --output-dir artifacts/experiment-0002-multilingual-bridge-causal
+            --target-mode all-other \
+            --output-dir artifacts/experiment-0002-target-address-matrix
 
-      - name: Summarize causal evidence
+      - name: Summarize target specificity
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          s = json.loads(Path('artifacts/experiment-0002-multilingual-bridge-causal/summary.json').read_text())
+          s = json.loads(Path('artifacts/experiment-0002-target-address-matrix/summary.json').read_text())
           print(f"model={s['model']} revision={s['resolved_model_revision']}")
-          print(f"cases={s['case_count']} baseline_valid={s['baseline_valid_count']}")
+          print(
+              f"source_cases={s['source_case_count']} target_pairs={s['target_pair_count']} "
+              f"baseline_valid={s['baseline_valid_source_cases']}"
+          )
           for name, row in s['conditions'].items():
               print(name, row)
+          print('cross-language target specificity:')
           for direction, row in s['cross_language_transfer'].items():
               print(direction, row)
           PY
@@ -87,7 +92,7 @@ jobs:
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-multilingual-bridge-causal-${{ github.run_id }}
-          path: artifacts/experiment-0002-multilingual-bridge-causal
+          name: experiment-0002-target-address-matrix-${{ github.run_id }}
+          path: artifacts/experiment-0002-target-address-matrix
           if-no-files-found: error
           retention-days: 14
