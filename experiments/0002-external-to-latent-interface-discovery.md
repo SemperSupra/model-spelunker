@@ -58,6 +58,29 @@ For every probe capture hidden states across all transformer layers at multiple 
 
 Store compact derived features in CI artifacts. Full activation tensors should remain ephemeral or be separately registered if retained.
 
+## Adopted observer: Jacobian lens / J-space
+
+Do not build a bespoke latent decoder before testing the strongest available reusable primitive.
+
+Adopt the reference implementation at `anthropics/jacobian-lens`, pinned to upstream commit:
+
+`581d398613e5602a5af361e1c34d3a92ea82ba8e`
+
+License: Apache-2.0.
+
+The Jacobian lens linearly transports an intermediate residual-stream vector into the final-layer basis using an average input-output Jacobian, then decodes through the model's own unembedding. This makes it an independent observer from our mean-difference / probe family and directly supports the J-space/global-workspace hypothesis.
+
+Use it as an observer, not as ground truth. Compare its readouts against:
+
+- raw activation geometry
+- held-out linear/counterfactual directions
+- representation-similarity/alignment methods
+- causal write/erase/patch interventions
+
+For first integration, fit a small lens on a plumbing model with a bounded generic-text sample. Do not widen fitting data until the observer produces stable, reproducible artifacts. The upstream reference notes that ~100 fitting prompts can be usable even though the paper used a larger corpus.
+
+The first strong J-space-style replication target is not merely readable vocabulary. It is a representation that survives a **read -> write -> reuse** sequence across more than one downstream function.
+
 ## Phase A — read / convergence
 
 Questions:
@@ -73,8 +96,9 @@ Methods, in increasing complexity:
 2. linear probes / counterfactual directions
 3. representational similarity
 4. CCA / orthogonal Procrustes alignment across languages
-5. prototype / subspace models
-6. nonlinear manifold analysis only if simpler hypotheses fail
+5. Jacobian-lens / J-space readout as an independent observer
+6. prototype / subspace models
+7. nonlinear manifold analysis only if simpler hypotheses fail
 
 All models are fit on training probe families and evaluated on held-out semantic items and paraphrases.
 
