@@ -1,0 +1,156 @@
+name: C1 Position Code Causal Falsifier
+
+on:
+  push:
+    branches:
+      - impl/c1-tracr-calibration-stage
+    paths:
+      - "experiments/mvp/run_c1_position_code_falsifier.py"
+      - "experiments/mvp/validate_c1_position_code_falsifier.py"
+      - ".github/workflows/c1-position-code-falsifier.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-spelunker-public-model-lane
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: "1"
+  PYTHONPATH: "."
+  TRACR_REVISION: 9ce2b8c82b6ba10e62e86cf6f390e7536d4fd2cd
+
+jobs:
+  rep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact Model Spelunker revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact archived Tracr revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: google-deepmind/tracr
+          ref: 9ce2b8c82b6ba10e62e86cf6f390e7536d4fd2cd
+          path: tracr-src
+          persist-credentials: false
+
+      - name: Verify exact Tracr source and license
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C tracr-src rev-parse HEAD)" = "${TRACR_REVISION}"
+          grep -q "Apache License" tracr-src/LICENSE
+
+      - name: Derive exact C1 runtime cache key
+        id: runtime-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"python_tag={sys.implementation.cache_tag}")
+          PY
+
+      - name: Restore exact C1 runtime
+        id: runtime-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .tracr-venv
+          key: model-spelunker-tracr-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}-jax0.4.38-haiku0.0.13-np1.26.4-${{ env.TRACR_REVISION }}
+
+      - name: Build exact CPU C1 runtime on cache miss
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .tracr-venv
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input \
+            "numpy==1.26.4" "jax==0.4.38" "jaxlib==0.4.38" \
+            "dm-haiku==0.0.13" "chex==0.1.88" "einops==0.8.0" \
+            "networkx==3.4.2" "typing_extensions==4.12.2"
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input --no-deps ./tracr-src
+
+      - name: Rebind exact local Tracr source and record runtime
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.runtime-cache.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input --no-deps --force-reinstall ./tracr-src >/dev/null
+          .tracr-venv/bin/python - <<'PY' | tee out/runtime.json
+          import importlib.metadata, json, os, platform
+          import jax, jaxlib, numpy, scipy
+          x={
+            'cache_hit':os.environ.get('CACHE_HIT')=='true',
+            'python':platform.python_version(),
+            'numpy':numpy.__version__,
+            'jax':jax.__version__,
+            'jaxlib':jaxlib.__version__,
+            'scipy':scipy.__version__,
+            'dm_haiku':importlib.metadata.version('dm-haiku'),
+            'chex':importlib.metadata.version('chex'),
+            'tracr':importlib.metadata.version('tracr'),
+          }
+          print(json.dumps(x,sort_keys=True))
+          assert x['numpy']=='1.26.4' and x['jax']=='0.4.38' and x['jaxlib']=='0.4.38'
+          PY
+
+      - name: Run targeted position-code falsifier
+        shell: bash
+        env:
+          JAX_PLATFORMS: cpu
+          XLA_PYTHON_CLIENT_PREALLOCATE: "false"
+        run: |
+          set -euo pipefail
+          /usr/bin/time -v .tracr-venv/bin/python experiments/mvp/run_c1_position_code_falsifier.py \
+            --output out/c1-position-code-falsifier.json \
+            2>&1 | tee out/run.log
+
+      - name: Validate causal evidence independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          .tracr-venv/bin/python -m pip install --disable-pip-version-check --no-input "jsonschema==4.25.1" >/dev/null
+          .tracr-venv/bin/python experiments/mvp/validate_c1_position_code_falsifier.py \
+            out/c1-position-code-falsifier.json | tee out/validation.log
+
+      - name: Summarize causal result
+        shell: bash
+        run: |
+          set -euo pipefail
+          .tracr-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          b=json.loads(Path('out/c1-position-code-falsifier.json').read_text())
+          d=b['derived_metrics']; o=b['observations']; c=b['cost']
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a',encoding='utf-8') as f:
+              f.write('## C1 position-code causal falsifier\n\n')
+              f.write(f"- seed-0 parameter hash: `{o['learned_specimen']['final_parameter_sha256']}`\n")
+              f.write(f"- identity reverse accuracy: `{d['identity_original_reverse_sequence_accuracy']:.3f}`\n")
+              f.write(f"- structured route-prediction wins: `{d['structured_permutation_predicted_route_probability_exceeds_original_route']}`\n")
+              f.write(f"- structured predicted-target sequence accuracy: `{d['structured_permutation_predicted_route_sequence_accuracy']}`\n")
+              f.write(f"- collapse reverse accuracy: `{d['collapse_original_reverse_sequence_accuracy']:.3f}`\n")
+              f.write(f"- current hash matches prior seed-0 run: `{d['cross_job_seed0_hash_matches_either_prior_run']}`\n")
+              f.write(f"- training: `{c['training_seconds']:.2f}s`; total: `{c['total_script_seconds']:.2f}s`; peak RSS: `{c['peak_rss_mib']:.1f} MiB`\n")
+          PY
+
+      - name: Upload bounded evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-spelunker-c1-position-code-${{ github.run_id }}
+          path: |
+            out/c1-position-code-falsifier.json
+            out/runtime.json
+            out/validation.log
+            out/run.log
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9
