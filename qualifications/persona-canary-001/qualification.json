@@ -58,7 +58,7 @@
     {
       "authority": {
         "arbitrary_shell": false,
-        "filesystem": "read-only fixture access through supplied tools",
+        "filesystem": "read-only inspection plus bounded challenge execution through supplied tools",
         "network_tools": false
       },
       "controller": {
