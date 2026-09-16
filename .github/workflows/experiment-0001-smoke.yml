@@ -1,4 +1,4 @@
-name: experiment-0001-smoke
+name: experiment-0001-model-control
 
 on:
   workflow_dispatch:
@@ -11,21 +11,14 @@ on:
       - 'tools/run_dcpmi_reference.py'
       - 'fixtures/experiment-0001/**'
       - 'requirements-experiment-0001.txt'
-  pull_request:
-    paths:
-      - '.github/workflows/experiment-0001-smoke.yml'
-      - 'tools/reference_cpu.py'
-      - 'tools/run_dcpmi_reference.py'
-      - 'fixtures/experiment-0001/**'
-      - 'requirements-experiment-0001.txt'
 
 permissions:
   contents: read
 
 jobs:
-  reference-repeatability:
+  model-control:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: 'false'
@@ -49,41 +42,53 @@ jobs:
       - name: Install pinned experiment dependencies
         run: python -m pip install -r requirements-experiment-0001.txt
 
-      - name: Run DC-PMI reference repeatability gate
+      - name: Run Pythia lexical sanity control
         run: |
           python tools/run_dcpmi_reference.py \
             --model EleutherAI/pythia-70m \
             --revision a39f36b100fe8a5377810d56c3f4789b9c53ac42 \
+            --fixture fixtures/experiment-0001/reciprocity-dcpmi-lexical-sanity.jsonl \
+            --repeats 2 \
+            --output-dir artifacts/pythia-lexical-sanity
+
+      - name: Run Qwen multilingual semantic control
+        run: |
+          python tools/run_dcpmi_reference.py \
+            --model Qwen/Qwen2.5-0.5B \
+            --revision 060db6499f32faf8b98477b0a26969ef7d8b9987 \
             --fixture fixtures/experiment-0001/reciprocity-dcpmi-heldout.jsonl \
             --repeats 2 \
-            --output-dir artifacts/experiment-0001-dcpmi-reference
+            --output-dir artifacts/qwen-semantic-control
 
-      - name: Summarize DC-PMI evidence
+      - name: Summarize controls
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
-          summary = json.loads(Path('artifacts/experiment-0001-dcpmi-reference/summary.json').read_text(encoding='utf-8'))
-          primary = summary['primary']
-          repeat = summary['intra_runner_repeatability']
-          print('method=', summary['method'])
-          print('fixture=', summary['fixture'])
-          print('numeric_mode=', summary['numeric_mode'])
-          print('cpu_model=', summary['runtime']['cpu_model'])
-          print(f'reference_accuracy={primary["accuracy"]:.3f}')
-          print(f'reference_cross_language_unanimous_rate={primary["cross_language_unanimous_rate"]:.3f}')
-          print(f'intra_runner_selection_agreement={repeat["selection_agreement_rate"]:.3f}')
-          print(f'intra_runner_max_margin_drift={repeat["max_margin_drift"]:.12g}')
-          for language, stats in primary['by_language'].items():
-              print(f'reference_{language}={json.dumps(stats, ensure_ascii=False, sort_keys=True)}')
+          for label, path in [
+              ('pythia_lexical', Path('artifacts/pythia-lexical-sanity/summary.json')),
+              ('qwen_semantic', Path('artifacts/qwen-semantic-control/summary.json')),
+          ]:
+              summary = json.loads(path.read_text(encoding='utf-8'))
+              primary = summary['primary']
+              repeat = summary['intra_runner_repeatability']
+              print(f'{label}_model={summary["model"]}')
+              print(f'{label}_resolved_revision={summary["resolved_revision"]}')
+              print(f'{label}_cpu_model={summary["runtime"]["cpu_model"]}')
+              print(f'{label}_accuracy={primary["accuracy"]:.3f}')
+              print(f'{label}_cross_language_unanimous_rate={primary["cross_language_unanimous_rate"]:.3f}')
+              print(f'{label}_repeatability={repeat["selection_agreement_rate"]:.3f}')
+              print(f'{label}_max_margin_drift={repeat["max_margin_drift"]:.12g}')
+              for language, stats in primary['by_language'].items():
+                  print(f'{label}_{language}={json.dumps(stats, ensure_ascii=False, sort_keys=True)}')
           PY
 
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0001-dcpmi-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          name: experiment-0001-model-control-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts
           if-no-files-found: error
           retention-days: 14
