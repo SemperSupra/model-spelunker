@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from huggingface_hub import model_info
+from huggingface_hub import hf_hub_download, model_info
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import jlens
@@ -109,11 +109,17 @@ def main() -> int:
     hf_model.eval().to("cpu")
     explicit_layout = explicit_layout_for(hf_model)
     model = jlens.from_hf(hf_model, tokenizer, layout=explicit_layout)
-    lens = jlens.JacobianLens.from_pretrained(
-        args.lens_repo,
+
+    # The upstream convenience loader uses snapshot_download, which first lists
+    # the entire lens repository. We already know the exact immutable revision
+    # and exact file, so fetch that file directly to reduce Hub requests and
+    # avoid repository-tree rate-limit failures on anonymous public runners.
+    lens_path = hf_hub_download(
+        repo_id=args.lens_repo,
         filename=args.lens_file,
         revision=args.lens_revision,
     )
+    lens = jlens.JacobianLens.load(lens_path)
     if lens.d_model != model.d_model:
         raise ValueError(
             f"Lens/model d_model mismatch: lens={lens.d_model}, model={model.d_model}"
