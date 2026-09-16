@@ -35,20 +35,22 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
-          cache-dependency-path: requirements-experiment-0001.txt
 
       - name: Syntax check harness
         if: steps.arm.outputs.armed == 'true'
-        run: python -m py_compile tools/run_multilingual_bridge_behavior.py
+        run: |
+          python -m py_compile tools/run_multilingual_bridge_cloze.py
+          python -m py_compile tools/run_qwen35_4b_jlens_compat.py
 
       - name: Install CPU PyTorch
         if: steps.arm.outputs.armed == 'true'
         run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
 
-      - name: Install behavior dependencies only
+      - name: Install compatibility dependencies
         if: steps.arm.outputs.armed == 'true'
-        run: python -m pip install -r requirements-experiment-0001.txt
+        run: |
+          python -m pip install -r requirements-experiment-0001.txt
+          python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
 
       - name: Reclaim package-cache disk
         if: steps.arm.outputs.armed == 'true'
@@ -57,68 +59,38 @@ jobs:
           df -h .
           free -h
 
-      - name: Build EN/DE gate fixture
+      - name: Run Qwen3.5-4B J-lens compatibility smoke
         if: steps.arm.outputs.armed == 'true'
         run: |
-          mkdir -p artifacts/experiment-0002-qwen3.5-4b-behavior-preflight
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          sources = [
-              Path('fixtures/experiment-0002/multilingual-indirect-bridge-cloze.jsonl'),
-              Path('fixtures/experiment-0002/multilingual-indirect-bridge-demonym.jsonl'),
-          ]
-          out = Path('artifacts/experiment-0002-qwen3.5-4b-behavior-preflight/en-de.jsonl')
-          rows = []
-          for source in sources:
-              rows.extend(json.loads(line) for line in source.read_text().splitlines() if line)
-          rows = [row for row in rows if row['language'] in {'en', 'de'}]
-          assert len(rows) == 16, len(rows)
-          out.write_text(''.join(json.dumps(row, ensure_ascii=False) + '\n' for row in rows), encoding='utf-8')
-          print('gate_cases', len(rows))
-          PY
+          python tools/run_qwen35_4b_jlens_compat.py \
+            --output-dir artifacts/experiment-0002-qwen35-4b-jlens-compat
 
-      - name: Run Qwen3.5-4B behavior-only preflight
-        if: steps.arm.outputs.armed == 'true'
-        run: |
-          python tools/run_multilingual_bridge_behavior.py \
-            --fixture artifacts/experiment-0002-qwen3.5-4b-behavior-preflight/en-de.jsonl \
-            --model Qwen/Qwen3.5-4B \
-            --dtype bfloat16 \
-            --output-dir artifacts/experiment-0002-qwen3.5-4b-behavior-preflight/results
-
-      - name: Apply cross-task behavior gate
+      - name: Apply compatibility gate
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          rows = [json.loads(line) for line in Path(
-              'artifacts/experiment-0002-qwen3.5-4b-behavior-preflight/results/records.jsonl'
-          ).read_text().splitlines() if line]
-          groups = {
-              'capital_en_de': [r for r in rows if r['case_id'].startswith('bridge-cloze-')],
-              'demonym_en_de': [r for r in rows if r['case_id'].startswith('bridge-demonym-')],
-          }
-          for name, group in groups.items():
-              correct = sum(bool(r['behavior_correct']) for r in group)
-              print(name, {'n': len(group), 'correct': correct, 'accuracy': correct / max(1, len(group))})
-              for r in group:
-                  print(r['case_id'], r['predicted_answer'], r['correct_answer'], r['behavior_margin_mean_logprob'])
-          earned = (
-              len(groups['capital_en_de']) == 8
-              and all(r['behavior_correct'] for r in groups['capital_en_de'])
-              and len(groups['demonym_en_de']) == 8
-              and all(r['behavior_correct'] for r in groups['demonym_en_de'])
-          )
-          print('observer_causal_rep_earned', earned)
+          s = json.loads(Path(
+              'artifacts/experiment-0002-qwen35-4b-jlens-compat/summary.json'
+          ).read_text())
+          print('model_class', s['model_class'])
+          print('adapter_layout', s['adapter_layout'])
+          print('model_shape', s['model_n_layers'], s['model_d_model'])
+          print('lens_shape', s['lens_d_model'], s['lens_source_layers'])
+          print('lens_n_prompts', s['lens_n_prompts'])
+          print('hidden_bridge_best_ranks', s['median_like_best_ranks'])
+          print('cases_top20', s['cases_top20'])
+          print('compatibility_pass', s['compatibility_pass'])
+          if not s['compatibility_pass']:
+              raise SystemExit('Qwen3.5-4B/published J-lens compatibility gate failed')
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-qwen3.5-4b-behavior-preflight-${{ github.run_id }}
-          path: artifacts/experiment-0002-qwen3.5-4b-behavior-preflight
+          name: experiment-0002-qwen35-4b-jlens-compat-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen35-4b-jlens-compat
           if-no-files-found: error
           retention-days: 14
