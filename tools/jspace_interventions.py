@@ -1,8 +1,9 @@
-"""Minimal reusable J-space intervention primitives.
+"""Minimal reusable latent intervention primitives.
 
-This module exists because the exact same causal write is now used by the
-released probe-swap calibration and the multilingual bridge experiment.  Keep
-it small: coordinate swap plus a norm-matched random falsification control.
+The same causal write is used by the released probe-swap calibration and the
+multilingual bridge experiment. Keep this module deliberately small: a J-space
+coordinate swap, a raw-residual coordinate-swap control, and a norm-matched
+random falsification control.
 """
 
 from __future__ import annotations
@@ -33,11 +34,25 @@ def deterministic_random_unit(d_model: int, *, seed: int, key: str) -> torch.Ten
     return vector / vector.norm().clamp_min(1e-12)
 
 
-def _layer_basis(model, lens, layer: int, source_id: int, target_id: int):
+def _layer_basis(
+    model,
+    lens,
+    layer: int,
+    source_id: int,
+    target_id: int,
+    *,
+    use_jacobian: bool,
+):
     unembedding = model._lm_head.weight[[source_id, target_id]].detach().float().cpu()
-    jacobian = lens.jacobians[layer].float().cpu()
-    source_direction = jacobian.T @ unembedding[0]
-    target_direction = jacobian.T @ unembedding[1]
+    if use_jacobian:
+        jacobian = lens.jacobians[layer].float().cpu()
+        source_direction = jacobian.T @ unembedding[0]
+        target_direction = jacobian.T @ unembedding[1]
+    else:
+        # Vanilla/logit-lens control: use the model's own unembedding rows
+        # directly in residual space, without J-space transport.
+        source_direction = unembedding[0]
+        target_direction = unembedding[1]
     basis = torch.stack([source_direction, target_direction], dim=1)
     return basis, torch.linalg.pinv(basis)
 
@@ -56,17 +71,22 @@ def jspace_swap(
     key: str = "",
     position_limit: int | None = None,
 ):
-    """Patch a J-space coordinate swap into selected residual blocks.
+    """Patch a two-coordinate residual intervention into selected blocks.
 
-    ``coordinate_swap`` implements the released two-coordinate intervention:
+    ``coordinate_swap`` implements the released J-space intervention:
 
         V = [J_l^T w_source, J_l^T w_target]
         c = V^+ h
         h' = h + strength * V * (swap(c) - c)
 
-    ``random_norm_matched`` uses the exact per-position norm of that swap delta
-    but applies it along a deterministic random unit direction.  This controls
-    for generic activation displacement.
+    ``raw_coordinate_swap`` performs the identical algebra with
+    ``V = [w_source, w_target]`` and no Jacobian transport. This is the matched
+    causal control for asking whether J-space contributes anything beyond an
+    ordinary residual/logit-lens direction.
+
+    ``random_norm_matched`` uses the exact per-position norm of the J-space
+    swap delta but applies it along a deterministic random unit direction. This
+    controls for generic activation displacement.
 
     ``position_limit`` patches only sequence positions ``[:position_limit]``.
     This is useful when candidate continuations are teacher-forced: the hidden
@@ -78,11 +98,19 @@ def jspace_swap(
     missing = [layer for layer in layer_list if layer not in lens.source_layers]
     if missing:
         raise ValueError(f"Layers are not present in fitted lens: {missing}")
-    if mode not in {"coordinate_swap", "random_norm_matched"}:
-        raise ValueError(f"Unknown J-space intervention mode: {mode}")
+    if mode not in {"coordinate_swap", "raw_coordinate_swap", "random_norm_matched"}:
+        raise ValueError(f"Unknown intervention mode: {mode}")
 
+    use_jacobian = mode != "raw_coordinate_swap"
     bases = {
-        layer: _layer_basis(model, lens, layer, source_id, target_id)
+        layer: _layer_basis(
+            model,
+            lens,
+            layer,
+            source_id,
+            target_id,
+            use_jacobian=use_jacobian,
+        )
         for layer in layer_list
     }
     random_units = {
@@ -121,7 +149,7 @@ def jspace_swap(
                 swapped = coordinates.flip(-1)
                 raw_delta = (swapped - coordinates) @ basis.T
 
-                if mode == "coordinate_swap":
+                if mode in {"coordinate_swap", "raw_coordinate_swap"}:
                     delta = raw_delta
                 else:
                     random_unit = random_cpu.to(selected.device)
