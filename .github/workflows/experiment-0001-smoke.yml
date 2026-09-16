@@ -2,6 +2,15 @@ name: experiment-0001-smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'research/experiment-0001-dcpmi'
+    paths:
+      - '.github/workflows/experiment-0001-smoke.yml'
+      - 'tools/reference_cpu.py'
+      - 'tools/run_dcpmi_reference.py'
+      - 'fixtures/experiment-0001/**'
+      - 'requirements-experiment-0001.txt'
   pull_request:
     paths:
       - '.github/workflows/experiment-0001-smoke.yml'
