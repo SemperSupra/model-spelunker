@@ -159,7 +159,7 @@ def run_direct(
     scores = list(scorer.score(image_path, concepts))
     scores.sort(key=lambda item: item.score, reverse=True)
     observations: list[Observation] = []
-    for item in scores[:top_k]:
+    for rank, item in enumerate(scores[:top_k], start=1):
         evidence = Evidence(
             kind="visual_model_score",
             source=f"{scorer.family}:{scorer.model_id}",
@@ -169,7 +169,7 @@ def run_direct(
         )
         observations.append(
             Observation(
-                observation_id=f"obs-{uuid.uuid4().hex[:12]}",
+                observation_id=f"obs-{rank:04d}-{canonical_digest({'label': item.label, 'concept_id': item.concept_id})[:8]}",
                 concept_id=item.concept_id,
                 label=item.label,
                 assertion=assertion,
