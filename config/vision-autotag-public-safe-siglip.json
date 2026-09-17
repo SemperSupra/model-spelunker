@@ -13,7 +13,7 @@
     "medical sign"
   ],
   "prompt_templates": [
-    "a photo of a {}"
+    "This is a photo of {}."
   ],
   "score_transform": "sigmoid",
   "top_k": 5,
