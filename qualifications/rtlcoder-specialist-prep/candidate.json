@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "record_type": "specialist-candidate-prep",
+  "candidate_id": "rtlcoder-v1.1-gguf-q4_0",
+  "role": "bounded Verilog generation specialist",
+  "state": "prepared-not-executed",
+  "upstream": {
+    "provider": "huggingface",
+    "repository": "ishorn5/RTLCoder-v1.1-gguf-4bit",
+    "exact_revision": "fc60b2440a782487654f573bbaed2c8a39647e8e",
+    "file": "ggml-model-q4_0.gguf",
+    "size_bytes": 4108921984,
+    "sha256": "860753548c58bc298db10e0173e73b73f89724ce848b6be1491cd01eb7131a54",
+    "license_spdx_id": "Apache-2.0"
+  },
+  "evidence": [
+    "https://huggingface.co/ishorn5/RTLCoder-v1.1-gguf-4bit/commit/fc60b2440a782487654f573bbaed2c8a39647e8e",
+    "https://github.com/hkust-zhiyao/RTL-Coder"
+  ],
+  "planned_comparison": {
+    "baseline": "qwen3.5:4b controller acting directly as RTL persona",
+    "challenger": "same controller/persona/tool/oracle configuration with RTLCoder exposed only as a Verilog-generation specialist",
+    "held_fixed": [
+      "logical RTL mission",
+      "controller model and inference settings",
+      "framework selected after OpenWorker portability result",
+      "bounded authority envelope",
+      "iverilog exhaustive oracle",
+      "fixture set"
+    ],
+    "decision_question": "Does the specialist improve objective RTL task success or repair efficiency enough to justify its approximately 4.11 GB artifact and runtime cost?"
+  },
+  "execution_gate": "Do not download or execute until the OpenWorker portability experiment is interpreted and selects the framework realization for the specialist trial."
+}
