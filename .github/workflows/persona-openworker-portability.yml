@@ -1,0 +1,61 @@
+name: Persona OpenWorker Portability
+
+on:
+  pull_request:
+    branches:
+      - exp/persona-qualification-canary
+    paths:
+      - "qualifications/persona-openworker-001/**"
+      - ".github/workflows/persona-openworker-portability.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  openworker-portability:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'exp/persona-openworker-portability'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Run bounded OpenWorker portability canary
+        id: canary
+        shell: bash
+        env:
+          RESULT_DIR: ${{ runner.temp }}/persona-openworker-result
+        run: |
+          mkdir -p "$RESULT_DIR"
+          cd qualifications/persona-openworker-001
+          set +e
+          SEALED_RESULT_DIR="$RESULT_DIR" bash run.sh
+          rc=$?
+          set -e
+          echo "task_rc=$rc" >> "$GITHUB_OUTPUT"
+          if [ -f "${RUNNER_TEMP}/persona-openworker-ollama/ollama.log" ]; then
+            cp "${RUNNER_TEMP}/persona-openworker-ollama/ollama.log" "$RESULT_DIR/ollama.log"
+          fi
+          exit 0
+
+      - name: Upload portability evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: persona-openworker-001
+          path: ${{ runner.temp }}/persona-openworker-result
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
+
+      - name: Preserve execution verdict
+        if: always()
+        shell: bash
+        env:
+          TASK_RC: ${{ steps.canary.outputs.task_rc }}
+        run: |
+          test -n "$TASK_RC" || exit 1
+          exit "$TASK_RC"
