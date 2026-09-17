@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/vision_autotag.py'
       - 'config/vision-autotag-public-safe.json'
+      - 'config/vision-autotag-public-safe-siglip.json'
       - '.github/workflows/vision-autotag-ringer.yml'
       - 'docs/vision-autotag-ringer.md'
   workflow_dispatch:
@@ -13,9 +14,17 @@ permissions:
   contents: read
 
 jobs:
-  clip-cpu-ringer:
+  zero-shot-cpu-ringer:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - analyzer: clip
+            config: config/vision-autotag-public-safe.json
+          - analyzer: siglip
+            config: config/vision-autotag-public-safe-siglip.json
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,29 +46,36 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input \
             transformers==5.17.0 \
             pillow==12.3.0 \
-            requests==2.34.2
+            requests==2.34.2 \
+            sentencepiece==0.2.2 \
+            protobuf==7.36.1
 
-      - name: Run public-safe CLIP ringer
+      - name: Run public-safe ${{ matrix.analyzer }} ringer
         shell: bash
         env:
           HF_HUB_DISABLE_TELEMETRY: '1'
           TRANSFORMERS_VERBOSITY: error
           TOKENIZERS_PARALLELISM: 'false'
+          RINGER_CONFIG: ${{ matrix.config }}
         run: |
           set -euo pipefail
           python scripts/vision_autotag.py \
-            --config config/vision-autotag-public-safe.json \
+            --config "$RINGER_CONFIG" \
             --output /tmp/vision-autotag-result.json
 
       - name: Validate ringer result
         shell: bash
+        env:
+          RINGER_CONFIG: ${{ matrix.config }}
+          ANALYZER: ${{ matrix.analyzer }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          cfg = json.loads(Path('config/vision-autotag-public-safe.json').read_text())
+          cfg = json.loads(Path(os.environ['RINGER_CONFIG']).read_text())
           result = json.loads(Path('/tmp/vision-autotag-result.json').read_text())
           preds = result['predictions']
           assert preds, 'predictions missing'
@@ -67,5 +83,5 @@ jobs:
           assert result['safeguards']['private_benchmark_content_present'] is False
           assert result['safeguards']['private_semantic_authority_present'] is False
           assert result['safeguards']['ground_truth'] is False
-          print(json.dumps({'status': 'ok', 'top3': preds[:3]}, sort_keys=True))
+          print(json.dumps({'status': 'ok', 'analyzer': os.environ['ANALYZER'], 'top3': preds[:3]}, sort_keys=True))
           PY
