@@ -6,6 +6,7 @@ on:
       - 'scripts/visual_concept_worker_core.py'
       - 'scripts/visual_concept_worker_ringer.py'
       - 'config/visual-concept-worker-public-safe.json'
+      - 'config/visual-concept-worker-public-safe-siglip.json'
       - '.github/workflows/visual-concept-worker-ringer.yml'
       - 'docs/visual-concept-worker-ringer.md'
   workflow_dispatch:
@@ -18,9 +19,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  clip-direct-v0:
+  direct-v0:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - candidate: clip
+            config: config/visual-concept-worker-public-safe.json
+          - candidate: siglip
+            config: config/visual-concept-worker-public-safe-siglip.json
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,25 +62,31 @@ jobs:
           HF_HUB_DISABLE_TELEMETRY: '1'
           TRANSFORMERS_VERBOSITY: error
           TOKENIZERS_PARALLELISM: 'false'
+          CANDIDATE_CONFIG: ${{ matrix.config }}
         run: |
           set -euo pipefail
           python scripts/visual_concept_worker_ringer.py \
-            --config config/visual-concept-worker-public-safe.json \
+            --config "$CANDIDATE_CONFIG" \
             --output /tmp/visual-concept-worker-result.json
 
-      - name: Validate Gate 1 contract
+      - name: Validate direct-v0 contract
         shell: bash
+        env:
+          CANDIDATE_CONFIG: ${{ matrix.config }}
+          CANDIDATE_NAME: ${{ matrix.candidate }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          cfg = json.loads(Path('config/visual-concept-worker-public-safe.json').read_text())
+          cfg = json.loads(Path(os.environ['CANDIDATE_CONFIG']).read_text())
           result = json.loads(Path('/tmp/visual-concept-worker-result.json').read_text())
           assert result['schema_version'] == 'visual_concept_worker_run.v0.1'
           assert result['execution_lane'] == 'public-ringer'
           assert result['candidate']['action_policy'] == 'direct-v0'
+          assert result['candidate']['backend_family'] == os.environ['CANDIDATE_NAME']
           assert result['candidate']['candidate_digest']
           assert result['input']['sha256']
           assert result['observations']
@@ -79,5 +95,5 @@ jobs:
           assert result['safeguards']['semantic_authority'] is False
           assert result['public_ringer']['private_benchmark_content_present'] is False
           assert result['public_ringer']['private_semantic_authority_present'] is False
-          print(json.dumps({'status': 'ok', 'top3': [x['label'] for x in result['observations'][:3]]}, sort_keys=True))
+          print(json.dumps({'status': 'ok', 'candidate': os.environ['CANDIDATE_NAME'], 'top3': [x['label'] for x in result['observations'][:3]]}, sort_keys=True))
           PY
