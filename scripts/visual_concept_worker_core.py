@@ -132,7 +132,12 @@ def build_run_manifest(
             "human_review_status": "unreviewed",
         },
     }
-    payload["run_digest"] = canonical_digest({k: v for k, v in payload.items() if k not in {"started_at", "finished_at", "run_id", "run_digest"}})
+    digest_payload = {k: v for k, v in payload.items() if k not in {"started_at", "finished_at", "run_id", "run_digest"}}
+    digest_payload["input"] = {
+        "kind": payload["input"]["kind"],
+        "sha256": payload["input"]["sha256"],
+    }
+    payload["run_digest"] = canonical_digest(digest_payload)
     return payload
 
 
