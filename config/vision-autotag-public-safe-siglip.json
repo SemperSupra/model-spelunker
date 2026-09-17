@@ -1,0 +1,24 @@
+{
+  "model_id": "google/siglip-base-patch16-224",
+  "model_revision": "main",
+  "image_source": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/hub/parrots.png",
+  "candidate_labels": [
+    "parrot",
+    "bird",
+    "person",
+    "car",
+    "tablet computer",
+    "retail shelf",
+    "wall mural",
+    "medical sign"
+  ],
+  "prompt_templates": [
+    "a photo of a {}"
+  ],
+  "score_transform": "sigmoid",
+  "top_k": 5,
+  "expected_top_labels": [
+    "parrot",
+    "bird"
+  ]
+}
