@@ -1,0 +1,26 @@
+{
+  "schema_version": "visual_concept_worker_candidate.v0.1",
+  "public_safe": true,
+  "worker_framework": "visual-concept-worker",
+  "framework_version": "0.1.0",
+  "backend_family": "clip",
+  "model_id": "openai/clip-vit-base-patch32",
+  "model_revision": "main",
+  "action_policy": "direct-v0",
+  "toolset": ["score_concepts"],
+  "parameters": {
+    "prompt_template": "a photo of a {}",
+    "score_transform": "softmax",
+    "text_padding": true,
+    "top_k": 3
+  },
+  "image_source": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/hub/parrots.png",
+  "concepts": [
+    {"label": "parrot", "concept_id": "object.animal.parrot"},
+    {"label": "bird", "concept_id": "object.animal.bird"},
+    {"label": "person", "concept_id": "subject.person"},
+    {"label": "car", "concept_id": "object.vehicle.car"},
+    {"label": "tablet computer", "concept_id": "object.device.tablet"}
+  ],
+  "expected_top_labels": ["parrot", "bird"]
+}
