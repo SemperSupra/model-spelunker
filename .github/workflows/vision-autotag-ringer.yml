@@ -1,0 +1,71 @@
+name: Vision Auto-Tag Public Ringer
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/vision_autotag.py'
+      - 'config/vision-autotag-public-safe.json'
+      - '.github/workflows/vision-autotag-ringer.yml'
+      - 'docs/vision-autotag-ringer.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clip-cpu-ringer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU-only inference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.14.0
+          python -m pip install --disable-pip-version-check --no-input \
+            transformers==5.17.0 \
+            pillow==12.3.0 \
+            requests==2.34.2
+
+      - name: Run public-safe CLIP ringer
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          set -euo pipefail
+          python scripts/vision_autotag.py \
+            --config config/vision-autotag-public-safe.json \
+            --output /tmp/vision-autotag-result.json
+
+      - name: Validate ringer result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          cfg = json.loads(Path('config/vision-autotag-public-safe.json').read_text())
+          result = json.loads(Path('/tmp/vision-autotag-result.json').read_text())
+          preds = result['predictions']
+          assert preds, 'predictions missing'
+          assert preds[0]['label'] in cfg['expected_top_labels'], preds[:3]
+          assert result['safeguards']['private_benchmark_content_present'] is False
+          assert result['safeguards']['private_semantic_authority_present'] is False
+          assert result['safeguards']['ground_truth'] is False
+          print(json.dumps({'status': 'ok', 'top3': preds[:3]}, sort_keys=True))
+          PY
