@@ -46,7 +46,8 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input \
             transformers==5.17.0 \
             pillow==12.3.0 \
-            requests==2.34.2
+            requests==2.34.2 \
+            sentencepiece==0.2.2
 
       - name: Run public-safe ${{ matrix.analyzer }} ringer
         shell: bash
