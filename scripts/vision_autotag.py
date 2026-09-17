@@ -45,6 +45,16 @@ def load_image(source: str) -> tuple[Image.Image, bytes, str]:
     return image, raw, locator_kind
 
 
+def transform_scores(logits: torch.Tensor, transform: str) -> torch.Tensor:
+    if transform == "softmax":
+        return torch.softmax(logits, dim=0)
+    if transform == "sigmoid":
+        return torch.sigmoid(logits)
+    if transform == "raw":
+        return logits
+    raise SystemExit(f"unsupported score_transform: {transform}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -58,6 +68,7 @@ def main() -> int:
     labels = list(config["candidate_labels"])
     templates = list(config.get("prompt_templates", ["a photo of a {}"] ))
     top_k = int(config.get("top_k", min(5, len(labels))))
+    score_transform = str(config.get("score_transform", "softmax"))
 
     if not labels:
         raise SystemExit("candidate_labels must be non-empty")
@@ -80,8 +91,8 @@ def main() -> int:
         outputs = model(**inputs)
 
     logits = outputs.logits_per_image[0].float()
-    probabilities = torch.softmax(logits, dim=0)
-    ranked = torch.argsort(probabilities, descending=True).tolist()
+    scores = transform_scores(logits, score_transform)
+    ranked = torch.argsort(scores, descending=True).tolist()
 
     predictions = []
     for rank, idx in enumerate(ranked[:top_k], start=1):
@@ -89,7 +100,8 @@ def main() -> int:
             "rank": rank,
             "label": labels[idx],
             "prompt": prompts[idx],
-            "score": float(probabilities[idx].item()),
+            "score": float(scores[idx].item()),
+            "raw_logit": float(logits[idx].item()),
         })
 
     result = {
@@ -105,6 +117,7 @@ def main() -> int:
             "model_id": model_id,
             "model_revision": model_revision,
             "prompt_template": template,
+            "score_transform": score_transform,
             "vocabulary_digest": canonical_digest(labels),
             "config_digest": canonical_digest(config),
             "python": platform.python_version(),
@@ -128,6 +141,7 @@ def main() -> int:
     print(json.dumps({
         "source_sha256": result["source"]["sha256"],
         "model_id": model_id,
+        "score_transform": score_transform,
         "top": predictions[:3],
     }, sort_keys=True))
     return 0
