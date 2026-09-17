@@ -3,20 +3,21 @@
     "execution_conditions": [
       "the pinned OpenWorker revision and Ollama runtime install",
       "the expected Ollama model manifest id prefix resolves",
-      "both matched persona/workload pairings execute twice",
+      "both matched persona/workload pairings execute once",
+      "reasoning_effort none is passed through the OpenAI-compatible provider",
       "each run emits a bounded tool trace and independent oracle result"
     ],
     "scientific_conditions": [
-      "at least one of two repetitions passes for each matched persona/workload pairing"
+      "both single diagnostic trials pass their independent workload oracles"
     ]
   },
   "pairings": [
     {
-      "persona_id": "rtl-engineer-openworker-qwen35-4b-v1",
+      "persona_id": "rtl-engineer-openworker-qwen35-4b-reasoning-none-v1",
       "workload_id": "rtl-popcount4-v1"
     },
     {
-      "persona_id": "binary-reverser-openworker-qwen35-4b-v1",
+      "persona_id": "binary-reverser-openworker-qwen35-4b-reasoning-none-v1",
       "workload_id": "binary-unlock-v1"
     }
   ],
@@ -32,6 +33,7 @@
         "inference": {
           "max_tokens": 768,
           "num_ctx": 4096,
+          "reasoning_effort": "none",
           "temperature": 0.0
         },
         "model": "qwen3.5:4b",
@@ -48,7 +50,7 @@
         "max_steps": 6
       },
       "mission": "Implement and verify small synthesizable Verilog from a bounded specification.",
-      "persona_id": "rtl-engineer-openworker-qwen35-4b-v1",
+      "persona_id": "rtl-engineer-openworker-qwen35-4b-reasoning-none-v1",
       "tools": [
         "read_spec",
         "write_solution",
@@ -66,6 +68,7 @@
         "inference": {
           "max_tokens": 768,
           "num_ctx": 4096,
+          "reasoning_effort": "none",
           "temperature": 0.0
         },
         "model": "qwen3.5:4b",
@@ -82,7 +85,7 @@
         "max_steps": 6
       },
       "mission": "Recover one fact from a benign purpose-built binary using bounded static-analysis and execution tools.",
-      "persona_id": "binary-reverser-openworker-qwen35-4b-v1",
+      "persona_id": "binary-reverser-openworker-qwen35-4b-reasoning-none-v1",
       "tools": [
         "read_spec",
         "inspect_strings",
@@ -91,10 +94,10 @@
       ]
     }
   ],
-  "purpose": "Canonical portability test: realize the same bounded RTL and benign binary-RE personas in OpenWorker while holding controller model, tool semantics, workloads, oracles, authority, and repetition count fixed.",
-  "qualification_id": "persona-portability-openworker-qwen35-v1",
+  "purpose": "Bounded diagnostic of the OpenWorker portability failure: hold framework, controller, tools, workloads, authority, oracles, context and 768-token completion ceiling fixed while changing only OpenAI-compatible reasoning control to reasoning_effort=none.",
+  "qualification_id": "persona-openworker-reasoning-none-diagnostic-v1",
   "record_type": "persona-qualification-plan",
-  "repetitions": 2,
+  "repetitions": 1,
   "schema_version": 1,
   "workloads": [
     {
