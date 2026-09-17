@@ -42,7 +42,7 @@ jobs:
           python -m py_compile tools/jspace_interventions.py
           python -m py_compile tools/run_multilingual_bridge_cloze.py
           python -m py_compile tools/run_qwen35_4b_cross_task_causal.py
-          python -m py_compile tools/run_qwen35_4b_random_null_ensemble.py
+          python -m py_compile tools/run_qwen35_4b_context_invariance.py
 
       - name: Install CPU PyTorch
         if: steps.arm.outputs.armed == 'true'
@@ -61,40 +61,41 @@ jobs:
           df -h .
           free -h
 
-      - name: Run R17 matched-random null ensemble
+      - name: Run R18 held-out context invariance
         if: steps.arm.outputs.armed == 'true'
         run: |
-          python tools/run_qwen35_4b_random_null_ensemble.py \
-            --output-dir artifacts/experiment-0002-qwen35-4b-random-null-ensemble
+          python tools/run_qwen35_4b_context_invariance.py \
+            --output-dir artifacts/experiment-0002-qwen35-4b-context-invariance
 
-      - name: Summarize R17 null calibration
+      - name: Summarize R18 context evidence
         if: steps.arm.outputs.armed == 'true'
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           s = json.loads(Path(
-              'artifacts/experiment-0002-qwen35-4b-random-null-ensemble/summary.json'
+              'artifacts/experiment-0002-qwen35-4b-context-invariance/summary.json'
           ).read_text())
           print('model', s['model'], s['resolved_model_revision'])
-          print('seeds', s['seeds'])
-          print('intervention_layers', s['intervention_layers'])
-          print('seed1729_reproduction_pass', s['seed1729_reproduction_pass'])
-          print('casewise_jspace_gain_exceeds_max_random', s['casewise_jspace_gain_exceeds_max_random'])
-          print('jspace_mean_target_gain_r16', s['jspace_mean_target_gain_r16'])
-          print('max_seed_mean_random_target_gain', s['max_seed_mean_random_target_gain'])
-          print('seed_summary')
-          for seed, row in s['seed_summary'].items():
-              print(seed, row)
-          print('null_calibration_pass', s['null_calibration_pass'])
-          print('R16 remains non-pass:', s['r16_remains_non_pass'])
+          print('baseline_valid_cases', s['baseline_valid_cases'])
+          print('causal_executed', s['causal_executed'])
+          if s['causal_executed']:
+              print('seeds', s['seeds'])
+              print('intervention_layers', s['intervention_layers'])
+              print('jspace_target_specificity_hits', s['jspace_target_specificity_hits'])
+              print('jspace_strong_switches', s['jspace_strong_switches'])
+              print('casewise_jspace_gain_exceeds_max_random', s['casewise_jspace_gain_exceeds_max_random'])
+              print('jspace_mean_target_gain', s['jspace_mean_target_gain'])
+              print('max_seed_mean_random_target_gain', s['max_seed_mean_random_target_gain'])
+              print('seed_summary', s['seed_summary'])
+          print('context_invariance_pass', s['context_invariance_pass'])
           PY
 
       - name: Upload evidence
         if: always() && steps.arm.outputs.armed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: experiment-0002-qwen35-4b-random-null-ensemble-${{ github.run_id }}
-          path: artifacts/experiment-0002-qwen35-4b-random-null-ensemble
+          name: experiment-0002-qwen35-4b-context-invariance-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen35-4b-context-invariance
           if-no-files-found: error
           retention-days: 14
