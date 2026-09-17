@@ -1,0 +1,90 @@
+name: experiment-0003-r01-trajectory
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.ci/run-experiment-0003-r01'
+
+permissions:
+  contents: read
+
+jobs:
+  r01-trajectory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: 'false'
+      TORCH_NUM_THREADS: '2'
+      HF_HUB_DISABLE_XET: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check one-shot arm
+        id: arm
+        run: |
+          if [ -f .ci/run-experiment-0003-r01 ]; then
+            echo 'armed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'armed=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.arm.outputs.armed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Syntax check
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python -m py_compile tools/jspace_interventions.py
+          python -m py_compile tools/run_experiment_0003_entity_bridge_trajectory.py
+
+      - name: Install CPU PyTorch
+        if: steps.arm.outputs.armed == 'true'
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
+
+      - name: Install trajectory dependencies
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python -m pip install -r requirements-experiment-0001.txt
+          python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
+          rm -rf ~/.cache/pip
+
+      - name: Run Experiment 0003 R01
+        if: steps.arm.outputs.armed == 'true'
+        run: python tools/run_experiment_0003_entity_bridge_trajectory.py
+
+      - name: Summarize trajectory evidence
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path('artifacts/experiment-0003-r01-entity-bridge-trajectory/summary.json').read_text())
+          for key in (
+              'pre_intermediate_top20',
+              'explicit_time_local_target_specificity_hits',
+              'explicit_local_beats_random_cases',
+              'explicit_local_beats_wrong_time_cases',
+              'direct_reference_target_specificity_hits',
+              'explicit_local_mean_target_gain',
+              'explicit_random_mean_target_gain',
+              'explicit_wrong_time_mean_target_gain',
+              'trajectory_mvp_pass',
+          ):
+              print(key, s[key])
+          PY
+
+      - name: Upload trajectory evidence
+        if: always() && steps.arm.outputs.armed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-0003-r01-trajectory-${{ github.run_id }}
+          path: artifacts/experiment-0003-r01-entity-bridge-trajectory
+          if-no-files-found: error
+          retention-days: 14
