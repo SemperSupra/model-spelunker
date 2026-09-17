@@ -69,6 +69,7 @@ def jspace_swap(
     mode: str = "coordinate_swap",
     seed: int = 1729,
     key: str = "",
+    position_start: int = 0,
     position_limit: int | None = None,
 ):
     """Patch a two-coordinate residual intervention into selected blocks.
@@ -88,9 +89,10 @@ def jspace_swap(
     swap delta but applies it along a deterministic random unit direction. This
     controls for generic activation displacement.
 
-    ``position_limit`` patches only sequence positions ``[:position_limit]``.
-    This is useful when candidate continuations are teacher-forced: the hidden
-    bridge is edited in the prompt, not in the answer tokens themselves.
+    ``position_start`` and ``position_limit`` define the patched half-open
+    sequence span ``[position_start:position_limit]``. With the defaults the
+    behavior is unchanged from the original prefix patch. Time-local spans are
+    useful for wrong-position controls and latent-trajectory interventions.
     """
     layer_list = [int(layer) for layer in layers]
     if not layer_list:
@@ -100,6 +102,10 @@ def jspace_swap(
         raise ValueError(f"Layers are not present in fitted lens: {missing}")
     if mode not in {"coordinate_swap", "raw_coordinate_swap", "random_norm_matched"}:
         raise ValueError(f"Unknown intervention mode: {mode}")
+    if position_start < 0:
+        raise ValueError("position_start must be non-negative")
+    if position_limit is not None and position_limit < position_start:
+        raise ValueError("position_limit must be >= position_start")
 
     use_jacobian = mode != "raw_coordinate_swap"
     bases = {
@@ -138,11 +144,13 @@ def jspace_swap(
             ):
                 hidden = output if torch.is_tensor(output) else output[0]
                 work = hidden.float()
-                stop = work.shape[-2] if position_limit is None else min(position_limit, work.shape[-2])
-                if stop <= 0:
+                seq_len = work.shape[-2]
+                start = min(position_start, seq_len)
+                stop = seq_len if position_limit is None else min(position_limit, seq_len)
+                if stop <= start:
                     return output
 
-                selected = work[..., :stop, :]
+                selected = work[..., start:stop, :]
                 basis = basis_cpu.to(selected.device)
                 pinv = pinv_cpu.to(selected.device)
                 coordinates = selected @ pinv.T
@@ -157,7 +165,7 @@ def jspace_swap(
                     delta = magnitudes * random_unit.view(*([1] * (selected.ndim - 1)), -1)
 
                 patched = work.clone()
-                patched[..., :stop, :] = selected + strength * delta
+                patched[..., start:stop, :] = selected + strength * delta
                 return _replace_hidden(output, patched.to(hidden.dtype))
 
             handles.append(model.layers[layer].register_forward_hook(hook))
