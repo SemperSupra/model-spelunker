@@ -268,6 +268,7 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
             model_settings={
                 "temperature": settings["temperature"],
                 "max_tokens": settings["max_tokens"],
+                "reasoning_effort": settings["reasoning_effort"],
             },
         )
 
@@ -307,11 +308,13 @@ def main() -> int:
     openworker_revision = os.environ.get("OPENWORKER_REVISION", "")
     expected_ids = {p["controller"]["expected_manifest_id_prefix"] for p in plan["personas"]}
     expected_revisions = {p["framework"]["revision"] for p in plan["personas"]}
+    reasoning_efforts = {p["controller"]["inference"]["reasoning_effort"] for p in plan["personas"]}
     identity_ok = (
         len(expected_ids) == 1
         and resolved_model_id in expected_ids
         and len(expected_revisions) == 1
         and openworker_revision in expected_revisions
+        and reasoning_efforts == {"none"}
     )
 
     runs: list[dict[str, Any]] = []
@@ -357,6 +360,7 @@ def main() -> int:
             "ollama_version": resolved_ollama_version,
             "model_manifest_id_prefix": resolved_model_id,
             "identity_match": identity_ok,
+            "reasoning_effort": next(iter(reasoning_efforts), None),
         },
         "pairing_summary": by_pairing,
         "runs": runs,
