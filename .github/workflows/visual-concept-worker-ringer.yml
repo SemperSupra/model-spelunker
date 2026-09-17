@@ -1,0 +1,83 @@
+name: Visual Concept Worker Public Ringer
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/visual_concept_worker_core.py'
+      - 'scripts/visual_concept_worker_ringer.py'
+      - 'config/visual-concept-worker-public-safe.json'
+      - '.github/workflows/visual-concept-worker-ringer.yml'
+      - 'docs/visual-concept-worker-ringer.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-ringer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clip-direct-v0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU-only inference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.14.0
+          python -m pip install --disable-pip-version-check --no-input \
+            transformers==5.17.0 \
+            pillow==12.3.0 \
+            requests==2.34.2 \
+            sentencepiece==0.2.2 \
+            protobuf==7.36.1
+
+      - name: Run direct-v0 public-safe candidate
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_worker_ringer.py \
+            --config config/visual-concept-worker-public-safe.json \
+            --output /tmp/visual-concept-worker-result.json
+
+      - name: Validate Gate 1 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          cfg = json.loads(Path('config/visual-concept-worker-public-safe.json').read_text())
+          result = json.loads(Path('/tmp/visual-concept-worker-result.json').read_text())
+          assert result['schema_version'] == 'visual_concept_worker_run.v0.1'
+          assert result['execution_lane'] == 'public-ringer'
+          assert result['candidate']['action_policy'] == 'direct-v0'
+          assert result['candidate']['candidate_digest']
+          assert result['input']['sha256']
+          assert result['observations']
+          assert result['observations'][0]['label'] in cfg['expected_top_labels'], result['observations'][:3]
+          assert result['safeguards']['ground_truth'] is False
+          assert result['safeguards']['semantic_authority'] is False
+          assert result['public_ringer']['private_benchmark_content_present'] is False
+          assert result['public_ringer']['private_semantic_authority_present'] is False
+          print(json.dumps({'status': 'ok', 'top3': [x['label'] for x in result['observations'][:3]]}, sort_keys=True))
+          PY
