@@ -69,6 +69,7 @@ def main() -> int:
     templates = list(config.get("prompt_templates", ["a photo of a {}"] ))
     top_k = int(config.get("top_k", min(5, len(labels))))
     score_transform = str(config.get("score_transform", "softmax"))
+    text_padding = config.get("text_padding", True)
 
     if not labels:
         raise SystemExit("candidate_labels must be non-empty")
@@ -85,7 +86,7 @@ def main() -> int:
 
     template = templates[0]
     prompts = [template.format(label) for label in labels]
-    inputs = processor(text=prompts, images=image, return_tensors="pt", padding=True)
+    inputs = processor(text=prompts, images=image, return_tensors="pt", padding=text_padding)
 
     with torch.inference_mode():
         outputs = model(**inputs)
@@ -117,6 +118,7 @@ def main() -> int:
             "model_id": model_id,
             "model_revision": model_revision,
             "prompt_template": template,
+            "text_padding": text_padding,
             "score_transform": score_transform,
             "vocabulary_digest": canonical_digest(labels),
             "config_digest": canonical_digest(config),
