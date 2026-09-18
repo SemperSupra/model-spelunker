@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "record_type": "specialist-amplification-plan",
+  "trial_id": "rtl-openworker-qwen35-rtlcoder-v1",
+  "purpose": "Test whether adding a bounded RTLCoder generator capability to the confirmed OpenWorker/Qwen3.5 RTL persona is operationally useful on the existing deterministic popcount canary, without changing controller authority or oracle.",
+  "baseline": {
+    "repository": "SemperSupra/model-spelunker",
+    "commit": "34f82e662d788356889bbea94aebdd26c15b396d",
+    "framework": {
+      "name": "openworker",
+      "revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "controller": {
+      "model": "qwen3.5:4b",
+      "expected_manifest_id_prefix": "2a654d98e6fb",
+      "ollama_version": "0.34.0",
+      "inference": {
+        "temperature": 0,
+        "max_tokens": 1024,
+        "num_ctx": 4096,
+        "reasoning_effort": "none"
+      }
+    },
+    "workload_id": "rtl-popcount4-v1",
+    "confirmed_passes": 2,
+    "observed_reference": {
+      "wall_seconds": [
+        335.54,
+        334.12
+      ],
+      "tool_trace": [
+        "read_spec",
+        "write_solution",
+        "write_solution",
+        "run_tests",
+        "write_solution",
+        "run_tests"
+      ]
+    }
+  },
+  "specialist": {
+    "candidate_id": "rtlcoder-v1.1-gguf-q4_0",
+    "source_repository": "ishorn5/RTLCoder-v1.1-gguf-4bit",
+    "exact_revision": "fc60b2440a782487654f573bbaed2c8a39647e8e",
+    "file": "ggml-model-q4_0.gguf",
+    "size_bytes": 4108921984,
+    "sha256": "860753548c58bc298db10e0173e73b73f89724ce848b6be1491cd01eb7131a54",
+    "license_spdx_id": "Apache-2.0",
+    "tool_contract": "generate_verilog(spec) -> candidate RTL text",
+    "authority": [
+      "local inference only",
+      "no file writes",
+      "no shell execution",
+      "no test execution",
+      "no network tools"
+    ]
+  },
+  "workload": {
+    "workload_id": "rtl-popcount4-v1",
+    "task": "Create solution.v containing a synthesizable SystemVerilog module named popcount4 with input logic [3:0] bits and output logic [2:0] count. count must equal the number of set bits in bits for all 16 input values. Use the tools to write the solution and verify it.",
+    "oracle": "iverilog compile plus exhaustive 16-vector testbench; PASS marker required"
+  },
+  "adaptive_gate": {
+    "phase_1": "Download and hash-verify RTLCoder, then run one standalone specialist generation against the fixed oracle.",
+    "on_phase_1_fail": "Preserve negative evidence and stop before downloading Qwen3.5.",
+    "on_phase_1_pass": "Install pinned OpenWorker, pull exact planned Qwen3.5 identity, and run one specialist-augmented persona repetition on the same runner."
+  },
+  "scientific_conditions": {
+    "specialist_smoke": "generated RTL passes the independent oracle",
+    "integrated_support": "augmented persona invokes generate_verilog at least once and final RTL passes the independent oracle",
+    "efficiency": "report wall time, writes, tests and tool calls against the confirmed baseline; do not collapse them into a composite score"
+  }
+}
