@@ -169,27 +169,47 @@ def aggregate_presence_scores(items: Sequence[dict[str, Any]]) -> dict[str, Any]
     }
 
 
-def observation_scores(observations: Sequence[dict[str, Any]]) -> dict[str, float]:
-    """Extract one whole-image visual score per concept for ranking evaluation."""
-    out: dict[str, float] = {}
+def observation_scores(
+    observations: Sequence[dict[str, Any]],
+    *,
+    view_scope: str = "whole",
+    score_field: str = "score",
+    reducer: str = "single",
+) -> dict[str, float]:
+    """Extract visual scores per concept under an explicit evidence protocol."""
+    if view_scope not in {"whole", "all"}:
+        raise ValueError(f"unsupported view_scope: {view_scope}")
+    if score_field not in {"score", "raw_score"}:
+        raise ValueError(f"unsupported score_field: {score_field}")
+    if reducer not in {"single", "max"}:
+        raise ValueError(f"unsupported reducer: {reducer}")
+
+    grouped: dict[str, list[float]] = {}
     for obs in observations:
         concept_id = obs.get("concept_id")
         if not concept_id:
             continue
-        scores = []
         for evidence in obs.get("evidence", []):
             if evidence.get("kind") != "visual_model_score":
                 continue
-            if evidence.get("region_xyxy") is not None:
+            if view_scope == "whole" and evidence.get("region_xyxy") is not None:
                 continue
-            if evidence.get("score") is not None:
-                scores.append(float(evidence["score"]))
-        if not scores:
-            continue
-        key = str(concept_id)
-        if key in out:
-            raise ValueError(f"duplicate whole-image score for concept {key}")
-        out[key] = scores[0]
+            value = evidence.get(score_field)
+            if value is None:
+                continue
+            grouped.setdefault(str(concept_id), []).append(float(value))
+
+    out: dict[str, float] = {}
+    for concept_id, values in grouped.items():
+        if reducer == "single":
+            if len(values) != 1:
+                raise ValueError(
+                    f"expected one {view_scope} {score_field} for concept {concept_id}, "
+                    f"got {len(values)}"
+                )
+            out[concept_id] = values[0]
+        else:
+            out[concept_id] = max(values)
     return out
 
 
@@ -198,11 +218,19 @@ def score_verified_ranking(
     item: Mapping[str, Any],
     observations: Sequence[dict[str, Any]],
     mappings: Mapping[tuple[str, str], LabelMapping],
+    view_scope: str = "whole",
+    score_field: str = "score",
+    reducer: str = "single",
 ) -> dict[str, Any]:
     """Score human-verified positives against verified negatives without a threshold."""
     dataset = str(item["dataset"])
     scope = str(item["ground_truth_scope"])
-    scores = observation_scores(observations)
+    scores = observation_scores(
+        observations,
+        view_scope=view_scope,
+        score_field=score_field,
+        reducer=reducer,
+    )
 
     positive: list[tuple[str, str, float]] = []
     negative: list[tuple[str, str, float]] = []
@@ -281,6 +309,11 @@ def score_verified_ranking(
         "dataset": dataset,
         "image_id": item.get("image_id"),
         "ground_truth_scope": scope,
+        "evidence_protocol": {
+            "view_scope": view_scope,
+            "score_field": score_field,
+            "reducer": reducer,
+        },
         "verified_positive_count": len(positive),
         "verified_negative_count": len(negative),
         "pairwise": {
