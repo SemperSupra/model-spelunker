@@ -1,9 +1,9 @@
-name: Persona OpenWorker Reasoning Diagnostic
+name: Persona OpenWorker RTL 1024 Diagnostic
 
 on:
   pull_request:
     branches:
-      - exp/persona-openworker-portability
+      - exp/persona-openworker-reasoning-none
     paths:
       - "qualifications/persona-openworker-001/**"
       - ".github/workflows/persona-openworker-portability.yml"
@@ -12,22 +12,22 @@ permissions:
   contents: read
 
 jobs:
-  openworker-reasoning-diagnostic:
+  openworker-rtl-1024-diagnostic:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'exp/persona-openworker-reasoning-none'
+      github.event.pull_request.head.ref == 'exp/persona-openworker-rtl-1024'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
 
-      - name: Run bounded OpenWorker reasoning diagnostic
+      - name: Run bounded OpenWorker RTL 1024 diagnostic
         id: diagnostic
         shell: bash
         env:
-          RESULT_DIR: ${{ runner.temp }}/persona-openworker-reasoning-result
+          RESULT_DIR: ${{ runner.temp }}/persona-openworker-rtl-1024-result
         run: |
           mkdir -p "$RESULT_DIR"
           cd qualifications/persona-openworker-001
@@ -41,11 +41,11 @@ jobs:
           fi
           exit 0
 
-      - name: Upload diagnostic evidence
+      - name: Upload RTL 1024 evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: persona-openworker-reasoning-none
+          name: persona-openworker-rtl-1024
           path: ${{ runner.temp }}/persona-openworker-reasoning-result
           if-no-files-found: warn
           retention-days: 7
