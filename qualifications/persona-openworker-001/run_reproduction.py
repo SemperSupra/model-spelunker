@@ -150,7 +150,7 @@ def schema(name: str, description: str, properties: dict[str, Any] | None = None
     }
 
 
-def make_registry(kind: str, task: str, root: Path, trace: list[dict[str, Any]]) -> ToolRegistry:
+def make_registry(kind: str, task: str, root: Path, trace: list[dict[str, Any]], draft_path: Path | None = None) -> ToolRegistry:
     registry = ToolRegistry()
 
     def record(name: str, arguments: dict[str, Any], result: str) -> str:
@@ -169,6 +169,23 @@ def make_registry(kind: str, task: str, root: Path, trace: list[dict[str, Any]])
         read_spec,
         schema=schema("read_spec", "Return the exact bounded task specification for this qualification run.")
     )
+
+    if draft_path is not None:
+        def read_specialist_draft() -> str:
+            draft = draft_path.read_text(encoding="utf-8")
+            return record(
+                "read_specialist_draft",
+                {"sha256": hashlib.sha256(draft.encode("utf-8")).hexdigest(), "bytes": len(draft.encode("utf-8"))},
+                draft,
+            )
+
+        registry.register(
+            read_specialist_draft,
+            schema=schema(
+                "read_specialist_draft",
+                "Return the exact frozen, untrusted specialist-generated RTL draft for diagnosis and repair."
+            ),
+        )
 
     if kind == "rtl":
         def write_solution(verilog: str) -> str:
@@ -258,7 +275,12 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
         else:
             raise ValueError(f"unsupported workload kind: {workload['kind']}")
 
-        registry = make_registry(workload["kind"], workload["task"], root, trace)
+        draft_path = None
+        if workload.get("draft_path"):
+            draft_path = (PLAN_PATH.parent / str(workload["draft_path"])).resolve()
+            if not draft_path.is_file():
+                raise RuntimeError(f"frozen specialist draft missing: {draft_path}")
+        registry = make_registry(workload["kind"], workload["task"], root, trace, draft_path)
         settings = persona["controller"]["inference"]
         provider = OpenAIProvider(
             api_key="ollama",
@@ -289,13 +311,20 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
         else:
             passed, oracle_detail = binary_oracle(root, final_answer, trace)
 
+        draft_required = bool(workload.get("draft_path"))
+        draft_reads = sum(1 for event in trace if event.get("tool") == "read_specialist_draft")
+        scientific_pass = bool(passed) and (not draft_required or draft_reads >= 1)
+
         return {
             "persona_id": persona["persona_id"],
             "persona_sha256": canonical_hash(persona),
             "workload_id": workload["workload_id"],
             "workload_sha256": canonical_hash(workload),
             "repetition": repetition,
-            "passed": bool(passed),
+            "passed": scientific_pass,
+            "oracle_passed": bool(passed),
+            "draft_required": draft_required,
+            "draft_reads": draft_reads,
             "wall_seconds": round(elapsed, 3),
             "final_answer": final_answer[-TRACE_LIMIT:],
             "agent_error": error,

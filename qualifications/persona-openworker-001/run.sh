@@ -12,6 +12,9 @@ OLLAMA_ROOT="${RUNNER_TEMP:-/tmp}/persona-openworker-ollama"
 OLLAMA_MODELS_DIR="${RUNNER_TEMP:-/tmp}/persona-openworker-models"
 FIXTURE_SPEC="../../fixtures/rtl-fifo4-v1/spec.md"
 FIXTURE_TB="../../fixtures/rtl-fifo4-v1/tb.sv"
+DRAFT_SOURCE="failed-specialist-draft.v"
+DRAFT_SHA256="2feb5811b4a324699cf32321eeecff3807ec5f15d8d2b6d1e81d10ab9a4de0b2"
+DRAFT_BYTES="856"
 
 MODEL="$(python3 - <<'PY'
 import json
@@ -32,6 +35,38 @@ PY
 mkdir -p "$SEALED_RESULT_DIR"
 sudo apt-get update -qq
 sudo apt-get install -y -qq iverilog zstd >/dev/null
+
+# Reconfirm the exact frozen RTLCoder draft is the known-bad FIFO artifact before model compute.
+resolved_draft_sha="$(sha256sum "$DRAFT_SOURCE" | awk '{print $1}')"
+resolved_draft_bytes="$(stat -c '%s' "$DRAFT_SOURCE")"
+test "$resolved_draft_sha" = "$DRAFT_SHA256"
+test "$resolved_draft_bytes" = "$DRAFT_BYTES"
+
+DRAFT_CHECK_DIR="$(mktemp -d)"
+cp "$DRAFT_SOURCE" "$DRAFT_CHECK_DIR/solution.v"
+cp "$FIXTURE_TB" "$DRAFT_CHECK_DIR/tb.sv"
+iverilog -g2012 -s tb -o "$DRAFT_CHECK_DIR/sim" "$DRAFT_CHECK_DIR/solution.v" "$DRAFT_CHECK_DIR/tb.sv"
+vvp "$DRAFT_CHECK_DIR/sim" > "$SEALED_RESULT_DIR/draft-precheck.out" 2>&1 || true
+draft_failures="$(grep -c '^FAIL ' "$SEALED_RESULT_DIR/draft-precheck.out" || true)"
+test "$draft_failures" = "254"
+if grep -qx 'PASS' "$SEALED_RESULT_DIR/draft-precheck.out"; then
+  echo "frozen draft unexpectedly passed FIFO oracle" >&2
+  exit 3
+fi
+python3 - "$SEALED_RESULT_DIR/draft-precheck.json" "$resolved_draft_sha" "$resolved_draft_bytes" "$draft_failures" <<'PY'
+import json, pathlib, sys
+path=pathlib.Path(sys.argv[1])
+path.write_text(json.dumps({
+  "schema_version":1,
+  "record_type":"frozen-draft-precheck",
+  "sha256":sys.argv[2],
+  "bytes":int(sys.argv[3]),
+  "oracle_failures":int(sys.argv[4]),
+  "expected_oracle_failures":254,
+  "passed_precondition":int(sys.argv[4]) == 254,
+}, indent=2, sort_keys=True)+"\n", encoding="utf-8")
+PY
+rm -rf "$DRAFT_CHECK_DIR"
 
 python3 -m pip install --disable-pip-version-check --no-input \
   "git+https://github.com/andrewyng/openworker.git@${OPENWORKER_REVISION}"
@@ -118,6 +153,7 @@ set -e
 cp qualification.json "$SEALED_RESULT_DIR/qualification.json"
 cp "$FIXTURE_SPEC" "$SEALED_RESULT_DIR/rtl-fifo4-spec.md"
 cp "$FIXTURE_TB" "$SEALED_RESULT_DIR/rtl-fifo4-tb.sv"
+cp "$DRAFT_SOURCE" "$SEALED_RESULT_DIR/failed-specialist-draft.v"
 export TASK_RC="$task_rc"
 
 python3 - <<'PY'
@@ -134,10 +170,11 @@ input_paths={
     "run_reproduction.py": Path("run_reproduction.py"),
     "rtl-fifo4-spec.md": Path("../../fixtures/rtl-fifo4-v1/spec.md"),
     "rtl-fifo4-tb.sv": Path("../../fixtures/rtl-fifo4-v1/tb.sv"),
+    "failed-specialist-draft.v": Path("failed-specialist-draft.v"),
 }
 inputs={name: identity(path) for name, path in input_paths.items()}
 outputs={}
-for name in ("qualification.json","result.json","model-provenance.json","ollama-model-manifest.json","rtl-fifo4-spec.md","rtl-fifo4-tb.sv"):
+for name in ("qualification.json","result.json","model-provenance.json","ollama-model-manifest.json","rtl-fifo4-spec.md","rtl-fifo4-tb.sv","failed-specialist-draft.v","draft-precheck.json","draft-precheck.out"):
     path=out/name
     if path.is_file():
         outputs[name]=identity(path)
