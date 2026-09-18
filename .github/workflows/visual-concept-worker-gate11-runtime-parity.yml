@@ -1,0 +1,105 @@
+name: Visual Concept Worker Gate 11 Runtime Parity
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/visual-concept-worker-gate11-runtime-parity.yml'
+      - 'docs/visual-concept-worker-gate11-runtime-parity.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-gate11-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pyproject-compatible-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - candidate: clip
+            config: config/visual-concept-worker-public-safe.json
+          - candidate: siglip
+            config: config/visual-concept-worker-public-safe-siglip.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install private-pyproject-compatible runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.14.0
+          python -m pip install --disable-pip-version-check --no-input \
+            transformers==4.57.1 \
+            pillow==12.3.0 \
+            requests==2.34.2 \
+            sentencepiece==0.2.2 \
+            protobuf==7.36.1
+          python - <<'PY'
+          import json
+          import PIL
+          import torch
+          import transformers
+          print(json.dumps({
+              "torch": torch.__version__,
+              "transformers": transformers.__version__,
+              "pillow": PIL.__version__,
+          }, sort_keys=True))
+          PY
+
+      - name: Run direct-v0 candidate
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+          CANDIDATE_CONFIG: ${{ matrix.config }}
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_worker_ringer.py \
+            --config "$CANDIDATE_CONFIG" \
+            --output /tmp/visual-concept-worker-runtime-parity.json
+
+      - name: Validate runtime-parity contract
+        shell: bash
+        env:
+          CANDIDATE_CONFIG: ${{ matrix.config }}
+          CANDIDATE_NAME: ${{ matrix.candidate }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          cfg = json.loads(Path(os.environ['CANDIDATE_CONFIG']).read_text())
+          result = json.loads(Path('/tmp/visual-concept-worker-runtime-parity.json').read_text())
+          assert result['schema_version'] == 'visual_concept_worker_run.v0.1'
+          assert result['execution_lane'] == 'public-ringer'
+          assert result['candidate']['backend_family'] == os.environ['CANDIDATE_NAME']
+          assert result['observations']
+          assert result['observations'][0]['label'] in cfg['expected_top_labels']
+          assert result['public_ringer']['private_benchmark_content_present'] is False
+          assert result['public_ringer']['private_semantic_authority_present'] is False
+          print(json.dumps({
+              'status': 'ok',
+              'candidate': os.environ['CANDIDATE_NAME'],
+              'top3': [x['label'] for x in result['observations'][:3]],
+          }, sort_keys=True))
+          PY
