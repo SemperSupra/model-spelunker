@@ -33,3 +33,16 @@ Do not execute until:
 3. the specialist bytes are verified against the pinned SHA-256 before inference.
 
 A failed scientific result is retained and is not automatically retried. More RTL fixtures or repetitions are added only if the first specialist result creates an ambiguity worth resolving.
+
+## Resource-bounded execution shape
+
+When the framework gate is satisfied, use one adaptive public-runner job rather than two separate model jobs:
+
+1. download the exact pinned RTLCoder GGUF and verify SHA-256;
+2. import it from the verified local file into the pinned Ollama runtime;
+3. run one standalone `rtl-popcount4-v1` specialist smoke test through the independent iverilog oracle;
+4. if the specialist fails, preserve the negative result and stop before downloading the controller;
+5. only if the specialist passes, pull the already-qualified Qwen3.5 controller and run the complete specialist-augmented persona on the same runner;
+6. keep `OLLAMA_MAX_LOADED_MODELS=1` so the two ~4B models do not need to remain resident together.
+
+The integrated persona should expose the specialist only as `generate_verilog(spec) -> candidate RTL text`. The controller remains responsible for writing, testing, repair, and the final decision. This preserves the authority boundary and avoids a speculative model/framework matrix.
