@@ -1,0 +1,72 @@
+name: Visual Concept Worker OCR Ringer
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/visual_concept_worker_core.py'
+      - 'scripts/visual_concept_worker_deterministic.py'
+      - 'scripts/visual_concept_worker_ocr_ringer.py'
+      - '.github/workflows/visual-concept-worker-ocr-ringer.yml'
+      - 'docs/visual-concept-worker-ocr-ringer.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-ocr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-ocr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install OCR runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            tesseract-ocr \
+            tesseract-ocr-eng \
+            tesseract-ocr-deu \
+            fonts-dejavu-core
+          tesseract --version | head -n 1
+          tesseract --list-langs
+          python -m pip install --disable-pip-version-check --no-input \
+            pillow==12.3.0 \
+            pytesseract==0.3.13
+
+      - name: Run deterministic OCR qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_worker_ocr_ringer.py \
+            --output /tmp/visual-concept-worker-ocr.json
+
+      - name: Validate OCR result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('/tmp/visual-concept-worker-ocr.json').read_text())
+          assert result['status'] == 'pass'
+          assert result['invariants']['real_tesseract_executed'] is True
+          assert result['invariants']['reproducible_run_digest'] is True
+          assert result['invariants']['missing_runtime_rejected'] is True
+          assert result['invariants']['private_content_present'] is False
+          print(json.dumps({'status': 'ok', 'ocr_text': result['ocr_text'], 'run_digest': result['run_digest']}, sort_keys=True))
+          PY
