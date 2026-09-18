@@ -1,0 +1,82 @@
+name: Visual Concept Worker Gate 2
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/visual_concept_worker_core.py'
+      - 'scripts/visual_concept_worker_ringer.py'
+      - 'scripts/visual_concept_worker_deterministic.py'
+      - 'scripts/visual_concept_worker_gate2.py'
+      - 'config/visual-concept-worker-public-safe.json'
+      - 'config/visual-concept-worker-public-safe-clip-deterministic.json'
+      - '.github/workflows/visual-concept-worker-gate2.yml'
+      - 'docs/visual-concept-worker-gate2.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-gate2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clip-direct-vs-deterministic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU-only inference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.14.0
+          python -m pip install --disable-pip-version-check --no-input \
+            transformers==5.17.0 \
+            pillow==12.3.0 \
+            requests==2.34.2 \
+            sentencepiece==0.2.2 \
+            protobuf==7.36.1
+
+      - name: Run Gate 2 direct-vs-deterministic control
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_worker_gate2.py \
+            --direct-config config/visual-concept-worker-public-safe.json \
+            --deterministic-config config/visual-concept-worker-public-safe-clip-deterministic.json \
+            --output /tmp/visual-concept-worker-gate2.json
+
+      - name: Validate Gate 2 result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('/tmp/visual-concept-worker-gate2.json').read_text())
+          assert result['status'] == 'pass'
+          assert result['invariants']['same_input'] is True
+          assert result['invariants']['same_model'] is True
+          assert result['invariants']['whole_image_path_preserved'] is True
+          assert result['invariants']['candidate_identity_separated'] is True
+          assert result['deterministic']['region_observations'] == 12
+          assert result['deterministic']['observations'] == 15
+          assert result['direct']['observations'] == 3
+          print(json.dumps({'status': 'ok', 'direct_seconds': result['direct']['seconds'], 'deterministic_seconds': result['deterministic']['seconds'], 'added_region_observations': result['deterministic']['region_observations']}, sort_keys=True))
+          PY
