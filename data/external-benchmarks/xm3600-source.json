@@ -11,5 +11,13 @@
   "image_license_note": "Use dataset-provided per-image attribution/license metadata; do not assume caption license applies to image bytes.",
   "expected_images": 3600,
   "expected_languages": 36,
-  "ground_truth_scope": "human_caption_image_alignment"
+  "ground_truth_scope": "human_caption_image_alignment",
+  "web_captions_url": "https://google.github.io/crossmodal-3600/web-data/web_captions.jsonl",
+  "image_ids_url": "https://google.github.io/crossmodal-3600/web-data/image_ids.txt",
+  "official_web_record_shape": {
+    "image_id_field": "imageId",
+    "image_locale_field": "imageLocale",
+    "captions_field": "captions",
+    "captions_shape": "list of [language, list-of-captions] pairs"
+  }
 }
