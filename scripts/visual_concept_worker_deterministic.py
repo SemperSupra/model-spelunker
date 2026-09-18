@@ -39,9 +39,12 @@ class TesseractTextRecognizer:
     """Thin deterministic Tesseract adapter for the OCR treatment."""
 
     def __init__(self, *, languages: str = "eng+deu", psm: int = 6) -> None:
+        import pytesseract
+
         self.languages = languages
         self.psm = int(psm)
-        self.source = f"tesseract:{languages}:psm-{psm}"
+        self.engine_version = str(pytesseract.get_tesseract_version()).splitlines()[0]
+        self.source = f"tesseract:{self.engine_version}:{languages}:psm-{psm}"
 
     @staticmethod
     def preprocess(image: Image.Image) -> Image.Image:
