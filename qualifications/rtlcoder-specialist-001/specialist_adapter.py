@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, re, urllib.request
 
 OLLAMA_GENERATE_URL = "http://127.0.0.1:11434/api/generate"
-SPECIALIST_MODEL = "rtlcoder-v1.1-q4_0"
+SPECIALIST_MODEL = "rtlcoder:q4_0"
 
 def _extract_rtl(text: str) -> str:
     text = str(text or "").strip()

@@ -51,7 +51,7 @@ printf '%s  %s\n' "$RTLCODER_SHA256" "$RTLCODER_FILE" | sha256sum -c -
 RESOLVED_RTLCODER_SHA256="$(sha256sum "$RTLCODER_FILE" | awk '{print $1}')"
 export RTLCODER_SHA256="$RESOLVED_RTLCODER_SHA256"
 
-ollama create rtlcoder-v1.1-q4_0 -f Modelfile.rtlcoder
+ollama create rtlcoder:q4_0 -f Modelfile.rtlcoder
 
 export TRIAL_PLAN="$PWD/plan.json"
 export RESULT_JSON="$SEALED_RESULT_DIR/result.json"
@@ -85,7 +85,7 @@ else
   # Phase 2 is unlocked only by the independent specialist smoke oracle.
   python3 -m pip install --disable-pip-version-check --no-input     "git+https://github.com/andrewyng/openworker.git@${OPENWORKER_REVISION}"
 
-  ollama stop rtlcoder-v1.1-q4_0 >/dev/null 2>&1 || true
+  ollama stop rtlcoder:q4_0 >/dev/null 2>&1 || true
   qwen_pull_started="$(date +%s)"
   ollama pull "$QWEN_MODEL"
   qwen_pull_finished="$(date +%s)"
