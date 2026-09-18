@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 
 REPO = "tensorblock/llm4decompile-1.3b-v1.5-GGUF"
-TARGET = "llm4decompile-1.3b-v1.5-Q4_K_M.gguf"
+TARGET_SUFFIX = "Q4_K_M.gguf"
 OUT = Path(os.environ.get("METADATA_OUT", "resolved-metadata.json"))
 
 url = "https://huggingface.co/api/models/" + urllib.parse.quote(REPO, safe="/") + "?blobs=true"
@@ -16,9 +16,17 @@ with urllib.request.urlopen(url, timeout=60) as response:
     payload = json.load(response)
 
 siblings = payload.get("siblings") or []
-match = next((item for item in siblings if item.get("rfilename") == TARGET), None)
-if not match:
-    raise SystemExit(f"target file not found: {TARGET}")
+matches = [
+    item for item in siblings
+    if str(item.get("rfilename") or "").endswith(TARGET_SUFFIX)
+]
+if len(matches) != 1:
+    names = [item.get("rfilename") for item in siblings]
+    raise SystemExit(
+        f"expected one *{TARGET_SUFFIX}, found {len(matches)}; repository files={names}"
+    )
+match = matches[0]
+target = str(match["rfilename"])
 
 lfs = match.get("lfs") or {}
 sha256 = lfs.get("sha256")
@@ -35,7 +43,7 @@ record = {
     "record_type": "hf-artifact-metadata",
     "repository": REPO,
     "revision": revision,
-    "file": TARGET,
+    "file": target,
     "sha256": sha256,
     "size_bytes": int(size),
     "blob_id": match.get("blobId"),
