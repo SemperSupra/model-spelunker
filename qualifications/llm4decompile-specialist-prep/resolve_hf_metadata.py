@@ -7,7 +7,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-REPO = "tensorblock/llm4decompile-1.3b-v1.5-GGUF"
+REPO = "RichardErkhov/LLM4Binary_-_llm4decompile-1.3b-v1.5-gguf"
 TARGET_SUFFIX = "Q4_K_M.gguf"
 OUT = Path(os.environ.get("METADATA_OUT", "resolved-metadata.json"))
 
