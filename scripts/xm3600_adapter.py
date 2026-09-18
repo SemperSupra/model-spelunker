@@ -33,7 +33,7 @@ def parse_xm3600_record(record: Mapping[str, Any]) -> list[XM3600Caption]:
     The adapter fails closed on unknown shapes so source-format changes do not
     silently corrupt multilingual qualification data.
     """
-    image_id = record.get("image_id") or record.get("id")
+    image_id = record.get("image_id") or record.get("imageId") or record.get("id")
     if image_id is None:
         raise ValueError("XM3600 record missing image_id")
 
@@ -43,6 +43,20 @@ def parse_xm3600_record(record: Mapping[str, Any]) -> list[XM3600Caption]:
             values = captions if isinstance(captions, list) else [captions]
             out.extend(_emit_caption(image_id, language, caption) for caption in values)
         return out
+
+    # Official web_captions.jsonl uses imageId/imageLocale and a list of
+    # [language, [caption, ...]] pairs for captions.
+    if isinstance(record.get("captions"), list) and record["captions"]:
+        if all(
+            isinstance(pair, list)
+            and len(pair) == 2
+            and isinstance(pair[1], list)
+            for pair in record["captions"]
+        ):
+            out: list[XM3600Caption] = []
+            for language, captions in record["captions"]:
+                out.extend(_emit_caption(image_id, language, caption) for caption in captions)
+            return out
 
     language = record.get("language") or record.get("lang") or record.get("language_id")
     if language is not None and isinstance(record.get("captions"), list):
