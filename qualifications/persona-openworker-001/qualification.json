@@ -3,22 +3,18 @@
     "execution_conditions": [
       "the pinned OpenWorker revision and Ollama runtime install",
       "the expected Ollama model manifest id prefix resolves",
-      "both matched persona/workload pairings execute once",
+      "the RTL persona/workload pairing executes once",
       "reasoning_effort none is passed through the OpenAI-compatible provider",
-      "each run emits a bounded tool trace and independent oracle result"
+      "the RTL run emits a bounded tool trace and independent oracle result"
     ],
     "scientific_conditions": [
-      "both single diagnostic trials pass their independent workload oracles"
+      "the single RTL diagnostic trial passes the independent iverilog oracle"
     ]
   },
   "pairings": [
     {
       "persona_id": "rtl-engineer-openworker-qwen35-4b-reasoning-none-v1",
       "workload_id": "rtl-popcount4-v1"
-    },
-    {
-      "persona_id": "binary-reverser-openworker-qwen35-4b-reasoning-none-v1",
-      "workload_id": "binary-unlock-v1"
     }
   ],
   "personas": [
@@ -31,10 +27,10 @@
       "controller": {
         "expected_manifest_id_prefix": "2a654d98e6fb",
         "inference": {
-          "max_tokens": 768,
+          "max_tokens": 1024,
           "num_ctx": 4096,
           "reasoning_effort": "none",
-          "temperature": 0.0
+          "temperature": 0
         },
         "model": "qwen3.5:4b",
         "provider": "ollama-openai-compatible",
@@ -66,10 +62,10 @@
       "controller": {
         "expected_manifest_id_prefix": "2a654d98e6fb",
         "inference": {
-          "max_tokens": 768,
+          "max_tokens": 1024,
           "num_ctx": 4096,
           "reasoning_effort": "none",
-          "temperature": 0.0
+          "temperature": 0
         },
         "model": "qwen3.5:4b",
         "provider": "ollama-openai-compatible",
@@ -94,8 +90,8 @@
       ]
     }
   ],
-  "purpose": "Bounded diagnostic of the OpenWorker portability failure: hold framework, controller, tools, workloads, authority, oracles, context and 768-token completion ceiling fixed while changing only OpenAI-compatible reasoning control to reasoning_effort=none.",
-  "qualification_id": "persona-openworker-reasoning-none-diagnostic-v1",
+  "purpose": "Bounded RTL-only diagnostic: hold OpenWorker, Qwen3.5, reasoning_effort=none, tools, authority, workload, oracle, context and iteration limit fixed while changing only the completion ceiling from 768 to 1024 tokens.",
+  "qualification_id": "persona-openworker-rtl-1024-diagnostic-v1",
   "record_type": "persona-qualification-plan",
   "repetitions": 1,
   "schema_version": 1,
