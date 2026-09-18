@@ -1,0 +1,38 @@
+name: Visual Concept Worker Gate 8 Concept Packs
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/visual_concept_worker_core.py'
+      - 'scripts/visual_concept_pack_ringer.py'
+      - '.github/workflows/visual-concept-worker-gate8-concept-pack.yml'
+      - 'docs/visual-concept-worker-gate8-concept-pack.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-gate8-pack-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  concept-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Qualify concept-pack normalization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_pack_ringer.py
