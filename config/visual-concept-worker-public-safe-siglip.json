@@ -5,7 +5,7 @@
   "framework_version": "0.1.0",
   "backend_family": "siglip",
   "model_id": "google/siglip-base-patch16-224",
-  "model_revision": "main",
+  "model_revision": "7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed",
   "action_policy": "direct-v0",
   "toolset": ["score_concepts"],
   "parameters": {
