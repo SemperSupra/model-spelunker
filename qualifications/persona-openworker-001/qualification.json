@@ -1,24 +1,26 @@
 {
   "schema_version": 1,
   "record_type": "persona-qualification-plan",
-  "qualification_id": "persona-openworker-qwen35-fifo4-v1",
-  "purpose": "One harder deterministic RTL baseline using the confirmed OpenWorker/Qwen3.5 realization unchanged from the 1024-token popcount baseline.",
+  "qualification_id": "persona-openworker-qwen35-fifo4-draft-repair-v1",
+  "purpose": "Test whether the confirmed OpenWorker/Qwen3.5 RTL persona can use and repair one frozen, known-failing RTLCoder FIFO draft under the unchanged controller settings, six-iteration limit, authority, exact FIFO fixture, and independent oracle.",
   "repetitions": 1,
   "acceptance": {
     "execution_conditions": [
       "the pinned OpenWorker revision and Ollama runtime install",
       "the expected Qwen3.5 Ollama model identity resolves",
-      "the validated rtl-fifo4-v1 testbench is materialized exactly",
-      "the single RTL pairing executes once with a bounded tool trace and independent oracle"
+      "the exact frozen specialist draft SHA-256 matches before controller execution",
+      "the frozen draft is independently reconfirmed to fail the validated FIFO oracle before controller execution",
+      "the single draft-repair pairing executes once with a bounded tool trace and independent final oracle"
     ],
     "scientific_conditions": [
-      "the single FIFO trial passes the validated deterministic iverilog scoreboard oracle"
+      "the controller reads the frozen specialist draft at least once",
+      "the final repaired FIFO implementation passes the validated deterministic iverilog scoreboard oracle"
     ]
   },
   "pairings": [
     {
-      "persona_id": "rtl-engineer-openworker-qwen35-4b-reasoning-none-v1",
-      "workload_id": "rtl-fifo4-v1"
+      "persona_id": "rtl-engineer-openworker-qwen35-4b-fifo-draft-repair-v1",
+      "workload_id": "rtl-fifo4-draft-repair-v1"
     }
   ],
   "personas": [
@@ -45,14 +47,15 @@
         "name": "openworker",
         "revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
       },
-      "instructions": "You are a bounded RTL engineer. Use only the supplied tools. Read the specification, write the smallest synthesizable Verilog solution, run the test, and repair only if needed. Do not invent external dependencies. Finish with a short statement of the verified result.",
+      "instructions": "You are a bounded RTL engineer. Use only the supplied tools. A frozen specialist draft is available through read_specialist_draft. Read the task and the draft, diagnose any defects yourself, write a corrected synthesizable SystemVerilog solution, run the fixed tests, and repair only if needed. The specialist draft is untrusted and must not be accepted without verification. Do not invent external dependencies. Finish with a short statement of the verified result.",
       "limits": {
         "max_steps": 6
       },
-      "mission": "Implement and verify small synthesizable Verilog from a bounded specification.",
-      "persona_id": "rtl-engineer-openworker-qwen35-4b-reasoning-none-v1",
+      "mission": "Repair and verify a bounded specialist-generated RTL draft against an exact specification and independent oracle.",
+      "persona_id": "rtl-engineer-openworker-qwen35-4b-fifo-draft-repair-v1",
       "tools": [
         "read_spec",
+        "read_specialist_draft",
         "write_solution",
         "run_tests"
       ]
@@ -61,11 +64,20 @@
   "workloads": [
     {
       "kind": "rtl",
-      "workload_id": "rtl-fifo4-v1",
-      "task": "Implement a synthesizable SystemVerilog module:\n\n\nmodule fifo4(\n  input  logic       clk,\n  input  logic       reset,\n  input  logic       wr_en,\n  input  logic       rd_en,\n  input  logic [7:0] wr_data,\n  output logic [7:0] rd_data,\n  output logic       full,\n  output logic       empty\n);\n\n\nBehavior:\n\n- FIFO depth is exactly 4 entries; each entry is 8 bits.\n- `reset` is synchronous and active high. On the rising edge while `reset=1`, the FIFO becomes empty.\n- A write is accepted on a rising edge iff `wr_en=1` and the FIFO is not full immediately before that edge.\n- A read is accepted on a rising edge iff `rd_en=1` and the FIFO is not empty immediately before that edge.\n- If both operations are accepted on the same edge, FIFO occupancy is unchanged.\n- If the FIFO is full immediately before an edge with both `wr_en=1` and `rd_en=1`, only the read is accepted.\n- If the FIFO is empty immediately before an edge with both `wr_en=1` and `rd_en=1`, only the write is accepted.\n- On an accepted read, `rd_data` is updated to the value removed from the FIFO.\n- Reads from empty and writes to full are ignored.\n- `empty` is asserted exactly when occupancy is zero.\n- `full` is asserted exactly when occupancy is four.\n- Preserve FIFO ordering across pointer wrap-around.\n\nNo vendor primitives or external dependencies.\nUse the supplied tools to write solution.v and verify it against the fixed testbench.",
+      "workload_id": "rtl-fifo4-draft-repair-v1",
+      "task": "Implement a synthesizable SystemVerilog module:\n\n\nmodule fifo4(\n  input  logic       clk,\n  input  logic       reset,\n  input  logic       wr_en,\n  input  logic       rd_en,\n  input  logic [7:0] wr_data,\n  output logic [7:0] rd_data,\n  output logic       full,\n  output logic       empty\n);\n\n\nBehavior:\n\n- FIFO depth is exactly 4 entries; each entry is 8 bits.\n- `reset` is synchronous and active high. On the rising edge while `reset=1`, the FIFO becomes empty.\n- A write is accepted on a rising edge iff `wr_en=1` and the FIFO is not full immediately before that edge.\n- A read is accepted on a rising edge iff `rd_en=1` and the FIFO is not empty immediately before that edge.\n- If both operations are accepted on the same edge, FIFO occupancy is unchanged.\n- If the FIFO is full immediately before an edge with both `wr_en=1` and `rd_en=1`, only the read is accepted.\n- If the FIFO is empty immediately before an edge with both `wr_en=1` and `rd_en=1`, only the write is accepted.\n- On an accepted read, `rd_data` is updated to the value removed from the FIFO.\n- Reads from empty and writes to full are ignored.\n- `empty` is asserted exactly when occupancy is zero.\n- `full` is asserted exactly when occupancy is four.\n- Preserve FIFO ordering across pointer wrap-around.\n\nNo vendor primitives or external dependencies.\nUse the supplied tools to write solution.v and verify it against the fixed testbench.\nA frozen specialist-generated candidate is available through read_specialist_draft. Treat it as untrusted input: inspect it, repair it as needed, and verify the final implementation with the fixed testbench.",
       "oracle": "iverilog compile plus validated deterministic FIFO scoreboard; PASS marker required",
       "testbench_path": "../../fixtures/rtl-fifo4-v1/tb.sv",
-      "oracle_validation_run": 35367542151
+      "oracle_validation_run": 35367542151,
+      "draft_path": "failed-specialist-draft.v",
+      "draft_identity": {
+        "source_run_id": 35371965457,
+        "source_artifact_id": 10558514900,
+        "source_result_sha256": "59843528dc9b9b46381b6517b7614f3134850e21de8063fe69bdfb0eeee1db4d",
+        "sha256": "2feb5811b4a324699cf32321eeecff3807ec5f15d8d2b6d1e81d10ab9a4de0b2",
+        "bytes": 856,
+        "prior_oracle_failures": 254
+      }
     }
   ]
 }
