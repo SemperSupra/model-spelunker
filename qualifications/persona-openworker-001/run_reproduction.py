@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -44,7 +45,15 @@ def sanitize_code(text: str) -> str:
     return (fenced.group(1) if fenced else text).strip() + "\n"
 
 
-def prepare_rtl_fixture(root: Path) -> None:
+def prepare_rtl_fixture(root: Path, workload: dict[str, Any]) -> None:
+    testbench_path = workload.get("testbench_path")
+    if testbench_path:
+        source = (PLAN_PATH.parent / str(testbench_path)).resolve()
+        if not source.is_file():
+            raise RuntimeError(f"fixed RTL testbench missing: {source}")
+        shutil.copyfile(source, root / "tb.sv")
+        return
+
     (root / "tb.sv").write_text(
         """module tb;
   logic [3:0] bits;
@@ -71,7 +80,6 @@ endmodule
 """,
         encoding="utf-8",
     )
-
 
 def rtl_oracle(root: Path) -> tuple[bool, str]:
     if not (root / "solution.v").is_file():
@@ -244,7 +252,7 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
     with tempfile.TemporaryDirectory(prefix="persona-openworker-qualification-") as td:
         root = Path(td)
         if workload["kind"] == "rtl":
-            prepare_rtl_fixture(root)
+            prepare_rtl_fixture(root, workload)
         elif workload["kind"] == "binary_re":
             prepare_binary_fixture(root)
         else:
