@@ -2,7 +2,7 @@
   "schema_version": 1,
   "record_type": "specialist-candidate-prep",
   "candidate_id": "llm4decompile-1.3b-v1.5-q4_k_m",
-  "state": "metadata-resolution-pending",
+  "state": "pinned-ready-for-bounded-trial",
   "purpose": "Bounded benign binary-reverse-engineering specialist candidate that consumes cleaned x86 assembly and returns candidate C/decompilation text for controller inspection and independent unlock verification.",
   "upstream": {
     "repository": "LLM4Binary/llm4decompile-1.3b-v1.5",
@@ -15,10 +15,13 @@
     "file": "llm4decompile-1.3b-v1.5.Q4_K_M.gguf",
     "quantization": "Q4_K_M",
     "approximate_size_gb": 0.81,
-    "exact_revision": null,
-    "exact_sha256": null,
-    "exact_size_bytes": null,
-    "packager_change_reason": "TensorBlock repository API currently exposes only Q2_K and Q3_K_M despite a broader model-card table; use a repository that actually contains Q4_K_M."
+    "exact_revision": "d739a10877190ce7d662d0bc77f30cb99c0a9ebf",
+    "exact_sha256": "f0387b2836c971a4192afca991dac00f4fec6ff28fef67663085eb3f666b6ba6",
+    "exact_size_bytes": 873453184,
+    "packager_change_reason": "TensorBlock repository API currently exposes only Q2_K and Q3_K_M despite a broader model-card table; use a repository that actually contains Q4_K_M.",
+    "metadata_run_id": 35400830654,
+    "metadata_artifact_id": 10570380706,
+    "metadata_artifact_digest": "sha256:20dc29dbce59fb24b98fa3ef4f6e44d67fcd4e91839720d3d063c7a3531a9baa"
   },
   "role": {
     "tool_contract": "decompile_main(assembly) -> candidate C/decompilation text",
