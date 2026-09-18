@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "record_type": "persona-qualification-plan",
-  "qualification_id": "persona-openworker-qwen35-fifo4-draft-repair-v1",
-  "purpose": "Test whether the confirmed OpenWorker/Qwen3.5 RTL persona can use and repair one frozen, known-failing RTLCoder FIFO draft under the unchanged controller settings, six-iteration limit, authority, exact FIFO fixture, and independent oracle.",
+  "qualification_id": "persona-openworker-qwen35-fifo4-validator-steering-v1",
+  "purpose": "Validate objective-verifier-driven continuation steering on the exact frozen-draft FIFO failure case, holding the controller, OpenWorker revision, prompt/instructions, tools, six-iteration limit, fixture, and oracle fixed.",
   "repetitions": 1,
   "acceptance": {
     "execution_conditions": [
@@ -14,6 +14,7 @@
     ],
     "scientific_conditions": [
       "the controller reads the frozen specialist draft at least once",
+      "the validator-steering guard fires at least once after a failed run_tests result and a no-tool assistant message",
       "the final repaired FIFO implementation passes the validated deterministic iverilog scoreboard oracle"
     ]
   },
@@ -77,6 +78,12 @@
         "sha256": "2feb5811b4a324699cf32321eeecff3807ec5f15d8d2b6d1e81d10ab9a4de0b2",
         "bytes": 856,
         "prior_oracle_failures": 254
+      },
+      "continuation_guard": {
+        "mode": "objective-validator-steering",
+        "enabled": true,
+        "condition": "assistant message has no tool calls AND at least one run_tests has failed AND no later run_tests has passed",
+        "steering_text": "Objective verification is still failing. Continue the same task using the available tools; do not stop until verification passes or the iteration limit is reached."
       }
     }
   ]
