@@ -8,8 +8,10 @@ from tempfile import TemporaryDirectory
 
 from external_presence_eval import (
     aggregate_presence_scores,
+    aggregate_verified_rankings,
     load_mappings,
     score_presence_item,
+    score_verified_ranking,
 )
 from xm3600_adapter import (
     build_caption_ranking_trials,
@@ -57,12 +59,12 @@ def main() -> int:
         {
             "concept_id": "object.animal.cat",
             "label": "cat",
-            "assertion": "candidate",
+            "assertion": "supported",
         },
         {
             "concept_id": "object.vehicle.car",
             "label": "car",
-            "assertion": "candidate",
+            "assertion": "supported",
         },
     ]
     scored = score_presence_item(item=item, observations=observations, mappings=mappings)
@@ -81,6 +83,38 @@ def main() -> int:
     if aggregate["precision"] != 1.0 or aggregate["recall"] != 1.0 or aggregate["specificity"] != 1.0:
         raise SystemExit("unexpected scoped aggregate metrics")
 
+    ranking_observations = [
+        {
+            "concept_id": "object.animal.cat",
+            "label": "cat",
+            "assertion": "candidate",
+            "evidence": [{"kind": "visual_model_score", "source": "synthetic", "score": 0.9, "region_xyxy": None}],
+        },
+        {
+            "concept_id": "object.animal.dog",
+            "label": "dog",
+            "assertion": "candidate",
+            "evidence": [{"kind": "visual_model_score", "source": "synthetic", "score": 0.2, "region_xyxy": None}],
+        },
+        {
+            "concept_id": "object.animal.bird",
+            "label": "bird",
+            "assertion": "candidate",
+            "evidence": [{"kind": "visual_model_score", "source": "synthetic", "score": 0.8, "region_xyxy": None}],
+        },
+    ]
+    ranked = score_verified_ranking(
+        item=item,
+        observations=ranking_observations,
+        mappings=mappings,
+    )
+    ranked_aggregate = aggregate_verified_rankings([ranked])
+    if ranked["pairwise"]["accuracy"] != 1.0:
+        raise SystemExit(f"unexpected ranking result: {ranked}")
+    if ranked["safeguards"]["classification_threshold_invented"] is not False:
+        raise SystemExit("ranking evaluator invented a classification threshold")
+    if ranked_aggregate["pairwise"]["accuracy"] != 1.0:
+        raise SystemExit("unexpected aggregate ranking result")
     with TemporaryDirectory(prefix="xm3600-adapter-") as tmp:
         path = Path(tmp) / "captions.jsonl"
         path.write_text(
@@ -166,6 +200,7 @@ def main() -> int:
             "precision": aggregate["precision"],
             "recall": aggregate["recall"],
             "specificity": aggregate["specificity"],
+            "pairwise_ranking_accuracy": ranked_aggregate["pairwise"]["accuracy"],
         },
         "xm3600": {
             "captions_normalized": len(captions),
@@ -176,6 +211,8 @@ def main() -> int:
             "unannotated_not_scored_as_absent": True,
             "non_exact_mapping_not_scored": True,
             "external_ground_truth_scope_explicit": True,
+            "candidate_state_not_treated_as_supported": True,
+            "ranking_threshold_not_invented": True,
             "policy_ground_truth_claimed": False,
             "multilingual_caption_alignment_preserved": True,
             "private_content_present": False,
