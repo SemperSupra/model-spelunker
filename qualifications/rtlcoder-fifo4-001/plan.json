@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "record_type": "specialist-amplification-plan",
+  "trial_id": "rtl-fifo4-openworker-qwen35-rtlcoder-v1",
+  "purpose": "Test whether the qualified bounded RTLCoder generator changes correctness or recovery on the exact rtl-fifo4-v1 workload that the unaugmented OpenWorker/Qwen3.5 persona failed, holding controller settings, authority, iteration limit, fixture, and oracle fixed.",
+  "baseline": {
+    "commit": "cadcea52c3bf3412b21f119e07ca657dac5ac796",
+    "run_id": 35370538183,
+    "artifact_id": 10558817596,
+    "result_sha256": "61f1bb6c2132de67d4201c028db630bc0560d3cd03965e03ab0fba2eebcac236",
+    "framework": {
+      "agent": "TurnEngine",
+      "name": "openworker",
+      "revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "controller": {
+      "expected_manifest_id_prefix": "2a654d98e6fb",
+      "inference": {
+        "max_tokens": 1024,
+        "num_ctx": 4096,
+        "reasoning_effort": "none",
+        "temperature": 0
+      },
+      "model": "qwen3.5:4b",
+      "provider": "ollama-openai-compatible",
+      "runtime_version": "0.34.0"
+    },
+    "max_iterations": 6,
+    "observed": {
+      "scientific_disposition": "not_supported",
+      "wall_seconds": 391.676,
+      "tool_calls": 6,
+      "trajectory": [
+        "read_spec",
+        "write_solution",
+        "run_tests",
+        "write_solution",
+        "run_tests",
+        "write_solution"
+      ],
+      "final_oracle_failures": 119
+    }
+  },
+  "specialist": {
+    "candidate_id": "rtlcoder-v1.1-gguf-q4_0",
+    "exact_revision": "fc60b2440a782487654f573bbaed2c8a39647e8e",
+    "file": "ggml-model-q4_0.gguf",
+    "size_bytes": 4108921984,
+    "sha256": "860753548c58bc298db10e0173e73b73f89724ce848b6be1491cd01eb7131a54",
+    "tool_contract": "generate_verilog(spec) -> candidate RTL text",
+    "authority": [
+      "local inference only",
+      "no file writes",
+      "no shell execution",
+      "no test execution",
+      "no network tools"
+    ]
+  },
+  "workload": {
+    "workload_id": "rtl-fifo4-v1",
+    "task": "Implement a synthesizable SystemVerilog module:\n\n\nmodule fifo4(\n  input  logic       clk,\n  input  logic       reset,\n  input  logic       wr_en,\n  input  logic       rd_en,\n  input  logic [7:0] wr_data,\n  output logic [7:0] rd_data,\n  output logic       full,\n  output logic       empty\n);\n\n\nBehavior:\n\n- FIFO depth is exactly 4 entries; each entry is 8 bits.\n- `reset` is synchronous and active high. On the rising edge while `reset=1`, the FIFO becomes empty.\n- A write is accepted on a rising edge iff `wr_en=1` and the FIFO is not full immediately before that edge.\n- A read is accepted on a rising edge iff `rd_en=1` and the FIFO is not empty immediately before that edge.\n- If both operations are accepted on the same edge, FIFO occupancy is unchanged.\n- If the FIFO is full immediately before an edge with both `wr_en=1` and `rd_en=1`, only the read is accepted.\n- If the FIFO is empty immediately before an edge with both `wr_en=1` and `rd_en=1`, only the write is accepted.\n- On an accepted read, `rd_data` is updated to the value removed from the FIFO.\n- Reads from empty and writes to full are ignored.\n- `empty` is asserted exactly when occupancy is zero.\n- `full` is asserted exactly when occupancy is four.\n- Preserve FIFO ordering across pointer wrap-around.\n\nNo vendor primitives or external dependencies.\nUse the supplied tools to write solution.v and verify it against the fixed testbench.",
+    "oracle": "iverilog compile plus validated deterministic FIFO scoreboard; PASS marker required",
+    "spec_path": "../../fixtures/rtl-fifo4-v1/spec.md",
+    "testbench_path": "../../fixtures/rtl-fifo4-v1/tb.sv",
+    "fixture_identity": {
+      "spec_sha256": "1146b58c1bd8e0215bf7bb65d5d171833d089bfaae0b24d87fbb1e15bfe616e2",
+      "testbench_sha256": "cdff5e7f15af79d33ab63a7bea7f6dd6d71b8ee6c2156ac94e52d3c29fd105e0",
+      "oracle_validation_run": 35367542151
+    }
+  },
+  "adaptive_gate": {
+    "phase_1": "Run one exact RTLCoder standalone FIFO generation against the validated oracle.",
+    "on_phase_1_fail": "Preserve the negative result and stop before downloading Qwen3.5.",
+    "on_phase_1_pass": "Run one OpenWorker/Qwen3.5 repetition with only generate_verilog added."
+  },
+  "scientific_conditions": {
+    "specialist_smoke": "standalone generated FIFO RTL passes the validated oracle",
+    "integrated_support": "persona invokes generate_verilog at least once and final FIFO RTL passes the validated oracle",
+    "efficiency": "report wall time, writes, tests, and tool calls separately"
+  }
+}
