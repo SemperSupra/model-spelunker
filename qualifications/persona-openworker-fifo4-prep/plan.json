@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "record_type": "persona-qualification-prep",
+  "qualification_id": "persona-openworker-qwen35-fifo4-v1",
+  "state": "prepared-not-executed",
+  "purpose": "One harder deterministic RTL baseline after the popcount canary, using the confirmed OpenWorker/Qwen3.5 realization before any specialist comparison.",
+  "controller_baseline": {
+    "source_commit": "34f82e662d788356889bbea94aebdd26c15b396d",
+    "framework": {
+      "name": "openworker",
+      "revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": "qwen3.5:4b",
+    "expected_manifest_id_prefix": "2a654d98e6fb",
+    "ollama_version": "0.34.0",
+    "inference": {
+      "temperature": 0,
+      "max_tokens": 1024,
+      "num_ctx": 4096,
+      "reasoning_effort": "none"
+    },
+    "max_iterations": 6
+  },
+  "workload": {
+    "workload_id": "rtl-fifo4-v1",
+    "spec_path": "fixtures/rtl-fifo4-v1/spec.md",
+    "testbench_path": "fixtures/rtl-fifo4-v1/tb.sv",
+    "oracle": "iverilog compile plus deterministic scoreboard simulation; explicit PASS marker required",
+    "oracle_validation_run": 35367542151
+  },
+  "repetitions": 1,
+  "evidence_to_record": [
+    "oracle pass/fail",
+    "wall_seconds",
+    "tool trajectory",
+    "write count",
+    "test count",
+    "completion-token usage when available",
+    "framework/model/runtime identity"
+  ],
+  "execution_gate": "Do not run until RTLCoder popcount smoke and integrated persona both pass. If that gate passes, run this baseline first; only its result can authorize an augmented FIFO comparison."
+}

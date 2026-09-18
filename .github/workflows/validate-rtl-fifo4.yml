@@ -1,0 +1,26 @@
+name: Validate FIFO RTL Fixture
+
+on:
+  pull_request:
+    branches:
+      - exp/persona-openworker-rtl-1024
+    paths:
+      - "fixtures/rtl-fifo4-v1/**"
+      - ".github/workflows/validate-rtl-fifo4.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-fixture:
+    if: github.event.pull_request.head.ref == 'exp/rtl-fifo4-fixture-prep'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install iverilog
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq iverilog >/dev/null
+      - name: Validate accept/reject oracle
+        run: bash fixtures/rtl-fifo4-v1/validate_oracle.sh
