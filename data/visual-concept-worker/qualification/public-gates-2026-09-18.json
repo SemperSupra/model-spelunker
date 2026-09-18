@@ -1,0 +1,180 @@
+{
+  "schema_version": "visual_concept_qualification_receipts.v0.1",
+  "generated_date": "2026-09-18",
+  "authority": "public qualification evidence; external benchmark metrics retain their declared task scope and are not CPE policy ground truth",
+  "receipts": [
+    {
+      "gate": "gate6-openimages-live-slice",
+      "source_run_id": 35371360066,
+      "source_pr": 40,
+      "merge_commit": "8ac530548f9b1e66306e57becdbb899bfefa48c8",
+      "status": "pass",
+      "workload": {
+        "dataset": "open-images-v7",
+        "split": "validation",
+        "images": 4,
+        "verified_positive_per_image": 2,
+        "verified_negative_per_image": 2,
+        "concept_pack_size": 16
+      },
+      "candidate": {
+        "treatment": "direct-v0",
+        "backend_family": "clip",
+        "model_id": "openai/clip-vit-base-patch32",
+        "model_revision": "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268",
+        "candidate_digest": "fbd589a70dcc6ad92b3e0b3e75ca8c6ad3baa72a4d415794c01c5063cf3ea5a7"
+      },
+      "metrics": {
+        "pairwise_ranking_accuracy": 0.625,
+        "pairwise_wins": 10,
+        "pairwise_losses": 6,
+        "pairwise_pairs": 16,
+        "positive_at_k_rate": 0.5,
+        "mean_positive_rank": 2.25
+      },
+      "safeguards": {
+        "human_verified_positive_and_negative_labels_only": true,
+        "unannotated_not_scored_as_absent": true,
+        "classification_threshold_invented": false,
+        "representative_population_claimed": false,
+        "policy_ground_truth_claimed": false,
+        "private_content_present": false
+      }
+    },
+    {
+      "gate": "gate7-treatment-comparison",
+      "source_run_id": 35371727486,
+      "source_pr": 41,
+      "merge_commit": "bcebcdf5860979d54e62a36646c9865e14731d5d",
+      "status": "pass",
+      "workload": {
+        "dataset": "open-images-v7",
+        "split": "validation",
+        "images": 4,
+        "pairwise_pairs_per_treatment": 16,
+        "concept_pack_size": 16
+      },
+      "evaluation_protocol": {
+        "view_scope": "all",
+        "score_field": "raw_score",
+        "reducer": "max",
+        "semantics": "best raw visual evidence acquired by candidate; no classification threshold"
+      },
+      "treatments": {
+        "direct-v0": {
+          "pairwise_ranking_accuracy": 0.625,
+          "positive_at_k_rate": 0.5,
+          "mean_positive_rank": 2.25,
+          "model_views": 4,
+          "seconds": 0.8569656459999351
+        },
+        "deterministic-v0": {
+          "pairwise_ranking_accuracy": 0.75,
+          "positive_at_k_rate": 0.75,
+          "mean_positive_rank": 2,
+          "model_views": 20,
+          "seconds": 6.6142650250001225
+        },
+        "active-v0": {
+          "pairwise_ranking_accuracy": 0.5625,
+          "positive_at_k_rate": 0.5,
+          "mean_positive_rank": 2.375,
+          "model_views": 7,
+          "seconds": 1.0893082470000763
+        }
+      },
+      "safeguards": {
+        "same_images": true,
+        "same_model_revision": true,
+        "same_concept_pack": true,
+        "same_evaluation_protocol": true,
+        "representative_population_claimed": false,
+        "policy_ground_truth_claimed": false,
+        "private_content_present": false
+      }
+    },
+    {
+      "gate": "gate8-concept-pack-compatibility",
+      "source_run_id": 35373817190,
+      "source_pr": 43,
+      "merge_commit": "0281c92d7645ab3eac2de226bb63f60da3ae8e3b",
+      "status": "pass",
+      "synthetic_entries": 2,
+      "normalized_digest": "41734621cd95667818062d968db8ff9750e59ac46f495ccedd658cdfc2bd4961",
+      "invariants": {
+        "legacy_labels_supported": true,
+        "current_concepts_supported": true,
+        "equivalent_shapes_same_digest": true,
+        "ambiguous_pack_rejected": true,
+        "empty_pack_rejected": true,
+        "duplicate_label_rejected": true,
+        "duplicate_concept_id_rejected": true,
+        "invalid_entry_rejected": true,
+        "private_semantic_authority_present": false,
+        "private_content_present": false
+      }
+    },
+    {
+      "gate": "gate9-treatment-scaleout",
+      "source_run_id": 35374536209,
+      "source_pr": 44,
+      "merge_commit": "e7ce5b34aa562b595093e86d1a01a7a8ce9237b8",
+      "status": "pass",
+      "workload": {
+        "dataset": "open-images-v7",
+        "split": "validation",
+        "images": 24,
+        "verified_positive_per_image": 2,
+        "verified_negative_per_image": 2,
+        "pairwise_pairs_per_treatment": 96,
+        "concept_pack_size": 72
+      },
+      "evaluation_protocol": {
+        "view_scope": "all",
+        "score_field": "raw_score",
+        "reducer": "max",
+        "semantics": "best raw visual evidence acquired by candidate; no classification threshold"
+      },
+      "treatments": {
+        "direct-v0": {
+          "pairwise_ranking_accuracy": 0.6145833333333334,
+          "pairwise_wins": 59,
+          "pairwise_losses": 37,
+          "positive_at_k_rate": 0.5833333333333334,
+          "mean_positive_rank": 2.2708333333333335,
+          "model_views": 24,
+          "seconds": 15.652807658000029
+        },
+        "deterministic-v0": {
+          "pairwise_ranking_accuracy": 0.6041666666666666,
+          "pairwise_wins": 58,
+          "pairwise_losses": 38,
+          "positive_at_k_rate": 0.5625,
+          "mean_positive_rank": 2.2916666666666665,
+          "model_views": 120,
+          "seconds": 89.27949017500006
+        },
+        "active-v0": {
+          "pairwise_ranking_accuracy": 0.5729166666666666,
+          "pairwise_wins": 55,
+          "pairwise_losses": 41,
+          "positive_at_k_rate": 0.5833333333333334,
+          "mean_positive_rank": 2.3541666666666665,
+          "model_views": 35,
+          "seconds": 9.212365356000006
+        }
+      },
+      "interpretation_note": "The four-image Gate-7 deterministic uplift did not persist on the 24-image scale-out. On this bounded slice, extra fixed or active views did not improve pairwise ranking over direct-v0 and incurred additional model views.",
+      "safeguards": {
+        "scaleout_without_policy_tuning": true,
+        "same_images": true,
+        "same_model_revision": true,
+        "same_concept_pack": true,
+        "same_evaluation_protocol": true,
+        "representative_population_claimed": false,
+        "policy_ground_truth_claimed": false,
+        "private_content_present": false
+      }
+    }
+  ]
+}
