@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from decimal import Decimal, InvalidOperation
 import io
 import json
 from pathlib import Path
@@ -48,11 +49,18 @@ def select_label_groups(url: str, *, images: int, min_present: int, min_absent: 
             sources = {row["Source"].strip() for row in rows}
             if not sources.issubset({"verification", "crowdsource-verification"}):
                 raise SystemExit(f"unexpected non-human source in human label file: {sources}")
-            positives = sum(row["Confidence"].strip() == "1" for row in rows)
-            negatives = sum(row["Confidence"].strip() == "0" for row in rows)
-            invalid = [row["Confidence"] for row in rows if row["Confidence"].strip() not in {"0", "1"}]
-            if invalid:
-                raise SystemExit(f"unexpected confidence in human label file: {invalid[:3]}")
+            values = []
+            for row in rows:
+                raw = row["Confidence"].strip()
+                try:
+                    value = Decimal(raw)
+                except InvalidOperation as exc:
+                    raise SystemExit(f"invalid confidence in human label file: {raw!r}") from exc
+                if value not in {Decimal("0"), Decimal("1")}:
+                    raise SystemExit(f"unexpected fractional confidence in human label file: {raw!r}")
+                values.append(value)
+            positives = sum(value == Decimal("1") for value in values)
+            negatives = sum(value == Decimal("0") for value in values)
             if positives >= min_present and negatives >= min_absent:
                 selected.append(list(rows))
 
