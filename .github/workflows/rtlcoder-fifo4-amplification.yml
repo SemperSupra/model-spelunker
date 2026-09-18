@@ -1,0 +1,69 @@
+name: RTLCoder FIFO4 Specialist Amplification
+
+on:
+  pull_request:
+    branches:
+      - exp/persona-openworker-fifo4
+    paths:
+      - "qualifications/rtlcoder-fifo4-001/**"
+      - "fixtures/rtl-fifo4-v1/**"
+      - ".github/workflows/rtlcoder-fifo4-amplification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rtlcoder-fifo4-amplification:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'exp/persona-openworker-rtlcoder-fifo4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Static preflight
+        shell: bash
+        run: |
+          cd qualifications/rtlcoder-fifo4-001
+          python3 -m py_compile run_trial.py specialist_adapter.py
+          python3 -m json.tool plan.json >/dev/null
+          bash -n run.sh
+          test -f ../../fixtures/rtl-fifo4-v1/spec.md
+          test -f ../../fixtures/rtl-fifo4-v1/tb.sv
+
+      - name: Run adaptive FIFO specialist trial
+        id: trial
+        shell: bash
+        env:
+          RESULT_DIR: ${{ runner.temp }}/rtlcoder-fifo4-001
+        run: |
+          mkdir -p "$RESULT_DIR"
+          cd qualifications/rtlcoder-fifo4-001
+          set +e
+          SEALED_RESULT_DIR="$RESULT_DIR" bash run.sh
+          rc=$?
+          set -e
+          echo "task_rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload FIFO specialist evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rtlcoder-fifo4-001
+          path: ${{ runner.temp }}/rtlcoder-fifo4-001
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
+
+      - name: Preserve execution verdict
+        if: always()
+        shell: bash
+        env:
+          TASK_RC: ${{ steps.trial.outputs.task_rc }}
+        run: |
+          test -n "$TASK_RC" || exit 1
+          exit "$TASK_RC"
