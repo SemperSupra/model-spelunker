@@ -1,0 +1,61 @@
+name: Visual Concept Worker Gate 6 Open Images
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/openimages_qualification.py'
+      - 'scripts/external_presence_eval.py'
+      - 'scripts/external_benchmark_ringer.py'
+      - 'scripts/openimages_live_slice_gate6.py'
+      - 'scripts/visual_concept_worker_core.py'
+      - 'scripts/visual_concept_worker_ringer.py'
+      - 'data/external-benchmarks/openimages-v7-validation-source.json'
+      - '.github/workflows/visual-concept-worker-gate6-openimages.yml'
+      - 'docs/visual-concept-worker-gate6-openimages.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-gate6-openimages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-openimages-slice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU-only inference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.14.0
+          python -m pip install --disable-pip-version-check --no-input \
+            transformers==5.17.0 \
+            pillow==12.3.0 \
+            requests==2.34.2 \
+            sentencepiece==0.2.2 \
+            protobuf==7.36.1
+
+      - name: Run live Open Images verified-label slice
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          set -euo pipefail
+          python scripts/openimages_live_slice_gate6.py
