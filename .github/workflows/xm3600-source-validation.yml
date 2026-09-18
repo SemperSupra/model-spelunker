@@ -1,0 +1,39 @@
+name: XM3600 Official Source Validation
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/xm3600_adapter.py'
+      - 'scripts/xm3600_source_probe.py'
+      - 'data/external-benchmarks/xm3600-source.json'
+      - '.github/workflows/xm3600-source-validation.yml'
+      - 'docs/xm3600-source-validation.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xm3600-source-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  official-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Probe official XM3600 metadata and captions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/xm3600_source_probe.py
