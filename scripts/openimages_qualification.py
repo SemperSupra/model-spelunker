@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+from decimal import Decimal, InvalidOperation
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
@@ -62,13 +63,20 @@ def iter_human_image_labels(
             if label_id not in class_descriptions:
                 raise ValueError(f"missing class description for Open Images label {label_id!r}")
             confidence = row["Confidence"].strip()
-            if confidence == "1":
+            try:
+                numeric_confidence = Decimal(confidence)
+            except InvalidOperation as exc:
+                raise ValueError(
+                    f"invalid human-label Confidence={confidence!r} for {image_id}/{label_id}"
+                ) from exc
+            if numeric_confidence == Decimal("1"):
                 assertion = "present"
-            elif confidence == "0":
+            elif numeric_confidence == Decimal("0"):
                 assertion = "absent"
             else:
                 raise ValueError(
-                    f"unexpected human-label Confidence={confidence!r} for {image_id}/{label_id}"
+                    f"unexpected fractional human-label Confidence={confidence!r} "
+                    f"for {image_id}/{label_id}"
                 )
             yield OpenImagesLabel(
                 dataset="open-images",
