@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "record_type": "framework-continuation-plan",
+  "experiment_id": "openworker-validator-steering-001",
+  "purpose": "Deterministically reproduce OpenWorker's no-tool completion boundary and test whether its existing queue_steering primitive can continue a bounded turn only when an objective validator remains failing.",
+  "framework": {
+    "name": "openworker",
+    "revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+  },
+  "model_dependency": "none; scripted ProviderClient only",
+  "changed_capability": "event-consumer queues steering after an assistant message with no tool calls only when the objective validator state is failing",
+  "cases": [
+    {
+      "id": "baseline-stop-prose",
+      "question": "Does current TurnEngine complete after a failing verifier is followed by ordinary assistant prose with no tool call?",
+      "expected": {
+        "provider_calls": 2,
+        "turn_status": "completed",
+        "validator_passed": false
+      }
+    },
+    {
+      "id": "validator-steering-stop",
+      "question": "Can queue_steering continue that same turn when the validator is still failing?",
+      "expected": {
+        "provider_calls": 5,
+        "turn_status": "completed",
+        "validator_passed": true,
+        "steering_count": 1
+      }
+    },
+    {
+      "id": "validator-steering-length",
+      "question": "Does the same objective steering recover when the no-tool turn is marked finish_reason=length?",
+      "expected": {
+        "provider_calls": 5,
+        "turn_status": "completed",
+        "validator_passed": true,
+        "steering_count": 1
+      }
+    },
+    {
+      "id": "no-steering-after-pass",
+      "question": "Does the guard avoid forcing another iteration after a passing verifier?",
+      "expected": {
+        "provider_calls": 2,
+        "turn_status": "completed",
+        "validator_passed": true,
+        "steering_count": 0
+      }
+    }
+  ],
+  "acceptance": [
+    "all four deterministic cases match their expected event/call behavior",
+    "the steering cases consume the built-in queue_steering mechanism without modifying OpenWorker source",
+    "the passing-verifier control proves the guard does not continue completed work merely because the last assistant message has no tool call"
+  ]
+}
