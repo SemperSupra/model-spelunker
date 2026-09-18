@@ -71,6 +71,15 @@ if grep -qi 'invalid model name' "$SEALED_RESULT_DIR/create-preflight-response.j
 fi
 printf '%s\n' "$preflight_status" > "$SEALED_RESULT_DIR/create-preflight-status.txt"
 
+# Cheap streaming-body canary: prove the blob upload form without an external model transfer.
+STREAM_PREFLIGHT_FILE="$OLLAMA_ROOT/blob-stream-preflight.bin"
+truncate -s 33554432 "$STREAM_PREFLIGHT_FILE"
+STREAM_PREFLIGHT_SHA="$(sha256sum "$STREAM_PREFLIGHT_FILE" | awk '{print $1}')"
+STREAM_PREFLIGHT_DIGEST="sha256:$STREAM_PREFLIGHT_SHA"
+curl -fsS -X POST --upload-file "$STREAM_PREFLIGHT_FILE" \
+  "http://$OLLAMA_HOST/api/blobs/$STREAM_PREFLIGHT_DIGEST"
+rm -f "$STREAM_PREFLIGHT_FILE"
+
 # Phase 1: exact specialist acquisition and standalone deterministic smoke.
 download_started="$(date +%s)"
 curl -fL --retry 1 --retry-delay 2 "$RTLCODER_URL" -o "$RTLCODER_FILE"
@@ -80,7 +89,7 @@ RESOLVED_RTLCODER_SHA256="$(sha256sum "$RTLCODER_FILE" | awk '{print $1}')"
 export RTLCODER_SHA256="$RESOLVED_RTLCODER_SHA256"
 
 RTLCODER_DIGEST="sha256:$RESOLVED_RTLCODER_SHA256"
-curl -fsS -X POST --data-binary @"$RTLCODER_FILE" \
+curl -fsS -X POST --upload-file "$RTLCODER_FILE" \
   "http://$OLLAMA_HOST/api/blobs/$RTLCODER_DIGEST"
 python3 - "$RTLCODER_DIGEST" "$SEALED_RESULT_DIR/rtlcoder-create-request.json" <<'PY'
 import json, pathlib, sys
