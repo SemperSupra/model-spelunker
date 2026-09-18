@@ -30,5 +30,31 @@
     ],
     "decision_question": "Does the specialist improve objective RTL task success or repair efficiency enough to justify its approximately 4.11 GB artifact and runtime cost?"
   },
-  "execution_gate": "Do not download or execute until the OpenWorker portability experiment is interpreted and selects the framework realization for the specialist trial."
+  "execution_gate": "Do not download or execute until the OpenWorker portability experiment is interpreted and selects the framework realization for the specialist trial.",
+  "runtime_projection": {
+    "server": "same pinned Ollama 0.34.0 process as controller",
+    "model_name": "rtlcoder-v1.1-q4_0",
+    "acquisition": {
+      "method": "download exact Hugging Face revision file then verify SHA-256 before import",
+      "source_repository": "ishorn5/RTLCoder-v1.1-gguf-4bit",
+      "exact_revision": "fc60b2440a782487654f573bbaed2c8a39647e8e",
+      "file": "ggml-model-q4_0.gguf",
+      "expected_sha256": "860753548c58bc298db10e0173e73b73f89724ce848b6be1491cd01eb7131a54"
+    },
+    "import": "ollama create from verified local GGUF; do not rely on mutable hf.co registry resolution",
+    "resident_model_limit": 1,
+    "tool_contract": "generate_verilog(spec) -> candidate RTL text",
+    "inference": {
+      "temperature": 0,
+      "num_ctx": 4096,
+      "num_predict": 1024
+    },
+    "authority": [
+      "local inference only",
+      "no file writes",
+      "no shell execution",
+      "no test execution",
+      "no network access from specialist tool"
+    ]
+  }
 }
