@@ -1,0 +1,46 @@
+name: Resolve LLM4Decompile Artifact Metadata
+
+on:
+  pull_request:
+    branches:
+      - exp/persona-openworker-rtl-1024
+    paths:
+      - "qualifications/llm4decompile-specialist-prep/**"
+      - ".github/workflows/resolve-llm4decompile-metadata.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-metadata:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'exp/llm4decompile-specialist-prep'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Static preflight
+        run: |
+          cd qualifications/llm4decompile-specialist-prep
+          python3 -m py_compile resolve_hf_metadata.py
+          python3 -m json.tool candidate.json >/dev/null
+
+      - name: Resolve immutable metadata
+        env:
+          METADATA_OUT: ${{ runner.temp }}/llm4decompile-resolved-metadata.json
+        run: |
+          cd qualifications/llm4decompile-specialist-prep
+          python3 resolve_hf_metadata.py
+
+      - name: Upload metadata evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: llm4decompile-resolved-metadata
+          path: ${{ runner.temp }}/llm4decompile-resolved-metadata.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
