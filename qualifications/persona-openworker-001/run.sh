@@ -10,6 +10,8 @@ OLLAMA_ARCHIVE_SHA256="cf95886728959aa09910bb34de5cca1cc5a8f68003b5597197d3f2c2d
 OPENWORKER_REVISION="5bc10d928e0b64aae74313349a3b17bd19643ae2"
 OLLAMA_ROOT="${RUNNER_TEMP:-/tmp}/persona-openworker-ollama"
 OLLAMA_MODELS_DIR="${RUNNER_TEMP:-/tmp}/persona-openworker-models"
+FIXTURE_SPEC="../../fixtures/rtl-fifo4-v1/spec.md"
+FIXTURE_TB="../../fixtures/rtl-fifo4-v1/tb.sv"
 
 MODEL="$(python3 - <<'PY'
 import json
@@ -114,6 +116,8 @@ task_rc=$?
 set -e
 
 cp qualification.json "$SEALED_RESULT_DIR/qualification.json"
+cp "$FIXTURE_SPEC" "$SEALED_RESULT_DIR/rtl-fifo4-spec.md"
+cp "$FIXTURE_TB" "$SEALED_RESULT_DIR/rtl-fifo4-tb.sv"
 export TASK_RC="$task_rc"
 
 python3 - <<'PY'
@@ -124,9 +128,16 @@ def identity(path: Path):
     return {"sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "bytes": path.stat().st_size}
 
 out=Path(os.environ["SEALED_RESULT_DIR"])
-inputs={name: identity(Path(name)) for name in ("qualification.json","run.sh","run_reproduction.py")}
+input_paths={
+    "qualification.json": Path("qualification.json"),
+    "run.sh": Path("run.sh"),
+    "run_reproduction.py": Path("run_reproduction.py"),
+    "rtl-fifo4-spec.md": Path("../../fixtures/rtl-fifo4-v1/spec.md"),
+    "rtl-fifo4-tb.sv": Path("../../fixtures/rtl-fifo4-v1/tb.sv"),
+}
+inputs={name: identity(path) for name, path in input_paths.items()}
 outputs={}
-for name in ("qualification.json","result.json","model-provenance.json","ollama-model-manifest.json"):
+for name in ("qualification.json","result.json","model-provenance.json","ollama-model-manifest.json","rtl-fifo4-spec.md","rtl-fifo4-tb.sv"):
     path=out/name
     if path.is_file():
         outputs[name]=identity(path)
