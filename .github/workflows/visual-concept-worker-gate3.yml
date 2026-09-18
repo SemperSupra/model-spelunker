@@ -1,0 +1,87 @@
+name: Visual Concept Worker Gate 3
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/visual_active_controller.py'
+      - 'scripts/visual_active_integration.py'
+      - 'scripts/visual_concept_worker_core.py'
+      - 'scripts/visual_concept_worker_deterministic.py'
+      - 'scripts/visual_concept_worker_gate3.py'
+      - 'scripts/visual_concept_worker_ringer.py'
+      - 'config/visual-concept-worker-public-safe.json'
+      - 'config/visual-concept-worker-public-safe-clip-deterministic.json'
+      - 'config/visual-concept-worker-public-safe-clip-active.json'
+      - '.github/workflows/visual-concept-worker-gate3.yml'
+      - 'docs/visual-concept-worker-gate3.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-gate3-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  direct-deterministic-active:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU-only inference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input \
+            --index-url https://download.pytorch.org/whl/cpu \
+            torch==2.14.0
+          python -m pip install --disable-pip-version-check --no-input \
+            transformers==5.17.0 \
+            pillow==12.3.0 \
+            requests==2.34.2 \
+            sentencepiece==0.2.2 \
+            protobuf==7.36.1
+
+      - name: Run Gate 3 active integration control
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_worker_gate3.py \
+            --direct-config config/visual-concept-worker-public-safe.json \
+            --deterministic-config config/visual-concept-worker-public-safe-clip-deterministic.json \
+            --active-config config/visual-concept-worker-public-safe-clip-active.json \
+            --output /tmp/visual-concept-worker-gate3.json
+
+      - name: Validate Gate 3 result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('/tmp/visual-concept-worker-gate3.json').read_text())
+          assert x['status']=='pass'
+          assert x['direct']['model_views']==1
+          assert x['deterministic']['model_views']==5
+          assert x['active']['model_views']==2
+          assert x['active']['added_region_observations']==3
+          assert x['decision']['actions_executed']==1
+          assert x['invariants']['active_execution_reproducible'] is True
+          assert x['invariants']['performance_claim'] is False
+          assert x['invariants']['private_content_present'] is False
+          print(json.dumps({'status':'ok','decision':x['decision'],'views':{'direct':1,'deterministic':5,'active':2}},sort_keys=True))
+          PY
