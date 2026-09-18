@@ -175,6 +175,64 @@
         "policy_ground_truth_claimed": false,
         "private_content_present": false
       }
+    },
+    {
+      "gate": "gate10-model-substitution",
+      "source_run_id": 35374768673,
+      "source_pr": 45,
+      "merge_commit": "029298d1dfc7b85c547eff1ee9271afe2adb225b",
+      "status": "pass",
+      "workload": {
+        "dataset": "open-images-v7",
+        "split": "validation",
+        "images": 24,
+        "verified_positive_per_image": 2,
+        "verified_negative_per_image": 2,
+        "pairwise_pairs_per_model": 96,
+        "concept_pack_size": 72
+      },
+      "evaluation_protocol": {
+        "view_scope": "whole",
+        "score_field": "raw_score",
+        "reducer": "single",
+        "semantics": "within-model ranking of one whole-image raw score per concept; raw values are not compared across model families"
+      },
+      "models": {
+        "clip": {
+          "model_id": "openai/clip-vit-base-patch32",
+          "model_revision": "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268",
+          "candidate_digest": "a19a62d547f385092751340a38752b30a2e2617467291adbb5a7498ef287690b",
+          "pairwise_ranking_accuracy": 0.6145833333333334,
+          "pairwise_wins": 59,
+          "pairwise_losses": 37,
+          "positive_at_k_rate": 0.5833333333333334,
+          "mean_positive_rank": 2.2708333333333335,
+          "model_views": 24,
+          "seconds": 14.27428525500001
+        },
+        "siglip": {
+          "model_id": "google/siglip-base-patch16-224",
+          "model_revision": "7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed",
+          "candidate_digest": "ae4b5fef5d2ba6b620700e044823a5c15ca27d6820486cf7326fb254fc5113fa",
+          "pairwise_ranking_accuracy": 0.6354166666666666,
+          "pairwise_wins": 61,
+          "pairwise_losses": 35,
+          "positive_at_k_rate": 0.6458333333333334,
+          "mean_positive_rank": 2.2291666666666665,
+          "model_views": 24,
+          "seconds": 118.36291505999996
+        }
+      },
+      "interpretation_note": "On this bounded 24-image slice, SigLIP had slightly better ranking metrics than CLIP but required substantially more CPU time. Raw score magnitudes were not compared across model families.",
+      "safeguards": {
+        "same_images": true,
+        "same_external_labels": true,
+        "same_concept_ids": true,
+        "raw_scores_compared_across_model_families": false,
+        "representative_population_claimed": false,
+        "policy_ground_truth_claimed": false,
+        "private_content_present": false
+      }
     }
   ]
 }
