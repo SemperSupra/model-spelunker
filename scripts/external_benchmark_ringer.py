@@ -23,21 +23,21 @@ def main() -> int:
             {
                 "dataset": "open-images",
                 "external_label_id": "/m/cat",
-                "cpe_concept_id": "object.animal.cat",
+                "worker_concept_id": "object.animal.cat",
                 "mapping": "exact",
                 "ground_truth_scope": "image_level_concept_presence",
             },
             {
                 "dataset": "open-images",
                 "external_label_id": "/m/dog",
-                "cpe_concept_id": "object.animal.dog",
+                "worker_concept_id": "object.animal.dog",
                 "mapping": "exact",
                 "ground_truth_scope": "image_level_concept_presence",
             },
             {
                 "dataset": "open-images",
                 "external_label_id": "/m/bird",
-                "cpe_concept_id": "object.animal.bird",
+                "worker_concept_id": "object.animal.bird",
                 "mapping": "related",
                 "ground_truth_scope": "image_level_concept_presence",
             },
@@ -74,7 +74,7 @@ def main() -> int:
             "external_label_id": "/m/bird",
             "reason": "mapping_related",
             "assertion": "present",
-            "cpe_concept_id": "object.animal.bird",
+            "worker_concept_id": "object.animal.bird",
         }
     ]:
         raise SystemExit(f"non-exact mapping was not retained correctly: {scored['excluded']}")
