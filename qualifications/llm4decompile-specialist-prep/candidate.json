@@ -11,13 +11,14 @@
     "max_context_tokens": 4096
   },
   "packaged_artifact": {
-    "repository": "tensorblock/llm4decompile-1.3b-v1.5-GGUF",
-    "file": "llm4decompile-1.3b-v1.5-Q4_K_M.gguf",
+    "repository": "RichardErkhov/LLM4Binary_-_llm4decompile-1.3b-v1.5-gguf",
+    "file": "llm4decompile-1.3b-v1.5.Q4_K_M.gguf",
     "quantization": "Q4_K_M",
-    "approximate_size_gb": 0.873,
+    "approximate_size_gb": 0.81,
     "exact_revision": null,
     "exact_sha256": null,
-    "exact_size_bytes": null
+    "exact_size_bytes": null,
+    "packager_change_reason": "TensorBlock repository API currently exposes only Q2_K and Q3_K_M despite a broader model-card table; use a repository that actually contains Q4_K_M."
   },
   "role": {
     "tool_contract": "decompile_main(assembly) -> candidate C/decompilation text",
