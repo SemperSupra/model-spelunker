@@ -233,6 +233,46 @@
         "policy_ground_truth_claimed": false,
         "private_content_present": false
       }
+    },
+    {
+      "gate": "gate11-private-runtime-parity",
+      "source_run_id": 35375371084,
+      "source_pr": 47,
+      "merge_commit": "20f6e2c54d4c122af7f494b53f931017078b2041",
+      "status": "pass",
+      "runtime": {
+        "python": "3.12",
+        "torch": "2.14.0+cpu",
+        "transformers": "4.57.1",
+        "pillow": "12.3.0",
+        "sentencepiece": "0.2.2",
+        "protobuf": "7.36.1"
+      },
+      "candidates": {
+        "clip": {
+          "top3": [
+            "parrot",
+            "bird",
+            "person"
+          ],
+          "status": "pass"
+        },
+        "siglip": {
+          "top3": [
+            "parrot",
+            "bird",
+            "person"
+          ],
+          "status": "pass"
+        }
+      },
+      "interpretation_note": "The existing pinned CLIP and SigLIP direct-v0 candidates execute successfully under a Transformers 4.57.1 runtime compatible with the private analyzer package constraint, avoiding a package-wide dependency change before the first trusted private sweep.",
+      "safeguards": {
+        "same_public_safe_fixture": true,
+        "same_model_revisions": true,
+        "private_content_present": false,
+        "private_semantic_authority_present": false
+      }
     }
   ]
 }
