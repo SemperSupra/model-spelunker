@@ -43,6 +43,34 @@ for _ in $(seq 1 60); do
 done
 curl -fsS "http://${OLLAMA_HOST}/api/tags" >/dev/null
 
+# Cheap request-shape canary before the multi-GB specialist transfer.
+PREFLIGHT_FILE="$OLLAMA_ROOT/create-preflight.bin"
+printf 'not-a-model\n' > "$PREFLIGHT_FILE"
+PREFLIGHT_SHA="$(sha256sum "$PREFLIGHT_FILE" | awk '{print $1}')"
+PREFLIGHT_DIGEST="sha256:$PREFLIGHT_SHA"
+curl -fsS -X POST --data-binary @"$PREFLIGHT_FILE" \
+  "http://$OLLAMA_HOST/api/blobs/$PREFLIGHT_DIGEST"
+python3 - "$PREFLIGHT_DIGEST" "$SEALED_RESULT_DIR/create-preflight-request.json" <<'PY'
+import json, pathlib, sys
+digest=sys.argv[1]
+path=pathlib.Path(sys.argv[2])
+path.write_text(json.dumps({
+  "model":"rtlcoder-preflight",
+  "files":{"not-a-model.gguf":digest},
+  "parameters":{"temperature":0,"num_ctx":4096},
+  "stream":False,
+}, indent=2, sort_keys=True)+"\n", encoding="utf-8")
+PY
+preflight_status="$(curl -sS -o "$SEALED_RESULT_DIR/create-preflight-response.json" -w '%{http_code}' \
+  -H 'Content-Type: application/json' \
+  --data-binary @"$SEALED_RESULT_DIR/create-preflight-request.json" \
+  "http://$OLLAMA_HOST/api/create")"
+if grep -qi 'invalid model name' "$SEALED_RESULT_DIR/create-preflight-response.json"; then
+  echo "Ollama create request-shape preflight rejected model name" >&2
+  exit 3
+fi
+printf '%s\n' "$preflight_status" > "$SEALED_RESULT_DIR/create-preflight-status.txt"
+
 # Phase 1: exact specialist acquisition and standalone deterministic smoke.
 download_started="$(date +%s)"
 curl -fL --retry 1 --retry-delay 2 "$RTLCODER_URL" -o "$RTLCODER_FILE"
@@ -51,7 +79,25 @@ printf '%s  %s\n' "$RTLCODER_SHA256" "$RTLCODER_FILE" | sha256sum -c -
 RESOLVED_RTLCODER_SHA256="$(sha256sum "$RTLCODER_FILE" | awk '{print $1}')"
 export RTLCODER_SHA256="$RESOLVED_RTLCODER_SHA256"
 
-ollama create rtlcoder:q4_0 -f Modelfile.rtlcoder
+RTLCODER_DIGEST="sha256:$RESOLVED_RTLCODER_SHA256"
+curl -fsS -X POST --data-binary @"$RTLCODER_FILE" \
+  "http://$OLLAMA_HOST/api/blobs/$RTLCODER_DIGEST"
+python3 - "$RTLCODER_DIGEST" "$SEALED_RESULT_DIR/rtlcoder-create-request.json" <<'PY'
+import json, pathlib, sys
+digest=sys.argv[1]
+path=pathlib.Path(sys.argv[2])
+path.write_text(json.dumps({
+  "model":"rtlcoder",
+  "files":{"ggml-model-q4_0.gguf":digest},
+  "parameters":{"temperature":0,"num_ctx":4096},
+  "stream":False,
+}, indent=2, sort_keys=True)+"\n", encoding="utf-8")
+PY
+curl -fsS -H 'Content-Type: application/json' \
+  --data-binary @"$SEALED_RESULT_DIR/rtlcoder-create-request.json" \
+  "http://$OLLAMA_HOST/api/create" \
+  > "$SEALED_RESULT_DIR/rtlcoder-create-response.json"
+ollama show rtlcoder >/dev/null
 
 export TRIAL_PLAN="$PWD/plan.json"
 export RESULT_JSON="$SEALED_RESULT_DIR/result.json"
@@ -62,7 +108,7 @@ import json, os, pathlib, sys
 out=pathlib.Path(sys.argv[1])
 record={
   "schema_version":1,
-  "candidate_id":"rtlcoder-v1.1-gguf-q4_0",
+  "candidate_id":"rtlcoder-v1.1-gguf-q4_0",\n  "ollama_model":"rtlcoder",
   "source_revision":"fc60b2440a782487654f573bbaed2c8a39647e8e",
   "file":"ggml-model-q4_0.gguf",
   "sha256":os.environ["RTLCODER_SHA256"],
@@ -85,7 +131,7 @@ else
   # Phase 2 is unlocked only by the independent specialist smoke oracle.
   python3 -m pip install --disable-pip-version-check --no-input     "git+https://github.com/andrewyng/openworker.git@${OPENWORKER_REVISION}"
 
-  ollama stop rtlcoder:q4_0 >/dev/null 2>&1 || true
+  ollama stop rtlcoder >/dev/null 2>&1 || true
   qwen_pull_started="$(date +%s)"
   ollama pull "$QWEN_MODEL"
   qwen_pull_finished="$(date +%s)"
@@ -109,7 +155,7 @@ PY
   python3 run_trial.py --phase integrated
 fi
 
-cp specialist_adapter.py Modelfile.rtlcoder "$SEALED_RESULT_DIR/"
+cp specialist_adapter.py "$SEALED_RESULT_DIR/"
 
 python3 - <<'PY'
 import hashlib, json, os
@@ -120,11 +166,11 @@ def ident(path: Path):
 
 out=Path(os.environ["SEALED_RESULT_DIR"])
 inputs={}
-for name in ("plan.json","run.sh","run_trial.py","specialist_adapter.py","Modelfile.rtlcoder"):
+for name in ("plan.json","run.sh","run_trial.py","specialist_adapter.py"):
     p=Path(name)
     inputs[name]=ident(p)
 outputs={}
-for name in ("plan.json","result.json","specialist-provenance.json","controller-provenance.json"):
+for name in ("plan.json","result.json","specialist-provenance.json","controller-provenance.json","create-preflight-request.json","create-preflight-response.json","create-preflight-status.txt","rtlcoder-create-request.json","rtlcoder-create-response.json"):
     p=out/name
     if p.is_file():
         outputs[name]=ident(p)
