@@ -150,7 +150,7 @@ def schema(name: str, description: str, properties: dict[str, Any] | None = None
     }
 
 
-def make_registry(kind: str, task: str, root: Path, trace: list[dict[str, Any]], draft_path: Path | None = None) -> ToolRegistry:
+def make_registry(kind: str, task: str, root: Path, trace: list[dict[str, Any]], validation_state: dict[str, Any], draft_path: Path | None = None) -> ToolRegistry:
     registry = ToolRegistry()
 
     def record(name: str, arguments: dict[str, Any], result: str) -> str:
@@ -195,6 +195,8 @@ def make_registry(kind: str, task: str, root: Path, trace: list[dict[str, Any]],
 
         def run_tests() -> str:
             passed, detail = rtl_oracle(root)
+            validation_state["attempted"] = int(validation_state.get("attempted", 0)) + 1
+            validation_state["passed"] = bool(passed)
             return record("run_tests", {}, ("PASS\n" if passed else "FAIL\n") + detail)
 
         registry.register(
@@ -247,21 +249,37 @@ def make_registry(kind: str, task: str, root: Path, trace: list[dict[str, Any]],
     raise ValueError(f"unsupported workload kind: {kind}")
 
 
-async def execute_engine(engine: TurnEngine, task: str) -> tuple[str, list[dict[str, Any]], str | None]:
+async def execute_engine(
+    engine: TurnEngine,
+    task: str,
+    validation_state: dict[str, Any],
+    continuation_guard: dict[str, Any] | None = None,
+) -> tuple[str, list[dict[str, Any]], str | None, int]:
     final_answer = ""
     events: list[dict[str, Any]] = []
     error = None
+    steering_count = 0
+    guard = dict(continuation_guard or {})
     try:
         async for event in engine.run(task):
             payload = {"type": event.type.value, "data": event.data}
             events.append(payload)
-            if event.type == EventType.ASSISTANT_MESSAGE and event.data.get("text"):
-                final_answer = str(event.data["text"])
+            if event.type == EventType.ASSISTANT_MESSAGE:
+                if event.data.get("text"):
+                    final_answer = str(event.data["text"])
+                if (
+                    guard.get("enabled")
+                    and not event.data.get("tool_calls")
+                    and int(validation_state.get("attempted", 0)) > 0
+                    and not bool(validation_state.get("passed"))
+                ):
+                    engine.queue_steering(str(guard["steering_text"]))
+                    steering_count += 1
             elif event.type == EventType.ERROR:
                 error = str(event.data)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
-    return final_answer, events, error
+    return final_answer, events, error, steering_count
 
 
 def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: int) -> dict[str, Any]:
@@ -280,7 +298,15 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
             draft_path = (PLAN_PATH.parent / str(workload["draft_path"])).resolve()
             if not draft_path.is_file():
                 raise RuntimeError(f"frozen specialist draft missing: {draft_path}")
-        registry = make_registry(workload["kind"], workload["task"], root, trace, draft_path)
+        validation_state: dict[str, Any] = {"attempted": 0, "passed": False}
+        registry = make_registry(
+            workload["kind"],
+            workload["task"],
+            root,
+            trace,
+            validation_state,
+            draft_path,
+        )
         settings = persona["controller"]["inference"]
         provider = OpenAIProvider(
             api_key="ollama",
@@ -303,7 +329,14 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
         )
 
         started = time.monotonic()
-        final_answer, engine_events, error = asyncio.run(execute_engine(engine, workload["task"]))
+        final_answer, engine_events, error, steering_count = asyncio.run(
+            execute_engine(
+                engine,
+                workload["task"],
+                validation_state,
+                workload.get("continuation_guard"),
+            )
+        )
         elapsed = time.monotonic() - started
 
         if workload["kind"] == "rtl":
@@ -313,7 +346,12 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
 
         draft_required = bool(workload.get("draft_path"))
         draft_reads = sum(1 for event in trace if event.get("tool") == "read_specialist_draft")
-        scientific_pass = bool(passed) and (not draft_required or draft_reads >= 1)
+        guard_required = bool((workload.get("continuation_guard") or {}).get("enabled"))
+        scientific_pass = (
+            bool(passed)
+            and (not draft_required or draft_reads >= 1)
+            and (not guard_required or steering_count >= 1)
+        )
 
         return {
             "persona_id": persona["persona_id"],
@@ -325,6 +363,10 @@ def run_pairing(persona: dict[str, Any], workload: dict[str, Any], repetition: i
             "oracle_passed": bool(passed),
             "draft_required": draft_required,
             "draft_reads": draft_reads,
+            "continuation_guard_enabled": guard_required,
+            "steering_count": steering_count,
+            "validation_attempts": int(validation_state.get("attempted", 0)),
+            "validation_passed_in_loop": bool(validation_state.get("passed")),
             "wall_seconds": round(elapsed, 3),
             "final_answer": final_answer[-TRACE_LIMIT:],
             "agent_error": error,
