@@ -30,6 +30,53 @@ def sha256_file(path: str | Path) -> str:
     return h.hexdigest()
 
 
+def load_concept_pack(value: Any) -> list[dict[str, str | None]]:
+    """Normalize legacy labels[] and current concepts[] packs into one contract."""
+    if isinstance(value, dict):
+        has_concepts = "concepts" in value
+        has_labels = "labels" in value
+        if has_concepts and has_labels:
+            raise ValueError("concept pack must not contain both concepts and labels")
+        if has_concepts:
+            entries = value["concepts"]
+        elif has_labels:
+            entries = value["labels"]
+        else:
+            raise ValueError("concept pack object must contain concepts or labels")
+    elif isinstance(value, list):
+        entries = value
+    else:
+        raise ValueError("concept pack must be a list or object")
+
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("concept pack is empty")
+
+    normalized: list[dict[str, str | None]] = []
+    labels_seen: set[str] = set()
+    ids_seen: set[str] = set()
+    for index, entry in enumerate(entries):
+        if isinstance(entry, str):
+            label = entry.strip()
+            concept_id = None
+        elif isinstance(entry, dict):
+            label = str(entry.get("label", "")).strip()
+            raw_id = entry.get("concept_id")
+            concept_id = None if raw_id in {None, ""} else str(raw_id).strip()
+        else:
+            raise ValueError(f"invalid concept pack entry at index {index}: {entry!r}")
+        if not label:
+            raise ValueError(f"concept pack entry {index} has an empty label")
+        if label in labels_seen:
+            raise ValueError(f"duplicate concept label: {label}")
+        if concept_id is not None and concept_id in ids_seen:
+            raise ValueError(f"duplicate concept_id: {concept_id}")
+        labels_seen.add(label)
+        if concept_id is not None:
+            ids_seen.add(concept_id)
+        normalized.append({"label": label, "concept_id": concept_id})
+    return normalized
+
+
 @dataclass(frozen=True)
 class CandidateSpec:
     worker_framework: str
