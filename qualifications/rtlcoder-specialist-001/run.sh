@@ -117,7 +117,8 @@ import json, os, pathlib, sys
 out=pathlib.Path(sys.argv[1])
 record={
   "schema_version":1,
-  "candidate_id":"rtlcoder-v1.1-gguf-q4_0",\n  "ollama_model":"rtlcoder",
+  "candidate_id":"rtlcoder-v1.1-gguf-q4_0",
+  "ollama_model":"rtlcoder",
   "source_revision":"fc60b2440a782487654f573bbaed2c8a39647e8e",
   "file":"ggml-model-q4_0.gguf",
   "sha256":os.environ["RTLCODER_SHA256"],
