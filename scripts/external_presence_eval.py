@@ -18,15 +18,15 @@ ALLOWED_MAPPINGS = {"exact", "narrower", "broader", "related", "excluded"}
 class LabelMapping:
     dataset: str
     external_label_id: str
-    cpe_concept_id: str | None
+    worker_concept_id: str | None
     mapping: str
     ground_truth_scope: str
 
     def __post_init__(self) -> None:
         if self.mapping not in ALLOWED_MAPPINGS:
             raise ValueError(f"unsupported mapping relation: {self.mapping}")
-        if self.mapping == "exact" and not self.cpe_concept_id:
-            raise ValueError("exact mappings require cpe_concept_id")
+        if self.mapping == "exact" and not self.worker_concept_id:
+            raise ValueError("exact mappings require worker_concept_id")
 
 
 def load_mappings(rows: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], LabelMapping]:
@@ -35,7 +35,7 @@ def load_mappings(rows: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], La
         item = LabelMapping(
             dataset=str(row["dataset"]),
             external_label_id=str(row["external_label_id"]),
-            cpe_concept_id=row.get("cpe_concept_id"),
+            worker_concept_id=row.get("worker_concept_id", row.get("cpe_concept_id")),
             mapping=str(row["mapping"]),
             ground_truth_scope=str(row["ground_truth_scope"]),
         )
@@ -98,12 +98,12 @@ def score_presence_item(
                         "external_label_id": external_label_id,
                         "reason": f"mapping_{mapping.mapping}",
                         "assertion": assertion,
-                        "cpe_concept_id": mapping.cpe_concept_id,
+                        "worker_concept_id": mapping.worker_concept_id,
                     }
                 )
                 continue
 
-            concept = str(mapping.cpe_concept_id)
+            concept = str(mapping.worker_concept_id)
             seen = concept in observed
             if assertion == "present":
                 outcome = "tp" if seen else "fn"
@@ -113,7 +113,7 @@ def score_presence_item(
             decisions.append(
                 {
                     "external_label_id": external_label_id,
-                    "cpe_concept_id": concept,
+                    "worker_concept_id": concept,
                     "verified_assertion": assertion,
                     "observed_by_worker": seen,
                     "outcome": outcome,
