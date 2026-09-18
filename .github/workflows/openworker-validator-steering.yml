@@ -1,0 +1,55 @@
+name: OpenWorker Validator Steering Canary
+
+on:
+  pull_request:
+    branches:
+      - exp/persona-openworker-fifo4
+    paths:
+      - "qualifications/openworker-continuation-001/**"
+      - ".github/workflows/openworker-validator-steering.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  continuation-canary:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'exp/openworker-validator-steering-canary'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Static preflight
+        shell: bash
+        run: |
+          cd qualifications/openworker-continuation-001
+          python3 -m py_compile run_probe.py
+          python3 -m json.tool plan.json >/dev/null
+
+      - name: Install pinned OpenWorker
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input             "git+https://github.com/andrewyng/openworker.git@5bc10d928e0b64aae74313349a3b17bd19643ae2"
+
+      - name: Run deterministic continuation probe
+        shell: bash
+        env:
+          OPENWORKER_REVISION: 5bc10d928e0b64aae74313349a3b17bd19643ae2
+          RESULT_JSON: ${{ runner.temp }}/openworker-continuation-result.json
+        run: |
+          cd qualifications/openworker-continuation-001
+          CONTINUATION_PLAN="$PWD/plan.json" python3 run_probe.py
+
+      - name: Upload continuation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: openworker-validator-steering-001
+          path: ${{ runner.temp }}/openworker-continuation-result.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
