@@ -1,0 +1,40 @@
+name: Visual Concept Worker Mechanics Ringer
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/openimages_qualification.py'
+      - 'scripts/visual_active_controller.py'
+      - 'scripts/visual_mechanics_ringer.py'
+      - 'scripts/visual_concept_worker_core.py'
+      - '.github/workflows/visual-concept-worker-mechanics-ringer.yml'
+      - 'docs/visual-concept-worker-mechanics-ringer.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-mechanics-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mechanics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Qualify benchmark and active-controller mechanics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/visual_mechanics_ringer.py
