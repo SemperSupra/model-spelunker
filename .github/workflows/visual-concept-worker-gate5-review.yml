@@ -1,0 +1,39 @@
+name: Visual Concept Worker Gate 5 Review Queue
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/visual_review_queue.py'
+      - 'scripts/visual_review_queue_ringer.py'
+      - 'scripts/visual_concept_worker_core.py'
+      - '.github/workflows/visual-concept-worker-gate5-review.yml'
+      - 'docs/visual-concept-worker-gate5-review.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-gate5-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Qualify review-queue semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/visual_review_queue_ringer.py
