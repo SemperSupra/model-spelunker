@@ -1,0 +1,37 @@
+name: Visual Concept Worker Gate 4
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/visual_batch.py'
+      - 'scripts/visual_batch_ringer.py'
+      - 'scripts/visual_concept_worker_core.py'
+      - '.github/workflows/visual-concept-worker-gate4.yml'
+      - 'docs/visual-concept-worker-gate4.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-worker-gate4-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  batch-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Qualify content-addressed batch harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/visual_batch_ringer.py
