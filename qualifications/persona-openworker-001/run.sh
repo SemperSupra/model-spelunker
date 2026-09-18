@@ -47,7 +47,7 @@ cp "$DRAFT_SOURCE" "$DRAFT_CHECK_DIR/solution.v"
 cp "$FIXTURE_TB" "$DRAFT_CHECK_DIR/tb.sv"
 iverilog -g2012 -s tb -o "$DRAFT_CHECK_DIR/sim" "$DRAFT_CHECK_DIR/solution.v" "$DRAFT_CHECK_DIR/tb.sv"
 vvp "$DRAFT_CHECK_DIR/sim" > "$SEALED_RESULT_DIR/draft-precheck.out" 2>&1 || true
-draft_failures="$(grep -c '^FAIL' "$SEALED_RESULT_DIR/draft-precheck.out" || true)"
+draft_failures="$(grep -c '^FAIL ' "$SEALED_RESULT_DIR/draft-precheck.out" || true)"
 test "$draft_failures" = "254"
 if grep -qx 'PASS' "$SEALED_RESULT_DIR/draft-precheck.out"; then
   echo "frozen draft unexpectedly passed FIFO oracle" >&2
