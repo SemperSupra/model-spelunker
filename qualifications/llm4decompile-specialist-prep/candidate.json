@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "record_type": "specialist-candidate-prep",
+  "candidate_id": "llm4decompile-1.3b-v1.5-q4_k_m",
+  "state": "pinned-ready-for-bounded-trial",
+  "purpose": "Bounded benign binary-reverse-engineering specialist candidate that consumes cleaned x86 assembly and returns candidate C/decompilation text for controller inspection and independent unlock verification.",
+  "upstream": {
+    "repository": "LLM4Binary/llm4decompile-1.3b-v1.5",
+    "license_spdx_id": "MIT",
+    "interface": "x86 assembly to C",
+    "max_context_tokens": 4096
+  },
+  "packaged_artifact": {
+    "repository": "RichardErkhov/LLM4Binary_-_llm4decompile-1.3b-v1.5-gguf",
+    "file": "llm4decompile-1.3b-v1.5.Q4_K_M.gguf",
+    "quantization": "Q4_K_M",
+    "approximate_size_gb": 0.81,
+    "exact_revision": "d739a10877190ce7d662d0bc77f30cb99c0a9ebf",
+    "exact_sha256": "f0387b2836c971a4192afca991dac00f4fec6ff28fef67663085eb3f666b6ba6",
+    "exact_size_bytes": 873453184,
+    "packager_change_reason": "TensorBlock repository API currently exposes only Q2_K and Q3_K_M despite a broader model-card table; use a repository that actually contains Q4_K_M.",
+    "metadata_run_id": 35400830654,
+    "metadata_artifact_id": 10570380706,
+    "metadata_artifact_digest": "sha256:20dc29dbce59fb24b98fa3ef4f6e44d67fcd4e91839720d3d063c7a3531a9baa"
+  },
+  "role": {
+    "tool_contract": "decompile_main(assembly) -> candidate C/decompilation text",
+    "controller_authority": "unchanged; specialist output is untrusted evidence only",
+    "specialist_authority": [
+      "local inference only",
+      "no file writes",
+      "no shell execution",
+      "no binary execution",
+      "no network tools"
+    ]
+  },
+  "qualification_constraints": [
+    "benign purpose-built ELF only",
+    "preserve the existing objdump-derived assembly surface for the first experiment",
+    "independent verification remains try_unlock/ACCESS GRANTED rather than judging generated C style",
+    "no Ghidra dependency in the first specialist experiment",
+    "no model download until exact revision, file SHA-256, and size are resolved"
+  ]
+}
