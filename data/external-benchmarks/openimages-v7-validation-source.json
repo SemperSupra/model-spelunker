@@ -1,0 +1,17 @@
+{
+  "schema_version": "external_visual_benchmark_source.v0.1",
+  "dataset": "open-images-v7",
+  "split": "validation",
+  "human_labels_url": "https://storage.googleapis.com/openimages/v7/oidv7-val-annotations-human-imagelabels.csv",
+  "class_descriptions_url": "https://storage.googleapis.com/openimages/v7/oidv7-class-descriptions.csv",
+  "image_url_template": "https://open-images-dataset.s3.amazonaws.com/validation/{image_id}.jpg",
+  "annotation_license": "CC-BY-4.0",
+  "image_license_note": "Images require per-image license verification; Gate 6 downloads a few validation images ephemerally and does not redistribute them.",
+  "ground_truth_scope": "image_level_concept_presence",
+  "selection_rule": {
+    "images": 4,
+    "verified_present_per_image": 2,
+    "verified_absent_per_image": 2,
+    "method": "first complete validation image groups in source order with at least the required human-verified positive and negative labels"
+  }
+}
