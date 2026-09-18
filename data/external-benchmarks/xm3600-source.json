@@ -1,0 +1,15 @@
+{
+  "schema_version": "external_visual_benchmark_source.v0.1",
+  "dataset": "xm3600",
+  "name": "Crossmodal-3600",
+  "version": "1.0",
+  "homepage": "https://google.github.io/crossmodal-3600/",
+  "captions_url": "https://google.github.io/crossmodal-3600/web-data/captions.zip",
+  "images_url": "https://open-images-dataset.s3.amazonaws.com/crossmodal-3600/images.tgz",
+  "image_attributions_url": "https://google.github.io/crossmodal-3600/web-data/image_attributions.csv",
+  "caption_license": "CC-BY-4.0",
+  "image_license_note": "Use dataset-provided per-image attribution/license metadata; do not assume caption license applies to image bytes.",
+  "expected_images": 3600,
+  "expected_languages": 36,
+  "ground_truth_scope": "human_caption_image_alignment"
+}
