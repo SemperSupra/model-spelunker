@@ -5,7 +5,7 @@ comparisons to configured actors.
 
 The unit under test is:
 
-`task × harness × model × configuration × toolset × substrate`
+`task × harness × build × model × configuration × toolset × substrate`
 
 This directory deliberately defines only the experiment-side contract:
 
@@ -61,3 +61,19 @@ timed out without changing task state.
 For expensive model-backed reps, validate the harness execution substrate before
 model hydration whenever a cheap no-model preflight exists. A broken sandbox or
 runtime is a substrate observation and should not consume model inference time.
+
+## Build provenance
+
+For open-source harnesses, the compiled/package projection is part of the configured
+actor when it can change startup cost or the runtime/model-facing capability surface.
+
+Receipts may therefore preserve a small optional `candidate.build` block containing
+the source revision, build profile, toolchain, default-feature decision, selected
+features, and final artifact digest. The complete candidate metadata still contributes
+to `configuration_digest`.
+
+Do not expand compiler flags into an experiment matrix unless an observed bottleneck
+makes them relevant. Prefer structural projections that remove unused providers,
+telemetry, voice, UI, plugins, or other capability surfaces over micro-optimizing
+code generation.
+

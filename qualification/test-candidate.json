@@ -9,5 +9,13 @@
   },
   "toolset": [
     "filesystem"
-  ]
+  ],
+  "build": {
+    "kind": "contract-fixture",
+    "profile": "fixture",
+    "source_revision": "contract",
+    "toolchain": "python",
+    "default_features": false,
+    "features": []
+  }
 }

@@ -238,6 +238,7 @@ def main() -> int:
                 "model": candidate["model"],
                 "configuration_digest": canonical_json_digest(candidate),
                 "toolset": candidate["toolset"],
+                **({"build": candidate["build"]} if "build" in candidate else {}),
             },
             "substrate": {
                 "profile_id": args.substrate_profile_id,
