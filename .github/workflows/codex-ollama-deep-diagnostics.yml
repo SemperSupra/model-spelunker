@@ -87,10 +87,14 @@ jobs:
           doctor_rc=$?
           sandbox_out="$(codex sandbox -- sh -c 'printf SANDBOX_OK' 2>&1)"
           sandbox_rc=$?
+          legacy_out="$(codex -c 'features.use_legacy_landlock=true' sandbox -- sh -c 'printf SANDBOX_OK' 2>&1)"
+          legacy_rc=$?
           set -e
           echo "DIAG_DOCTOR_RC=$doctor_rc"
-          echo "DIAG_SANDBOX_PREFLIGHT_RC=$sandbox_rc"
-          printf 'DIAG_SANDBOX_PREFLIGHT_OUTPUT=%q\n' "$sandbox_out"
+          echo "DIAG_SANDBOX_BWRAP_RC=$sandbox_rc"
+          printf 'DIAG_SANDBOX_BWRAP_OUTPUT=%q\n' "$sandbox_out"
+          echo "DIAG_SANDBOX_LANDLOCK_RC=$legacy_rc"
+          printf 'DIAG_SANDBOX_LANDLOCK_OUTPUT=%q\n' "$legacy_out"
           DOCTOR_JSON="$doctor_json" python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -100,11 +104,19 @@ jobs:
           except Exception as exc:
               print("DIAG_DOCTOR_PARSE_ERROR=" + json.dumps(str(exc)))
           else:
-              checks=report.get("checks") or []
+              raw=report.get("checks") or []
+              if isinstance(raw, dict):
+                  checks=[]
+                  for key,value in raw.items():
+                      row=dict(value) if isinstance(value,dict) else {"value":value}
+                      row.setdefault("id",key)
+                      checks.append(row)
+              else:
+                  checks=[row for row in raw if isinstance(row,dict)]
               selected=[
-                  c for c in checks
-                  if c.get("id") in {"sandbox.helpers","sandbox.runtime","runtime.install"}
-                  or c.get("category") == "sandbox"
+                  row for row in checks
+                  if row.get("id") in {"sandbox.helpers","sandbox.runtime","runtime.install"}
+                  or row.get("category") == "sandbox"
               ]
               print("DIAG_DOCTOR_SANDBOX=" + json.dumps(selected, sort_keys=True))
           PY
@@ -238,6 +250,7 @@ jobs:
             --skip-git-repo-check
             --ephemeral
             -c 'web_search="disabled"'
+            -c 'features.use_legacy_landlock=true'
             -c "model_catalog_json=\"$CATALOG_FILE\""
             -c "model_instructions_file=\"$INSTRUCTIONS_FILE\""
           )
