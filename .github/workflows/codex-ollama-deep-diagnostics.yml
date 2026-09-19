@@ -1,0 +1,354 @@
+name: Codex Ollama Deep Diagnostics
+
+on:
+  push:
+    branches:
+      - test/issue-54-harness-model-qualification
+    paths:
+      - '.github/workflows/codex-ollama-deep-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - label: Qwen3 1.7B / effort unset
+            model_tag: qwen3:1.7b
+            digest_prefix: 8f68893c685c
+            effort_mode: unset
+          - label: Qwen3 1.7B / explicit no reasoning
+            model_tag: qwen3:1.7b
+            digest_prefix: 8f68893c685c
+            effort_mode: explicit-none
+          - label: Qwen3 0.6B / explicit no reasoning
+            model_tag: qwen3:0.6b
+            digest_prefix: 7df6b6e09427
+            effort_mode: explicit-none
+    env:
+      CODEX_VERSION: '0.154.0'
+      CODEX_SOURCE_SHA: '6b9826e3aa83b1a5947db50f4332cb9c65f1b340'
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: ${{ matrix.model_tag }}
+      OLLAMA_MODEL_DIGEST_PREFIX: ${{ matrix.digest_prefix }}
+      EFFORT_MODE: ${{ matrix.effort_mode }}
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-diag-models'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      CODEX_HOME: '/tmp/model-spelunker-diag-codex-home'
+      RUST_LOG: 'codex_core=debug,codex_exec=debug,codex_model_provider=debug,codex_api=debug,reqwest=warn,hyper=warn'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Record runner substrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DIAG_RUNNER_NPROC=$(nproc)"
+          lscpu | grep -E '^(Architecture|CPU\(s\)|Model name|Thread\(s\) per core|Core\(s\) per socket|Socket\(s\)):' || true
+          free -b
+          df -B1 / /tmp
+
+      - name: Install pinned Codex and Ollama
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$CODEX_HOME"
+          npm install --global "@openai/codex@${CODEX_VERSION}" >/dev/null
+          codex --version
+
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" \
+            --output "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+          "$runtime/bin/ollama" --version
+
+      - name: Start diagnostic Ollama and hydrate model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env \
+            OLLAMA_HOST="$OLLAMA_HOST" \
+            OLLAMA_MODELS="$OLLAMA_MODELS" \
+            OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL" \
+            OLLAMA_MAX_LOADED_MODELS="$OLLAMA_MAX_LOADED_MODELS" \
+            OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH" \
+            OLLAMA_DEBUG=1 \
+            OLLAMA_DEBUG_LOG_REQUESTS=1 \
+            ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null && break
+            sleep 1
+          done
+          curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG" >/dev/null
+          python3 - <<'PY'
+          import json, os, urllib.request
+          with urllib.request.urlopen(f"http://{os.environ['OLLAMA_HOST']}/api/tags", timeout=10) as r:
+              data=json.load(r)
+          row=next(m for m in data['models'] if m.get('name') == os.environ['OLLAMA_MODEL_TAG'])
+          digest=str(row.get('digest') or '').removeprefix('sha256:')
+          if not digest.startswith(os.environ['OLLAMA_MODEL_DIGEST_PREFIX']):
+              raise SystemExit(f"model digest drift: {digest}")
+          print('DIAG_MODEL=' + json.dumps({'name': row.get('name'), 'digest': row.get('digest'), 'size': row.get('size')}, sort_keys=True))
+          PY
+
+      - name: Build explicit local-model metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          catalog="$RUNNER_TEMP/codex-local-models.json"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://raw.githubusercontent.com/openai/codex/$CODEX_SOURCE_SHA/codex-rs/models-manager/models.json" \
+            --output "$catalog"
+          CATALOG_FILE="$catalog" python3 - <<'PY'
+          import copy, json, os
+          from pathlib import Path
+          path=Path(os.environ['CATALOG_FILE'])
+          source=json.loads(path.read_text())
+          model=copy.deepcopy(source['models'][0])
+          model.update({
+              'slug': os.environ['OLLAMA_MODEL_TAG'],
+              'display_name': os.environ['OLLAMA_MODEL_TAG'] + ' diagnostic',
+              'description': 'Diagnostic-only local Ollama metadata.',
+              'default_reasoning_level': None,
+              'supported_reasoning_levels': [],
+              'shell_type': 'unified_exec',
+              'visibility': 'none',
+              'supported_in_api': True,
+              'priority': 99,
+              'minimal_client_version': '0.154.0',
+              'support_verbosity': False,
+              'default_verbosity': None,
+              'apply_patch_tool_type': None,
+              'web_search_tool_type': 'text',
+              'context_window': 40960,
+              'max_context_window': 40960,
+              'effective_context_window_percent': 95,
+              'include_skills_usage_instructions': False,
+              'include_apps_usage_instructions': False,
+              'include_plugin_usage_instructions': False,
+              'supports_reasoning_summary_parameter': False,
+              'default_reasoning_summary': 'none',
+              'supports_image_detail_original': False,
+              'input_modalities': ['text'],
+              'experimental_supported_tools': [],
+              'supports_search_tool': False,
+              'supports_experimental_context': False,
+              'use_responses_lite': False,
+              'node_repl_auto_review_required': False,
+              'node_repl_disabled': True,
+              'tool_mode': 'direct',
+              'multi_agent_version': None,
+              'multi_agent_reasoning_effort': None,
+              'model_messages': {'instructions_template': 'Local coding model.'},
+          })
+          path.write_text(json.dumps({'models':[model]}, indent=2, sort_keys=True) + '\n')
+          PY
+
+          instructions="$RUNNER_TEMP/minimal-instructions.md"
+          cat >"$instructions" <<'EOF'
+          You are a coding agent operating in the current workspace.
+          Follow the user's request exactly.
+          Use the available tools to inspect or modify files as needed.
+          Do not access the network.
+          Make the smallest correct change and stop.
+          EOF
+          echo "CATALOG_FILE=$catalog" >> "$GITHUB_ENV"
+          echo "INSTRUCTIONS_FILE=$instructions" >> "$GITHUB_ENV"
+
+      - name: Run deep diagnostic turn
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset OPENAI_API_KEY CODEX_API_KEY || true
+          task_dir="$GITHUB_WORKSPACE/qualification/tasks/text-repair-v0"
+          workdir="$RUNNER_TEMP/diag-work"
+          mkdir -p "$workdir"
+          cp -a "$task_dir/fixture/." "$workdir/"
+          prompt="$RUNNER_TEMP/prompt.txt"
+          python3 - <<'PY' >"$prompt"
+          import json
+          print(json.load(open('qualification/tasks/text-repair-v0/task.json'))['instruction'])
+          PY
+
+          jsonl="$RUNNER_TEMP/codex-events.timed.jsonl"
+          stderr_log="$RUNNER_TEMP/codex-stderr.timed.log"
+          resource_log="$RUNNER_TEMP/resource-timeline.log"
+          time_log="$RUNNER_TEMP/time-v.log"
+
+          codex_cmd=(
+            codex exec
+            --json
+            --oss
+            --local-provider ollama
+            --model "$OLLAMA_MODEL_TAG"
+            --sandbox workspace-write
+            --skip-git-repo-check
+            --ephemeral
+            -c 'web_search="disabled"'
+            -c "model_catalog_json=\"$CATALOG_FILE\""
+            -c "model_instructions_file=\"$INSTRUCTIONS_FILE\""
+          )
+          if [[ "$EFFORT_MODE" == 'explicit-none' ]]; then
+            codex_cmd+=(-c 'model_reasoning_effort="none"')
+          fi
+
+          cd "$workdir"
+          set +e
+          /usr/bin/time -v -o "$time_log" timeout --signal=TERM --kill-after=5s 120s \
+            "${codex_cmd[@]}" <"$prompt" \
+            > >(while IFS= read -r line; do printf '%s\t%s\n' "$(date +%s.%N)" "$line" >>"$jsonl"; done) \
+            2> >(while IFS= read -r line; do printf '%s\t%s\n' "$(date +%s.%N)" "$line" >>"$stderr_log"; done) &
+          candidate_pid=$!
+
+          (
+            while kill -0 "$candidate_pid" 2>/dev/null; do
+              printf 'TS=%s\n' "$(date +%s.%N)"
+              cat /proc/loadavg
+              free -b | sed -n '1,2p'
+              ps -eo pid,ppid,stat,pcpu,pmem,rss,vsz,nlwp,etime,comm,args | awk 'NR==1 || /codex|ollama|timeout/'
+              printf 'OLLAMA_PS='
+              curl --silent --max-time 2 "http://${OLLAMA_HOST}/api/ps" || true
+              printf '\n---\n'
+              sleep 5
+            done
+          ) >"$resource_log" 2>&1 &
+          monitor_pid=$!
+
+          wait "$candidate_pid"
+          candidate_rc=$?
+          wait "$monitor_pid" 2>/dev/null || true
+          sleep 1
+          set -e
+
+          set +e
+          python "$task_dir/verify.py" "$workdir"
+          verifier_rc=$?
+          set -e
+
+          echo "DIAG_CANDIDATE_RC=$candidate_rc"
+          echo "DIAG_VERIFIER_RC=$verifier_rc"
+          echo '=== GNU time -v ==='
+          cat "$time_log"
+          echo '=== resource timeline tail ==='
+          tail -n 160 "$resource_log" || true
+          echo '=== Codex JSON event summary ==='
+          JSONL="$jsonl" STDERR_LOG="$stderr_log" python3 - <<'PY'
+          import collections, json, os
+          from pathlib import Path
+
+          def read_timed(path):
+              out=[]
+              p=Path(path)
+              if not p.exists(): return out
+              for raw in p.read_text(errors='replace').splitlines():
+                  try:
+                      ts_s, payload=raw.split('\t',1)
+                      out.append((float(ts_s), payload))
+                  except ValueError:
+                      pass
+              return out
+
+          events=read_timed(os.environ['JSONL'])
+          parsed=[]
+          for ts,payload in events:
+              try: obj=json.loads(payload)
+              except json.JSONDecodeError: continue
+              parsed.append((ts,obj))
+          if parsed:
+              t0=parsed[0][0]
+              counts=collections.Counter(str(o.get('type')) for _,o in parsed)
+              print('CODEX_EVENT_COUNTS=' + json.dumps(counts, sort_keys=True))
+              compact=[]
+              for ts,o in parsed[:40]:
+                  item=o.get('item') if isinstance(o.get('item'),dict) else {}
+                  compact.append({
+                      't_rel_s': round(ts-t0,3),
+                      'type': o.get('type'),
+                      'item_type': item.get('type'),
+                      'item_status': item.get('status'),
+                      'command': item.get('command'),
+                  })
+              print('CODEX_EVENT_TIMELINE=' + json.dumps(compact, sort_keys=True))
+          else:
+              print('CODEX_EVENT_COUNTS={}')
+
+          stderr=read_timed(os.environ['STDERR_LOG'])
+          if stderr:
+              t0=stderr[0][0]
+              interesting=[]
+              for ts,line in stderr:
+                  low=line.lower()
+                  if any(k in low for k in ('reason', 'exec_command', 'apply_patch', 'tool', 'warning', 'error')):
+                      interesting.append({'t_rel_s':round(ts-t0,3),'line':line[:600]})
+              print('CODEX_STDERR_SIGNALS=' + json.dumps(interesting[-40:], sort_keys=True))
+          PY
+
+          echo '=== Ollama request structure ==='
+          python3 - <<'PY'
+          import glob, hashlib, json, os
+          from pathlib import Path
+          bodies=sorted(glob.glob('/tmp/ollama-request-logs-*/*_body.json'))
+          print('OLLAMA_REQUEST_BODY_COUNT=' + str(len(bodies)))
+          for path in bodies:
+              raw=Path(path).read_bytes()
+              try: d=json.loads(raw)
+              except Exception as exc:
+                  print('OLLAMA_REQUEST_PARSE_ERROR=' + json.dumps({'path':path,'error':str(exc)}))
+                  continue
+              tools=d.get('tools') or []
+              tool_summaries=[]
+              for t in tools:
+                  tool_summaries.append({
+                      'type': t.get('type'),
+                      'name': t.get('name'),
+                      'description_chars': len(t.get('description') or ''),
+                      'parameters_bytes': len(json.dumps(t.get('parameters') or {}, sort_keys=True)),
+                  })
+              inp=d.get('input')
+              summary={
+                  'path_basename': Path(path).name,
+                  'body_bytes': len(raw),
+                  'body_sha256': hashlib.sha256(raw).hexdigest(),
+                  'model': d.get('model'),
+                  'reasoning': d.get('reasoning'),
+                  'think_extension': d.get('think'),
+                  'instructions_chars': len(d.get('instructions') or ''),
+                  'input_bytes': len(json.dumps(inp, sort_keys=True)),
+                  'input_items': len(inp) if isinstance(inp,list) else None,
+                  'tool_count': len(tools),
+                  'tools': tool_summaries,
+                  'max_output_tokens': d.get('max_output_tokens'),
+                  'temperature': d.get('temperature'),
+                  'top_p': d.get('top_p'),
+                  'stream': d.get('stream'),
+              }
+              print('OLLAMA_REQUEST_SUMMARY=' + json.dumps(summary, sort_keys=True))
+          PY
+
+          echo '=== Ollama inference timing/debug tail ==='
+          grep -E 'prompt processing|generation|print_timing|eval|reason|think|request|response|slot' "$RUNNER_TEMP/ollama.log" | tail -n 240 || true
+
+          # Diagnostic candidate failure is evidence, not workflow-infrastructure failure.
+          exit 0
