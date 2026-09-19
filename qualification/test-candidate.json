@@ -1,0 +1,21 @@
+{
+  "harness": {
+    "name": "contract-test",
+    "version": "1"
+  },
+  "model": {
+    "provider": "none",
+    "id": "none"
+  },
+  "toolset": [
+    "filesystem"
+  ],
+  "build": {
+    "kind": "contract-fixture",
+    "profile": "fixture",
+    "source_revision": "contract",
+    "toolchain": "python",
+    "default_features": false,
+    "features": []
+  }
+}

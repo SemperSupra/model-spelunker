@@ -1,0 +1,106 @@
+name: Qualification Contract Check
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/**'
+      - '.github/workflows/qualification-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualification-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install schema validator
+        run: python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+
+      - name: Validate JSON contracts
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          json.loads(Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          json.loads(Path("qualification/test-candidate.json").read_text())
+          schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          jsonschema.Draft7Validator.check_schema(schema)
+          print("PASS qualification JSON contracts")
+          PY
+
+      - name: Self-test deterministic verifier
+        run: python qualification/tasks/text-repair-v0/verify.py --self-test
+
+      - name: Exercise positive, repeat, and negative receipts
+        env:
+          RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
+          RECEIPT_GOOD_2: ${{ runner.temp }}/qualification-good-2.json
+          RECEIPT_BAD: ${{ runner.temp }}/qualification-bad.json
+        run: |
+          set -euo pipefail
+
+          run_rep() {
+            local receipt="$1"
+            local candidate="$2"
+            python qualification/run_task.py \
+              --task-commit "$GITHUB_SHA" \
+              --substrate-profile-id contract-self-test \
+              --substrate-profile-commit "$GITHUB_SHA" \
+              qualification/tasks/text-repair-v0 \
+              qualification/test-candidate.json \
+              "$receipt" \
+              -- python "$GITHUB_WORKSPACE/$candidate"
+          }
+
+          run_rep "$RECEIPT_GOOD_1" qualification/test_candidate.py
+          run_rep "$RECEIPT_GOOD_2" qualification/test_candidate.py
+
+          set +e
+          run_rep "$RECEIPT_BAD" qualification/test_candidate_bad.py
+          bad_rc=$?
+          set -e
+          test "$bad_rc" -eq 1
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import jsonschema
+
+          schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          good1 = json.loads(Path(os.environ["RECEIPT_GOOD_1"]).read_text())
+          good2 = json.loads(Path(os.environ["RECEIPT_GOOD_2"]).read_text())
+          bad = json.loads(Path(os.environ["RECEIPT_BAD"]).read_text())
+
+          for receipt in (good1, good2, bad):
+              jsonschema.validate(receipt, schema)
+              assert receipt["observation"]["human_interventions"] == 0
+
+          assert good1["observation"]["success"] is True
+          assert good2["observation"]["success"] is True
+          assert bad["observation"]["success"] is False
+          assert bad["observation"]["failure_class"] == "false-completion"
+          assert bad["observation"]["timed_out"] is False
+          assert bad["observation"]["state_changed"] is True
+          assert "false-completion" in bad["observation"]["failure_signals"]
+          assert good1["observation"]["failure_signals"] == []
+          assert good2["observation"]["failure_signals"] == []
+          assert len({good1["run_id"], good2["run_id"], bad["run_id"]}) == 3
+          assert good1["candidate"]["configuration_digest"] == good2["candidate"]["configuration_digest"]
+          print("PASS repeated reps create distinct receipts and failed evidence is preserved")
+          PY

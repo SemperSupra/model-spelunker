@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "evidence_id": "harness-build-seams-20260919",
+  "recorded_at": "2026-09-19T20:23:00+02:00",
+  "findings": [
+    {
+      "harness": "codex",
+      "version": "0.154.0",
+      "source_revision": "6b9826e3aa83b1a5947db50f4332cb9c65f1b340",
+      "build_system": "cargo",
+      "upstream_release_profile": {
+        "lto": "thin",
+        "debug": "line-tables-only",
+        "strip": false,
+        "codegen_units": 4
+      },
+      "structural_projection": {
+        "status": "requires-source-change",
+        "evidence": "codex-rs/cli and codex-rs/exec expose no top-level Cargo [features] table at the pinned revision",
+        "next_step": "Do not fork solely for size/startup. Revisit only if runtime qualification shows a removable subsystem is causally material."
+      }
+    },
+    {
+      "harness": "goose",
+      "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe",
+      "toolchain": "rust 1.96.1",
+      "build_system": "cargo",
+      "default_cli_features": [
+        "code-mode",
+        "local-inference",
+        "aws-providers",
+        "telemetry",
+        "nostr",
+        "otel",
+        "rustls-tls",
+        "live-voice",
+        "system-keyring",
+        "update"
+      ],
+      "structural_projection": {
+        "status": "upstream-supported",
+        "first_profile": "--no-default-features",
+        "rationale": "Proves a genuinely projected CLI before spending model inference."
+      }
+    },
+    {
+      "harness": "openworker",
+      "version": "0.2.3",
+      "build_system": "python/setuptools",
+      "structural_projection": {
+        "status": "package-level",
+        "optional_dependency_groups": [
+          "dev",
+          "messaging",
+          "browser",
+          "bedrock"
+        ],
+        "rationale": "Useful for footprint/cold-start/supply-chain experiments, not a native compiler feature projection of the core runtime."
+      }
+    }
+  ],
+  "decision": "First compile-time qualification rep targets Goose minimal CLI. Codex compile-time fork is deferred until runtime evidence demonstrates that dependency removal is likely to change the model-facing or execution surface."
+}
