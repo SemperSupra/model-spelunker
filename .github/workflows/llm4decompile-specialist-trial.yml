@@ -1,0 +1,66 @@
+name: LLM4Decompile Binary Specialist Trial
+
+on:
+  pull_request:
+    branches:
+      - exp/llm4decompile-specialist-prep
+    paths:
+      - "qualifications/llm4decompile-specialist-001/**"
+      - ".github/workflows/llm4decompile-specialist-trial.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  llm4decompile-specialist:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'exp/llm4decompile-v15-specialist-smoke'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Static preflight
+        shell: bash
+        run: |
+          cd qualifications/llm4decompile-specialist-001
+          python3 -m py_compile run_trial.py specialist_adapter.py
+          python3 -m json.tool plan.json >/dev/null
+          bash -n run.sh
+
+      - name: Run adaptive binary specialist trial
+        id: trial
+        shell: bash
+        env:
+          RESULT_DIR: ${{ runner.temp }}/llm4decompile-specialist-001
+        run: |
+          mkdir -p "$RESULT_DIR"
+          cd qualifications/llm4decompile-specialist-001
+          set +e
+          SEALED_RESULT_DIR="$RESULT_DIR" bash run.sh
+          rc=$?
+          set -e
+          echo "task_rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload binary specialist evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: llm4decompile-specialist-001
+          path: ${{ runner.temp }}/llm4decompile-specialist-001
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
+
+      - name: Preserve execution verdict
+        if: always()
+        shell: bash
+        env:
+          TASK_RC: ${{ steps.trial.outputs.task_rc }}
+        run: |
+          test -n "$TASK_RC" || exit 1
+          exit "$TASK_RC"
