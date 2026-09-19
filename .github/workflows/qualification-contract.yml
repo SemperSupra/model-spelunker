@@ -46,18 +46,35 @@ jobs:
       - name: Self-test deterministic verifier
         run: python qualification/tasks/text-repair-v0/verify.py --self-test
 
-      - name: Run end-to-end contract rep
+      - name: Exercise positive, repeat, and negative receipts
         env:
-          RECEIPT: ${{ runner.temp }}/qualification-receipt.json
+          RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
+          RECEIPT_GOOD_2: ${{ runner.temp }}/qualification-good-2.json
+          RECEIPT_BAD: ${{ runner.temp }}/qualification-bad.json
         run: |
-          python qualification/run_task.py \
-            --task-commit "$GITHUB_SHA" \
-            --substrate-profile-id contract-self-test \
-            --substrate-profile-commit "$GITHUB_SHA" \
-            qualification/tasks/text-repair-v0 \
-            qualification/test-candidate.json \
-            "$RECEIPT" \
-            -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
+          set -euo pipefail
+
+          run_rep() {
+            local receipt="$1"
+            local candidate="$2"
+            python qualification/run_task.py \
+              --task-commit "$GITHUB_SHA" \
+              --substrate-profile-id contract-self-test \
+              --substrate-profile-commit "$GITHUB_SHA" \
+              qualification/tasks/text-repair-v0 \
+              qualification/test-candidate.json \
+              "$receipt" \
+              -- python "$GITHUB_WORKSPACE/$candidate"
+          }
+
+          run_rep "$RECEIPT_GOOD_1" qualification/test_candidate.py
+          run_rep "$RECEIPT_GOOD_2" qualification/test_candidate.py
+
+          set +e
+          run_rep "$RECEIPT_BAD" qualification/test_candidate_bad.py
+          bad_rc=$?
+          set -e
+          test "$bad_rc" -eq 1
 
           python - <<'PY'
           import json
@@ -65,12 +82,20 @@ jobs:
           from pathlib import Path
           import jsonschema
 
-          receipt = json.loads(Path(os.environ["RECEIPT"]).read_text())
           schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
-          jsonschema.validate(receipt, schema)
+          good1 = json.loads(Path(os.environ["RECEIPT_GOOD_1"]).read_text())
+          good2 = json.loads(Path(os.environ["RECEIPT_GOOD_2"]).read_text())
+          bad = json.loads(Path(os.environ["RECEIPT_BAD"]).read_text())
 
-          assert receipt["observation"]["success"] is True
-          assert receipt["observation"]["human_interventions"] == 0
-          assert receipt["candidate"]["harness"]["name"] == "contract-test"
-          print("PASS end-to-end qualification receipt")
+          for receipt in (good1, good2, bad):
+              jsonschema.validate(receipt, schema)
+              assert receipt["observation"]["human_interventions"] == 0
+
+          assert good1["observation"]["success"] is True
+          assert good2["observation"]["success"] is True
+          assert bad["observation"]["success"] is False
+          assert bad["observation"]["failure_class"] == "verifier-failure"
+          assert len({good1["run_id"], good2["run_id"], bad["run_id"]}) == 3
+          assert good1["candidate"]["configuration_digest"] == good2["candidate"]["configuration_digest"]
+          print("PASS repeated reps create distinct receipts and failed evidence is preserved")
           PY
