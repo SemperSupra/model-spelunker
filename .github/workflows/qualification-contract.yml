@@ -27,14 +27,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validate JSON and receipt schema
+      - name: Install schema validator
+        run: python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+
+      - name: Validate JSON contracts
         run: |
-          python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
           python - <<'PY'
           import json
           from pathlib import Path
           import jsonschema
           json.loads(Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          json.loads(Path("qualification/test-candidate.json").read_text())
           schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
           jsonschema.Draft7Validator.check_schema(schema)
           print("PASS qualification JSON contracts")
@@ -42,3 +45,32 @@ jobs:
 
       - name: Self-test deterministic verifier
         run: python qualification/tasks/text-repair-v0/verify.py --self-test
+
+      - name: Run end-to-end contract rep
+        env:
+          RECEIPT: ${{ runner.temp }}/qualification-receipt.json
+        run: |
+          python qualification/run_task.py \
+            qualification/tasks/text-repair-v0 \
+            qualification/test-candidate.json \
+            "$RECEIPT" \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id contract-self-test \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import jsonschema
+
+          receipt = json.loads(Path(os.environ["RECEIPT"]).read_text())
+          schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          jsonschema.validate(receipt, schema)
+
+          assert receipt["observation"]["success"] is True
+          assert receipt["observation"]["human_interventions"] == 0
+          assert receipt["candidate"]["harness"]["name"] == "contract-test"
+          print("PASS end-to-end qualification receipt")
+          PY
