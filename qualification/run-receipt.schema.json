@@ -75,12 +75,21 @@
     "observation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["success", "failure_class", "wall_seconds", "human_interventions"],
+      "required": [
+        "success",
+        "failure_class",
+        "wall_seconds",
+        "human_interventions",
+        "candidate_exit_code",
+        "verifier_exit_code"
+      ],
       "properties": {
         "success": { "type": "boolean" },
         "failure_class": { "type": ["string", "null"] },
         "wall_seconds": { "type": "number", "minimum": 0 },
         "human_interventions": { "type": "integer", "minimum": 0 },
+        "candidate_exit_code": { "type": "integer" },
+        "verifier_exit_code": { "type": "integer" },
         "tool_calls": { "type": ["integer", "null"], "minimum": 0 },
         "input_tokens": { "type": ["integer", "null"], "minimum": 0 },
         "output_tokens": { "type": ["integer", "null"], "minimum": 0 },
