@@ -23,21 +23,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: Qwen3 1.7B stock
-            model_tag: qwen3:1.7b
-            digest_prefix: 8f68893c685c
-            instructions_mode: stock
-            metadata_mode: fallback
-          - label: Qwen3 1.7B minimal instructions
-            model_tag: qwen3:1.7b
-            digest_prefix: 8f68893c685c
-            instructions_mode: minimal-local-v1
-            metadata_mode: fallback
-          - label: Qwen3 1.7B minimal + known metadata
+          - label: Qwen3 1.7B known metadata + unified shell
             model_tag: qwen3:1.7b
             digest_prefix: 8f68893c685c
             instructions_mode: minimal-local-v1
             metadata_mode: known-local-v1
+            tool_surface: unified-shell
+          - label: Qwen3 1.7B known metadata + apply_patch only
+            model_tag: qwen3:1.7b
+            digest_prefix: 8f68893c685c
+            instructions_mode: minimal-local-v1
+            metadata_mode: known-local-v1
+            tool_surface: apply-patch-only
     env:
       CODEX_VERSION: '0.154.0'
       OLLAMA_VERSION: '0.34.1'
@@ -46,6 +43,7 @@ jobs:
       OLLAMA_MODEL_DIGEST_PREFIX: ${{ matrix.digest_prefix }}
       INSTRUCTIONS_MODE: ${{ matrix.instructions_mode }}
       METADATA_MODE: ${{ matrix.metadata_mode }}
+      TOOL_SURFACE: ${{ matrix.tool_surface }}
       CODEX_SOURCE_SHA: '6b9826e3aa83b1a5947db50f4332cb9c65f1b340'
       OLLAMA_HOST: '127.0.0.1:11434'
       OLLAMA_MODELS: '/tmp/model-spelunker-ollama-models'
@@ -131,6 +129,7 @@ jobs:
           if not digest.startswith(expected):
               raise SystemExit(f"model digest drift: expected prefix {expected}, got {digest}")
 
+          tool_surface = os.environ['TOOL_SURFACE']
           candidate = {
               'harness': {'name': 'codex', 'version': os.environ['CODEX_VERSION']},
               'model': {
@@ -138,7 +137,11 @@ jobs:
                   'id': wanted,
                   'artifact_ref': f"ollama-sha256:{digest}",
               },
-              'toolset': ['filesystem', 'shell'],
+              'toolset': (
+                  ['filesystem', 'apply_patch']
+                  if tool_surface == 'apply-patch-only'
+                  else ['filesystem', 'shell']
+              ),
               'configuration': {
                   'mode': 'oss',
                   'local_provider': 'ollama',
@@ -148,6 +151,7 @@ jobs:
                   'web_search': 'disabled',
                   'model_instructions_variant': os.environ['INSTRUCTIONS_MODE'],
                   'model_metadata_variant': os.environ['METADATA_MODE'],
+                  'tool_surface': tool_surface,
                   'ollama_context_length': int(os.environ['OLLAMA_CONTEXT_LENGTH']),
               },
           }
@@ -211,14 +215,22 @@ jobs:
                   "description": "Qualification-only local Ollama model metadata.",
                   "default_reasoning_level": None,
                   "supported_reasoning_levels": [],
-                  "shell_type": "unified_exec",
+                  "shell_type": (
+                      "disabled"
+                      if os.environ["TOOL_SURFACE"] == "apply-patch-only"
+                      else "unified_exec"
+                  ),
                   "visibility": "none",
                   "supported_in_api": True,
                   "priority": 99,
                   "minimal_client_version": "0.154.0",
                   "support_verbosity": False,
                   "default_verbosity": None,
-                  "apply_patch_tool_type": None,
+                  "apply_patch_tool_type": (
+                      "freeform"
+                      if os.environ["TOOL_SURFACE"] == "apply-patch-only"
+                      else None
+                  ),
                   "web_search_tool_type": "text",
                   "context_window": 40960,
                   "max_context_window": 40960,
