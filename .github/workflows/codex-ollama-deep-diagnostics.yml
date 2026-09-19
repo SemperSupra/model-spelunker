@@ -82,19 +82,44 @@ jobs:
           echo "DIAG_CODEX_HOME=$CODEX_HOME"
           doctor_json="$RUNNER_TEMP/codex-doctor.json"
           doctor_err="$RUNNER_TEMP/codex-doctor.err"
+          probe_work="$RUNNER_TEMP/sandbox-probe"
+          mkdir -p "$probe_work"
+          cat >"$CODEX_HOME/config.toml" <<'EOF'
+          approval_policy = "never"
+          default_permissions = "legacy-workspace"
+
+          [permissions.legacy-workspace.filesystem]
+          ":root" = "read"
+          ":workspace_roots" = "write"
+
+          [permissions.legacy-workspace.network]
+          enabled = false
+          EOF
+
           set +e
           codex doctor --json >"$doctor_json" 2>"$doctor_err"
           doctor_rc=$?
           sandbox_out="$(codex sandbox -- sh -c 'printf SANDBOX_OK' 2>&1)"
           sandbox_rc=$?
+          bwrap_net_out="$(codex -c 'sandbox_workspace_write.network_access=true' sandbox -- sh -c 'printf SANDBOX_OK' 2>&1)"
+          bwrap_net_rc=$?
           legacy_out="$(codex -c 'features.use_legacy_landlock=true' sandbox -- sh -c 'printf SANDBOX_OK' 2>&1)"
           legacy_rc=$?
+          custom_legacy_out="$(codex -c 'features.use_legacy_landlock=true' sandbox -P legacy-workspace -C "$probe_work" -- sh -c 'printf SANDBOX_OK > probe.txt' 2>&1)"
+          custom_legacy_rc=$?
           set -e
+          custom_legacy_value="$(cat "$probe_work/probe.txt" 2>/dev/null || true)"
+
           echo "DIAG_DOCTOR_RC=$doctor_rc"
           echo "DIAG_SANDBOX_BWRAP_RC=$sandbox_rc"
           printf 'DIAG_SANDBOX_BWRAP_OUTPUT=%q\n' "$sandbox_out"
+          echo "DIAG_SANDBOX_BWRAP_NETWORK_ENABLED_RC=$bwrap_net_rc"
+          printf 'DIAG_SANDBOX_BWRAP_NETWORK_ENABLED_OUTPUT=%q\n' "$bwrap_net_out"
           echo "DIAG_SANDBOX_LANDLOCK_RC=$legacy_rc"
           printf 'DIAG_SANDBOX_LANDLOCK_OUTPUT=%q\n' "$legacy_out"
+          echo "DIAG_SANDBOX_CUSTOM_LANDLOCK_RC=$custom_legacy_rc"
+          printf 'DIAG_SANDBOX_CUSTOM_LANDLOCK_OUTPUT=%q\n' "$custom_legacy_out"
+          printf 'DIAG_SANDBOX_CUSTOM_LANDLOCK_VALUE=%q\n' "$custom_legacy_value"
           DOCTOR_JSON="$doctor_json" python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -248,6 +273,7 @@ jobs:
             --model "$OLLAMA_MODEL_TAG"
             --sandbox workspace-write
             --skip-git-repo-check
+            -c 'default_permissions="legacy-workspace"'
             --ephemeral
             -c 'web_search="disabled"'
             -c 'features.use_legacy_landlock=true'
