@@ -133,6 +133,7 @@ jobs:
           test -z "${OPENAI_API_KEY:-}"
           test -z "${CODEX_API_KEY:-}"
 
+          set +e
           python qualification/run_task.py \
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-linux-x64-codex-ollama \
@@ -148,16 +149,25 @@ jobs:
               --skip-git-repo-check \
               --ephemeral \
               -c 'web_search="disabled"'
+          qualification_rc=$?
+          set -e
 
-          python3 - <<'PY'
+          test -f "$RECEIPT"
+          QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'
           import json
           import os
           from pathlib import Path
 
           receipt = json.loads(Path(os.environ['RECEIPT']).read_text())
+          rc = int(os.environ['QUALIFICATION_RC'])
           assert receipt['candidate']['harness']['name'] == 'codex'
           assert receipt['candidate']['model']['id'] == os.environ['OLLAMA_MODEL_TAG']
+          assert rc == (0 if receipt['observation']['success'] else 1)
           print(json.dumps(receipt, sort_keys=True))
+          if not receipt['observation']['success']:
+              print("QUALIFICATION_RESULT=FAIL (valid observation; workflow infrastructure remains healthy)")
+          else:
+              print("QUALIFICATION_RESULT=PASS")
           PY
 
       - name: Show bounded Ollama diagnostics on failure
