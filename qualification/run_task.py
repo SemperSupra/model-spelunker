@@ -144,6 +144,7 @@ def main() -> int:
             "task": {
                 "id": task["id"],
                 "source_commit": args.task_commit,
+                "package_digest": tree_digest(args.task_dir),
             },
             "candidate": {
                 "harness": candidate["harness"],
