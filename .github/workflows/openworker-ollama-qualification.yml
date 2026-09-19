@@ -125,6 +125,14 @@ jobs:
                   'artifact_ref': f"ollama-sha256:{digest}",
               },
               'toolset': ['filesystem'],
+              'configuration': {
+                  'projection': ['read_file', 'write_file'],
+                  'parallel_tool_calls': False,
+                  'max_tokens': 2048,
+                  'reasoning_effort': 'none',
+                  'max_iterations': 4,
+                  'ollama_context_length': int(os.environ['OLLAMA_CONTEXT_LENGTH']),
+              },
           }
           Path(os.environ['CANDIDATE_META']).write_text(
               json.dumps(candidate, indent=2, sort_keys=True) + '\n',
@@ -173,20 +181,10 @@ jobs:
               print('QUALIFICATION_RESULT=FAIL (valid observation; workflow infrastructure remains healthy)')
           PY
 
-          if python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          receipt = json.loads(Path(os.environ['RECEIPT']).read_text())
-          raise SystemExit(0 if receipt['observation']['success'] else 1)
-          PY
-          then
-            :
-          else
-            echo '=== bounded candidate diagnostics (credential-free rep) ==='
-            cat "$DIAGNOSTICS"
-            echo '=== bounded Ollama timing diagnostics ==='
-            grep -E 'task [0-9]+ \| prompt processing|prompt eval|eval rate|total duration|load duration|prompt_eval|eval_count|processing task|new prompt' "$RUNNER_TEMP/ollama.log" | tail -n 120 || true
-          fi
+          echo '=== bounded candidate diagnostics (credential-free rep) ==='
+          cat "$DIAGNOSTICS"
+          echo '=== bounded Ollama timing diagnostics ==='
+          grep -E 'task [0-9]+ \| prompt processing|prompt eval|eval rate|total duration|load duration|prompt_eval|eval_count|processing task|new prompt' "$RUNNER_TEMP/ollama.log" | tail -n 120 || true
 
       - name: Show bounded Ollama diagnostics on infrastructure failure
         if: failure()
