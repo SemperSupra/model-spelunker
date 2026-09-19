@@ -1,0 +1,166 @@
+name: Codex Ollama Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/**'
+      - '.github/workflows/codex-ollama-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-ollama-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codex-qwen3-1-7b:
+    name: Codex 0.154.0 + Qwen3 1.7B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CODEX_VERSION: '0.154.0'
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-ollama-models'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      CODEX_HOME: ${{ runner.temp }}/codex-home
+      CANDIDATE_META: ${{ runner.temp }}/codex-qwen3-1.7b.json
+      RECEIPT: ${{ runner.temp }}/codex-qwen3-1.7b-receipt.json
+      SUBSTRATE_PROFILE_COMMIT: 'dada1c0403920b2977fe0cf2830ccd374cb6d94e'
+    steps:
+      - name: Checkout qualification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Codex
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+          npm install --global "@openai/codex@${CODEX_VERSION}"
+          installed="$(codex --version)"
+          echo "$installed"
+          grep -F "$CODEX_VERSION" <<<"$installed"
+          mkdir -p "$CODEX_HOME"
+
+      - name: Install pinned Ollama ephemerally
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" \
+            --output "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          test -x "$runtime/bin/ollama"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+          installed="$("$runtime/bin/ollama" --version 2>&1)"
+          echo "$installed"
+          grep -F "$OLLAMA_VERSION" <<<"$installed"
+
+      - name: Start isolated Ollama and hydrate pinned model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env \
+            OLLAMA_HOST="$OLLAMA_HOST" \
+            OLLAMA_MODELS="$OLLAMA_MODELS" \
+            OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL" \
+            OLLAMA_MAX_LOADED_MODELS="$OLLAMA_MAX_LOADED_MODELS" \
+            OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH" \
+            ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          with urllib.request.urlopen(f"http://{os.environ['OLLAMA_HOST']}/api/tags", timeout=10) as response:
+              data = json.load(response)
+          wanted = os.environ['OLLAMA_MODEL_TAG']
+          row = next((m for m in data.get('models', []) if m.get('name') == wanted), None)
+          if row is None:
+              raise SystemExit(f"pulled model not present in /api/tags: {wanted}")
+          digest = str(row.get('digest') or '').removeprefix('sha256:')
+          expected = os.environ['OLLAMA_MODEL_DIGEST_PREFIX']
+          if not digest.startswith(expected):
+              raise SystemExit(f"model digest drift: expected prefix {expected}, got {digest}")
+
+          candidate = {
+              'harness': {'name': 'codex', 'version': os.environ['CODEX_VERSION']},
+              'model': {
+                  'provider': 'ollama',
+                  'id': wanted,
+                  'artifact_ref': f"ollama-sha256:{digest}",
+              },
+              'toolset': ['filesystem', 'shell'],
+          }
+          Path(os.environ['CANDIDATE_META']).write_text(
+              json.dumps(candidate, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps({'model': wanted, 'digest': row.get('digest'), 'size': row.get('size')}, sort_keys=True))
+          PY
+
+      - name: Run harness-neutral task through Codex OSS mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset OPENAI_API_KEY || true
+          unset CODEX_API_KEY || true
+          test -z "${OPENAI_API_KEY:-}"
+          test -z "${CODEX_API_KEY:-}"
+
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-linux-x64-codex-ollama \
+            --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            qualification/tasks/text-repair-v0 \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
+            -- codex exec \
+              --oss \
+              --local-provider ollama \
+              --model "$OLLAMA_MODEL_TAG" \
+              --sandbox workspace-write \
+              --skip-git-repo-check \
+              --ephemeral \
+              -c 'web_search="disabled"'
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          receipt = json.loads(Path(os.environ['RECEIPT']).read_text())
+          assert receipt['candidate']['harness']['name'] == 'codex'
+          assert receipt['candidate']['model']['id'] == os.environ['OLLAMA_MODEL_TAG']
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+
+      - name: Show bounded Ollama diagnostics on failure
+        if: failure()
+        shell: bash
+        run: tail -n 200 "$RUNNER_TEMP/ollama.log" || true
