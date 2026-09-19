@@ -51,12 +51,12 @@ jobs:
           RECEIPT: ${{ runner.temp }}/qualification-receipt.json
         run: |
           python qualification/run_task.py \
-            qualification/tasks/text-repair-v0 \
-            qualification/test-candidate.json \
-            "$RECEIPT" \
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id contract-self-test \
             --substrate-profile-commit "$GITHUB_SHA" \
+            qualification/tasks/text-repair-v0 \
+            qualification/test-candidate.json \
+            "$RECEIPT" \
             -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
 
           python - <<'PY'
