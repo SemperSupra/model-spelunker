@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "evidence_id": "codex-ollama-deep-diagnostics-20260919",
+  "branch": "test/issue-54-harness-model-qualification",
+  "recorded_at": "2026-09-19T14:05:00Z",
+  "versions": {
+    "codex": "0.154.0",
+    "codex_source_sha": "6b9826e3aa83b1a5947db50f4332cb9c65f1b340",
+    "ollama": "0.34.1"
+  },
+  "models": {
+    "qwen3:1.7b": {
+      "digest_prefix": "8f68893c685c"
+    },
+    "qwen3:0.6b": {
+      "digest_prefix": "7df6b6e09427"
+    }
+  },
+  "runs": [
+    {
+      "workflow_run_id": 35446508113,
+      "jobs": [
+        {
+          "job_id": 105906244416,
+          "condition": "qwen3:1.7b reasoning effort unset",
+          "candidate_exit_code": 124,
+          "verifier_exit_code": 1,
+          "wall_seconds": 120,
+          "observations": [
+            "wire reasoning object was empty/default",
+            "first function call occurred late in the turn",
+            "tool execution did not produce READY"
+          ]
+        },
+        {
+          "job_id": 105906244528,
+          "condition": "qwen3:1.7b explicit reasoning effort none",
+          "candidate_exit_code": 124,
+          "verifier_exit_code": 1,
+          "wall_seconds": 120,
+          "observations": [
+            "wire reasoning effort was explicitly none",
+            "invalid write_stdin call observed",
+            "approval escalation rejected",
+            "sandbox helper spawn failure observed"
+          ]
+        },
+        {
+          "job_id": 105906244550,
+          "condition": "qwen3:0.6b explicit reasoning effort none",
+          "candidate_exit_code": 0,
+          "verifier_exit_code": 1,
+          "wall_seconds": 31.9,
+          "observations": [
+            "candidate completed before timeout",
+            "invalid write_stdin call observed",
+            "deterministic verifier rejected final state",
+            "false completion"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_run_id": 35446905573,
+      "jobs": [
+        {
+          "job_id": 105907294624,
+          "condition": "stable CODEX_HOME, default bubblewrap preflight",
+          "observations": [
+            "Codex helper aliases resolved under workspace home",
+            "bubblewrap failed with loopback RTM_NEWADDR operation not permitted",
+            "model hydration was skipped by preflight"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_run_id": 35446985131,
+      "jobs": [
+        {
+          "job_id": 105907503546,
+          "condition": "stable CODEX_HOME plus legacy Landlock fallback",
+          "candidate_exit_code": 124,
+          "verifier_exit_code": 1,
+          "wall_seconds": 180,
+          "observations": [
+            "trivial Landlock sandbox smoke test passed",
+            "agent exec_command failed because permission profile required direct runtime enforcement",
+            "repeated invalid tool and sandbox retries amplified context",
+            "final task state remained BROKEN"
+          ]
+        }
+      ]
+    },
+    {
+      "workflow_run_id": 35447284961,
+      "jobs": [
+        {
+          "job_id": 105908295567,
+          "condition": "custom reduced permission-profile probe",
+          "candidate_exit_code": 124,
+          "verifier_exit_code": 1,
+          "wall_seconds": 180,
+          "observations": [
+            "default bubblewrap remained unavailable",
+            "network-enabled bubblewrap remained unavailable",
+            "legacy Landlock still rejected agent permission profile",
+            "invalid write_stdin and approval mismatch persisted",
+            "final task state remained BROKEN"
+          ]
+        }
+      ]
+    }
+  ],
+  "durable_findings": [
+    {
+      "id": "reasoning-display-vs-wire",
+      "finding": "An unset/default reasoning effort can appear as none in status while the Ollama request carries an empty reasoning object; explicit none must be configured to disable Qwen reasoning deterministically."
+    },
+    {
+      "id": "timeout-is-terminal-not-root-cause",
+      "finding": "Outer timeout can coexist with invalid tool use, approval-policy mismatch, sandbox failure, repeated retries, and context growth; preserve those signals separately."
+    },
+    {
+      "id": "false-completion",
+      "finding": "Qwen3 0.6B completed within the wall clock but failed deterministic verification, so candidate exit zero is not sufficient for qualification."
+    },
+    {
+      "id": "codex-home-temp-incompatibility",
+      "finding": "Codex 0.154.0 refuses arg0 helper creation when CODEX_HOME is under the system temporary directory; qualification must use a non-temporary Codex home."
+    },
+    {
+      "id": "github-hosted-bubblewrap-boundary",
+      "finding": "The tested GitHub-hosted Ubuntu runner cannot satisfy Codex bubblewrap user/network namespace setup and returns loopback RTM_NEWADDR operation not permitted."
+    },
+    {
+      "id": "landlock-not-drop-in",
+      "finding": "Legacy Landlock is not a transparent substitute for the agent workspace permission profile when Codex requires direct runtime enforcement."
+    }
+  ],
+  "operational_rules": [
+    "Run a no-model sandbox preflight before downloading or hydrating an expensive model.",
+    "Record timed_out separately from underlying failure signals.",
+    "Record state_changed independently of candidate exit status.",
+    "Keep deterministic verification authoritative for success.",
+    "Keep expensive qualification and deep-diagnostic workflows manual-only unless a future trigger demonstrates acceptable cost."
+  ]
+}

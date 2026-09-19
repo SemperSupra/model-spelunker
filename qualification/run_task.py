@@ -38,6 +38,80 @@ def tree_digest(root: Path) -> str:
     return "sha256:" + hasher.hexdigest()
 
 
+def detect_failure_signals(
+    stdout: str,
+    stderr: str,
+    *,
+    timed_out: bool,
+    candidate_exit: int,
+    verifier_exit: int,
+    state_changed: bool,
+) -> list[str]:
+    """Return bounded, evidence-backed failure signals without replacing the terminal class."""
+
+    combined = f"{stdout}\n{stderr}"
+    signals: list[str] = []
+
+    def add(signal: str) -> None:
+        if signal not in signals:
+            signals.append(signal)
+
+    if timed_out:
+        add("timeout")
+    if candidate_exit == 0 and verifier_exit != 0:
+        add("false-completion")
+    if verifier_exit != 0 and not state_changed:
+        add("state-unchanged")
+
+    signatures = {
+        "invalid-tool-call": (
+            "write_stdin failed: Unknown process id",
+            "invalid tool call",
+            "invalid_tool_call",
+        ),
+        "authority-mismatch": (
+            "approval policy is Never; reject command",
+            "cannot ask for escalated permissions",
+        ),
+        "sandbox-helper-unavailable": (
+            "Unable to spawn codex-linux-sandbox",
+            "No viable candidates found in PATH",
+            "missing codex-linux-sandbox executable path",
+        ),
+        "sandbox-user-namespace-unavailable": (
+            "loopback: Failed RTM_NEWADDR",
+            "loopback: Failed RTM_NEWLINK",
+            "setting up uid map: Permission denied",
+            "No permissions to create a new namespace",
+        ),
+        "sandbox-policy-incompatible": (
+            "permission profiles requiring direct runtime enforcement are incompatible with --use-legacy-landlock",
+        ),
+        "unexpected-external-network": (
+            "failed to warm featured plugin ids cache error=remote featured plugin request",
+        ),
+    }
+
+    tool_failure_hits = 0
+    for signal, needles in signatures.items():
+        hits = sum(combined.count(needle) for needle in needles)
+        if hits:
+            add(signal)
+        if signal in {
+            "invalid-tool-call",
+            "authority-mismatch",
+            "sandbox-helper-unavailable",
+            "sandbox-user-namespace-unavailable",
+            "sandbox-policy-incompatible",
+        }:
+            tool_failure_hits += hits
+
+    if tool_failure_hits >= 2:
+        add("repeated-tool-failure")
+
+    return signals
+
+
 def new_run_id() -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return f"{stamp}-{uuid.uuid4().hex[:8]}"
@@ -72,6 +146,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="model-spelunker-qual-") as temp:
         workdir = Path(temp) / "work"
         shutil.copytree(args.task_dir / task["fixture"], workdir)
+        initial_tree_digest = tree_digest(workdir)
 
         started = time.monotonic()
         try:
@@ -109,15 +184,26 @@ def main() -> int:
         )
         wall_seconds = time.monotonic() - started
 
+        final_tree_digest = tree_digest(workdir)
+        state_changed = final_tree_digest != initial_tree_digest
         success = verifier.returncode == 0 and not timed_out
         if timed_out:
             failure_class = "timeout"
         elif candidate_exit != 0:
             failure_class = "candidate-error"
         elif verifier.returncode != 0:
-            failure_class = "verifier-failure"
+            failure_class = "false-completion"
         else:
             failure_class = None
+
+        failure_signals = detect_failure_signals(
+            stdout,
+            stderr,
+            timed_out=timed_out,
+            candidate_exit=candidate_exit,
+            verifier_exit=verifier.returncode,
+            state_changed=state_changed,
+        )
 
         evidence = {
             "candidate_exit_code": candidate_exit,
@@ -126,7 +212,8 @@ def main() -> int:
             "verifier_exit_code": verifier.returncode,
             "verifier_stdout_sha256": sha256_bytes(verifier.stdout.encode("utf-8")),
             "verifier_stderr_sha256": sha256_bytes(verifier.stderr.encode("utf-8")),
-            "final_tree_digest": tree_digest(workdir),
+            "initial_tree_digest": initial_tree_digest,
+            "final_tree_digest": final_tree_digest,
         }
 
         diagnostics = {
@@ -163,6 +250,9 @@ def main() -> int:
                 "human_interventions": 0,
                 "candidate_exit_code": candidate_exit,
                 "verifier_exit_code": verifier.returncode,
+                "timed_out": timed_out,
+                "state_changed": state_changed,
+                "failure_signals": failure_signals,
                 "tool_calls": None,
                 "input_tokens": None,
                 "output_tokens": None,

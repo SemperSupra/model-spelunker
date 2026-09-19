@@ -39,3 +39,25 @@ produce comparable receipts. It is not a meaningful coding benchmark.
 Do not add a scheduler, database, dashboard, agent registry, or new execution
 service here. Agent Dispatch remains the execution/routing authority and the
 infrastructure repository owns worker substrate construction.
+
+## Failure observations
+
+The terminal `failure_class` stays deliberately small:
+
+- `timeout` — the candidate exceeded the task wall clock;
+- `candidate-error` — the candidate process exited non-zero;
+- `false-completion` — the candidate exited zero but deterministic verification failed.
+
+A timeout does not erase evidence about what happened before the wall clock expired.
+Receipts may also include `failure_signals` such as invalid tool use, approval/authority
+mismatch, sandbox-helper failure, hosted-runner user-namespace failure, or repeated
+tool-recovery failures. These signals are evidence annotations, not a replacement
+for deterministic verification.
+
+`timed_out` and `state_changed` are recorded separately so downstream placement
+logic can distinguish, for example, a slow actor that made progress from one that
+timed out without changing task state.
+
+For expensive model-backed reps, validate the harness execution substrate before
+model hydration whenever a cheap no-model preflight exists. A broken sandbox or
+runtime is a substrate observation and should not consume model inference time.

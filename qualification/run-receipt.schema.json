@@ -14,7 +14,12 @@
     "evidence_digest"
   ],
   "properties": {
-    "schema_version": { "type": "integer", "enum": [1] },
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
     "run_id": {
       "type": "string",
       "pattern": "^[0-9]{8}T[0-9]{6}Z-[a-z0-9-]+$"
@@ -22,35 +27,73 @@
     "task": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "source_commit", "package_digest"],
+      "required": [
+        "id",
+        "source_commit",
+        "package_digest"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "package_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "package_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "candidate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["harness", "model", "configuration_digest", "toolset"],
+      "required": [
+        "harness",
+        "model",
+        "configuration_digest",
+        "toolset"
+      ],
       "properties": {
         "harness": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["name", "version"],
+          "required": [
+            "name",
+            "version"
+          ],
           "properties": {
-            "name": { "type": "string", "minLength": 1 },
-            "version": { "type": "string", "minLength": 1 }
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "model": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["provider", "id"],
+          "required": [
+            "provider",
+            "id"
+          ],
           "properties": {
-            "provider": { "type": "string", "minLength": 1 },
-            "id": { "type": "string", "minLength": 1 },
-            "artifact_ref": { "type": "string" }
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "artifact_ref": {
+              "type": "string"
+            }
           }
         },
         "configuration_digest": {
@@ -60,17 +103,28 @@
         "toolset": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
     "substrate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["profile_id", "profile_commit"],
+      "required": [
+        "profile_id",
+        "profile_commit"
+      ],
       "properties": {
-        "profile_id": { "type": "string", "minLength": 1 },
-        "profile_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        "profile_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
       }
     },
     "observation": {
@@ -85,16 +139,82 @@
         "verifier_exit_code"
       ],
       "properties": {
-        "success": { "type": "boolean" },
-        "failure_class": { "type": ["string", "null"] },
-        "wall_seconds": { "type": "number", "minimum": 0 },
-        "human_interventions": { "type": "integer", "minimum": 0 },
-        "candidate_exit_code": { "type": "integer" },
-        "verifier_exit_code": { "type": "integer" },
-        "tool_calls": { "type": ["integer", "null"], "minimum": 0 },
-        "input_tokens": { "type": ["integer", "null"], "minimum": 0 },
-        "output_tokens": { "type": ["integer", "null"], "minimum": 0 },
-        "cost": { "type": ["number", "null"], "minimum": 0 }
+        "success": {
+          "type": "boolean"
+        },
+        "failure_class": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "wall_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "human_interventions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidate_exit_code": {
+          "type": "integer"
+        },
+        "verifier_exit_code": {
+          "type": "integer"
+        },
+        "tool_calls": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "input_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "cost": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "timed_out": {
+          "type": "boolean"
+        },
+        "state_changed": {
+          "type": "boolean"
+        },
+        "failure_signals": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "timeout",
+              "false-completion",
+              "state-unchanged",
+              "invalid-tool-call",
+              "authority-mismatch",
+              "sandbox-helper-unavailable",
+              "sandbox-user-namespace-unavailable",
+              "sandbox-policy-incompatible",
+              "unexpected-external-network",
+              "repeated-tool-failure"
+            ]
+          }
+        }
       }
     },
     "evidence_digest": {

@@ -1,11 +1,6 @@
 name: Codex Ollama Deep Diagnostics
 
 on:
-  push:
-    branches:
-      - test/issue-54-harness-model-qualification
-    paths:
-      - '.github/workflows/codex-ollama-deep-diagnostics.yml'
   workflow_dispatch:
 
 permissions:

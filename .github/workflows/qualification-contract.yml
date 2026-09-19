@@ -94,7 +94,12 @@ jobs:
           assert good1["observation"]["success"] is True
           assert good2["observation"]["success"] is True
           assert bad["observation"]["success"] is False
-          assert bad["observation"]["failure_class"] == "verifier-failure"
+          assert bad["observation"]["failure_class"] == "false-completion"
+          assert bad["observation"]["timed_out"] is False
+          assert bad["observation"]["state_changed"] is True
+          assert "false-completion" in bad["observation"]["failure_signals"]
+          assert good1["observation"]["failure_signals"] == []
+          assert good2["observation"]["failure_signals"] == []
           assert len({good1["run_id"], good2["run_id"], bad["run_id"]}) == 3
           assert good1["candidate"]["configuration_digest"] == good2["candidate"]["configuration_digest"]
           print("PASS repeated reps create distinct receipts and failed evidence is preserved")
