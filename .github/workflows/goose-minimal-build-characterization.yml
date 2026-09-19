@@ -1,12 +1,6 @@
 name: Goose Minimal Build Characterization
 
 on:
-  push:
-    branches:
-      - test/issue-54-harness-model-qualification
-    paths:
-      - '.github/workflows/goose-minimal-build-characterization.yml'
-      - 'qualification/evidence/harness-build-seams-2026-09-19.json'
   workflow_dispatch:
 
 permissions:

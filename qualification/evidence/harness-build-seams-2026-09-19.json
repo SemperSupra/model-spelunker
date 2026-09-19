@@ -15,9 +15,14 @@
         "codegen_units": 4
       },
       "structural_projection": {
-        "status": "requires-source-change",
-        "evidence": "codex-rs/cli and codex-rs/exec expose no top-level Cargo [features] table at the pinned revision",
-        "next_step": "Do not fork solely for size/startup. Revisit only if runtime qualification shows a removable subsystem is causally material."
+        "status": "upstream-headless-binary-available",
+        "evidence": "codex-rs/exec is a dedicated non-interactive binary target preserving exec semantics while omitting substantial full-CLI/TUI/plugin/server dependencies",
+        "next_step": "Characterize a source-built codex-exec binary before considering any fork.",
+        "candidate": "codex-exec",
+        "direct_dependency_counts": {
+          "full_cli": 69,
+          "codex_exec": 31
+        }
       }
     },
     {
@@ -40,7 +45,32 @@
       "structural_projection": {
         "status": "upstream-supported",
         "first_profile": "--no-default-features",
-        "rationale": "Proves a genuinely projected CLI before spending model inference."
+        "rationale": "Proves a genuinely projected CLI before spending model inference.",
+        "zero_feature_result": {
+          "status": "build-failed",
+          "workflow_run_id": 35461215153,
+          "failure": "goose-cli requires at least one TLS backend"
+        },
+        "minimum_viable_profile": "--no-default-features --features rustls-tls",
+        "minimum_viable_build": {
+          "status": "pass",
+          "workflow_run_id": 35461853755,
+          "default_tree_lines": 9269,
+          "minimal_tree_lines": 4979,
+          "default_feature_lines": 6217,
+          "minimal_feature_lines": 3109,
+          "wall_seconds": 828.73,
+          "max_rss_kbytes": 4127004,
+          "binary_bytes": 152980744,
+          "binary_sha256": "f117d4f40bedc3e5371e04355729f1ba27066a5552be691cd22296e6294e2699",
+          "cold_version_seconds": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        }
       }
     },
     {
@@ -59,5 +89,5 @@
       }
     }
   ],
-  "decision": "First compile-time qualification rep targets Goose minimal CLI. Codex compile-time fork is deferred until runtime evidence demonstrates that dependency removal is likely to change the model-facing or execution surface."
+  "decision": "Goose minimum viable source projection is --no-default-features --features rustls-tls and has earned a Qwen crossover. Codex should next test the upstream codex-exec binary target before any source fork."
 }
