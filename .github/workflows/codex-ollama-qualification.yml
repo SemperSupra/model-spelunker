@@ -43,6 +43,7 @@ jobs:
       CODEX_HOME: '/tmp/model-spelunker-codex-home'
       CANDIDATE_META: '/tmp/model-spelunker-codex-candidate.json'
       RECEIPT: '/tmp/model-spelunker-codex-receipt.json'
+      DIAGNOSTICS: '/tmp/model-spelunker-codex-diagnostics.json'
       SUBSTRATE_PROFILE_COMMIT: 'dada1c0403920b2977fe0cf2830ccd374cb6d94e'
     steps:
       - name: Checkout qualification harness
@@ -148,6 +149,7 @@ jobs:
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-linux-x64-codex-ollama \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            --diagnostics "$DIAGNOSTICS" \
             qualification/tasks/text-repair-v0 \
             "$CANDIDATE_META" \
             "$RECEIPT" \
@@ -180,7 +182,22 @@ jobs:
               print("QUALIFICATION_RESULT=PASS")
           PY
 
-      - name: Show bounded Ollama diagnostics on failure
+          if python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt = json.loads(Path(os.environ['RECEIPT']).read_text())
+          raise SystemExit(0 if receipt['observation']['success'] else 1)
+          PY
+          then
+            :
+          else
+            echo "=== bounded candidate diagnostics (credential-free rep) ==="
+            cat "$DIAGNOSTICS"
+            echo "=== bounded Ollama timing diagnostics ==="
+            grep -E 'task [0-9]+ \| prompt processing|prompt eval|eval rate|total duration|load duration|prompt_eval|eval_count|processing task|new prompt' "$RUNNER_TEMP/ollama.log" | tail -n 120 || true
+          fi
+
+      - name: Show bounded Ollama diagnostics on infrastructure failure
         if: failure()
         shell: bash
         run: tail -n 200 "$RUNNER_TEMP/ollama.log" || true
