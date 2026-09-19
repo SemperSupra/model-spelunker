@@ -51,6 +51,11 @@ def main() -> int:
     parser.add_argument("--task-commit", required=True)
     parser.add_argument("--substrate-profile-id", required=True)
     parser.add_argument("--substrate-profile-commit", required=True)
+    parser.add_argument(
+        "--diagnostics",
+        type=Path,
+        help="Optional bounded raw diagnostics file. Use only on credential-free qualification reps.",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -122,6 +127,15 @@ def main() -> int:
             "final_tree_digest": tree_digest(workdir),
         }
 
+        diagnostics = {
+            "candidate_stdout_chars": len(stdout),
+            "candidate_stderr_chars": len(stderr),
+            "candidate_stdout_tail": stdout[-8192:],
+            "candidate_stderr_tail": stderr[-8192:],
+            "verifier_stdout_tail": verifier.stdout[-4096:],
+            "verifier_stderr_tail": verifier.stderr[-4096:],
+        }
+
         receipt = {
             "schema_version": 1,
             "run_id": new_run_id(),
@@ -159,6 +173,12 @@ def main() -> int:
             json.dumps(receipt, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        if args.diagnostics is not None:
+            args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
+            args.diagnostics.write_text(
+                json.dumps(diagnostics, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         print(json.dumps(receipt, sort_keys=True))
         return 0 if success else 1
 
