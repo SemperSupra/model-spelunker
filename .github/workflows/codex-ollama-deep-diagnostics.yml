@@ -21,17 +21,9 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - label: Qwen3 1.7B / effort unset
+          - label: Qwen3 1.7B / explicit no reasoning / stable Codex home
             model_tag: qwen3:1.7b
             digest_prefix: 8f68893c685c
-            effort_mode: unset
-          - label: Qwen3 1.7B / explicit no reasoning
-            model_tag: qwen3:1.7b
-            digest_prefix: 8f68893c685c
-            effort_mode: explicit-none
-          - label: Qwen3 0.6B / explicit no reasoning
-            model_tag: qwen3:0.6b
-            digest_prefix: 7df6b6e09427
             effort_mode: explicit-none
     env:
       CODEX_VERSION: '0.154.0'
@@ -46,7 +38,8 @@ jobs:
       OLLAMA_NUM_PARALLEL: '1'
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
-      CODEX_HOME: '/tmp/model-spelunker-diag-codex-home'
+      CODEX_HOME: '${{ github.workspace }}/.codex-diag-home'
+      DIAG_TIMEOUT_SECONDS: '180'
       RUST_LOG: 'codex_core=debug,codex_exec=debug,codex_model_provider=debug,codex_api=debug,reqwest=warn,hyper=warn'
     steps:
       - name: Checkout
@@ -81,6 +74,44 @@ jobs:
           zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
           echo "$runtime/bin" >> "$GITHUB_PATH"
           "$runtime/bin/ollama" --version
+
+      - name: Preflight Codex sandbox substrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DIAG_CODEX_HOME=$CODEX_HOME"
+          doctor_json="$RUNNER_TEMP/codex-doctor.json"
+          doctor_err="$RUNNER_TEMP/codex-doctor.err"
+          set +e
+          codex doctor --json >"$doctor_json" 2>"$doctor_err"
+          doctor_rc=$?
+          sandbox_out="$(codex sandbox -- sh -c 'printf SANDBOX_OK' 2>&1)"
+          sandbox_rc=$?
+          set -e
+          echo "DIAG_DOCTOR_RC=$doctor_rc"
+          echo "DIAG_SANDBOX_PREFLIGHT_RC=$sandbox_rc"
+          printf 'DIAG_SANDBOX_PREFLIGHT_OUTPUT=%q\n' "$sandbox_out"
+          DOCTOR_JSON="$doctor_json" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path=Path(os.environ["DOCTOR_JSON"])
+          try:
+              report=json.loads(path.read_text(encoding="utf-8"))
+          except Exception as exc:
+              print("DIAG_DOCTOR_PARSE_ERROR=" + json.dumps(str(exc)))
+          else:
+              checks=report.get("checks") or []
+              selected=[
+                  c for c in checks
+                  if c.get("id") in {"sandbox.helpers","sandbox.runtime","runtime.install"}
+                  or c.get("category") == "sandbox"
+              ]
+              print("DIAG_DOCTOR_SANDBOX=" + json.dumps(selected, sort_keys=True))
+          PY
+          if [[ -s "$doctor_err" ]]; then
+            echo "=== doctor stderr tail ==="
+            tail -n 40 "$doctor_err"
+          fi
 
       - name: Start diagnostic Ollama and hydrate model
         shell: bash
@@ -216,7 +247,7 @@ jobs:
 
           cd "$workdir"
           set +e
-          /usr/bin/time -v -o "$time_log" timeout --signal=TERM --kill-after=5s 120s \
+          /usr/bin/time -v -o "$time_log" timeout --signal=TERM --kill-after=5s "${DIAG_TIMEOUT_SECONDS}s" \
             "${codex_cmd[@]}" <"$prompt" \
             > >(while IFS= read -r line; do printf '%s\t%s\n' "$(date +%s.%N)" "$line" >>"$jsonl"; done) \
             2> >(while IFS= read -r line; do printf '%s\t%s\n' "$(date +%s.%N)" "$line" >>"$stderr_log"; done) &
@@ -249,6 +280,13 @@ jobs:
 
           echo "DIAG_CANDIDATE_RC=$candidate_rc"
           echo "DIAG_VERIFIER_RC=$verifier_rc"
+          WORKDIR="$workdir" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          target=Path(os.environ["WORKDIR"]) / "value.txt"
+          observed=target.read_text(encoding="utf-8", errors="replace") if target.exists() else None
+          print("DIAG_FINAL_VALUE=" + json.dumps(observed))
+          PY
           echo '=== GNU time -v ==='
           cat "$time_log"
           echo '=== resource timeline tail ==='
@@ -289,6 +327,7 @@ jobs:
                       'item_type': item.get('type'),
                       'item_status': item.get('status'),
                       'command': item.get('command'),
+                      'text': str(item.get('text') or item.get('content') or '')[:500],
                   })
               print('CODEX_EVENT_TIMELINE=' + json.dumps(compact, sort_keys=True))
           else:
@@ -325,8 +364,23 @@ jobs:
                       'name': t.get('name'),
                       'description_chars': len(t.get('description') or ''),
                       'parameters_bytes': len(json.dumps(t.get('parameters') or {}, sort_keys=True)),
+                      'parameter_properties': sorted(((t.get('parameters') or {}).get('properties') or {}).keys()),
                   })
               inp=d.get('input')
+              input_summaries=[]
+              if isinstance(inp, list):
+                  for item in inp:
+                      if not isinstance(item, dict):
+                          input_summaries.append({'type': type(item).__name__})
+                          continue
+                      output=item.get('output')
+                      input_summaries.append({
+                          'type': item.get('type'),
+                          'role': item.get('role'),
+                          'name': item.get('name'),
+                          'call_id': item.get('call_id'),
+                          'output_prefix': str(output)[:700] if output is not None else None,
+                      })
               summary={
                   'path_basename': Path(path).name,
                   'body_bytes': len(raw),
@@ -337,6 +391,7 @@ jobs:
                   'instructions_chars': len(d.get('instructions') or ''),
                   'input_bytes': len(json.dumps(inp, sort_keys=True)),
                   'input_items': len(inp) if isinstance(inp,list) else None,
+                  'input_summaries': input_summaries,
                   'tool_count': len(tools),
                   'tools': tool_summaries,
                   'max_output_tokens': d.get('max_output_tokens'),

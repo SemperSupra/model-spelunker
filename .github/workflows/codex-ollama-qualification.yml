@@ -1,10 +1,6 @@
 name: Codex Ollama Qualification
 
 on:
-  pull_request:
-    paths:
-      - 'qualification/**'
-      - '.github/workflows/codex-ollama-qualification.yml'
   workflow_dispatch:
 
 permissions:

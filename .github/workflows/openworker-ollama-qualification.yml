@@ -1,10 +1,6 @@
 name: OpenWorker Ollama Qualification
 
 on:
-  pull_request:
-    paths:
-      - 'qualification/**'
-      - '.github/workflows/openworker-ollama-qualification.yml'
   workflow_dispatch:
 
 permissions:
