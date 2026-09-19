@@ -112,6 +112,8 @@ def main() -> int:
         success = verifier.returncode == 0 and not timed_out
         if timed_out:
             failure_class = "timeout"
+        elif candidate_exit != 0:
+            failure_class = "candidate-error"
         elif verifier.returncode != 0:
             failure_class = "verifier-failure"
         else:
