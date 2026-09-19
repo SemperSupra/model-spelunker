@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo tree --locked -p goose-cli -e features >"$RUNNER_TEMP/goose-default-features.txt"
-          cargo tree --locked -p goose-cli -e features --no-default-features >"$RUNNER_TEMP/goose-minimal-features.txt"
+          cargo tree --locked -p goose-cli -e features --no-default-features --features rustls-tls >"$RUNNER_TEMP/goose-minimal-features.txt"
 
           python3 - <<'PY'
           import os
@@ -82,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           /usr/bin/time -v -o "$RUNNER_TEMP/goose-build-time.txt" \
-            cargo build --locked --release -p goose-cli --bin goose --no-default-features
+            cargo build --locked --release -p goose-cli --bin goose --no-default-features --features rustls-tls
 
           bin="$CARGO_TARGET_DIR/release/goose"
           test -x "$bin"
