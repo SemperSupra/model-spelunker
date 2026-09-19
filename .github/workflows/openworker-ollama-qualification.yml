@@ -1,1 +1,194 @@
-name: OpenWorker Ollama Qualification\n\non:\n  pull_request:\n    paths:\n      - 'qualification/**'\n      - '.github/workflows/openworker-ollama-qualification.yml'\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: openworker-ollama-qualification-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true\n\njobs:\n  openworker-qwen3-1-7b:\n    name: OpenWorker projected + Qwen3 1.7B\n    runs-on: ubuntu-24.04\n    timeout-minutes: 20\n    env:\n      OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'\n      OLLAMA_VERSION: '0.34.1'\n      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'\n      OLLAMA_MODEL_TAG: 'qwen3:1.7b'\n      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'\n      OLLAMA_HOST: '127.0.0.1:11434'\n      OLLAMA_MODELS: '/tmp/model-spelunker-openworker-models'\n      OLLAMA_NUM_PARALLEL: '1'\n      OLLAMA_MAX_LOADED_MODELS: '1'\n      OLLAMA_CONTEXT_LENGTH: '32768'\n      MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'\n      CANDIDATE_META: '/tmp/model-spelunker-openworker-candidate.json'\n      RECEIPT: '/tmp/model-spelunker-openworker-receipt.json'\n      DIAGNOSTICS: '/tmp/model-spelunker-openworker-diagnostics.json'\n      SUBSTRATE_PROFILE_COMMIT: '93a108783bd60dc830fab1b67b78eaab8bfdae97'\n      PIP_DISABLE_PIP_VERSION_CHECK: '1'\n      PYTHONDONTWRITEBYTECODE: '1'\n    steps:\n      - name: Checkout qualification harness\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Clone immutable OpenWorker source\n        shell: bash\n        run: |\n          set -euo pipefail\n          upstream="$RUNNER_TEMP/openworker"\n          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"\n          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_UPSTREAM_SHA"\n          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_UPSTREAM_SHA"\n\n      - name: Install OpenWorker in isolated environment\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 -m venv "$RUNNER_TEMP/openworker-venv"\n          source "$RUNNER_TEMP/openworker-venv/bin/activate"\n          python -m pip install --quiet --upgrade pip\n          python -m pip install --quiet -e "$RUNNER_TEMP/openworker"\n\n      - name: Install pinned Ollama ephemerally\n        shell: bash\n        run: |\n          set -euo pipefail\n          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"\n          runtime="$RUNNER_TEMP/ollama-runtime"\n          curl --fail --location --silent --show-error --retry 3 \\n            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" \\n            --output "$archive"\n          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -\n          mkdir -p "$runtime"\n          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"\n          test -x "$runtime/bin/ollama"\n          echo "$runtime/bin" >> "$GITHUB_PATH"\n          installed="$("$runtime/bin/ollama" --version 2>&1)"\n          echo "$installed"\n          grep -F "$OLLAMA_VERSION" <<<"$installed"\n\n      - name: Start isolated Ollama and hydrate pinned model\n        shell: bash\n        run: |\n          set -euo pipefail\n          mkdir -p "$OLLAMA_MODELS"\n          nohup env \\n            OLLAMA_HOST="$OLLAMA_HOST" \\n            OLLAMA_MODELS="$OLLAMA_MODELS" \\n            OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL" \\n            OLLAMA_MAX_LOADED_MODELS="$OLLAMA_MAX_LOADED_MODELS" \\n            OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH" \\n            ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &\n          for attempt in $(seq 1 60); do\n            if curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null; then\n              break\n            fi\n            sleep 1\n          done\n          curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null\n          ollama pull "$OLLAMA_MODEL_TAG"\n\n          python3 - <<'PY'\n          import json\n          import os\n          import urllib.request\n          from pathlib import Path\n\n          with urllib.request.urlopen(f"http://{os.environ['OLLAMA_HOST']}/api/tags", timeout=10) as response:\n              data = json.load(response)\n          wanted = os.environ['OLLAMA_MODEL_TAG']\n          row = next((m for m in data.get('models', []) if m.get('name') == wanted), None)\n          if row is None:\n              raise SystemExit(f"pulled model not present in /api/tags: {wanted}")\n          digest = str(row.get('digest') or '').removeprefix('sha256:')\n          expected = os.environ['OLLAMA_MODEL_DIGEST_PREFIX']\n          if not digest.startswith(expected):\n              raise SystemExit(f"model digest drift: expected prefix {expected}, got {digest}")\n\n          candidate = {\n              'harness': {'name': 'openworker', 'version': os.environ['OPENWORKER_UPSTREAM_SHA']},\n              'model': {\n                  'provider': 'ollama',\n                  'id': wanted,\n                  'artifact_ref': f"ollama-sha256:{digest}",\n              },\n              'toolset': ['filesystem'],\n          }\n          Path(os.environ['CANDIDATE_META']).write_text(\n              json.dumps(candidate, indent=2, sort_keys=True) + '\n',\n              encoding='utf-8',\n          )\n          print(json.dumps({'model': wanted, 'digest': row.get('digest'), 'size': row.get('size')}, sort_keys=True))\n          PY\n\n      - name: Run harness-neutral task through projected OpenWorker\n        shell: bash\n        run: |\n          set -euo pipefail\n          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY; do\n            unset "$key" || true\n          done\n\n          set +e\n          python qualification/run_task.py \\n            --task-commit "$GITHUB_SHA" \\n            --substrate-profile-id gha-linux-x64-openworker-ollama \\n            --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \\n            --diagnostics "$DIAGNOSTICS" \\n            qualification/tasks/text-repair-v0 \\n            "$CANDIDATE_META" \\n            "$RECEIPT" \\n            -- "$RUNNER_TEMP/openworker-venv/bin/python" \\n              "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"\n          qualification_rc=$?\n          set -e\n\n          test -f "$RECEIPT"\n          QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'\n          import json\n          import os\n          from pathlib import Path\n\n          receipt = json.loads(Path(os.environ['RECEIPT']).read_text())\n          rc = int(os.environ['QUALIFICATION_RC'])\n          assert receipt['candidate']['harness']['name'] == 'openworker'\n          assert receipt['candidate']['model']['id'] == os.environ['OLLAMA_MODEL_TAG']\n          assert rc == (0 if receipt['observation']['success'] else 1)\n          print(json.dumps(receipt, sort_keys=True))\n          if receipt['observation']['success']:\n              print('QUALIFICATION_RESULT=PASS')\n          else:\n              print('QUALIFICATION_RESULT=FAIL (valid observation; workflow infrastructure remains healthy)')\n          PY\n\n          if python3 - <<'PY'\n          import json, os\n          from pathlib import Path\n          receipt = json.loads(Path(os.environ['RECEIPT']).read_text())\n          raise SystemExit(0 if receipt['observation']['success'] else 1)\n          PY\n          then\n            :\n          else\n            echo '=== bounded candidate diagnostics (credential-free rep) ==='\n            cat "$DIAGNOSTICS"\n            echo '=== bounded Ollama timing diagnostics ==='\n            grep -E 'task [0-9]+ \| prompt processing|prompt eval|eval rate|total duration|load duration|prompt_eval|eval_count|processing task|new prompt' "$RUNNER_TEMP/ollama.log" | tail -n 120 || true\n          fi\n\n      - name: Show bounded Ollama diagnostics on infrastructure failure\n        if: failure()\n        shell: bash\n        run: tail -n 200 "$RUNNER_TEMP/ollama.log" || true\n
+name: OpenWorker Ollama Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/**'
+      - '.github/workflows/openworker-ollama-qualification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openworker-ollama-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  openworker-qwen3-1-7b:
+    name: OpenWorker projected + Qwen3 1.7B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-openworker-models'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
+      CANDIDATE_META: '/tmp/model-spelunker-openworker-candidate.json'
+      RECEIPT: '/tmp/model-spelunker-openworker-receipt.json'
+      DIAGNOSTICS: '/tmp/model-spelunker-openworker-diagnostics.json'
+      SUBSTRATE_PROFILE_COMMIT: '93a108783bd60dc830fab1b67b78eaab8bfdae97'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout qualification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Clone immutable OpenWorker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/openworker"
+          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"
+          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_UPSTREAM_SHA"
+          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_UPSTREAM_SHA"
+
+      - name: Install OpenWorker in isolated environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          source "$RUNNER_TEMP/openworker-venv/bin/activate"
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+
+      - name: Install pinned Ollama ephemerally
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" \
+            --output "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          test -x "$runtime/bin/ollama"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+          installed="$("$runtime/bin/ollama" --version 2>&1)"
+          echo "$installed"
+          grep -F "$OLLAMA_VERSION" <<<"$installed"
+
+      - name: Start isolated Ollama and hydrate pinned model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env \
+            OLLAMA_HOST="$OLLAMA_HOST" \
+            OLLAMA_MODELS="$OLLAMA_MODELS" \
+            OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL" \
+            OLLAMA_MAX_LOADED_MODELS="$OLLAMA_MAX_LOADED_MODELS" \
+            OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH" \
+            ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          with urllib.request.urlopen(f"http://{os.environ['OLLAMA_HOST']}/api/tags", timeout=10) as response:
+              data = json.load(response)
+          wanted = os.environ['OLLAMA_MODEL_TAG']
+          row = next((m for m in data.get('models', []) if m.get('name') == wanted), None)
+          if row is None:
+              raise SystemExit(f"pulled model not present in /api/tags: {wanted}")
+          digest = str(row.get('digest') or '').removeprefix('sha256:')
+          expected = os.environ['OLLAMA_MODEL_DIGEST_PREFIX']
+          if not digest.startswith(expected):
+              raise SystemExit(f"model digest drift: expected prefix {expected}, got {digest}")
+
+          candidate = {
+              'harness': {'name': 'openworker', 'version': os.environ['OPENWORKER_UPSTREAM_SHA']},
+              'model': {
+                  'provider': 'ollama',
+                  'id': wanted,
+                  'artifact_ref': f"ollama-sha256:{digest}",
+              },
+              'toolset': ['filesystem'],
+          }
+          Path(os.environ['CANDIDATE_META']).write_text(
+              json.dumps(candidate, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps({'model': wanted, 'digest': row.get('digest'), 'size': row.get('size')}, sort_keys=True))
+          PY
+
+      - name: Run harness-neutral task through projected OpenWorker
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY; do
+            unset "$key" || true
+          done
+
+          set +e
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-linux-x64-openworker-ollama \
+            --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            --diagnostics "$DIAGNOSTICS" \
+            qualification/tasks/text-repair-v0 \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
+            -- "$RUNNER_TEMP/openworker-venv/bin/python" \
+              "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          qualification_rc=$?
+          set -e
+
+          test -f "$RECEIPT"
+          QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          receipt = json.loads(Path(os.environ['RECEIPT']).read_text())
+          rc = int(os.environ['QUALIFICATION_RC'])
+          assert receipt['candidate']['harness']['name'] == 'openworker'
+          assert receipt['candidate']['model']['id'] == os.environ['OLLAMA_MODEL_TAG']
+          assert rc == (0 if receipt['observation']['success'] else 1)
+          print(json.dumps(receipt, sort_keys=True))
+          if receipt['observation']['success']:
+              print('QUALIFICATION_RESULT=PASS')
+          else:
+              print('QUALIFICATION_RESULT=FAIL (valid observation; workflow infrastructure remains healthy)')
+          PY
+
+          if python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt = json.loads(Path(os.environ['RECEIPT']).read_text())
+          raise SystemExit(0 if receipt['observation']['success'] else 1)
+          PY
+          then
+            :
+          else
+            echo '=== bounded candidate diagnostics (credential-free rep) ==='
+            cat "$DIAGNOSTICS"
+            echo '=== bounded Ollama timing diagnostics ==='
+            grep -E 'task [0-9]+ \| prompt processing|prompt eval|eval rate|total duration|load duration|prompt_eval|eval_count|processing task|new prompt' "$RUNNER_TEMP/ollama.log" | tail -n 120 || true
+          fi
+
+      - name: Show bounded Ollama diagnostics on infrastructure failure
+        if: failure()
+        shell: bash
+        run: tail -n 200 "$RUNNER_TEMP/ollama.log" || true
