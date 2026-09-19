@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "record_type": "specialist-amplification-plan",
+  "trial_id": "binary-openworker-qwen35-llm4decompile-v15-v1",
+  "purpose": "Test whether a bounded LLM4Decompile v1.5 specialist can recover useful decompilation evidence from the same benign Intel-syntax objdump main surface used by the confirmed OpenWorker/Qwen3.5 binary persona, and whether adding that tool preserves or improves verified unlock recovery.",
+  "baseline": {
+    "framework": {
+      "name": "openworker",
+      "revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "controller": {
+      "model": "qwen3.5:4b",
+      "expected_manifest_id_prefix": "2a654d98e6fb",
+      "ollama_version": "0.34.0",
+      "inference": {
+        "temperature": 0,
+        "max_tokens": 768,
+        "num_ctx": 4096,
+        "reasoning_effort": "none"
+      }
+    },
+    "max_iterations": 6,
+    "workload_id": "binary-unlock-v1",
+    "prior_observation": {
+      "run_id": 35252084219,
+      "scientific_result": "PASS 1/1 after reasoning_effort=none",
+      "wall_seconds": 198.343,
+      "oracle": "try_unlock(7351) -> ACCESS GRANTED"
+    }
+  },
+  "specialist": {
+    "candidate_id": "llm4decompile-1.3b-v1.5-q4_k_m",
+    "upstream_repository": "LLM4Binary/llm4decompile-1.3b-v1.5",
+    "packaged_repository": "RichardErkhov/LLM4Binary_-_llm4decompile-1.3b-v1.5-gguf",
+    "exact_revision": "d739a10877190ce7d662d0bc77f30cb99c0a9ebf",
+    "file": "llm4decompile-1.3b-v1.5.Q4_K_M.gguf",
+    "size_bytes": 873453184,
+    "sha256": "f0387b2836c971a4192afca991dac00f4fec6ff28fef67663085eb3f666b6ba6",
+    "license_spdx_id": "MIT",
+    "tool_contract": "decompile_main(assembly) -> candidate C/decompilation text",
+    "prompt_contract": {
+      "before": "# This is the assembly code:\\n",
+      "after": "\\n# What is the source code?\\n",
+      "source": "upstream v1.5 usage contract"
+    },
+    "authority": [
+      "local inference only",
+      "no file writes",
+      "no shell execution",
+      "no binary execution",
+      "no network tools"
+    ]
+  },
+  "workload": {
+    "workload_id": "binary-unlock-v1",
+    "task": "Analyze the supplied benign purpose-built ELF executable and recover its numeric unlock code. Use bounded inspection/decompilation evidence and verify the candidate with the independent challenge oracle.",
+    "unlock_code_for_oracle_only": 7351,
+    "build": [
+      "gcc",
+      "-O0",
+      "-fno-pie",
+      "-no-pie",
+      "-fno-stack-protector"
+    ],
+    "disassembly": [
+      "objdump",
+      "-d",
+      "-Mintel",
+      "--disassemble=main",
+      "./challenge"
+    ],
+    "oracle": "purpose-built executable prints ACCESS GRANTED only for the correct candidate"
+  },
+  "adaptive_gate": {
+    "phase_1": "Download/hash-verify exact LLM4Decompile GGUF, import locally, generate one decompilation from cleaned baseline Intel objdump main, extract bounded numeric candidates, and verify them only through the independent challenge executable.",
+    "on_phase_1_fail": "Preserve the negative specialist result and stop before pulling Qwen3.5.",
+    "on_phase_1_pass": "Install pinned OpenWorker, pull the confirmed Qwen3.5 controller, and run one integrated persona repetition with decompile_main added to the existing read/inspection/try_unlock surface."
+  },
+  "scientific_conditions": {
+    "specialist_smoke": "at least one candidate extracted from specialist output independently yields ACCESS GRANTED",
+    "integrated_support": "the persona invokes decompile_main at least once and independently verifies an ACCESS GRANTED candidate",
+    "efficiency": "report wall time and tool trajectory separately against the prior baseline; no composite score"
+  }
+}
