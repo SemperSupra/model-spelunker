@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "text-repair-v0",
+  "instruction": "Replace the entire contents of value.txt with READY followed by a newline.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  }
+}
