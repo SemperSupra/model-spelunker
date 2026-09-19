@@ -90,6 +90,10 @@ def main() -> int:
             candidate_exit = 124
             stdout = exc.stdout or ""
             stderr = exc.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
             timed_out = True
 
         verifier = subprocess.run(
