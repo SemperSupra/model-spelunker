@@ -22,10 +22,11 @@
     "task": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "source_commit"],
+      "required": ["id", "source_commit", "package_digest"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "package_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
       }
     },
     "candidate": {
