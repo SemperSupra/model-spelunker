@@ -53,6 +53,18 @@ jobs:
           git -C "$RUNNER_TEMP/codex" checkout --quiet --detach "$CODEX_SHA"
           test "$(git -C "$RUNNER_TEMP/codex" rev-parse HEAD)" = "$CODEX_SHA"
 
+      - name: Normalize and bind Cargo lockfile
+        shell: bash
+        working-directory: ${{ runner.temp }}/codex/codex-rs
+        run: |
+          set -euo pipefail
+          echo "CODEX_LOCK_ORIGINAL_SHA256=$(sha256sum Cargo.lock | awk '{print $1}')"
+          cp Cargo.lock "$RUNNER_TEMP/Cargo.lock.original"
+          cargo tree -p codex-exec --depth 1 >/dev/null
+          echo "CODEX_LOCK_RESOLVED_SHA256=$(sha256sum Cargo.lock | awk '{print $1}')"
+          echo '=== bounded Cargo.lock diff ==='
+          git diff -- Cargo.lock | sed -n '1,220p'
+
       - name: Compare full CLI and exec dependency surfaces
         shell: bash
         working-directory: ${{ runner.temp }}/codex/codex-rs
