@@ -30,9 +30,9 @@ jobs:
       OLLAMA_NUM_PARALLEL: '1'
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
-      CODEX_HOME: ${{ runner.temp }}/codex-home
-      CANDIDATE_META: ${{ runner.temp }}/codex-qwen3-1.7b.json
-      RECEIPT: ${{ runner.temp }}/codex-qwen3-1.7b-receipt.json
+      CODEX_HOME: '/tmp/model-spelunker-codex-home'
+      CANDIDATE_META: '/tmp/model-spelunker-codex-qwen3-1.7b.json'
+      RECEIPT: '/tmp/model-spelunker-codex-qwen3-1.7b-receipt.json'
       SUBSTRATE_PROFILE_COMMIT: 'dada1c0403920b2977fe0cf2830ccd374cb6d94e'
     steps:
       - name: Checkout qualification harness
