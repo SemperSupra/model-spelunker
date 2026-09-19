@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "evidence_id": "goose-minimal-ollama-20260919",
+  "recorded_at": "2026-09-19T19:34:00Z",
+  "workflow_run_id": 35463854999,
+  "job_id": 105952390236,
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:282f8bb8f7e1bf8937f085dfda793ee29fbd525db1051c40310b5cdb1d7b94bb"
+  },
+  "substrate": {
+    "profile_id": "gha-linux-x64-goose-minimal-ollama",
+    "profile_commit": "4f064a8b06bff7ebea0c1286bee47ead6adee6de",
+    "runner": "ubuntu-24.04"
+  },
+  "candidate": {
+    "harness": {
+      "name": "goose",
+      "version": "1.51.0",
+      "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe"
+    },
+    "build": {
+      "profile": "no-default-features+rustls-tls",
+      "toolchain": "rust 1.96.1",
+      "artifact_digest": "sha256:f117d4f40bedc3e5371e04355729f1ba27066a5552be691cd22296e6294e2699",
+      "binary_bytes": 152980744,
+      "rebuild_wall_seconds": 845.9,
+      "rebuild_max_rss_kbytes": 4132188
+    },
+    "model": {
+      "provider": "ollama",
+      "id": "qwen3:1.7b",
+      "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+    },
+    "configuration": {
+      "thinking_effort": "off",
+      "mode": "auto",
+      "no_session": true,
+      "no_profile": true,
+      "builtins": [
+        "developer"
+      ],
+      "max_turns": 4,
+      "max_tool_repetitions": 2,
+      "output_format": "stream-json",
+      "context_length": 32768
+    }
+  },
+  "observation": {
+    "run_id": "20260919T193346Z-9a705a2a",
+    "success": false,
+    "failure_class": "timeout",
+    "wall_seconds": 120.069303,
+    "candidate_exit_code": 124,
+    "verifier_exit_code": 1,
+    "state_changed": false,
+    "failure_signals": [
+      "timeout",
+      "state-unchanged"
+    ],
+    "first_prompt_tokens": 415,
+    "first_prompt_eval_ms": 7569.17,
+    "first_prompt_eval_tokens_per_second": 54.83,
+    "second_prompt_tokens": 1144
+  },
+  "interpretation": [
+    "The source-build projection itself is reproducible and stable: the qualification rebuild produced the same binary SHA-256 as the prior characterization run.",
+    "This failure is not dominated by initial prompt ingestion: the first 415-token prompt evaluated in about 7.6 seconds.",
+    "A second 1,144-token model turn began, but the task state remained unchanged when the 120-second wall clock expired.",
+    "The result is a configured-actor boundary for this Goose build/model/tool configuration, not a universal Goose result.",
+    "A future Goose deep-diagnostic rep should stream child stdout/stderr and request/tool events rather than buffering the wrapper until process exit."
+  ]
+}

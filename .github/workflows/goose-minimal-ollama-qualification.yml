@@ -1,12 +1,6 @@
 name: Goose Minimal Ollama Qualification
 
 on:
-  push:
-    branches:
-      - test/issue-54-harness-model-qualification
-    paths:
-      - '.github/workflows/goose-minimal-ollama-qualification.yml'
-      - 'qualification/adapters/goose_cli.py'
   workflow_dispatch:
 
 permissions:
