@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -69,13 +70,17 @@ def main() -> int:
 
         started = time.monotonic()
         try:
+            candidate_env = dict(os.environ)
+            candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
             completed = subprocess.run(
                 command,
                 cwd=workdir,
                 text=True,
+                input=task["instruction"] + "\n",
                 capture_output=True,
                 timeout=timeout,
                 check=False,
+                env=candidate_env,
             )
             candidate_exit = completed.returncode
             stdout = completed.stdout
