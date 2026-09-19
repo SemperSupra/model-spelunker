@@ -127,6 +127,15 @@ jobs:
                   'artifact_ref': f"ollama-sha256:{digest}",
               },
               'toolset': ['filesystem', 'shell'],
+              'configuration': {
+                  'mode': 'oss',
+                  'local_provider': 'ollama',
+                  'sandbox': 'workspace-write',
+                  'skip_git_repo_check': True,
+                  'ephemeral': True,
+                  'web_search': 'disabled',
+                  'ollama_context_length': int(os.environ['OLLAMA_CONTEXT_LENGTH']),
+              },
           }
           Path(os.environ['CANDIDATE_META']).write_text(
               json.dumps(candidate, indent=2, sort_keys=True) + '\n',
