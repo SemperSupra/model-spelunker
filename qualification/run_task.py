@@ -158,6 +158,76 @@ def harness_metrics(stdout: str) -> dict[str, int | None]:
     }
 
 
+def provider_observations(stdout: str) -> list[dict[str, object]]:
+    raw = last_marker(stdout, "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=")
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]:
+    numeric_fields = (
+        "request_message_bytes",
+        "request_tool_schema_bytes",
+        "output_text_bytes",
+        "reasoning_bytes",
+        "tool_argument_bytes",
+        "client_wall_seconds",
+    )
+    summary: dict[str, object] = {"model_rounds": len(observations)}
+    for field in numeric_fields:
+        values = [
+            item.get(field)
+            for item in observations
+            if isinstance(item.get(field), (int, float))
+        ]
+        if values:
+            summary[field + "_total"] = round(float(sum(values)), 6)
+
+    ttft = [
+        float(item["ttft_seconds"])
+        for item in observations
+        if isinstance(item.get("ttft_seconds"), (int, float))
+    ]
+    if ttft:
+        summary["ttft_seconds_first"] = round(ttft[0], 6)
+        summary["ttft_seconds_min"] = round(min(ttft), 6)
+        summary["ttft_seconds_max"] = round(max(ttft), 6)
+
+    resolved_models = sorted(
+        {
+            str(item["resolved_model"])
+            for item in observations
+            if isinstance(item.get("resolved_model"), str) and item.get("resolved_model")
+        }
+    )
+    serving_providers: set[str] = set()
+    for item in observations:
+        direct = item.get("provider")
+        if isinstance(direct, str) and direct:
+            serving_providers.add(direct)
+        generation = item.get("openrouter_generation")
+        if isinstance(generation, dict):
+            provider = generation.get("provider_name")
+            if isinstance(provider, str) and provider:
+                serving_providers.add(provider)
+            model = generation.get("model")
+            if isinstance(model, str) and model:
+                resolved_models.append(model)
+
+    if resolved_models:
+        summary["resolved_models"] = sorted(set(resolved_models))
+    if serving_providers:
+        summary["serving_providers"] = sorted(serving_providers)
+    return summary
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("task_dir", type=Path)
@@ -246,6 +316,8 @@ def main() -> int:
             state_changed=state_changed,
         )
         metrics = harness_metrics(stdout)
+        provider_rounds = provider_observations(stdout)
+        workload = workload_summary(provider_rounds)
 
         evidence = {
             "candidate_exit_code": candidate_exit,
@@ -301,6 +373,8 @@ def main() -> int:
                 "output_tokens": metrics["output_tokens"],
                 "cache_read_tokens": metrics["cache_read_tokens"],
                 "cache_write_tokens": metrics["cache_write_tokens"],
+                "provider_observations": provider_rounds,
+                "workload": workload,
                 "cost": None,
             },
             "evidence_digest": canonical_json_digest(evidence),
