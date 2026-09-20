@@ -35,17 +35,14 @@ def actor_realization(receipt: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def evidence_state(successes: int, failures: int) -> str:
-    total = successes + failures
-    if total == 0:
-        return "UNCHARACTERIZED"
-    if successes == 0:
-        return "RESTRICTED"
-    if failures == 0 and successes >= 2:
-        return "PROVISIONAL_REPEATED"
-    if failures == 0:
-        return "PROVISIONAL"
-    return "PROVISIONAL_WITH_VARIANCE"
+def evidence_pattern(successes: int, failures: int) -> str:
+    if successes and failures:
+        return "MIXED"
+    if successes:
+        return "PASS_ONLY"
+    if failures:
+        return "FAIL_ONLY"
+    return "NO_TERMINAL_EVIDENCE"
 
 
 def ksa_state(successes: int, failures: int) -> str:
@@ -87,7 +84,7 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "actor_realization_id": actor_id,
                 "actor": actor_records[actor_id],
                 "task_class": task_class,
-                "state": evidence_state(successes, failures),
+                "evidence_pattern": evidence_pattern(successes, failures),
                 "evidence": {
                     "reps": len(rows),
                     "validated_pass": successes,
@@ -95,7 +92,6 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "run_ids": sorted(r["run_id"] for r in rows),
                 },
                 "ksa_evidence": ksa,
-                "qualification_status": "NOT_DERIVED",
             }
         )
     return envelopes
