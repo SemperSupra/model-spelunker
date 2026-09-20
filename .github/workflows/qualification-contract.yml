@@ -124,15 +124,15 @@ jobs:
               ): env
               for env in data["envelopes"]
           }
-          assert by_route[("deepseek","deepseek-flash","software.bounded-repair")]["state"] == "PROVISIONAL"
-          assert by_route[("google","gemini-3.7-flash","software.bounded-repair")]["state"] == "PROVISIONAL"
-          assert by_route[("groq","openai/gpt-oss-20b","software.bounded-repair")]["state"] == "PROVISIONAL"
-          assert by_route[("openrouter","openai/gpt-oss-20b","software.bounded-repair")]["state"] == "PROVISIONAL"
-          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b","software.bounded-repair")]["state"] == "RESTRICTED"
-          assert by_route[("openrouter","openrouter/free","software.bounded-repair")]["state"] == "PROVISIONAL"
+          assert by_route[("deepseek","deepseek-flash","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("google","gemini-3.7-flash","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("groq","openai/gpt-oss-20b","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("openrouter","openai/gpt-oss-20b","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b","software.bounded-repair")]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("openrouter","openrouter/free","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
           qwen=[env for env in data["envelopes"] if env["task_class"]=="repository.capability-discovery"][0]
-          assert qwen["state"] == "RESTRICTED"
-          assert all(env["qualification_status"] == "NOT_DERIVED" for env in data["envelopes"])
+          assert qwen["evidence_pattern"] == "FAIL_ONLY"
+          assert all("state" not in env and "qualified" not in env for env in data["envelopes"])
           print(json.dumps(data,sort_keys=True))
           PY
 
