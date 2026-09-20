@@ -57,6 +57,19 @@ def ksa_state(successes: int, failures: int) -> str:
     return "INSUFFICIENT_EVIDENCE"
 
 
+def terminal_outcome(receipt: dict[str, Any]) -> str:
+    obs = receipt["observation"]
+    if bool(obs.get("success")):
+        return "pass"
+    workload = obs.get("workload") or {}
+    zero_round_nonterminal = (
+        not obs.get("timed_out", False)
+        and obs.get("candidate_exit_code") == 0
+        and workload.get("model_rounds") == 0
+    )
+    return "incomplete" if zero_round_nonterminal else "fail"
+
+
 def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     actor_records: dict[str, dict[str, Any]] = {}
@@ -70,8 +83,10 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     envelopes = []
     for (actor_id, task_class), rows in sorted(groups.items()):
-        successes = sum(bool(r["observation"]["success"]) for r in rows)
-        failures = len(rows) - successes
+        outcomes = [terminal_outcome(r) for r in rows]
+        successes = outcomes.count("pass")
+        failures = outcomes.count("fail")
+        incomplete = outcomes.count("incomplete")
         mapping = KSA_BY_TASK_CLASS.get(task_class, {})
         state = ksa_state(successes, failures)
         ksa = {
@@ -89,6 +104,7 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "reps": len(rows),
                     "validated_pass": successes,
                     "validated_fail": failures,
+                    "incomplete": incomplete,
                     "run_ids": sorted(r["run_id"] for r in rows),
                 },
                 "ksa_evidence": ksa,
