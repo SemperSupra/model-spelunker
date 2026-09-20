@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "mvp-free-screen-text-repair-v0",
+  "decision_question": "Which currently reachable zero-inference-price actor realizations can complete the bounded-repair anchor under the same OpenWorker harness and GitHub-hosted environment?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "openworker-qwen3-1.7b-gha-ollama",
+    "openworker-gemini-3.7-flash-gha-google",
+    "openworker-groq-gpt-oss-20b-gha-direct",
+    "openworker-nemotron-3.5-lightning-gha-nvidia",
+    "openworker-openrouter-free-gha"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "task",
+    "harness-family",
+    "github-hosted-runner-class"
+  ],
+  "variable_under_test": "model-and-inference-realization",
+  "stop_conditions": [
+    "validator-contract-failure",
+    "unexpected-authority-expansion",
+    "provider-route-unavailable"
+  ]
+}
