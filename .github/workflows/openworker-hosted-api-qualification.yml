@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   qualify:
+    environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -120,6 +121,28 @@ jobs:
           umask 077
           printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
 
+      - name: Stage Google credential
+        if: steps.treatment.outputs.provider == 'google'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-GOOGLE_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
+      - name: Stage NVIDIA credential
+        if: steps.treatment.outputs.provider == 'nvidia'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-NVIDIA_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
       - name: Stage OpenRouter credential
         if: steps.treatment.outputs.provider == 'openrouter'
         shell: bash
@@ -179,6 +202,14 @@ jobs:
                   "rate_limit_requests":headers.get("x-ratelimit-limit-requests"),
                   "rate_limit_tokens":headers.get("x-ratelimit-limit-tokens"),
               }
+
+          elif provider in {"google","nvidia"}:
+              data,_=get(base+"/models")
+              rows=data.get("data",[]) if isinstance(data,dict) else []
+              ids={row.get("id") for row in rows if isinstance(row,dict)}
+              if model not in ids:
+                  raise SystemExit(f"{provider} model is not active for this key: {model}")
+              evidence={"authenticated":True,"model_active":True}
 
           elif provider=="openrouter":
               data,_=get(base+"/key")
@@ -245,13 +276,23 @@ jobs:
           case "$HOSTED_PROVIDER" in
             deepseek) export DEEPSEEK_API_KEY="$provider_key" ;;
             groq) export GROQ_API_KEY="$provider_key" ;;
+            google) export GOOGLE_API_KEY="$provider_key" ;;
+            nvidia) export NVIDIA_API_KEY="$provider_key" ;;
             openrouter) export OPENROUTER_API_KEY="$provider_key" ;;
             *) echo "unsupported provider: $HOSTED_PROVIDER" >&2; exit 2 ;;
           esac
           unset provider_key
-          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY; do
+          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OLLAMA_API_KEY; do
             unset "$key" || true
           done
+          case "$HOSTED_PROVIDER" in
+            google) ;;
+            *) unset GOOGLE_API_KEY || true ;;
+          esac
+          case "$HOSTED_PROVIDER" in
+            nvidia) ;;
+            *) unset NVIDIA_API_KEY || true ;;
+          esac
 
           set +e
           python qualification/run_task.py \
