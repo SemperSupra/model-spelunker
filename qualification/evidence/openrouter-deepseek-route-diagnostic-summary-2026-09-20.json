@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "experiment_id": "openrouter-deepseek-route-diagnostic-2026-09-20",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "route_contract": {
+    "provider_only": [
+      "deepseek"
+    ],
+    "allow_fallbacks": false
+  },
+  "diagnostic_run": {
+    "run_id": "20260920T173034Z-d00c03cd",
+    "outcome": "incomplete",
+    "failure_class": "candidate-error-event",
+    "engine_error_types": [
+      "NotFoundError"
+    ],
+    "model_rounds": 0,
+    "tool_calls": 0,
+    "state_changed": false
+  },
+  "zero_inference_route_probe": {
+    "model_endpoint_exists": true,
+    "deepseek_endpoint": {
+      "provider_name": "DeepSeek",
+      "tag": "deepseek",
+      "status": 0,
+      "supports_tool_parameters": true
+    }
+  },
+  "disposition": "ROUTE_INTEGRATION_BOUNDARY_CHARACTERIZED",
+  "interpretation": [
+    "The OpenRouter model exists and advertises an active DeepSeek endpoint with tool parameters.",
+    "The pinned OpenRouter request fails before the first model round with NotFoundError.",
+    "This is evidence of an OpenRouter/DeepSeek route or request-compatibility boundary, not a DeepSeek model capability failure.",
+    "No further diagnostic inference reps are warranted in this tranche; preserve the route realization as UNCHARACTERIZED for task capability until the integration boundary changes."
+  ]
+}
