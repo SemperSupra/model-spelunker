@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "purpose": "diagnostic rerun for failed Google/Groq admission paths",
+  "purpose": "Groq admission retry with explicit user-agent",
   "task": "text-repair-v0",
   "candidates": [
     "groq-gpt-oss-20b",
@@ -9,5 +9,5 @@
     "openrouter-free-router"
   ],
   "created_for": "model-spelunker-mvp",
-  "rerun": 2
+  "rerun": 3
 }
