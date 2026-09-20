@@ -269,15 +269,21 @@ def registry_for(workspace: Path) -> ToolRegistry:
         getattr(func, "__name__", ""): func
         for func in ai.toolkits.files(root=str(workspace), allow_write=True)
     }
-    required = ("read_file", "write_file")
-    missing = [name for name in required if name not in available]
+    requested = tuple(
+        name.strip()
+        for name in os.environ.get(
+            "MODEL_SPELUNKER_PROJECTED_TOOLS", "read_file,write_file"
+        ).split(",")
+        if name.strip()
+    )
+    missing = [name for name in requested if name not in available]
     if missing:
         raise RuntimeError(f"OpenWorker file toolkit missing required tools: {missing}")
 
     registry = ToolRegistry()
-    for name in required:
+    for name in requested:
         registry.register(available[name])
-    if registry.names() != list(required):
+    if registry.names() != list(requested):
         raise RuntimeError(f"projected registry drift: {registry.names()}")
     return registry
 
