@@ -38,6 +38,13 @@ MODEL_SETTINGS = {
 if _reasoning_effort != "omit":
     MODEL_SETTINGS["reasoning_effort"] = _reasoning_effort
 
+_extra_body_raw = os.environ.get("MODEL_SPELUNKER_EXTRA_BODY")
+if _extra_body_raw:
+    parsed_extra_body = json.loads(_extra_body_raw)
+    if not isinstance(parsed_extra_body, dict):
+        raise RuntimeError("MODEL_SPELUNKER_EXTRA_BODY must decode to an object")
+    MODEL_SETTINGS["extra_body"] = parsed_extra_body
+
 
 class CapabilityEnforcingProvider(ProviderClient):
     """Keep one proposed tool call when the declared model is non-parallel."""
