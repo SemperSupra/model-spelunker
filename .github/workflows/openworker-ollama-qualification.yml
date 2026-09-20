@@ -1,6 +1,11 @@
 name: OpenWorker Ollama Qualification
 
 on:
+  push:
+    branches:
+      - test/issue-54-harness-model-qualification
+    paths:
+      - 'qualification/local-second-task-trigger.json'
   workflow_dispatch:
     inputs:
       task:
@@ -32,7 +37,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
-      QUALIFICATION_TASK: ${{ inputs.task }}
+      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'validation-discovery-v0' }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-candidate.json'
       RECEIPT: '/tmp/model-spelunker-openworker-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-openworker-diagnostics.json'
