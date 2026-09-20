@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot initial hosted free-tier actor qualification smoke",
+  "task": "text-repair-v0",
+  "candidates": [
+    "groq-gpt-oss-20b",
+    "google-gemini-3.7-flash",
+    "nvidia-nemotron-3.5-lightning",
+    "openrouter-free-router"
+  ],
+  "created_for": "model-spelunker-mvp"
+}
