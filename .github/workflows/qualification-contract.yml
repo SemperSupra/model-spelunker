@@ -98,6 +98,9 @@ jobs:
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
 
+      - name: Self-test Foundry hosted-realization projection
+        run: PYTHONPATH=. python qualification/test_export_hosted_realization.py
+
       - name: Exercise positive, repeat, and negative receipts
         env:
           RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
