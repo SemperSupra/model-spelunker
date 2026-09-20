@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        candidate: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.candidate) || '["groq-gpt-oss-20b","google-gemini-3.7-flash"]') }}
+        candidate: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.candidate) || '["groq-gpt-oss-20b"]') }}
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -190,7 +190,7 @@ jobs:
           def get(url):
               request=urllib.request.Request(
                   url,
-                  headers={"Accept":"application/json","Authorization":"Bearer "+key},
+                  headers={"Accept":"application/json","Authorization":"Bearer "+key,"User-Agent":"Model-Spelunker/1.0 (+https://github.com/SemperSupra/model-spelunker)"},
                   method="GET",
               )
               try:
