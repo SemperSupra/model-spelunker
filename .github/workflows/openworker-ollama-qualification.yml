@@ -2,6 +2,11 @@ name: OpenWorker Ollama Qualification
 
 on:
   workflow_dispatch:
+    inputs:
+      task:
+        description: Task id from qualification/tasks
+        required: true
+        default: text-repair-v0
 
 permissions:
   contents: read
@@ -27,6 +32,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
+      QUALIFICATION_TASK: ${{ inputs.task }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-candidate.json'
       RECEIPT: '/tmp/model-spelunker-openworker-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-openworker-diagnostics.json'
@@ -113,6 +119,12 @@ jobs:
           if not digest.startswith(expected):
               raise SystemExit(f"model digest drift: expected prefix {expected}, got {digest}")
 
+          task_path = Path("qualification/tasks") / os.environ["QUALIFICATION_TASK"] / "task.json"
+          if not task_path.is_file():
+              raise SystemExit(f"unknown qualification task: {os.environ['QUALIFICATION_TASK']}")
+          task = json.loads(task_path.read_text(encoding="utf-8"))
+          projected_tools = task.get("projected_tools") or ["read_file", "write_file"]
+
           candidate = {
               'harness': {'name': 'openworker', 'version': os.environ['OPENWORKER_UPSTREAM_SHA']},
               'model': {
@@ -120,9 +132,9 @@ jobs:
                   'id': wanted,
                   'artifact_ref': f"ollama-sha256:{digest}",
               },
-              'toolset': ['filesystem'],
+              'toolset': projected_tools,
               'configuration': {
-                  'projection': ['read_file', 'write_file'],
+                  'projection': projected_tools,
                   'parallel_tool_calls': False,
                   'max_tokens': 2048,
                   'reasoning_effort': 'none',
@@ -151,7 +163,7 @@ jobs:
             --substrate-profile-id gha-linux-x64-openworker-ollama \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
             --diagnostics "$DIAGNOSTICS" \
-            qualification/tasks/text-repair-v0 \
+            "qualification/tasks/$QUALIFICATION_TASK" \
             "$CANDIDATE_META" \
             "$RECEIPT" \
             -- "$RUNNER_TEMP/openworker-venv/bin/python" \
