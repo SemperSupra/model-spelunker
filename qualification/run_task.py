@@ -191,14 +191,14 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
             summary[field + "_total"] = round(float(sum(values)), 6)
 
     ttft = [
-        float(item["ttft_seconds"])
+        float(item["first_event_seconds"])
         for item in observations
-        if isinstance(item.get("ttft_seconds"), (int, float))
+        if isinstance(item.get("first_event_seconds"), (int, float))
     ]
     if ttft:
-        summary["ttft_seconds_first"] = round(ttft[0], 6)
-        summary["ttft_seconds_min"] = round(min(ttft), 6)
-        summary["ttft_seconds_max"] = round(max(ttft), 6)
+        summary["first_event_seconds_first"] = round(ttft[0], 6)
+        summary["first_event_seconds_min"] = round(min(ttft), 6)
+        summary["first_event_seconds_max"] = round(max(ttft), 6)
 
     resolved_models = sorted(
         {
@@ -210,7 +210,7 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
     serving_providers: set[str] = set()
     system_fingerprints: set[str] = set()
     service_tiers: set[str] = set()
-    provider_cost_total = 0.0
+    provider_reported_cost_total = 0.0
     provider_cost_seen = False
     native_totals = {
         "native_prompt_tokens_total": 0,
@@ -245,7 +245,7 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
 
             cost = generation.get("total_cost")
             if isinstance(cost, (int, float)) and cost >= 0:
-                provider_cost_total += float(cost)
+                provider_reported_cost_total += float(cost)
                 provider_cost_seen = True
 
             native_map = {
@@ -262,7 +262,7 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         else:
             cost = item.get("provider_cost")
             if isinstance(cost, (int, float)) and cost >= 0:
-                provider_cost_total += float(cost)
+                provider_reported_cost_total += float(cost)
                 provider_cost_seen = True
 
     if resolved_models:
@@ -274,7 +274,7 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
     if service_tiers:
         summary["service_tiers"] = sorted(service_tiers)
     if provider_cost_seen:
-        summary["provider_cost_total"] = round(provider_cost_total, 12)
+        summary["provider_reported_cost_total"] = round(provider_reported_cost_total, 12)
     for key, value in native_totals.items():
         if native_seen[key]:
             summary[key] = value
