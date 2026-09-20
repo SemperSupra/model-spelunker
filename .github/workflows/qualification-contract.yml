@@ -78,6 +78,9 @@ jobs:
           python qualification/tasks/text-repair-v0/verify.py --self-test
           python qualification/tasks/validation-discovery-v0/verify.py --self-test
 
+      - name: Self-test task-conditioned evidence reducer
+        run: python qualification/test_reduce_evidence.py
+
       - name: Exercise positive, repeat, and negative receipts
         env:
           RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
