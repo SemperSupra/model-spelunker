@@ -403,6 +403,7 @@ def main() -> int:
             "run_id": new_run_id(),
             "task": {
                 "id": task["id"],
+                "task_class": task.get("task_class"),
                 "source_commit": args.task_commit,
                 "package_digest": tree_digest(args.task_dir),
             },
