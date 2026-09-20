@@ -1,0 +1,56 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:c534176c625acbbe58c52ca57e427c22d5958c24d4a691ee537948fd880c25b3",
+    "harness": {
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "provider": "nvidia",
+      "treatment_kind": "model"
+    },
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:8dc8c0896d77ed4288b14000e269bb4f00a39ed99d358692b635a05c6104d726",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 124,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "timeout",
+    "failure_signals": [
+      "timeout",
+      "state-unchanged"
+    ],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "output_tokens": null,
+    "state_changed": false,
+    "success": false,
+    "timed_out": true,
+    "tool_calls": null,
+    "verifier_exit_code": 1,
+    "wall_seconds": 120.06262,
+    "workload": {
+      "model_rounds": 0
+    }
+  },
+  "run_id": "20260920T173717Z-e7f0b678",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "15ea4903a060d06c56c20f9f81b02c06541298e0",
+    "profile_id": "gha-linux-x64-openworker-hosted-api"
+  },
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "package_digest": "sha256:52ffb636ec670b5f89c4acb0d2126c8ac34336c8bafa517097cfd49fd0477cc8",
+    "source_commit": "b9df85dcfb197fadaf68c2f0117fda1231e60de0",
+    "task_class": "software.bounded-debugging"
+  }
+}
