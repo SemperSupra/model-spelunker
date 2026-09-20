@@ -110,6 +110,9 @@ jobs:
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
 
+      - name: Self-test run failure attribution
+        run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
+
       - name: Self-test Foundry hosted-realization projection
         run: PYTHONPATH=. python qualification/test_export_hosted_realization.py
 
