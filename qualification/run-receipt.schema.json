@@ -275,6 +275,76 @@
             "null"
           ],
           "minimum": 0
+        },
+        "provider_observations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model_rounds"
+          ],
+          "properties": {
+            "model_rounds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "request_message_bytes_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "request_tool_schema_bytes_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "output_text_bytes_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "reasoning_bytes_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "tool_argument_bytes_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "client_wall_seconds_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "ttft_seconds_first": {
+              "type": "number",
+              "minimum": 0
+            },
+            "ttft_seconds_min": {
+              "type": "number",
+              "minimum": 0
+            },
+            "ttft_seconds_max": {
+              "type": "number",
+              "minimum": 0
+            },
+            "resolved_models": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "serving_providers": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
