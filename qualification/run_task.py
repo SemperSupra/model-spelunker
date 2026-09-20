@@ -208,10 +208,29 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         }
     )
     serving_providers: set[str] = set()
+    system_fingerprints: set[str] = set()
+    service_tiers: set[str] = set()
+    provider_cost_total = 0.0
+    provider_cost_seen = False
+    native_totals = {
+        "native_prompt_tokens_total": 0,
+        "native_completion_tokens_total": 0,
+        "native_reasoning_tokens_total": 0,
+        "native_cached_tokens_total": 0,
+    }
+    native_seen = {key: False for key in native_totals}
+
     for item in observations:
         direct = item.get("provider")
         if isinstance(direct, str) and direct:
             serving_providers.add(direct)
+        fingerprint = item.get("system_fingerprint")
+        if isinstance(fingerprint, str) and fingerprint:
+            system_fingerprints.add(fingerprint)
+        tier = item.get("service_tier")
+        if isinstance(tier, str) and tier:
+            service_tiers.add(tier)
+
         generation = item.get("openrouter_generation")
         if isinstance(generation, dict):
             provider = generation.get("provider_name")
@@ -220,11 +239,45 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
             model = generation.get("model")
             if isinstance(model, str) and model:
                 resolved_models.append(model)
+            generation_tier = generation.get("service_tier")
+            if isinstance(generation_tier, str) and generation_tier:
+                service_tiers.add(generation_tier)
+
+            cost = generation.get("total_cost")
+            if isinstance(cost, (int, float)) and cost >= 0:
+                provider_cost_total += float(cost)
+                provider_cost_seen = True
+
+            native_map = {
+                "native_prompt_tokens_total": "native_tokens_prompt",
+                "native_completion_tokens_total": "native_tokens_completion",
+                "native_reasoning_tokens_total": "native_tokens_reasoning",
+                "native_cached_tokens_total": "native_tokens_cached",
+            }
+            for target, source in native_map.items():
+                value = generation.get(source)
+                if isinstance(value, int) and value >= 0:
+                    native_totals[target] += value
+                    native_seen[target] = True
+        else:
+            cost = item.get("provider_cost")
+            if isinstance(cost, (int, float)) and cost >= 0:
+                provider_cost_total += float(cost)
+                provider_cost_seen = True
 
     if resolved_models:
         summary["resolved_models"] = sorted(set(resolved_models))
     if serving_providers:
         summary["serving_providers"] = sorted(serving_providers)
+    if system_fingerprints:
+        summary["system_fingerprints"] = sorted(system_fingerprints)
+    if service_tiers:
+        summary["service_tiers"] = sorted(service_tiers)
+    if provider_cost_seen:
+        summary["provider_cost_total"] = round(provider_cost_total, 12)
+    for key, value in native_totals.items():
+        if native_seen[key]:
+            summary[key] = value
     return summary
 
 
@@ -373,7 +426,6 @@ def main() -> int:
                 "output_tokens": metrics["output_tokens"],
                 "cache_read_tokens": metrics["cache_read_tokens"],
                 "cache_write_tokens": metrics["cache_write_tokens"],
-                "provider_observations": provider_rounds,
                 "workload": workload,
                 "cost": None,
             },
