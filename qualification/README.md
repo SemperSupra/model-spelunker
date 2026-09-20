@@ -152,7 +152,7 @@ Qualification therefore preserves several measurement planes:
 
 4. **Time / capacity**
    - client-observed model-call wall time;
-   - time to first streamed event;
+   - time to first harness event;
    - provider queue/prompt/completion/total time where exposed;
    - rate-limit/quota observations where available.
 
@@ -164,9 +164,11 @@ Qualification therefore preserves several measurement planes:
    - service tier and generation/request identifiers.
 
 Do not rank models by raw tokens/second across tokenizers. Compare task success and
-behavior first, then use byte-normalized and wall-time measures for cross-model
-efficiency. Provider-native tokens remain essential within a provider/model accounting
-regime.
+behavior first, then use representation-volume and wall-time measures for controlled
+cross-model comparisons. Provider-native tokens remain essential within a
+provider/model accounting regime.
+
+Serialized byte counts are tokenizer-independent, but they are not a universal measure of semantic work and are not harness-independent. Compare them directly only when the harness, tool projection, and serialization path are held constant; otherwise treat them as representation-volume evidence rather than a normalized score.
 
 For OpenRouter, the adapter may enrich completed generations through the metadata-only
 `/api/v1/generation` endpoint. This records the actual routed model/provider and
