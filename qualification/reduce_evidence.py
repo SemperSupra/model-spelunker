@@ -20,6 +20,10 @@ KSA_BY_TASK_CLASS = {
         "skills": ["repository_discovery", "validation_path_identification"],
         "abilities": ["evidence_discrimination", "unknown_preservation"],
     },
+    "software.bounded-debugging": {
+        "skills": ["fault_localization", "bounded_code_repair"],
+        "abilities": ["evidence_discrimination", "scope_discipline"],
+    },
 }
 
 
