@@ -105,6 +105,28 @@ jobs:
       - name: Self-test Foundry hosted-realization projection
         run: PYTHONPATH=. python qualification/test_export_hosted_realization.py
 
+      - name: Reduce current actor qualification evidence
+        run: |
+          PYTHONPATH=. python qualification/reduce_evidence.py             qualification/evidence/hosted-deepseek-flash-text-repair-2026-09-20.json             qualification/evidence/hosted-google-gemini-text-repair-2026-09-20.json             qualification/evidence/hosted-groq-gpt-oss-text-repair-2026-09-20.json             qualification/evidence/hosted-nvidia-nemotron-text-repair-2026-09-20.json             qualification/evidence/hosted-openrouter-free-text-repair-2026-09-20.json             qualification/evidence/local-openworker-qwen-validation-discovery-2026-09-20.json             --output "$RUNNER_TEMP/current-envelopes.json"
+          python - "$RUNNER_TEMP/current-envelopes.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1]))
+          assert len(data["envelopes"]) == 6
+          by_model={
+              env["actor"]["candidate"]["model"]["id"]: env
+              for env in data["envelopes"]
+          }
+          assert by_model["deepseek-flash"]["state"] == "PROVISIONAL"
+          assert by_model["gemini-3.7-flash"]["state"] == "PROVISIONAL"
+          assert by_model["openai/gpt-oss-20b"]["state"] == "PROVISIONAL"
+          assert by_model["nvidia/nemotron-3.5-lightning-30b-a3b"]["state"] == "RESTRICTED"
+          assert by_model["openrouter/free"]["state"] == "PROVISIONAL"
+          qwen=[env for env in data["envelopes"] if env["task_class"]=="repository.capability-discovery"][0]
+          assert qwen["state"] == "RESTRICTED"
+          assert all(env["qualification_status"] == "NOT_DERIVED" for env in data["envelopes"])
+          print(json.dumps(data,sort_keys=True))
+          PY
+
       - name: Exercise positive, repeat, and negative receipts
         env:
           RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
