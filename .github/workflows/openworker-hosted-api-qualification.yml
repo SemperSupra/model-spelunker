@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        candidate: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.candidate) || '["groq-gpt-oss-20b","google-gemini-3.7-flash","nvidia-nemotron-3.5-lightning","openrouter-free-router"]') }}
+        candidate: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.candidate) || '["groq-gpt-oss-20b","google-gemini-3.7-flash"]') }}
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 10
