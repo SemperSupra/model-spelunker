@@ -43,6 +43,7 @@ jobs:
           schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
           actor_schema = json.loads(Path("qualification/actor-profile.schema.json").read_text())
           experiment_schema = json.loads(Path("qualification/experiment.schema.json").read_text())
+          task_schema = json.loads(Path("qualification/task-profile.schema.json").read_text())
 
           candidates = hosted["candidates"]
           assert set(candidates) == {
@@ -74,6 +75,9 @@ jobs:
           jsonschema.Draft7Validator.check_schema(schema)
           jsonschema.Draft7Validator.check_schema(actor_schema)
           jsonschema.Draft7Validator.check_schema(experiment_schema)
+          jsonschema.Draft7Validator.check_schema(task_schema)
+          jsonschema.validate(text_task, task_schema)
+          jsonschema.validate(discovery_task, task_schema)
           actor_ids = set()
           for path in sorted(Path("qualification/actors").glob("*.json")):
               actor = json.loads(path.read_text())
