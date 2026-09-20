@@ -19,5 +19,12 @@
     "recovery_requirement": "low",
     "context_volume": "small",
     "environment_uncertainty": "low"
-  }
+  },
+  "allowed_write_paths": [
+    "value.txt"
+  ],
+  "projected_tools": [
+    "read_file",
+    "write_file"
+  ]
 }
