@@ -118,11 +118,25 @@ jobs:
 
       - name: Reduce current actor qualification evidence
         run: |
-          PYTHONPATH=. python qualification/reduce_evidence.py             qualification/evidence/hosted-deepseek-flash-text-repair-2026-09-20.json             qualification/evidence/hosted-google-gemini-text-repair-2026-09-20.json             qualification/evidence/hosted-groq-gpt-oss-text-repair-2026-09-20.json             qualification/evidence/hosted-nvidia-nemotron-text-repair-2026-09-20.json             qualification/evidence/hosted-openrouter-free-text-repair-2026-09-20.json             qualification/evidence/hosted-openrouter-groq-gpt-oss-text-repair-2026-09-20.json             qualification/evidence/local-openworker-qwen-validation-discovery-2026-09-20.json             --output "$RUNNER_TEMP/current-envelopes.json"
+          PYTHONPATH=. python qualification/reduce_evidence.py \
+            qualification/evidence/hosted-deepseek-flash-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-google-gemini-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-groq-gpt-oss-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-nvidia-nemotron-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-free-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-groq-gpt-oss-text-repair-2026-09-20.json \
+            qualification/evidence/local-openworker-qwen-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-google-gemini-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-groq-gpt-oss-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-nvidia-nemotron-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-free-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-deepseek-flash-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-deepseek-v41-flash-validation-discovery-2026-09-20.json \
+            --output "$RUNNER_TEMP/current-envelopes.json"
           python - "$RUNNER_TEMP/current-envelopes.json" <<'PY'
           import json, sys
           data=json.load(open(sys.argv[1]))
-          assert len(data["envelopes"]) == 7
+          assert len(data["envelopes"]) == 13
           by_route={
               (
                   env["actor"]["candidate"]["model"]["provider"],
@@ -131,14 +145,33 @@ jobs:
               ): env
               for env in data["envelopes"]
           }
-          assert by_route[("deepseek","deepseek-flash","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
-          assert by_route[("google","gemini-3.7-flash","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
-          assert by_route[("groq","openai/gpt-oss-20b","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
-          assert by_route[("openrouter","openai/gpt-oss-20b","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
-          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b","software.bounded-repair")]["evidence_pattern"] == "FAIL_ONLY"
-          assert by_route[("openrouter","openrouter/free","software.bounded-repair")]["evidence_pattern"] == "PASS_ONLY"
-          qwen=[env for env in data["envelopes"] if env["task_class"]=="repository.capability-discovery"][0]
-          assert qwen["evidence_pattern"] == "FAIL_ONLY"
+          bounded="software.bounded-repair"
+          discovery="repository.capability-discovery"
+          assert by_route[("deepseek","deepseek-flash",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("google","gemini-3.7-flash",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("groq","openai/gpt-oss-20b",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("openrouter","openai/gpt-oss-20b",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b",bounded)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("openrouter","openrouter/free",bounded)]["evidence_pattern"] == "PASS_ONLY"
+
+          assert by_route[("ollama","qwen3:1.7b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("groq","openai/gpt-oss-20b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("openrouter","openrouter/free",discovery)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("deepseek","deepseek-flash",discovery)]["evidence_pattern"] == "PASS_ONLY"
+
+          google=by_route[("google","gemini-3.7-flash",discovery)]
+          assert google["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+          assert google["evidence"]["incomplete"] == 1
+          assert all(
+              value == "INSUFFICIENT_EVIDENCE"
+              for family in google["ksa_evidence"].values()
+              for value in family.values()
+          )
+
+          routed=by_route[("openrouter","deepseek/deepseek-v4.1-flash",discovery)]
+          assert routed["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+          assert routed["evidence"]["incomplete"] == 1
           assert all("state" not in env and "qualified" not in env for env in data["envelopes"])
           print(json.dumps(data,sort_keys=True))
           PY
