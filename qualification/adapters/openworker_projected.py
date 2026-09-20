@@ -28,8 +28,8 @@ from coworker.tools import ToolRegistry
 MODEL = os.environ.get("MODEL_SPELUNKER_MODEL", "ollama:qwen3:1.7b")
 MODEL_SETTINGS = {
     "parallel_tool_calls": False,
-    "max_tokens": 2048,
-    "reasoning_effort": "none",
+    "max_tokens": int(os.environ.get("MODEL_SPELUNKER_MAX_TOKENS", "2048")),
+    "reasoning_effort": os.environ.get("MODEL_SPELUNKER_REASONING_EFFORT", "none"),
 }
 
 
@@ -168,6 +168,7 @@ async def run(instruction: str) -> int:
     )
 
     counts: Counter[str] = Counter()
+    usage_totals: Counter[str] = Counter()
     async for event in engine.run(instruction):
         event_type = str(event.type)
         counts[event_type] += 1
@@ -177,9 +178,15 @@ async def run(instruction: str) -> int:
         }:
             payload = dict(event.data or {})
             compact = {"type": event_type}
-            for key in ("tool_calls", "status", "error", "error_type", "iterations"):
+            for key in ("tool_calls", "status", "error", "error_type", "iterations", "usage"):
                 if key in payload:
                     compact[key] = payload[key]
+            usage = payload.get("usage")
+            if isinstance(usage, dict):
+                for key in ("input", "output", "cache_read", "cache_write"):
+                    value = usage.get(key)
+                    if isinstance(value, int) and value >= 0:
+                        usage_totals[key] += value
             print("OPENWORKER_EVENT=" + json.dumps(compact, sort_keys=True), flush=True)
 
     summary = {
@@ -193,7 +200,16 @@ async def run(instruction: str) -> int:
         "event_counts": dict(counts),
         "target_exists": target.is_file(),
     }
+    usage_summary = {
+        "input": int(usage_totals.get("input", 0)),
+        "output": int(usage_totals.get("output", 0)),
+        "cache_read": int(usage_totals.get("cache_read", 0)),
+        "cache_write": int(usage_totals.get("cache_write", 0)),
+    }
+    summary["usage"] = usage_summary
     print("OPENWORKER_SUMMARY=" + json.dumps(summary, sort_keys=True), flush=True)
+    print("MODEL_SPELUNKER_USAGE=" + json.dumps(usage_summary, sort_keys=True), flush=True)
+    print(f"MODEL_SPELUNKER_TOOL_CALLS={len(summary['tool_calls'])}", flush=True)
     return 0
 
 
@@ -203,15 +219,29 @@ def main() -> int:
         print("missing task instruction on stdin", file=sys.stderr)
         return 2
 
-    forbidden = (
+    provider = MODEL.split(":", 1)[0] if ":" in MODEL else "openai"
+    provider_key = {"deepseek": "DEEPSEEK_API_KEY"}.get(provider)
+    known_keys = (
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "OLLAMA_API_KEY",
+        "DEEPSEEK_API_KEY",
     )
-    present = [name for name in forbidden if os.environ.get(name)]
-    if present:
+    present = [name for name in known_keys if os.environ.get(name)]
+    disallowed = [name for name in present if name != provider_key]
+    if disallowed:
+        print(
+            "crossover received credentials unrelated to selected provider: "
+            + ", ".join(disallowed),
+            file=sys.stderr,
+        )
+        return 2
+    if provider_key and not os.environ.get(provider_key):
+        print(f"selected provider requires {provider_key}", file=sys.stderr)
+        return 2
+    if provider_key is None and present:
         print(
             "credential-free crossover received model credentials: " + ", ".join(present),
             file=sys.stderr,
