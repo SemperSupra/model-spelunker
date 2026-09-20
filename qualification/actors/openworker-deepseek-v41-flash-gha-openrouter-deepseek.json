@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "openworker-deepseek-v41-flash-gha-openrouter-deepseek",
+  "harness": {
+    "name": "openworker",
+    "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+  },
+  "model": {
+    "provider": "openrouter",
+    "id": "deepseek/deepseek-v4.1-flash",
+    "realization": "hosted-service",
+    "artifact_ref": null,
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/ubuntu-24.04-x64",
+    "inference_route": "openrouter:provider=deepseek;allow_fallbacks=false",
+    "substrate_profile": "gha-linux-x64-openworker-hosted-api"
+  },
+  "toolset": [
+    "read_file",
+    "write_file"
+  ],
+  "configuration": {
+    "reasoning_effort": "none",
+    "max_iterations": 4,
+    "provider_routing": {
+      "only": [
+        "deepseek"
+      ],
+      "allow_fallbacks": false
+    },
+    "byok_expected": true,
+    "byok_credential_source_observable": false,
+    "nominal_upstream_model": "DeepSeek-V4.1-Flash"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
