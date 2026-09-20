@@ -6,66 +6,24 @@
       "provider": "deepseek",
       "model": "deepseek-flash",
       "api_base": "https://api.deepseek.com",
-      "secret": "DEEPSEEK_API_KEY",
       "reasoning_effort": "none",
-      "cost_class": "metered-api",
-      "admission": "deepseek-balance",
-      "notes": "Direct DeepSeek hosted model alias."
-    },
-    "deepseek-v4-pro": {
-      "treatment_kind": "model",
-      "provider": "deepseek",
-      "model": "deepseek-v4-pro",
-      "api_base": "https://api.deepseek.com",
-      "secret": "DEEPSEEK_API_KEY",
-      "reasoning_effort": "none",
-      "cost_class": "metered-api",
-      "admission": "deepseek-balance",
-      "notes": "Direct DeepSeek hosted model alias."
+      "cost_class": "metered-api"
     },
     "groq-gpt-oss-20b": {
       "treatment_kind": "model",
       "provider": "groq",
       "model": "openai/gpt-oss-20b",
       "api_base": "https://api.groq.com/openai/v1",
-      "secret": "GROQ_API_KEY",
       "reasoning_effort": "low",
-      "cost_class": "free-tier-account",
-      "admission": "groq-model",
-      "notes": "Groq free-tier candidate; free-tier status is account-level and cannot be proven by the models endpoint."
-    },
-    "groq-qwen3.8-27b": {
-      "treatment_kind": "model",
-      "provider": "groq",
-      "model": "qwen/qwen3.8-27b",
-      "api_base": "https://api.groq.com/openai/v1",
-      "secret": "GROQ_API_KEY",
-      "reasoning_effort": "none",
-      "cost_class": "free-tier-account",
-      "admission": "groq-model",
-      "notes": "Groq free-tier candidate with tool use and explicit no-reasoning mode."
-    },
-    "openrouter-deepseek-v4-flash-0731-free": {
-      "treatment_kind": "model",
-      "provider": "openrouter",
-      "model": "deepseek/deepseek-v4-flash-0731:free",
-      "api_base": "https://openrouter.ai/api/v1",
-      "secret": "OPENROUTER_API_KEY",
-      "reasoning_effort": "omit",
-      "cost_class": "zero-token-price",
-      "admission": "openrouter-key",
-      "notes": "Specific free model variant. This is suitable for model qualification."
+      "cost_class": "free-tier-account-unverified"
     },
     "openrouter-free-router": {
       "treatment_kind": "router",
       "provider": "openrouter",
       "model": "openrouter/free",
       "api_base": "https://openrouter.ai/api/v1",
-      "secret": "OPENROUTER_API_KEY",
       "reasoning_effort": "omit",
-      "cost_class": "zero-token-price",
-      "admission": "openrouter-key",
-      "notes": "Randomized free-model router. Qualifies routing behavior, not one model."
+      "cost_class": "zero-token-price"
     }
   }
 }
