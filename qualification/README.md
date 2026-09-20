@@ -97,3 +97,25 @@ Provider aliases are not immutable model artifacts. A receipt for a hosted alias
 as `deepseek-flash` proves behavior of the provider-served configured actor at that
 time; it does not claim possession of an immutable model checkpoint.
 
+### Free-tier hosted providers
+
+Hosted free-tier/free-variant providers are model treatments, not harnesses.
+
+Current initial catalog:
+- Groq: `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`;
+- OpenRouter: specific `:free` model variants;
+- OpenRouter `openrouter/free`: router treatment only, never interpreted as one model.
+
+For Groq, free access is an account-tier property. A models preflight proves that the
+key can access the requested model, but it cannot prove that the account has not been
+upgraded to a paid tier. Keep these runs manual and bounded.
+
+For OpenRouter, a specific model qualification MUST use an explicit `:free` variant
+when the treatment is intended to be zero-token-price. `openrouter/free` randomly
+routes among eligible free models and therefore qualifies the router behavior rather
+than a stable model identity.
+
+The free-provider roster is intentionally small. Add candidates only when they support
+the task's required capabilities and produce useful coverage rather than enumerating
+every free endpoint.
+
