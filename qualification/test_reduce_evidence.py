@@ -25,18 +25,17 @@ envelopes = reduce_receipts(rows)
 assert len(envelopes) == 1
 env = envelopes[0]
 assert env["task_class"] == "software.bounded-repair"
-assert env["state"] == "PROVISIONAL_REPEATED"
-assert env["qualification_status"] == "NOT_DERIVED"
+assert env["evidence_pattern"] == "PASS_ONLY"
 assert env["evidence"]["validated_pass"] == 2
 assert env["ksa_evidence"]["skills"]["bounded_change_execution"] == "REPEATED_EVIDENCE"
 
 rows.append(receipt("run-c", False))
 env = reduce_receipts(rows)[0]
-assert env["state"] == "PROVISIONAL_WITH_VARIANCE"
+assert env["evidence_pattern"] == "MIXED"
 assert env["ksa_evidence"]["abilities"]["scope_discipline"] == "MIXED_EVIDENCE"
 
 negative = reduce_receipts([receipt("run-d", False)])[0]
-assert negative["state"] == "RESTRICTED"
+assert negative["evidence_pattern"] == "FAIL_ONLY"
 assert negative["ksa_evidence"]["skills"]["bounded_change_execution"] == "NEGATIVE_BOUNDARY_OBSERVED"
 
 print("PASS evidence reducer")
