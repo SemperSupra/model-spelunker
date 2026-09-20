@@ -14,6 +14,9 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
+import urllib.parse
+import urllib.request
 from typing import Any, Optional
 
 import aisuite as ai
@@ -42,6 +45,145 @@ class CapabilityEnforcingProvider(ProviderClient):
     def __init__(self, delegate: ProviderClient) -> None:
         self.delegate = delegate
         self.suppressed_batches: list[dict[str, Any]] = []
+        self.provider_observations: list[dict[str, Any]] = []
+
+    @staticmethod
+    def _mapping(value: Any) -> dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        if value is None:
+            return {}
+        dumper = getattr(value, "model_dump", None)
+        if callable(dumper):
+            try:
+                dumped = dumper()
+                return dumped if isinstance(dumped, dict) else {}
+            except Exception:
+                return {}
+        return {}
+
+    @staticmethod
+    def _bytes(value: Any) -> int:
+        return len(
+            json.dumps(
+                value,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            ).encode("utf-8")
+        )
+
+    def _observe(
+        self,
+        *,
+        requested_model: str,
+        messages: list[dict[str, Any]],
+        tools: Optional[list[dict[str, Any]]],
+        turn: AssistantTurn,
+        started: float,
+        first_event_at: float | None,
+    ) -> None:
+        raw = self._mapping(turn.raw)
+        usage = self._mapping(raw.get("usage"))
+        prompt_details = self._mapping(usage.get("prompt_tokens_details"))
+        x_groq = self._mapping(raw.get("x_groq"))
+
+        tool_argument_bytes = sum(
+            self._bytes(call.arguments) for call in (turn.tool_calls or [])
+        )
+        observation = {
+            "requested_model": requested_model,
+            "resolved_model": raw.get("model"),
+            "response_id": raw.get("id"),
+            "provider": raw.get("provider"),
+            "system_fingerprint": raw.get("system_fingerprint"),
+            "service_tier": raw.get("service_tier"),
+            "finish_reason": turn.finish_reason,
+            "request_message_bytes": self._bytes(messages),
+            "request_tool_schema_bytes": self._bytes(tools or []),
+            "output_text_bytes": len((turn.text or "").encode("utf-8")),
+            "reasoning_bytes": len((turn.reasoning or "").encode("utf-8")),
+            "tool_argument_bytes": tool_argument_bytes,
+            "client_wall_seconds": round(time.monotonic() - started, 6),
+            "ttft_seconds": (
+                round(first_event_at - started, 6)
+                if first_event_at is not None
+                else None
+            ),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+            "cached_tokens": prompt_details.get("cached_tokens"),
+            "cache_write_tokens": prompt_details.get("cache_write_tokens"),
+            "queue_time": usage.get("queue_time"),
+            "prompt_time": usage.get("prompt_time"),
+            "completion_time": usage.get("completion_time"),
+            "provider_total_time": usage.get("total_time"),
+            "provider_cost": usage.get("cost"),
+            "provider_request_id": x_groq.get("id"),
+        }
+        self.provider_observations.append(
+            {key: value for key, value in observation.items() if value is not None}
+        )
+
+    def enrich_openrouter_generations(self) -> None:
+        if _PROVIDER != "openrouter":
+            return
+        key = os.environ.get("OPENROUTER_API_KEY")
+        if not key:
+            return
+        allowed = (
+            "id",
+            "model",
+            "provider_name",
+            "router",
+            "service_tier",
+            "streamed",
+            "cancelled",
+            "finish_reason",
+            "native_finish_reason",
+            "native_tokens_prompt",
+            "native_tokens_completion",
+            "native_tokens_reasoning",
+            "native_tokens_cached",
+            "tokens_prompt",
+            "tokens_completion",
+            "total_cost",
+            "upstream_inference_cost",
+            "latency",
+            "generation_time",
+            "moderation_latency",
+            "data_region",
+            "upstream_id",
+        )
+        for observation in self.provider_observations:
+            response_id = observation.get("response_id")
+            if not isinstance(response_id, str) or not response_id:
+                continue
+            url = (
+                "https://openrouter.ai/api/v1/generation?"
+                + urllib.parse.urlencode({"id": response_id})
+            )
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": "Bearer " + key,
+                },
+                method="GET",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    payload = json.load(response)
+                data = payload.get("data") if isinstance(payload, dict) else None
+                if isinstance(data, dict):
+                    observation["openrouter_generation"] = {
+                        name: data.get(name)
+                        for name in allowed
+                        if data.get(name) is not None
+                    }
+            except Exception as exc:
+                observation["openrouter_generation_error"] = type(exc).__name__
 
     def capabilities(self, model: str) -> ModelCapabilities:
         return self.delegate.capabilities(model)
@@ -71,13 +213,23 @@ class CapabilityEnforcingProvider(ProviderClient):
         tools: Optional[list[dict[str, Any]]] = None,
         **settings: Any,
     ) -> AssistantTurn:
+        started = time.monotonic()
         turn = self.delegate.complete(
             model=model,
             messages=messages,
             tools=tools,
             **settings,
         )
-        return self._enforce(model, turn)
+        turn = self._enforce(model, turn)
+        self._observe(
+            requested_model=model,
+            messages=messages,
+            tools=tools,
+            turn=turn,
+            started=started,
+            first_event_at=None,
+        )
+        return turn
 
     def stream(
         self,
@@ -87,16 +239,33 @@ class CapabilityEnforcingProvider(ProviderClient):
         tools: Optional[list[dict[str, Any]]] = None,
         **settings: Any,
     ):
+        started = time.monotonic()
+        first_event_at: float | None = None
         for chunk in self.delegate.stream(
             model=model,
             messages=messages,
             tools=tools,
             **settings,
         ):
+            if first_event_at is None and (
+                chunk.text_delta is not None
+                or chunk.reasoning_delta is not None
+                or chunk.turn is not None
+            ):
+                first_event_at = time.monotonic()
             if chunk.turn is None:
                 yield chunk
             else:
-                yield replace(chunk, turn=self._enforce(model, chunk.turn))
+                turn = self._enforce(model, chunk.turn)
+                self._observe(
+                    requested_model=model,
+                    messages=messages,
+                    tools=tools,
+                    turn=turn,
+                    started=started,
+                    first_event_at=first_event_at,
+                )
+                yield replace(chunk, turn=turn)
 
 
 def registry_for(workspace: Path) -> ToolRegistry:
@@ -216,6 +385,7 @@ async def run(instruction: str) -> int:
         "event_counts": dict(counts),
         "target_exists": target.is_file(),
     }
+    provider.enrich_openrouter_generations()
     usage_summary = {
         "input": int(usage_totals.get("input", 0)),
         "output": int(usage_totals.get("output", 0)),
@@ -226,6 +396,11 @@ async def run(instruction: str) -> int:
     print("OPENWORKER_SUMMARY=" + json.dumps(summary, sort_keys=True), flush=True)
     print("MODEL_SPELUNKER_USAGE=" + json.dumps(usage_summary, sort_keys=True), flush=True)
     print(f"MODEL_SPELUNKER_TOOL_CALLS={len(summary['tool_calls'])}", flush=True)
+    print(
+        "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS="
+        + json.dumps(provider.provider_observations, sort_keys=True),
+        flush=True,
+    )
     return 0
 
 
