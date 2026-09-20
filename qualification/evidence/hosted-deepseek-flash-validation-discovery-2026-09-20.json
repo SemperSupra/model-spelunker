@@ -1,0 +1,61 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:ba3d93d2c8862f3743e96f67ccd43ef582699ed23f8f95a34b0b07e5ac7d4a2c",
+    "harness": {
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "id": "deepseek-flash",
+      "provider": "deepseek",
+      "treatment_kind": "model"
+    },
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:2cf9d411bcf4b48e4b0480f7cb5b1a93bc5b944bfaa771763f12dd07cdda53a4",
+  "observation": {
+    "cache_read_tokens": 1920,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": 1185,
+    "output_tokens": 416,
+    "state_changed": true,
+    "success": true,
+    "timed_out": false,
+    "tool_calls": 6,
+    "verifier_exit_code": 0,
+    "wall_seconds": 5.718638,
+    "workload": {
+      "client_wall_seconds_total": 4.829137,
+      "first_event_seconds_first": 1.070225,
+      "first_event_seconds_max": 1.107259,
+      "first_event_seconds_min": 0.901651,
+      "model_rounds": 4,
+      "output_text_bytes_total": 690,
+      "reasoning_bytes_total": 0,
+      "request_message_bytes_total": 6030,
+      "request_tool_schema_bytes_total": 3872,
+      "tool_argument_bytes_total": 244
+    }
+  },
+  "run_id": "20260920T170228Z-8566ac25",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "15ea4903a060d06c56c20f9f81b02c06541298e0",
+    "profile_id": "gha-linux-x64-openworker-hosted-api"
+  },
+  "task": {
+    "id": "validation-discovery-v0",
+    "package_digest": "sha256:6e4330510461625808eb8ae5d5c1d9484c6e347d584c6ee77485be32ccc93876",
+    "source_commit": "655cf2462acc24e7be6716d182bb06771a6d40e1",
+    "task_class": "repository.capability-discovery"
+  }
+}
