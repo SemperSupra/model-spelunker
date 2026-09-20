@@ -311,18 +311,6 @@
               "type": "number",
               "minimum": 0
             },
-            "ttft_seconds_first": {
-              "type": "number",
-              "minimum": 0
-            },
-            "ttft_seconds_min": {
-              "type": "number",
-              "minimum": 0
-            },
-            "ttft_seconds_max": {
-              "type": "number",
-              "minimum": 0
-            },
             "resolved_models": {
               "type": "array",
               "uniqueItems": true,
@@ -351,10 +339,6 @@
                 "type": "string"
               }
             },
-            "provider_cost_total": {
-              "type": "number",
-              "minimum": 0
-            },
             "native_prompt_tokens_total": {
               "type": "integer",
               "minimum": 0
@@ -369,6 +353,22 @@
             },
             "native_cached_tokens_total": {
               "type": "integer",
+              "minimum": 0
+            },
+            "first_event_seconds_first": {
+              "type": "number",
+              "minimum": 0
+            },
+            "first_event_seconds_min": {
+              "type": "number",
+              "minimum": 0
+            },
+            "first_event_seconds_max": {
+              "type": "number",
+              "minimum": 0
+            },
+            "provider_reported_cost_total": {
+              "type": "number",
               "minimum": 0
             }
           }
