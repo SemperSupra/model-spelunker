@@ -93,6 +93,11 @@ jobs:
 
           assert good1["observation"]["success"] is True
           assert good2["observation"]["success"] is True
+          assert good1["observation"]["tool_calls"] == 1
+          assert good1["observation"]["input_tokens"] == 11
+          assert good1["observation"]["output_tokens"] == 3
+          assert good1["observation"]["cache_read_tokens"] == 2
+          assert good1["observation"]["cache_write_tokens"] == 0
           assert bad["observation"]["success"] is False
           assert bad["observation"]["failure_class"] == "false-completion"
           assert bad["observation"]["timed_out"] is False
