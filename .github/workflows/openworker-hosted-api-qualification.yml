@@ -1,11 +1,6 @@
 name: OpenWorker Hosted API Qualification
 
 on:
-  push:
-    branches:
-      - test/issue-54-harness-model-qualification
-    paths:
-      - 'qualification/openrouter-groq-repeat-trigger.json'
   workflow_dispatch:
     inputs:
       candidate:
@@ -26,17 +21,13 @@ concurrency:
 
 jobs:
   qualify:
-    strategy:
-      fail-fast: false
-      matrix:
-        candidate: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.candidate) || '["groq-gpt-oss-20b","openrouter-groq-gpt-oss-20b-byok"]') }}
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
-      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'text-repair-v0' }}
+      QUALIFICATION_TASK: ${{ inputs.task }}
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
@@ -55,7 +46,7 @@ jobs:
         id: treatment
         shell: bash
         env:
-          REQUESTED_CANDIDATE: ${{ matrix.candidate }}
+          REQUESTED_CANDIDATE: ${{ inputs.candidate }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -359,7 +350,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: hosted-qualification-${{ matrix.candidate }}-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
+          name: hosted-qualification-${{ inputs.candidate }}-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
           path: ${{ env.RECEIPT }}
           if-no-files-found: ignore
           retention-days: 30
