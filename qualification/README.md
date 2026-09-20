@@ -101,19 +101,23 @@ time; it does not claim possession of an immutable model checkpoint.
 
 Hosted free-tier/free-variant providers are model treatments, not harnesses.
 
-Current initial catalog:
-- Groq: `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`;
-- OpenRouter: specific `:free` model variants;
-- OpenRouter `openrouter/free`: router treatment only, never interpreted as one model.
+Current initial catalog is intentionally one representative treatment per immediate need:
+- DeepSeek: `deepseek-flash` for direct hosted-model crossover;
+- Groq: `openai/gpt-oss-20b` for free-tier hosted-model crossover;
+- OpenRouter: `openrouter/free` for router/dreaming characterization only.
+
+Add another hosted model only when a concrete comparison requires it. Do not keep a
+standing catalog of every available free endpoint.
 
 For Groq, free access is an account-tier property. A models preflight proves that the
 key can access the requested model, but it cannot prove that the account has not been
-upgraded to a paid tier. Keep these runs manual and bounded.
+upgraded to a paid tier. The catalog therefore labels this treatment
+`free-tier-account-unverified`; keep these runs manual and bounded.
 
-For OpenRouter, a specific model qualification MUST use an explicit `:free` variant
-when the treatment is intended to be zero-token-price. `openrouter/free` randomly
-routes among eligible free models and therefore qualifies the router behavior rather
-than a stable model identity.
+`openrouter/free` dynamically routes among eligible free models and therefore
+qualifies router behavior rather than a stable model identity. If a resolved free
+model later earns a controlled comparison, add that exact `:free` slug as a new
+candidate for the rep that needs it rather than pre-populating the catalog.
 
 The free-provider roster is intentionally small. Add candidates only when they support
 the task's required capabilities and produce useful coverage rather than enumerating
