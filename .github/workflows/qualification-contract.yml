@@ -36,10 +36,13 @@ jobs:
           import json
           from pathlib import Path
           import jsonschema
-          json.loads(Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          text_task = json.loads(Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          discovery_task = json.loads(Path("qualification/tasks/validation-discovery-v0/task.json").read_text())
           json.loads(Path("qualification/test-candidate.json").read_text())
           hosted = json.loads(Path("qualification/models/hosted-api.json").read_text())
           schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          actor_schema = json.loads(Path("qualification/actor-profile.schema.json").read_text())
+          experiment_schema = json.loads(Path("qualification/experiment.schema.json").read_text())
 
           candidates = hosted["candidates"]
           assert set(candidates) == {
@@ -60,12 +63,20 @@ jobs:
               assert candidate["treatment_kind"] in {"model", "router"}
               assert "secret" not in candidate, candidate_id
               assert "admission" not in candidate, candidate_id
+          assert text_task["task_class"] == "software.bounded-repair"
+          assert discovery_task["task_class"] == "repository.capability-discovery"
+          assert text_task["allowed_write_paths"] == ["value.txt"]
+          assert discovery_task["allowed_write_paths"] == ["result.json"]
           jsonschema.Draft7Validator.check_schema(schema)
+          jsonschema.Draft7Validator.check_schema(actor_schema)
+          jsonschema.Draft7Validator.check_schema(experiment_schema)
           print("PASS qualification JSON contracts")
           PY
 
-      - name: Self-test deterministic verifier
-        run: python qualification/tasks/text-repair-v0/verify.py --self-test
+      - name: Self-test deterministic verifiers
+        run: |
+          python qualification/tasks/text-repair-v0/verify.py --self-test
+          python qualification/tasks/validation-discovery-v0/verify.py --self-test
 
       - name: Exercise positive, repeat, and negative receipts
         env:
