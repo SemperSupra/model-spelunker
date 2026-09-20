@@ -265,7 +265,8 @@
               "sandbox-user-namespace-unavailable",
               "sandbox-policy-incompatible",
               "unexpected-external-network",
-              "repeated-tool-failure"
+              "repeated-tool-failure",
+              "engine-error-event"
             ]
           }
         },
@@ -378,6 +379,15 @@
               "type": "number",
               "minimum": 0
             }
+          }
+        },
+        "engine_error_types": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
           }
         }
       }
