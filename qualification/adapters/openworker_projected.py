@@ -26,11 +26,14 @@ from coworker.tools import ToolRegistry
 
 
 MODEL = os.environ.get("MODEL_SPELUNKER_MODEL", "ollama:qwen3:1.7b")
+_PROVIDER, _, _BARE_MODEL = MODEL.partition(":")
+_reasoning_effort = os.environ.get("MODEL_SPELUNKER_REASONING_EFFORT", "none")
 MODEL_SETTINGS = {
     "parallel_tool_calls": False,
     "max_tokens": int(os.environ.get("MODEL_SPELUNKER_MAX_TOKENS", "2048")),
-    "reasoning_effort": os.environ.get("MODEL_SPELUNKER_REASONING_EFFORT", "none"),
 }
+if _reasoning_effort != "omit":
+    MODEL_SETTINGS["reasoning_effort"] = _reasoning_effort
 
 
 class CapabilityEnforcingProvider(ProviderClient):
@@ -132,9 +135,22 @@ async def run(instruction: str) -> int:
     target = (workspace / "value.txt").resolve()
     registry = registry_for(workspace)
     permissions = PermissionEngine(workspace_root=workspace)
-    provider = CapabilityEnforcingProvider(
-        ProviderRouter(secrets=None, default_provider="openai")
-    )
+    if _PROVIDER == "groq":
+        # The pinned OpenWorker revision intentionally deferred a first-class Groq
+        # descriptor. Keep the harness/engine unchanged and bind its existing
+        # OpenAI-compatible ProviderClient directly to Groq for qualification.
+        from coworker.providers.openai_provider import OpenAIProvider
+
+        delegate = OpenAIProvider(
+            api_key=os.environ["GROQ_API_KEY"],
+            base_url="https://api.groq.com/openai/v1",
+        )
+        engine_model = _BARE_MODEL
+    else:
+        delegate = ProviderRouter(secrets=None, default_provider="openai")
+        engine_model = MODEL
+
+    provider = CapabilityEnforcingProvider(delegate)
 
     approvals: list[dict[str, Any]] = []
 
@@ -161,7 +177,7 @@ async def run(instruction: str) -> int:
         provider=provider,
         registry=registry,
         permissions=permissions,
-        model=MODEL,
+        model=engine_model,
         approver=approver,
         max_iterations=4,
         model_settings=MODEL_SETTINGS,
@@ -220,7 +236,11 @@ def main() -> int:
         return 2
 
     provider = MODEL.split(":", 1)[0] if ":" in MODEL else "openai"
-    provider_key = {"deepseek": "DEEPSEEK_API_KEY"}.get(provider)
+    provider_key = {
+        "deepseek": "DEEPSEEK_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "openrouter": "OPENROUTER_API_KEY",
+    }.get(provider)
     known_keys = (
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
@@ -228,6 +248,8 @@ def main() -> int:
         "GOOGLE_API_KEY",
         "OLLAMA_API_KEY",
         "DEEPSEEK_API_KEY",
+        "GROQ_API_KEY",
+        "OPENROUTER_API_KEY",
     )
     present = [name for name in known_keys if os.environ.get(name)]
     disallowed = [name for name in present if name != provider_key]
