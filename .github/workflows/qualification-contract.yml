@@ -107,7 +107,7 @@ jobs:
 
       - name: Reduce current actor qualification evidence
         run: |
-          PYTHONPATH=. python qualification/reduce_evidence.py             qualification/evidence/hosted-deepseek-flash-text-repair-2026-09-20.json             qualification/evidence/hosted-google-gemini-text-repair-2026-09-20.json             qualification/evidence/hosted-groq-gpt-oss-text-repair-2026-09-20.json             qualification/evidence/hosted-nvidia-nemotron-text-repair-2026-09-20.json             qualification/evidence/hosted-openrouter-free-text-repair-2026-09-20.json             qualification/evidence/local-openworker-qwen-validation-discovery-2026-09-20.json             --output "$RUNNER_TEMP/current-envelopes.json"
+          PYTHONPATH=. python qualification/reduce_evidence.py             qualification/evidence/hosted-deepseek-flash-text-repair-2026-09-20.json             qualification/evidence/hosted-google-gemini-text-repair-2026-09-20.json             qualification/evidence/hosted-groq-gpt-oss-text-repair-2026-09-20.json             qualification/evidence/hosted-nvidia-nemotron-text-repair-2026-09-20.json             qualification/evidence/hosted-openrouter-free-text-repair-2026-09-20.json             qualification/evidence/hosted-openrouter-groq-gpt-oss-text-repair-2026-09-20.json             qualification/evidence/local-openworker-qwen-validation-discovery-2026-09-20.json             --output "$RUNNER_TEMP/current-envelopes.json"
           python - "$RUNNER_TEMP/current-envelopes.json" <<'PY'
           import json, sys
           data=json.load(open(sys.argv[1]))
