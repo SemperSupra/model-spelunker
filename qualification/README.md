@@ -77,3 +77,23 @@ makes them relevant. Prefer structural projections that remove unused providers,
 telemetry, voice, UI, plugins, or other capability surfaces over micro-optimizing
 code generation.
 
+## Hosted API model treatments
+
+Hosted API models are valid model treatments alongside sovereign/local CPU or GPU
+models when the harness, task, tool projection, substrate, and authority envelope can
+otherwise be held constant.
+
+API-backed qualification workflows are manual-only and must:
+
+- receive provider credentials only at execution time from an external secret store;
+- never serialize credential values into candidate metadata, receipts, diagnostics, or artifacts;
+- run a non-inference authentication/readiness preflight when the provider exposes one;
+- preserve the provider/model alias and the date or contract revision used for interpretation;
+- record provider-reported token usage when available;
+- keep `cost` null unless an exact, contemporaneous billing calculation is independently
+  derived from provider usage and pricing evidence.
+
+Provider aliases are not immutable model artifacts. A receipt for a hosted alias such
+as `deepseek-flash` proves behavior of the provider-served configured actor at that
+time; it does not claim possession of an immutable model checkpoint.
+
