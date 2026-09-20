@@ -316,6 +316,9 @@ def main() -> int:
         try:
             candidate_env = dict(os.environ)
             candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
+            allowed = task.get("allowed_write_paths") or []
+            if len(allowed) == 1:
+                candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
             completed = subprocess.run(
                 command,
                 cwd=workdir,
