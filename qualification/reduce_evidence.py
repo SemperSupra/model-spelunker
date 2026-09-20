@@ -66,12 +66,15 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     if bool(obs.get("success")):
         return "pass"
     workload = obs.get("workload") or {}
+    engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in set(
+        obs.get("failure_signals") or []
+    )
     zero_round_nonterminal = (
         not obs.get("timed_out", False)
         and obs.get("candidate_exit_code") == 0
         and workload.get("model_rounds") == 0
     )
-    return "incomplete" if zero_round_nonterminal else "fail"
+    return "incomplete" if engine_error or zero_round_nonterminal else "fail"
 
 
 def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
