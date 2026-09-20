@@ -86,7 +86,6 @@ class CapabilityEnforcingProvider(ProviderClient):
         raw = self._mapping(turn.raw)
         usage = self._mapping(raw.get("usage"))
         prompt_details = self._mapping(usage.get("prompt_tokens_details"))
-        x_groq = self._mapping(raw.get("x_groq"))
 
         tool_argument_bytes = sum(
             self._bytes(call.arguments) for call in (turn.tool_calls or [])
