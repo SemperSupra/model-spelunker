@@ -70,6 +70,23 @@ jobs:
           jsonschema.Draft7Validator.check_schema(schema)
           jsonschema.Draft7Validator.check_schema(actor_schema)
           jsonschema.Draft7Validator.check_schema(experiment_schema)
+          actor_ids = set()
+          for path in sorted(Path("qualification/actors").glob("*.json")):
+              actor = json.loads(path.read_text())
+              jsonschema.validate(actor, actor_schema)
+              actor_ids.add(actor["id"])
+          assert len(actor_ids) >= 6
+
+          task_classes = {
+              text_task["id"]: text_task["task_class"],
+              discovery_task["id"]: discovery_task["task_class"],
+          }
+          for path in sorted(Path("qualification/experiments").glob("*.json")):
+              experiment = json.loads(path.read_text())
+              jsonschema.validate(experiment, experiment_schema)
+              assert experiment["task"]["id"] in task_classes
+              assert experiment["task"]["task_class"] == task_classes[experiment["task"]["id"]]
+              assert set(experiment["actors"]) <= actor_ids
           print("PASS qualification JSON contracts")
           PY
 
