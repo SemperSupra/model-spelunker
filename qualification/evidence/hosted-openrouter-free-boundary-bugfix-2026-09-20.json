@@ -1,0 +1,62 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:bb9679300a49f48b2136075253a8d3173b1ac1878dc6638ea0d9d69590b58ce8",
+    "harness": {
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "id": "openrouter/free",
+      "provider": "openrouter",
+      "treatment_kind": "router"
+    },
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:65e5280673afb941ba82641e270cd1d37efd9f705fc37375022d2f58add338fb",
+  "observation": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": 2655,
+    "output_tokens": 529,
+    "state_changed": true,
+    "success": true,
+    "timed_out": false,
+    "tool_calls": 4,
+    "verifier_exit_code": 0,
+    "wall_seconds": 9.008692,
+    "workload": {
+      "client_wall_seconds_total": 8.143314,
+      "first_event_seconds_first": 1.076272,
+      "first_event_seconds_max": 1.076272,
+      "first_event_seconds_min": 0.527359,
+      "model_rounds": 4,
+      "output_text_bytes_total": 4,
+      "reasoning_bytes_total": 1002,
+      "request_message_bytes_total": 3832,
+      "request_tool_schema_bytes_total": 3872,
+      "tool_argument_bytes_total": 367
+    }
+  },
+  "run_id": "20260920T173525Z-394d2592",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "15ea4903a060d06c56c20f9f81b02c06541298e0",
+    "profile_id": "gha-linux-x64-openworker-hosted-api"
+  },
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "package_digest": "sha256:52ffb636ec670b5f89c4acb0d2126c8ac34336c8bafa517097cfd49fd0477cc8",
+    "source_commit": "b9df85dcfb197fadaf68c2f0117fda1231e60de0",
+    "task_class": "software.bounded-debugging"
+  }
+}
