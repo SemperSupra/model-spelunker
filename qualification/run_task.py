@@ -117,6 +117,47 @@ def new_run_id() -> str:
     return f"{stamp}-{uuid.uuid4().hex[:8]}"
 
 
+def last_marker(stdout: str, prefix: str) -> str | None:
+    for line in reversed(stdout.splitlines()):
+        if line.startswith(prefix):
+            return line[len(prefix):]
+    return None
+
+
+def harness_metrics(stdout: str) -> dict[str, int | None]:
+    usage_raw = last_marker(stdout, "MODEL_SPELUNKER_USAGE=")
+    usage: dict[str, int] = {}
+    if usage_raw:
+        try:
+            parsed = json.loads(usage_raw)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            for key in ("input", "output", "cache_read", "cache_write"):
+                value = parsed.get(key)
+                if isinstance(value, int) and value >= 0:
+                    usage[key] = value
+
+    tool_calls: int | None = None
+    tool_raw = last_marker(stdout, "MODEL_SPELUNKER_TOOL_CALLS=")
+    if tool_raw is not None:
+        try:
+            value = int(tool_raw)
+        except ValueError:
+            pass
+        else:
+            if value >= 0:
+                tool_calls = value
+
+    return {
+        "tool_calls": tool_calls,
+        "input_tokens": usage.get("input"),
+        "output_tokens": usage.get("output"),
+        "cache_read_tokens": usage.get("cache_read"),
+        "cache_write_tokens": usage.get("cache_write"),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("task_dir", type=Path)
@@ -204,6 +245,7 @@ def main() -> int:
             verifier_exit=verifier.returncode,
             state_changed=state_changed,
         )
+        metrics = harness_metrics(stdout)
 
         evidence = {
             "candidate_exit_code": candidate_exit,
@@ -254,9 +296,11 @@ def main() -> int:
                 "timed_out": timed_out,
                 "state_changed": state_changed,
                 "failure_signals": failure_signals,
-                "tool_calls": None,
-                "input_tokens": None,
-                "output_tokens": None,
+                "tool_calls": metrics["tool_calls"],
+                "input_tokens": metrics["input_tokens"],
+                "output_tokens": metrics["output_tokens"],
+                "cache_read_tokens": metrics["cache_read_tokens"],
+                "cache_write_tokens": metrics["cache_write_tokens"],
                 "cost": None,
             },
             "evidence_digest": canonical_json_digest(evidence),
