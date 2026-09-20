@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot local Qwen actor interview for software.bounded-debugging",
+  "task": "boundary-bugfix-v0",
+  "actor": "openworker-qwen3-1.7b-gha-ollama",
+  "max_reps": 1
+}
