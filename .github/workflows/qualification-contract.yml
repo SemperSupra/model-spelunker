@@ -111,16 +111,21 @@ jobs:
           python - "$RUNNER_TEMP/current-envelopes.json" <<'PY'
           import json, sys
           data=json.load(open(sys.argv[1]))
-          assert len(data["envelopes"]) == 6
-          by_model={
-              env["actor"]["candidate"]["model"]["id"]: env
+          assert len(data["envelopes"]) == 7
+          by_route={
+              (
+                  env["actor"]["candidate"]["model"]["provider"],
+                  env["actor"]["candidate"]["model"]["id"],
+                  env["task_class"],
+              ): env
               for env in data["envelopes"]
           }
-          assert by_model["deepseek-flash"]["state"] == "PROVISIONAL"
-          assert by_model["gemini-3.7-flash"]["state"] == "PROVISIONAL"
-          assert by_model["openai/gpt-oss-20b"]["state"] == "PROVISIONAL"
-          assert by_model["nvidia/nemotron-3.5-lightning-30b-a3b"]["state"] == "RESTRICTED"
-          assert by_model["openrouter/free"]["state"] == "PROVISIONAL"
+          assert by_route[("deepseek","deepseek-flash","software.bounded-repair")]["state"] == "PROVISIONAL"
+          assert by_route[("google","gemini-3.7-flash","software.bounded-repair")]["state"] == "PROVISIONAL"
+          assert by_route[("groq","openai/gpt-oss-20b","software.bounded-repair")]["state"] == "PROVISIONAL"
+          assert by_route[("openrouter","openai/gpt-oss-20b","software.bounded-repair")]["state"] == "PROVISIONAL"
+          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b","software.bounded-repair")]["state"] == "RESTRICTED"
+          assert by_route[("openrouter","openrouter/free","software.bounded-repair")]["state"] == "PROVISIONAL"
           qwen=[env for env in data["envelopes"] if env["task_class"]=="repository.capability-discovery"][0]
           assert qwen["state"] == "RESTRICTED"
           assert all(env["qualification_status"] == "NOT_DERIVED" for env in data["envelopes"])
