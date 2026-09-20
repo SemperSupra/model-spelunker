@@ -38,6 +38,10 @@ def tree_digest(root: Path) -> str:
     return "sha256:" + hasher.hexdigest()
 
 
+def has_engine_error_event(stdout: str) -> bool:
+    return '"type": "EventType.ERROR"' in stdout or '"type":"EventType.ERROR"' in stdout
+
+
 def detect_failure_signals(
     stdout: str,
     stderr: str,
@@ -56,9 +60,12 @@ def detect_failure_signals(
         if signal not in signals:
             signals.append(signal)
 
+    engine_error = has_engine_error_event(stdout)
     if timed_out:
         add("timeout")
-    if candidate_exit == 0 and verifier_exit != 0:
+    if engine_error:
+        add("engine-error-event")
+    if candidate_exit == 0 and verifier_exit != 0 and not engine_error:
         add("false-completion")
     if verifier_exit != 0 and not state_changed:
         add("state-unchanged")
@@ -357,10 +364,14 @@ def main() -> int:
         final_tree_digest = tree_digest(workdir)
         state_changed = final_tree_digest != initial_tree_digest
         success = verifier.returncode == 0 and not timed_out
+        provider_rounds = provider_observations(stdout)
+        engine_error = has_engine_error_event(stdout)
         if timed_out:
             failure_class = "timeout"
         elif candidate_exit != 0:
             failure_class = "candidate-error"
+        elif verifier.returncode != 0 and engine_error and not provider_rounds:
+            failure_class = "candidate-error-event"
         elif verifier.returncode != 0:
             failure_class = "false-completion"
         else:
@@ -375,7 +386,6 @@ def main() -> int:
             state_changed=state_changed,
         )
         metrics = harness_metrics(stdout)
-        provider_rounds = provider_observations(stdout)
         workload = workload_summary(provider_rounds)
 
         evidence = {
