@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot direct-DeepSeek versus OpenRouter-pinned-DeepSeek second-task pair",
+  "task": "validation-discovery-v0",
+  "candidates": [
+    "deepseek-flash",
+    "openrouter-deepseek-v41-flash-byok"
+  ],
+  "max_reps_per_actor": 1
+}
