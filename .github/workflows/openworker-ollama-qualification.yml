@@ -1,11 +1,6 @@
 name: OpenWorker Ollama Qualification
 
 on:
-  push:
-    branches:
-      - exp/qualification-next-tranche
-    paths:
-      - 'qualification/third-task-local-trigger.json'
   workflow_dispatch:
     inputs:
       task:
@@ -37,7 +32,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
-      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'boundary-bugfix-v0' }}
+      QUALIFICATION_TASK: ${{ inputs.task }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-candidate.json'
       RECEIPT: '/tmp/model-spelunker-openworker-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-openworker-diagnostics.json'
