@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "mvp-deepseek-reference-text-repair-v0",
+  "decision_question": "What bounded-repair outcome does the paid DeepSeek reference actor produce under the same projected OpenWorker/GHA task contract?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "openworker-deepseek-flash-gha-direct"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "task",
+    "harness",
+    "github-hosted-runner-class",
+    "tool-projection"
+  ],
+  "variable_under_test": null,
+  "stop_conditions": [
+    "validator-contract-failure",
+    "unexpected-authority-expansion",
+    "provider-admission-failure"
+  ]
+}
