@@ -1,0 +1,55 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:052ef60d496552a372afafd470288766a429fcdefd9502c1631134a822f132f4",
+    "harness": {
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "id": "deepseek/deepseek-v4.1-flash",
+      "provider": "openrouter",
+      "treatment_kind": "model"
+    },
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:8ba2770e7c667d8c8c9eed91c94fce7e766cb9e3dc4b2cf0cfb7f5a725cac77b",
+  "observation": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "failure_class": "false-completion",
+    "failure_signals": [
+      "false-completion",
+      "state-unchanged"
+    ],
+    "human_interventions": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "state_changed": false,
+    "success": false,
+    "timed_out": false,
+    "tool_calls": 0,
+    "verifier_exit_code": 1,
+    "wall_seconds": 1.24746,
+    "workload": {
+      "model_rounds": 0
+    }
+  },
+  "run_id": "20260920T170225Z-afd312ac",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "15ea4903a060d06c56c20f9f81b02c06541298e0",
+    "profile_id": "gha-linux-x64-openworker-hosted-api"
+  },
+  "task": {
+    "id": "validation-discovery-v0",
+    "package_digest": "sha256:6e4330510461625808eb8ae5d5c1d9484c6e347d584c6ee77485be32ccc93876",
+    "source_commit": "655cf2462acc24e7be6716d182bb06771a6d40e1",
+    "task_class": "repository.capability-discovery"
+  }
+}
