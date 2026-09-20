@@ -297,7 +297,8 @@ def tool_names(messages: list[dict[str, Any]]) -> list[str]:
 
 async def run(instruction: str) -> int:
     workspace = Path.cwd().resolve()
-    target = (workspace / "value.txt").resolve()
+    write_target = os.environ.get("MODEL_SPELUNKER_WRITE_TARGET", "value.txt")
+    target = (workspace / write_target).resolve()
     registry = registry_for(workspace)
     permissions = PermissionEngine(workspace_root=workspace)
     compatible = {
