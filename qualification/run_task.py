@@ -38,8 +38,26 @@ def tree_digest(root: Path) -> str:
     return "sha256:" + hasher.hexdigest()
 
 
+def engine_error_types(stdout: str) -> list[str]:
+    out: list[str] = []
+    for line in stdout.splitlines():
+        if not line.startswith("OPENWORKER_EVENT="):
+            continue
+        try:
+            event = json.loads(line.split("=", 1)[1])
+        except (json.JSONDecodeError, IndexError):
+            continue
+        if event.get("type") != "EventType.ERROR":
+            continue
+        value = event.get("error_type")
+        normalized = str(value).strip() if value is not None else "unspecified"
+        if normalized and normalized not in out:
+            out.append(normalized)
+    return out
+
+
 def has_engine_error_event(stdout: str) -> bool:
-    return '"type": "EventType.ERROR"' in stdout or '"type":"EventType.ERROR"' in stdout
+    return bool(engine_error_types(stdout))
 
 
 def detect_failure_signals(
@@ -386,6 +404,7 @@ def main() -> int:
             state_changed=state_changed,
         )
         metrics = harness_metrics(stdout)
+        error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
 
         evidence = {
@@ -438,6 +457,7 @@ def main() -> int:
                 "timed_out": timed_out,
                 "state_changed": state_changed,
                 "failure_signals": failure_signals,
+                "engine_error_types": error_types,
                 "tool_calls": metrics["tool_calls"],
                 "input_tokens": metrics["input_tokens"],
                 "output_tokens": metrics["output_tokens"],
