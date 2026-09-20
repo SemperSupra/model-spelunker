@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot bounded paid DeepSeek reference actor qualification",
+  "candidate": "deepseek-flash",
+  "task": "text-repair-v0",
+  "max_reps": 1
+}
