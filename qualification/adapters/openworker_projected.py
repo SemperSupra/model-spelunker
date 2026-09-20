@@ -104,7 +104,7 @@ class CapabilityEnforcingProvider(ProviderClient):
             "reasoning_bytes": len((turn.reasoning or "").encode("utf-8")),
             "tool_argument_bytes": tool_argument_bytes,
             "client_wall_seconds": round(time.monotonic() - started, 6),
-            "ttft_seconds": (
+            "first_event_seconds": (
                 round(first_event_at - started, 6)
                 if first_event_at is not None
                 else None
