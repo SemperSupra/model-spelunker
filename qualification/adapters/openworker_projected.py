@@ -300,15 +300,18 @@ async def run(instruction: str) -> int:
     target = (workspace / "value.txt").resolve()
     registry = registry_for(workspace)
     permissions = PermissionEngine(workspace_root=workspace)
-    if _PROVIDER == "groq":
-        # The pinned OpenWorker revision intentionally deferred a first-class Groq
-        # descriptor. Keep the harness/engine unchanged and bind its existing
-        # OpenAI-compatible ProviderClient directly to Groq for qualification.
+    compatible = {
+        "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1"),
+        "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+        "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
+    }
+    if _PROVIDER in compatible:
         from coworker.providers.openai_provider import OpenAIProvider
 
+        key_name, base_url = compatible[_PROVIDER]
         delegate = OpenAIProvider(
-            api_key=os.environ["GROQ_API_KEY"],
-            base_url="https://api.groq.com/openai/v1",
+            api_key=os.environ[key_name],
+            base_url=base_url,
         )
         engine_model = _BARE_MODEL
     else:
