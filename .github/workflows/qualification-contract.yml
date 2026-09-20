@@ -96,7 +96,7 @@ jobs:
           python qualification/tasks/validation-discovery-v0/verify.py --self-test
 
       - name: Self-test task-conditioned evidence reducer
-        run: python qualification/test_reduce_evidence.py
+        run: PYTHONPATH=. python qualification/test_reduce_evidence.py
 
       - name: Exercise positive, repeat, and negative receipts
         env:
