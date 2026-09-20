@@ -319,6 +319,9 @@ def main() -> int:
             allowed = task.get("allowed_write_paths") or []
             if len(allowed) == 1:
                 candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
+            projected_tools = task.get("projected_tools") or []
+            if projected_tools:
+                candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
             completed = subprocess.run(
                 command,
                 cwd=workdir,
