@@ -94,7 +94,7 @@ class CapabilityEnforcingProvider(ProviderClient):
         observation = {
             "requested_model": requested_model,
             "resolved_model": raw.get("model"),
-            "response_id": raw.get("id"),
+            "_response_id": raw.get("id"),
             "provider": raw.get("provider"),
             "system_fingerprint": raw.get("system_fingerprint"),
             "service_tier": raw.get("service_tier"),
@@ -120,7 +120,6 @@ class CapabilityEnforcingProvider(ProviderClient):
             "completion_time": usage.get("completion_time"),
             "provider_total_time": usage.get("total_time"),
             "provider_cost": usage.get("cost"),
-            "provider_request_id": x_groq.get("id"),
         }
         self.provider_observations.append(
             {key: value for key, value in observation.items() if value is not None}
@@ -133,7 +132,6 @@ class CapabilityEnforcingProvider(ProviderClient):
         if not key:
             return
         allowed = (
-            "id",
             "model",
             "provider_name",
             "router",
@@ -154,10 +152,9 @@ class CapabilityEnforcingProvider(ProviderClient):
             "generation_time",
             "moderation_latency",
             "data_region",
-            "upstream_id",
         )
         for observation in self.provider_observations:
-            response_id = observation.get("response_id")
+            response_id = observation.get("_response_id")
             if not isinstance(response_id, str) or not response_id:
                 continue
             url = (
@@ -396,9 +393,13 @@ async def run(instruction: str) -> int:
     print("OPENWORKER_SUMMARY=" + json.dumps(summary, sort_keys=True), flush=True)
     print("MODEL_SPELUNKER_USAGE=" + json.dumps(usage_summary, sort_keys=True), flush=True)
     print(f"MODEL_SPELUNKER_TOOL_CALLS={len(summary['tool_calls'])}", flush=True)
+    public_observations = [
+        {key: value for key, value in observation.items() if not key.startswith("_")}
+        for observation in provider.provider_observations
+    ]
     print(
         "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS="
-        + json.dumps(provider.provider_observations, sort_keys=True),
+        + json.dumps(public_observations, sort_keys=True),
         flush=True,
     )
     return 0
