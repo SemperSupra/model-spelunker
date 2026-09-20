@@ -5,7 +5,7 @@ on:
     branches:
       - exp/qualification-next-tranche
     paths:
-      - 'qualification/diagnostic-openrouter-deepseek-trigger.json'
+      - 'qualification/third-task-free-trigger.json'
   workflow_dispatch:
     inputs:
       candidate:
@@ -29,14 +29,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        candidate: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.candidate) || '["openrouter-deepseek-v41-flash-byok"]') }}
+        candidate: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.candidate) || '["groq-gpt-oss-20b","google-gemini-3.7-flash","nvidia-nemotron-3.5-lightning","openrouter-free-router"]') }}
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
-      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'validation-discovery-v0' }}
+      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'boundary-bugfix-v0' }}
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
