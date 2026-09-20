@@ -67,6 +67,7 @@ jobs:
               "HOSTED_MODEL": candidate["model"],
               "HOSTED_API_BASE": candidate["api_base"],
               "HOSTED_COST_CLASS": candidate["cost_class"],
+              "HOSTED_EXTRA_BODY_JSON": json.dumps(candidate.get("extra_body") or {},sort_keys=True,separators=(",",":")),
               "MODEL_SPELUNKER_MODEL": f'{candidate["provider"]}:{candidate["model"]}',
               "MODEL_SPELUNKER_REASONING_EFFORT": candidate["reasoning_effort"],
           }
@@ -83,6 +84,7 @@ jobs:
               "model":candidate["model"],
               "cost_class":candidate["cost_class"],
               "reasoning_effort":candidate["reasoning_effort"],
+              "extra_body":candidate.get("extra_body"),
           },sort_keys=True))
           PY
 
@@ -222,12 +224,10 @@ jobs:
           elif provider=="openrouter":
               data,_=get(base+"/key")
               info=data.get("data") or {}
-              if os.environ["HOSTED_TREATMENT_KIND"]!="router" or model!="openrouter/free":
-                  raise SystemExit("current OpenRouter treatment must be the free router")
               evidence={
                   "authenticated":True,
                   "is_free_tier":info.get("is_free_tier"),
-                  "treatment_kind":"router",
+                  "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
               }
 
           else:
@@ -272,6 +272,7 @@ jobs:
                   "api_base":os.environ["HOSTED_API_BASE"],
                   "cost_class":os.environ["HOSTED_COST_CLASS"],
                   "provider_alias_semantics":"hosted mutable service",
+                  "extra_body":json.loads(os.environ["HOSTED_EXTRA_BODY_JSON"]),
               },
           }
           Path(os.environ["CANDIDATE_META"]).write_text(
@@ -307,6 +308,11 @@ jobs:
             nvidia) ;;
             *) unset NVIDIA_API_KEY || true ;;
           esac
+          if [ "$HOSTED_EXTRA_BODY_JSON" != "{}" ]; then
+            export MODEL_SPELUNKER_EXTRA_BODY="$HOSTED_EXTRA_BODY_JSON"
+          else
+            unset MODEL_SPELUNKER_EXTRA_BODY || true
+          fi
 
           set +e
           python qualification/run_task.py \
