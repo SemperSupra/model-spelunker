@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot OpenRouter intermediary crossover against direct Groq baseline",
+  "candidate": "openrouter-groq-gpt-oss-20b-byok",
+  "task": "text-repair-v0",
+  "provider_constraints": {
+    "only": [
+      "groq"
+    ],
+    "allow_fallbacks": false
+  },
+  "max_reps": 1
+}
