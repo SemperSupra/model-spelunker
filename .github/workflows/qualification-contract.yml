@@ -51,12 +51,16 @@ jobs:
               "google-gemini-3.7-flash",
               "nvidia-nemotron-3.5-lightning",
               "openrouter-free-router",
+              "openrouter-groq-gpt-oss-20b-byok",
           }
           assert candidates["deepseek-flash"]["provider"] == "deepseek"
           assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
           assert candidates["google-gemini-3.7-flash"]["provider"] == "google"
           assert candidates["nvidia-nemotron-3.5-lightning"]["provider"] == "nvidia"
           assert candidates["openrouter-free-router"]["provider"] == "openrouter"
+          assert candidates["openrouter-groq-gpt-oss-20b-byok"]["provider"] == "openrouter"
+          assert candidates["openrouter-groq-gpt-oss-20b-byok"]["extra_body"]["provider"]["only"] == ["groq"]
+          assert candidates["openrouter-groq-gpt-oss-20b-byok"]["extra_body"]["provider"]["allow_fallbacks"] is False
           assert candidates["openrouter-free-router"]["treatment_kind"] == "router"
           assert candidates["openrouter-free-router"]["model"] == "openrouter/free"
           for candidate_id, candidate in candidates.items():
