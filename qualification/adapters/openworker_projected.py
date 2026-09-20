@@ -417,6 +417,8 @@ def main() -> int:
     provider_key = {
         "deepseek": "DEEPSEEK_API_KEY",
         "groq": "GROQ_API_KEY",
+        "google": "GOOGLE_API_KEY",
+        "nvidia": "NVIDIA_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
     }.get(provider)
     known_keys = (
@@ -427,6 +429,7 @@ def main() -> int:
         "OLLAMA_API_KEY",
         "DEEPSEEK_API_KEY",
         "GROQ_API_KEY",
+        "NVIDIA_API_KEY",
         "OPENROUTER_API_KEY",
     )
     present = [name for name in known_keys if os.environ.get(name)]
