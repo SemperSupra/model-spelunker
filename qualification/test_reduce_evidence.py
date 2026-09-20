@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+from qualification.reduce_evidence import reduce_receipts
+
+
+def receipt(run_id: str, success: bool):
+    return {
+        "run_id": run_id,
+        "task": {"id": "text-repair-v0", "task_class": "software.bounded-repair"},
+        "candidate": {
+            "harness": {"name": "fixture", "version": "1"},
+            "model": {"provider": "none", "id": "none"},
+            "configuration_digest": "sha256:" + "0" * 64,
+            "toolset": ["filesystem"],
+        },
+        "substrate": {
+            "profile_id": "fixture",
+            "profile_commit": "0" * 40,
+        },
+        "observation": {"success": success},
+    }
+
+
+rows = [receipt("run-a", True), receipt("run-b", True)]
+envelopes = reduce_receipts(rows)
+assert len(envelopes) == 1
+env = envelopes[0]
+assert env["task_class"] == "software.bounded-repair"
+assert env["state"] == "PROVISIONAL_REPEATED"
+assert env["qualification_status"] == "NOT_DERIVED"
+assert env["evidence"]["validated_pass"] == 2
+assert env["ksa_evidence"]["skills"]["bounded_change_execution"] == "REPEATED_EVIDENCE"
+
+rows.append(receipt("run-c", False))
+env = reduce_receipts(rows)[0]
+assert env["state"] == "PROVISIONAL_WITH_VARIANCE"
+assert env["ksa_evidence"]["abilities"]["scope_discipline"] == "MIXED_EVIDENCE"
+
+negative = reduce_receipts([receipt("run-d", False)])[0]
+assert negative["state"] == "RESTRICTED"
+assert negative["ksa_evidence"]["skills"]["bounded_change_execution"] == "NEGATIVE_BOUNDARY_OBSERVED"
+
+print("PASS evidence reducer")
