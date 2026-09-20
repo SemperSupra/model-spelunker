@@ -93,6 +93,13 @@
             },
             "artifact_ref": {
               "type": "string"
+            },
+            "treatment_kind": {
+              "type": "string",
+              "enum": [
+                "model",
+                "router"
+              ]
             }
           }
         },
