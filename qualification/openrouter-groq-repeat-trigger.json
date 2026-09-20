@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "purpose": "paired direct-Groq versus OpenRouter-pinned-Groq replication",
+  "task": "text-repair-v0",
+  "pair": [
+    "groq-gpt-oss-20b",
+    "openrouter-groq-gpt-oss-20b-byok"
+  ],
+  "replication_index": 2
+}
