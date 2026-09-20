@@ -119,3 +119,53 @@ The free-provider roster is intentionally small. Add candidates only when they s
 the task's required capabilities and produce useful coverage rather than enumerating
 every free endpoint.
 
+## Cross-model measurement semantics
+
+Provider-native tokens are retained because they matter for quotas, billing, caching,
+and model-local throughput. They are **not** treated as a universal unit of semantic
+work across model families or providers.
+
+Qualification therefore preserves several measurement planes:
+
+1. **Outcome / behavior**
+   - deterministic verifier result;
+   - state change;
+   - tool calls, approvals, retries, failure signals, model rounds.
+
+2. **Tokenizer-independent workload**
+   - serialized message bytes presented to the harness provider;
+   - serialized tool-schema bytes;
+   - output text bytes;
+   - reasoning bytes;
+   - tool-argument bytes.
+
+3. **Provider-native accounting**
+   - prompt/input tokens;
+   - completion/output tokens;
+   - cache read/write tokens;
+   - provider reasoning/native tokens when exposed;
+   - exact provider cost when exposed.
+
+4. **Time / capacity**
+   - client-observed model-call wall time;
+   - time to first streamed event;
+   - provider queue/prompt/completion/total time where exposed;
+   - rate-limit/quota observations where available.
+
+5. **Identity / routing**
+   - requested model/provider;
+   - resolved model returned by the service;
+   - backend/system fingerprint where exposed;
+   - serving provider and router metadata where exposed;
+   - service tier and generation/request identifiers.
+
+Do not rank models by raw tokens/second across tokenizers. Compare task success and
+behavior first, then use byte-normalized and wall-time measures for cross-model
+efficiency. Provider-native tokens remain essential within a provider/model accounting
+regime.
+
+For OpenRouter, the adapter may enrich completed generations through the metadata-only
+`/api/v1/generation` endpoint. This records the actual routed model/provider and
+native token/timing/cost information without retrieving stored prompt/completion
+content.
+
