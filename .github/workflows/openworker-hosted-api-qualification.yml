@@ -260,6 +260,21 @@ jobs:
           task=json.loads(task_path.read_text(encoding="utf-8"))
           projected_tools=task.get("projected_tools") or ["read_file","write_file"]
 
+          configuration={
+              "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
+              "projection":projected_tools,
+              "parallel_tool_calls":False,
+              "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
+              "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
+              "max_iterations":4,
+              "api_base":os.environ["HOSTED_API_BASE"],
+              "cost_class":os.environ["HOSTED_COST_CLASS"],
+              "provider_alias_semantics":"hosted mutable service",
+          }
+          extra_body=json.loads(os.environ["HOSTED_EXTRA_BODY_JSON"])
+          if extra_body:
+              configuration["extra_body"]=extra_body
+
           candidate={
               "harness":{
                   "name":"openworker",
@@ -271,18 +286,7 @@ jobs:
                   "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
               },
               "toolset":projected_tools,
-              "configuration":{
-                  "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
-                  "projection":projected_tools,
-                  "parallel_tool_calls":False,
-                  "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
-                  "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
-                  "max_iterations":4,
-                  "api_base":os.environ["HOSTED_API_BASE"],
-                  "cost_class":os.environ["HOSTED_COST_CLASS"],
-                  "provider_alias_semantics":"hosted mutable service",
-                  "extra_body":json.loads(os.environ["HOSTED_EXTRA_BODY_JSON"]),
-              },
+              "configuration":configuration,
           }
           Path(os.environ["CANDIDATE_META"]).write_text(
               json.dumps(candidate,indent=2,sort_keys=True)+"\n",
