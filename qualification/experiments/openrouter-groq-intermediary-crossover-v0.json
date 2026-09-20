@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "openrouter-groq-intermediary-crossover-v0",
+  "decision_question": "What changes when the same OpenWorker + gpt-oss-20b + GitHub-hosted task realization reaches Groq directly versus through OpenRouter pinned to Groq with provider fallbacks disabled?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "openworker-groq-gpt-oss-20b-gha-direct",
+    "openworker-groq-gpt-oss-20b-gha-openrouter-groq"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "task",
+    "harness_revision",
+    "nominal_model",
+    "tool_projection",
+    "github-hosted-runner-class"
+  ],
+  "variable_under_test": "execution_environment.inference_route",
+  "stop_conditions": [
+    "validator-contract-failure",
+    "OpenRouter-resolved-provider-not-Groq",
+    "unexpected-provider-fallback",
+    "unexpected-authority-expansion"
+  ]
+}
