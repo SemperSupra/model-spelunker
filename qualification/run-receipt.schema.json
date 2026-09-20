@@ -276,13 +276,6 @@
           ],
           "minimum": 0
         },
-        "provider_observations": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": true
-          }
-        },
         "workload": {
           "type": "object",
           "additionalProperties": false,
@@ -343,6 +336,40 @@
               "items": {
                 "type": "string"
               }
+            },
+            "system_fingerprints": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "service_tiers": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "provider_cost_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "native_prompt_tokens_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "native_completion_tokens_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "native_reasoning_tokens_total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "native_cached_tokens_total": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         }
