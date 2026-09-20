@@ -5,44 +5,74 @@
     "id": "text-repair-v0",
     "task_class": "software.bounded-repair"
   },
-  "direct": {
-    "actor_id": "openworker-groq-gpt-oss-20b-gha-direct",
-    "run_id": "20260920T141230Z-bf7440dc",
-    "outcome": "validated_pass",
-    "wall_seconds": 1.879978,
-    "model_rounds": 2,
-    "input_tokens": 399,
-    "output_tokens": 90,
-    "tool_calls": 1
-  },
-  "intermediary": {
-    "actor_id": "openworker-groq-gpt-oss-20b-gha-openrouter-groq",
-    "run_id": "20260920T141728Z-918206e7",
-    "outcome": "validated_pass",
-    "wall_seconds": 1.766816,
-    "model_rounds": 2,
-    "input_tokens": 418,
-    "output_tokens": 71,
-    "tool_calls": 1,
-    "route_contract": {
-      "provider_only": [
-        "groq"
-      ],
-      "allow_fallbacks": false,
-      "byok_configured": true
+  "reps": [
+    {
+      "index": 1,
+      "direct": {
+        "run_id": "20260920T141230Z-bf7440dc",
+        "outcome": "validated_pass",
+        "wall_seconds": 1.879978
+      },
+      "intermediary": {
+        "run_id": "20260920T141728Z-918206e7",
+        "outcome": "validated_pass",
+        "wall_seconds": 1.766816
+      }
     },
+    {
+      "index": 2,
+      "direct": {
+        "run_id": "20260920T142051Z-ea3fbee1",
+        "outcome": "validated_pass",
+        "wall_seconds": 1.461539
+      },
+      "intermediary": {
+        "run_id": "20260920T142040Z-48450a19",
+        "outcome": "validated_pass",
+        "wall_seconds": 1.996035
+      }
+    },
+    {
+      "index": 3,
+      "direct": {
+        "run_id": "20260920T142241Z-b490eb69",
+        "outcome": "validated_pass",
+        "wall_seconds": 1.622546
+      },
+      "intermediary": {
+        "run_id": "20260920T142239Z-8a2d6fed",
+        "outcome": "validated_pass",
+        "wall_seconds": 2.104622
+      }
+    }
+  ],
+  "route_contract": {
+    "provider_only": [
+      "groq"
+    ],
+    "allow_fallbacks": false,
+    "byok_configured": true,
     "byok_credential_source_observed": false
   },
   "observed": {
-    "both_validated": true,
-    "wall_seconds_delta_intermediary_minus_direct": -0.113162,
-    "terminal_outcome_difference": false,
-    "representation_accounting_difference": true
+    "pairs": 3,
+    "direct_validated_pass": 3,
+    "intermediary_validated_pass": 3,
+    "direct_mean_wall_seconds": 1.654688,
+    "intermediary_mean_wall_seconds": 1.955824,
+    "mean_delta_intermediary_minus_direct": 0.301137,
+    "per_pair_delta_seconds": [
+      -0.113162,
+      0.534496,
+      0.482076
+    ],
+    "terminal_outcome_difference_observed": false
   },
   "interpretation_ceiling": [
-    "This is one paired anchor, not evidence that OpenRouter is faster or equivalent in general.",
-    "The OpenRouter request contract pinned the serving provider to Groq and disabled provider fallbacks.",
-    "The current receipt path does not independently prove whether OpenRouter used the configured Groq BYOK credential or same-provider shared capacity; preserve that as UNKNOWN.",
-    "Additional independent reps are required before estimating an intermediary latency/reliability distribution."
+    "All three paired anchor reps validated successfully on both routes.",
+    "The three-rep sample is sufficient to show the pinned OpenRouter route is viable on this task anchor, but is too small to establish a general latency or reliability distribution.",
+    "Two of three paired reps were slower through OpenRouter; one was faster. Preserve this as an observed sample, not a general performance claim.",
+    "The request contract pinned the provider to Groq and disabled provider fallbacks.",
+    "The current receipt path does not independently prove whether OpenRouter used the configured Groq BYOK credential or same-provider shared capacity; preserve credential source as UNKNOWN."
   ]
 }
