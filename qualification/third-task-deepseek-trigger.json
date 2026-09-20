@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot paid DeepSeek reference actor interview for software.bounded-debugging",
+  "candidate": "deepseek-flash",
+  "task": "boundary-bugfix-v0",
+  "max_reps": 1
+}
