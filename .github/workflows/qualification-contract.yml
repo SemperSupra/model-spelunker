@@ -42,15 +42,20 @@ jobs:
           schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
 
           candidates = hosted["candidates"]
+          assert set(candidates) == {
+              "deepseek-flash",
+              "groq-gpt-oss-20b",
+              "openrouter-free-router",
+          }
+          assert candidates["deepseek-flash"]["provider"] == "deepseek"
           assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
-          assert candidates["groq-qwen3.8-27b"]["provider"] == "groq"
+          assert candidates["openrouter-free-router"]["provider"] == "openrouter"
+          assert candidates["openrouter-free-router"]["treatment_kind"] == "router"
+          assert candidates["openrouter-free-router"]["model"] == "openrouter/free"
           for candidate_id, candidate in candidates.items():
               assert candidate["treatment_kind"] in {"model", "router"}
-              if candidate["provider"] == "openrouter":
-                  if candidate["treatment_kind"] == "model":
-                      assert candidate["model"].endswith(":free"), candidate_id
-                  else:
-                      assert candidate["model"] == "openrouter/free", candidate_id
+              assert "secret" not in candidate, candidate_id
+              assert "admission" not in candidate, candidate_id
           jsonschema.Draft7Validator.check_schema(schema)
           print("PASS qualification JSON contracts")
           PY
@@ -110,7 +115,7 @@ jobs:
           assert good1["observation"]["output_tokens"] == 3
           assert good1["observation"]["cache_read_tokens"] == 2
           assert good1["observation"]["cache_write_tokens"] == 0
-          assert len(good1["observation"]["provider_observations"]) == 1
+          assert "provider_observations" not in good1["observation"]
           workload = good1["observation"]["workload"]
           assert workload["model_rounds"] == 1
           assert workload["request_message_bytes_total"] == 100.0
