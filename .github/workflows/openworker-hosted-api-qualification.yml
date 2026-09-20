@@ -333,6 +333,15 @@ jobs:
           print("QUALIFICATION_RESULT=" + ("PASS" if receipt["observation"]["success"] else "FAIL (valid observation)"))
           PY
 
+      - name: Upload immutable qualification receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hosted-qualification-${{ inputs.candidate }}-${{ inputs.task }}-${{ github.run_id }}
+          path: ${{ env.RECEIPT }}
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Remove staged provider credential
         if: always()
         shell: bash
