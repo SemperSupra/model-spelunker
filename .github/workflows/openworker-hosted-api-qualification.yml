@@ -7,6 +7,10 @@ on:
         description: Candidate id from qualification/models/hosted-api.json
         required: true
         default: groq-gpt-oss-20b
+      task:
+        description: Task id from qualification/tasks
+        required: true
+        default: text-repair-v0
 
 permissions:
   contents: read
@@ -23,6 +27,7 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
+      QUALIFICATION_TASK: ${{ inputs.task }}
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
@@ -237,6 +242,12 @@ jobs:
           import os
           from pathlib import Path
 
+          task_path=Path("qualification/tasks") / os.environ["QUALIFICATION_TASK"] / "task.json"
+          if not task_path.is_file():
+              raise SystemExit(f"unknown qualification task: {os.environ['QUALIFICATION_TASK']}")
+          task=json.loads(task_path.read_text(encoding="utf-8"))
+          projected_tools=task.get("projected_tools") or ["read_file","write_file"]
+
           candidate={
               "harness":{
                   "name":"openworker",
@@ -247,10 +258,10 @@ jobs:
                   "id":os.environ["HOSTED_MODEL"],
                   "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
               },
-              "toolset":["filesystem"],
+              "toolset":projected_tools,
               "configuration":{
                   "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
-                  "projection":["read_file","write_file"],
+                  "projection":projected_tools,
                   "parallel_tool_calls":False,
                   "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
                   "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
@@ -299,7 +310,7 @@ jobs:
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-linux-x64-openworker-hosted-api \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
-            qualification/tasks/text-repair-v0 \
+            "qualification/tasks/$QUALIFICATION_TASK" \
             "$CANDIDATE_META" \
             "$RECEIPT" \
             -- "$RUNNER_TEMP/openworker-venv/bin/python" \
