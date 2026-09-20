@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot free-tier second-task actor interview tranche",
+  "task": "validation-discovery-v0",
+  "candidates": [
+    "groq-gpt-oss-20b",
+    "google-gemini-3.7-flash",
+    "nvidia-nemotron-3.5-lightning",
+    "openrouter-free-router"
+  ],
+  "max_reps_per_actor": 1
+}
