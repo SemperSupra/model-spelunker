@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "candidates": {
+    "deepseek-flash": {
+      "treatment_kind": "model",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "api_base": "https://api.deepseek.com",
+      "reasoning_effort": "none",
+      "cost_class": "metered-api"
+    },
+    "groq-gpt-oss-20b": {
+      "treatment_kind": "model",
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "api_base": "https://api.groq.com/openai/v1",
+      "reasoning_effort": "low",
+      "cost_class": "free-tier-account-unverified"
+    },
+    "openrouter-free-router": {
+      "treatment_kind": "router",
+      "provider": "openrouter",
+      "model": "openrouter/free",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "zero-token-price"
+    },
+    "google-gemini-3.7-flash": {
+      "treatment_kind": "model",
+      "provider": "google",
+      "model": "gemini-3.7-flash",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "reasoning_effort": "omit",
+      "cost_class": "free-tier-account"
+    },
+    "nvidia-nemotron-3.5-lightning": {
+      "treatment_kind": "model",
+      "provider": "nvidia",
+      "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "api_base": "https://integrate.api.nvidia.com/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "free-endpoint"
+    },
+    "openrouter-groq-gpt-oss-20b-byok": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "openai/gpt-oss-20b",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "low",
+      "cost_class": "byok-free-tier-upstream",
+      "extra_body": {
+        "provider": {
+          "only": [
+            "groq"
+          ],
+          "allow_fallbacks": false
+        }
+      },
+      "route_note": "OpenRouter pinned to Groq; configured BYOK is expected to be prioritized. Shared same-provider fallback remains an evidence question unless account-level Always use is enabled."
+    },
+    "openrouter-deepseek-v41-flash-byok": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "none",
+      "cost_class": "byok-metered-upstream",
+      "extra_body": {
+        "provider": {
+          "only": [
+            "deepseek"
+          ],
+          "allow_fallbacks": false
+        }
+      },
+      "route_note": "OpenRouter pinned to DeepSeek with provider fallback disabled. Direct DeepSeek deepseek-flash currently maps to DeepSeek-V4.1-Flash; exact provider-served realization remains receipt/provenance evidence."
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "validation-discovery-v0",
+  "task_class": "repository.capability-discovery",
+  "instruction": "Inspect the repository and identify the canonical substantive validation entrypoint for a small code change. Do not invent a validator. Write result.json containing exactly one JSON object with the key entrypoint and the canonical command as its string value.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  },
+  "allowed_write_paths": [
+    "result.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "medium",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "medium"
+  }
+}

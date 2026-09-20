@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "purpose": "Groq admission retry with explicit user-agent",
+  "task": "text-repair-v0",
+  "candidates": [
+    "groq-gpt-oss-20b",
+    "google-gemini-3.7-flash",
+    "nvidia-nemotron-3.5-lightning",
+    "openrouter-free-router"
+  ],
+  "created_for": "model-spelunker-mvp",
+  "rerun": 3
+}

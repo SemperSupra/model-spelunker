@@ -1,0 +1,60 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:bb4ae410c5737fba1a723c1515dfefbe8b9a0bcb0a6a6d7c2cdd755d96eb8b67",
+    "harness": {
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "id": "openai/gpt-oss-20b",
+      "provider": "groq",
+      "treatment_kind": "model"
+    },
+    "toolset": [
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:438076ddaeaf61458ac01d065f8233fe2534010ba658447cc67e9aafe80975fa",
+  "observation": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": 399,
+    "output_tokens": 72,
+    "state_changed": true,
+    "success": true,
+    "timed_out": false,
+    "tool_calls": 1,
+    "verifier_exit_code": 0,
+    "wall_seconds": 1.622546,
+    "workload": {
+      "client_wall_seconds_total": 0.962973,
+      "first_event_seconds_first": 0.591819,
+      "first_event_seconds_max": 0.591819,
+      "first_event_seconds_min": 0.298905,
+      "model_rounds": 2,
+      "output_text_bytes_total": 32,
+      "reasoning_bytes_total": 95,
+      "request_message_bytes_total": 540,
+      "request_tool_schema_bytes_total": 1146,
+      "tool_argument_bytes_total": 57
+    }
+  },
+  "run_id": "20260920T142241Z-b490eb69",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "15ea4903a060d06c56c20f9f81b02c06541298e0",
+    "profile_id": "gha-linux-x64-openworker-hosted-api"
+  },
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:a51be2ffb8cbe2cacac72f038bb88a1649d491ff853244adb729981c9d6c24cc",
+    "source_commit": "9b236a6d61d2713754fafd0412828a19e150a0ff",
+    "task_class": "software.bounded-repair"
+  }
+}

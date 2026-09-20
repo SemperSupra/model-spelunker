@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/SemperSupra/model-spelunker/qualification/actor-profile.schema.json",
+  "title": "Configured Actor Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "harness", "model", "execution_environment", "toolset"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1]},
+    "id": {"type": "string", "minLength": 1},
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "id", "realization"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "id": {"type": "string", "minLength": 1},
+        "realization": {"type": "string", "enum": ["local-artifact", "hosted-service", "router"]},
+        "artifact_ref": {"type": ["string", "null"]},
+        "foundry_ref": {"type": ["string", "null"]}
+      }
+    },
+    "execution_environment": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["venue", "inference_route"],
+      "properties": {
+        "venue": {"type": "string", "minLength": 1},
+        "inference_route": {"type": "string", "minLength": 1}
+      }
+    },
+    "toolset": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string"}
+    },
+    "configuration": {"type": "object"},
+    "authority_profile": {"type": ["string", "null"]}
+  }
+}

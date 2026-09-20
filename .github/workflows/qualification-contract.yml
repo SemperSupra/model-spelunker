@@ -1,0 +1,249 @@
+name: Qualification Contract Check
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/**'
+      - '.github/workflows/qualification-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualification-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install schema validator
+        run: python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+
+      - name: Validate JSON contracts
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+          text_task = json.loads(Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          discovery_task = json.loads(Path("qualification/tasks/validation-discovery-v0/task.json").read_text())
+          json.loads(Path("qualification/test-candidate.json").read_text())
+          hosted = json.loads(Path("qualification/models/hosted-api.json").read_text())
+          schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          actor_schema = json.loads(Path("qualification/actor-profile.schema.json").read_text())
+          experiment_schema = json.loads(Path("qualification/experiment.schema.json").read_text())
+          task_schema = json.loads(Path("qualification/task-profile.schema.json").read_text())
+
+          candidates = hosted["candidates"]
+          assert set(candidates) == {
+              "deepseek-flash",
+              "groq-gpt-oss-20b",
+              "google-gemini-3.7-flash",
+              "nvidia-nemotron-3.5-lightning",
+              "openrouter-free-router",
+              "openrouter-groq-gpt-oss-20b-byok",
+              "openrouter-deepseek-v41-flash-byok",
+          }
+          assert candidates["deepseek-flash"]["provider"] == "deepseek"
+          assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
+          assert candidates["google-gemini-3.7-flash"]["provider"] == "google"
+          assert candidates["nvidia-nemotron-3.5-lightning"]["provider"] == "nvidia"
+          assert candidates["openrouter-free-router"]["provider"] == "openrouter"
+          assert candidates["openrouter-groq-gpt-oss-20b-byok"]["provider"] == "openrouter"
+          assert candidates["openrouter-groq-gpt-oss-20b-byok"]["extra_body"]["provider"]["only"] == ["groq"]
+          assert candidates["openrouter-groq-gpt-oss-20b-byok"]["extra_body"]["provider"]["allow_fallbacks"] is False
+          assert candidates["openrouter-deepseek-v41-flash-byok"]["provider"] == "openrouter"
+          assert candidates["openrouter-deepseek-v41-flash-byok"]["extra_body"]["provider"]["only"] == ["deepseek"]
+          assert candidates["openrouter-deepseek-v41-flash-byok"]["extra_body"]["provider"]["allow_fallbacks"] is False
+          assert candidates["openrouter-free-router"]["treatment_kind"] == "router"
+          assert candidates["openrouter-free-router"]["model"] == "openrouter/free"
+          for candidate_id, candidate in candidates.items():
+              assert candidate["treatment_kind"] in {"model", "router"}
+              assert "secret" not in candidate, candidate_id
+              assert "admission" not in candidate, candidate_id
+          assert text_task["task_class"] == "software.bounded-repair"
+          assert discovery_task["task_class"] == "repository.capability-discovery"
+          assert text_task["allowed_write_paths"] == ["value.txt"]
+          assert discovery_task["allowed_write_paths"] == ["result.json"]
+          jsonschema.Draft7Validator.check_schema(schema)
+          jsonschema.Draft7Validator.check_schema(actor_schema)
+          jsonschema.Draft7Validator.check_schema(experiment_schema)
+          jsonschema.Draft7Validator.check_schema(task_schema)
+          jsonschema.validate(text_task, task_schema)
+          jsonschema.validate(discovery_task, task_schema)
+          actor_ids = set()
+          for path in sorted(Path("qualification/actors").glob("*.json")):
+              actor = json.loads(path.read_text())
+              jsonschema.validate(actor, actor_schema)
+              actor_ids.add(actor["id"])
+          assert len(actor_ids) >= 6
+
+          task_classes = {
+              text_task["id"]: text_task["task_class"],
+              discovery_task["id"]: discovery_task["task_class"],
+          }
+          for path in sorted(Path("qualification/experiments").glob("*.json")):
+              experiment = json.loads(path.read_text())
+              jsonschema.validate(experiment, experiment_schema)
+              assert experiment["task"]["id"] in task_classes
+              assert experiment["task"]["task_class"] == task_classes[experiment["task"]["id"]]
+              assert set(experiment["actors"]) <= actor_ids
+          print("PASS qualification JSON contracts")
+          PY
+
+      - name: Self-test deterministic verifiers
+        run: |
+          python qualification/tasks/text-repair-v0/verify.py --self-test
+          python qualification/tasks/validation-discovery-v0/verify.py --self-test
+
+      - name: Self-test task-conditioned evidence reducer
+        run: PYTHONPATH=. python qualification/test_reduce_evidence.py
+
+      - name: Self-test run failure attribution
+        run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
+
+      - name: Self-test Foundry hosted-realization projection
+        run: PYTHONPATH=. python qualification/test_export_hosted_realization.py
+
+      - name: Reduce current actor qualification evidence
+        run: |
+          PYTHONPATH=. python qualification/reduce_evidence.py \
+            qualification/evidence/hosted-deepseek-flash-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-google-gemini-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-groq-gpt-oss-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-nvidia-nemotron-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-free-text-repair-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-groq-gpt-oss-text-repair-2026-09-20.json \
+            qualification/evidence/local-openworker-qwen-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-google-gemini-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-groq-gpt-oss-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-nvidia-nemotron-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-free-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-deepseek-flash-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-openrouter-deepseek-v41-flash-validation-discovery-2026-09-20.json \
+            --output "$RUNNER_TEMP/current-envelopes.json"
+          python - "$RUNNER_TEMP/current-envelopes.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1]))
+          assert len(data["envelopes"]) == 13
+          by_route={
+              (
+                  env["actor"]["candidate"]["model"]["provider"],
+                  env["actor"]["candidate"]["model"]["id"],
+                  env["task_class"],
+              ): env
+              for env in data["envelopes"]
+          }
+          bounded="software.bounded-repair"
+          discovery="repository.capability-discovery"
+          assert by_route[("deepseek","deepseek-flash",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("google","gemini-3.7-flash",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("groq","openai/gpt-oss-20b",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("openrouter","openai/gpt-oss-20b",bounded)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b",bounded)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("openrouter","openrouter/free",bounded)]["evidence_pattern"] == "PASS_ONLY"
+
+          assert by_route[("ollama","qwen3:1.7b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("groq","openai/gpt-oss-20b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
+          assert by_route[("openrouter","openrouter/free",discovery)]["evidence_pattern"] == "PASS_ONLY"
+          assert by_route[("deepseek","deepseek-flash",discovery)]["evidence_pattern"] == "PASS_ONLY"
+
+          google=by_route[("google","gemini-3.7-flash",discovery)]
+          assert google["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+          assert google["evidence"]["incomplete"] == 1
+          assert all(
+              value == "INSUFFICIENT_EVIDENCE"
+              for family in google["ksa_evidence"].values()
+              for value in family.values()
+          )
+
+          routed=by_route[("openrouter","deepseek/deepseek-v4.1-flash",discovery)]
+          assert routed["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+          assert routed["evidence"]["incomplete"] == 1
+          assert all("state" not in env and "qualified" not in env for env in data["envelopes"])
+          print(json.dumps(data,sort_keys=True))
+          PY
+
+      - name: Exercise positive, repeat, and negative receipts
+        env:
+          RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
+          RECEIPT_GOOD_2: ${{ runner.temp }}/qualification-good-2.json
+          RECEIPT_BAD: ${{ runner.temp }}/qualification-bad.json
+        run: |
+          set -euo pipefail
+
+          run_rep() {
+            local receipt="$1"
+            local candidate="$2"
+            python qualification/run_task.py \
+              --task-commit "$GITHUB_SHA" \
+              --substrate-profile-id contract-self-test \
+              --substrate-profile-commit "$GITHUB_SHA" \
+              qualification/tasks/text-repair-v0 \
+              qualification/test-candidate.json \
+              "$receipt" \
+              -- python "$GITHUB_WORKSPACE/$candidate"
+          }
+
+          run_rep "$RECEIPT_GOOD_1" qualification/test_candidate.py
+          run_rep "$RECEIPT_GOOD_2" qualification/test_candidate.py
+
+          set +e
+          run_rep "$RECEIPT_BAD" qualification/test_candidate_bad.py
+          bad_rc=$?
+          set -e
+          test "$bad_rc" -eq 1
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import jsonschema
+
+          schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          good1 = json.loads(Path(os.environ["RECEIPT_GOOD_1"]).read_text())
+          good2 = json.loads(Path(os.environ["RECEIPT_GOOD_2"]).read_text())
+          bad = json.loads(Path(os.environ["RECEIPT_BAD"]).read_text())
+
+          for receipt in (good1, good2, bad):
+              jsonschema.validate(receipt, schema)
+              assert receipt["observation"]["human_interventions"] == 0
+
+          assert good1["observation"]["success"] is True
+          assert good2["observation"]["success"] is True
+          assert good1["observation"]["tool_calls"] == 1
+          assert good1["observation"]["input_tokens"] == 11
+          assert good1["observation"]["output_tokens"] == 3
+          assert good1["observation"]["cache_read_tokens"] == 2
+          assert good1["observation"]["cache_write_tokens"] == 0
+          assert "provider_observations" not in good1["observation"]
+          workload = good1["observation"]["workload"]
+          assert workload["model_rounds"] == 1
+          assert workload["request_message_bytes_total"] == 100.0
+          assert workload["request_tool_schema_bytes_total"] == 25.0
+          assert workload["output_text_bytes_total"] == 5.0
+          assert workload["tool_argument_bytes_total"] == 12.0
+          assert workload["resolved_models"] == ["contract-test"]
+          assert bad["observation"]["success"] is False
+          assert bad["observation"]["failure_class"] == "false-completion"
+          assert bad["observation"]["timed_out"] is False
+          assert bad["observation"]["state_changed"] is True
+          assert "false-completion" in bad["observation"]["failure_signals"]
+          assert good1["observation"]["failure_signals"] == []
+          assert good2["observation"]["failure_signals"] == []
+          assert len({good1["run_id"], good2["run_id"], bad["run_id"]}) == 3
+          assert good1["candidate"]["configuration_digest"] == good2["candidate"]["configuration_digest"]
+          print("PASS repeated reps create distinct receipts and failed evidence is preserved")
+          PY

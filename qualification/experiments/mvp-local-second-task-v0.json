@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "mvp-local-second-task-v0",
+  "decision_question": "Does the existing local OpenWorker/Qwen actor retain useful behavior on a genuinely different repository capability-discovery task class?",
+  "task": {
+    "id": "validation-discovery-v0",
+    "task_class": "repository.capability-discovery"
+  },
+  "actors": [
+    "openworker-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "harness",
+    "model-artifact",
+    "github-hosted-runner-class"
+  ],
+  "variable_under_test": "task-class",
+  "stop_conditions": [
+    "validator-contract-failure",
+    "unexpected-authority-expansion",
+    "tool-projection-unavailable"
+  ]
+}

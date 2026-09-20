@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "openworker-groq-gpt-oss-20b-gha-direct",
+  "harness": {
+    "name": "openworker",
+    "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+  },
+  "model": {
+    "provider": "groq",
+    "id": "openai/gpt-oss-20b",
+    "realization": "hosted-service",
+    "artifact_ref": null,
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/ubuntu-24.04-x64",
+    "inference_route": "direct:groq",
+    "substrate_profile": "gha-linux-x64-openworker-hosted-api"
+  },
+  "toolset": [
+    "read_file",
+    "write_file"
+  ],
+  "configuration": {
+    "reasoning_effort": "low",
+    "max_iterations": 4
+  },
+  "authority_profile": "task-scoped-workcell"
+}

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot local configured-actor second-task-class qualification",
+  "actor": "openworker-qwen3-1.7b-gha-ollama",
+  "task": "validation-discovery-v0"
+}

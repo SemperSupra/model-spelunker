@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/SemperSupra/model-spelunker/qualification/experiment.schema.json",
+  "title": "Actor Qualification Experiment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "decision_question",
+    "task",
+    "actors",
+    "replication"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "task_class"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "task_class": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "actors": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "replication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reps_per_actor"
+      ],
+      "properties": {
+        "reps_per_actor": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "independent": {
+          "type": "boolean"
+        },
+        "randomized_order": {
+          "type": "boolean"
+        }
+      }
+    },
+    "frozen_factors": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "variable_under_test": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "stop_conditions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
