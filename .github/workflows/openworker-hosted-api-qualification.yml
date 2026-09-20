@@ -197,7 +197,8 @@ jobs:
                   with urllib.request.urlopen(request,timeout=20) as response:
                       return json.load(response),dict(response.headers.items())
               except urllib.error.HTTPError as exc:
-                  raise SystemExit(f"{provider} admission failed: HTTP {exc.code}") from exc
+                  body=exc.read(512).decode("utf-8",errors="replace")
+                  raise SystemExit(f"{provider} admission failed: HTTP {exc.code}: {body}") from exc
 
           if provider=="deepseek":
               data,_=get(base+"/user/balance")
@@ -220,9 +221,11 @@ jobs:
           elif provider in {"google","nvidia"}:
               data,_=get(base+"/models")
               rows=data.get("data",[]) if isinstance(data,dict) else []
-              ids={row.get("id") for row in rows if isinstance(row,dict)}
-              if model not in ids:
-                  raise SystemExit(f"{provider} model is not active for this key: {model}")
+              ids={str(row.get("id") or "") for row in rows if isinstance(row,dict)}
+              normalized={item.removeprefix("models/") for item in ids}
+              if model not in normalized:
+                  sample=sorted(item for item in normalized if item)[:20]
+                  raise SystemExit(f"{provider} model is not active for this key: {model}; visible={sample}")
               evidence={"authenticated":True,"model_active":True}
 
           elif provider=="openrouter":
