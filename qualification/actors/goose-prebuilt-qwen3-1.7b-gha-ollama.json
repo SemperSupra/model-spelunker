@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "goose-prebuilt-qwen3-1.7b-gha-ollama",
+  "harness": {
+    "name": "goose",
+    "version": "1.51.0",
+    "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636",
+    "admission_ref": "github:SemperSupra/model-spelunker@f03859d11da391706cedeb12a1d37e66bd234ee7:qualification/harness-artifacts/goose-2090ad1c65dd-linux-x64.admission.json"
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3:1.7b",
+    "realization": "local-artifact",
+    "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/ubuntu-24.04-x64",
+    "inference_route": "local:ollama-0.34.1",
+    "substrate_profile": "gha-linux-x64-goose-prebuilt-ollama"
+  },
+  "toolset": [
+    "developer"
+  ],
+  "configuration": {
+    "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe",
+    "build_profile": "no-default-features+rustls-tls",
+    "build_artifact_digest": "sha256:f117d4f40bedc3e5371e04355729f1ba27066a5552be691cd22296e6294e2699",
+    "context": 32768,
+    "thinking_effort": "off",
+    "max_turns": 4,
+    "max_tool_repetitions": 2,
+    "harness_delivery": "prebuilt-admitted-artifact"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
