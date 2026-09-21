@@ -61,6 +61,17 @@
       "interpretation": "Goose stream-json turn mapping removes the earlier zero-round instrumentation ambiguity; the admitted actor reaches inference and remains outside the task wall envelope."
     },
     {
+      "actor": "goose-prebuilt-qwen3-1.7b-gha-ollama",
+      "task": "text-repair-v0",
+      "run_id": "20260921T100622Z-66457dbe",
+      "outcome": "validated-fail",
+      "failure_class": "timeout",
+      "model_rounds": 1,
+      "state_changed": false,
+      "wall_seconds": 120.057504,
+      "interpretation": "Current-package bounded-repair crossover reaches an observed Ollama model round but remains outside the task wall envelope with unchanged state."
+    },
+    {
       "actor": "codex-exec-prebuilt-qwen3-1.7b-gha-ollama",
       "task": "text-repair-v0",
       "run_id": "20260921T095245Z-38d89984",
@@ -81,6 +92,7 @@
     "Historical source-built evidence is preserved; admitted artifacts mint distinct configured actor identities.",
     "OpenWorker bridge continuity is supported for the current controls; latency differences remain observations, not equivalence gates.",
     "Goose bounded-debugging is now a terminal task-specific timeout observation for the prebuilt actor because two model rounds are directly observed.",
+    "Across the two current task packages, prebuilt OpenWorker is inside the text-repair envelope and outside bounded-debugging via false completion; prebuilt Goose is outside both 120-second task envelopes after reaching model inference. This is a configured-actor comparison, not a universal harness ranking.",
     "Codex-exec stops at the simplest-task integration boundary; no bounded-debugging follow-on is justified until standardized post-model telemetry is available.",
     "No universal harness ranking or automatic routing policy is derived."
   ],
@@ -90,7 +102,8 @@
       "openworker_text_repair": "PROVISIONAL",
       "openworker_boundary_bugfix": "RESTRICTED",
       "goose_boundary_bugfix": "RESTRICTED",
-      "codex_exec_text_repair": "UNCHARACTERIZED"
+      "codex_exec_text_repair": "UNCHARACTERIZED",
+      "goose_text_repair": "PENDING_AGENT_DISPATCH_IMPORT"
     }
   }
 }
