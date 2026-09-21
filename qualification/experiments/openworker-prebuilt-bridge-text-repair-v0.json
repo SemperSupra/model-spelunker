@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "openworker-prebuilt-bridge-text-repair-v0",
+  "decision_question": "Does the admitted prebuilt OpenWorker artifact preserve the historical Qwen3 1.7B bounded-repair behavior when model artifact, Ollama runtime, task, runner class, and tool projection are held constant?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "openworker-qwen3-1.7b-gha-ollama",
+    "openworker-prebuilt-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "model-artifact",
+    "ollama-version",
+    "task-profile",
+    "github-hosted-runner-class",
+    "task-projected-tool-surface"
+  ],
+  "variable_under_test": "harness-delivery-source-built-vs-admitted-prebuilt",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "unexpected-authority-expansion",
+    "model-artifact-drift",
+    "unexplained-behavioral-discontinuity"
+  ]
+}
