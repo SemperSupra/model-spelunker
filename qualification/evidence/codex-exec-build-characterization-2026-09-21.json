@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "evidence_id": "codex-exec-build-characterization-20260921",
+  "recorded_at": "2026-09-21T03:23:17Z",
+  "harness": "codex-exec",
+  "codex_version": "0.154.0",
+  "source_revision": "6b9826e3aa83b1a5947db50f4332cb9c65f1b340",
+  "workflow_run_id": 35556438371,
+  "job_id": 106200861194,
+  "runner_class": "github-hosted-ubuntu-24.04-x64",
+  "toolchain": {
+    "cargo": "1.95.0 (f2d3ce0bd 2026-03-21)",
+    "original_cargo_lock_sha256": "29b37678141ef79e8548a8f135161e5360cd5c2c775cf497589bcfdfe9efc1a0",
+    "resolved_cargo_lock_sha256": "34726731e842976085e3c122f62ddd5c8d6555bdcb32f5e9361c8e27fb0795bf"
+  },
+  "dependency_projection": {
+    "full_cli_depth1_lines": 86,
+    "codex_exec_depth1_lines": 48,
+    "structural_result": "codex-exec remains a materially narrower upstream binary target than full codex-cli"
+  },
+  "build_attempt": {
+    "command": "cargo build --locked --release -p codex-exec --bin codex-exec",
+    "status": "failed",
+    "exit_code": 101,
+    "binary_emitted": false,
+    "failure_class": "rust-query-depth-overflow",
+    "error": "queries overflow the depth limit",
+    "compiler_help": "consider increasing the recursion limit by adding #![recursion_limit = \"256\"] to crate codex_exec",
+    "query_depth_note": "query depth increased by 130 while computing layout of an instrumented codex_app_server request-dispatch future"
+  },
+  "inference": {
+    "launched": false,
+    "reason": "source characterization gate failed before a binary existed"
+  },
+  "disposition": {
+    "source_build_characterization": "BUILD_SEAM_OBSERVED",
+    "actor_qualification": "NOT_RUN",
+    "qualification_state_change": "NOT_DERIVED",
+    "source_patch_authorized": false,
+    "dangerous_sandbox_bypass_used": false
+  },
+  "interpretation": "The upstream codex-exec target is structurally narrower, but this exact 0.154.0 source did not build cleanly under the observed current hosted toolchain/resolved lock state. This is build/substrate evidence, not a Codex/Qwen capability failure.",
+  "next_boundary": "Do not launch codex-exec inference until a bounded, independently justified build path exists. Prefer upstream-supported/reproducible build behavior over carrying a private source fork."
+}
