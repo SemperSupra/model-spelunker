@@ -4,46 +4,129 @@
   "title": "Configured Actor Profile",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "id", "harness", "model", "execution_environment", "toolset"],
+  "required": [
+    "schema_version",
+    "id",
+    "harness",
+    "model",
+    "execution_environment",
+    "toolset"
+  ],
   "properties": {
-    "schema_version": {"type": "integer", "enum": [1]},
-    "id": {"type": "string", "minLength": 1},
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
     "harness": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "version"],
+      "required": [
+        "name",
+        "version"
+      ],
       "properties": {
-        "name": {"type": "string", "minLength": 1},
-        "version": {"type": "string", "minLength": 1}
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "admission_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
       }
     },
     "model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider", "id", "realization"],
+      "required": [
+        "provider",
+        "id",
+        "realization"
+      ],
       "properties": {
-        "provider": {"type": "string", "minLength": 1},
-        "id": {"type": "string", "minLength": 1},
-        "realization": {"type": "string", "enum": ["local-artifact", "hosted-service", "router"]},
-        "artifact_ref": {"type": ["string", "null"]},
-        "foundry_ref": {"type": ["string", "null"]}
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "realization": {
+          "type": "string",
+          "enum": [
+            "local-artifact",
+            "hosted-service",
+            "router"
+          ]
+        },
+        "artifact_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "foundry_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "execution_environment": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["venue", "inference_route"],
+      "required": [
+        "venue",
+        "inference_route"
+      ],
       "properties": {
-        "venue": {"type": "string", "minLength": 1},
-        "inference_route": {"type": "string", "minLength": 1}
+        "venue": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inference_route": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "toolset": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"type": "string"}
+      "items": {
+        "type": "string"
+      }
     },
-    "configuration": {"type": "object"},
-    "authority_profile": {"type": ["string", "null"]}
+    "configuration": {
+      "type": "object"
+    },
+    "authority_profile": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
   }
 }
