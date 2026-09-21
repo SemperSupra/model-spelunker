@@ -1,0 +1,208 @@
+name: OpenWorker Prebuilt Ollama Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_ref:
+        description: Immutable admitted OpenWorker OCI ref (ghcr.io/...@sha256:...)
+        required: true
+      admission_ref:
+        description: Durable admission receipt reference
+        required: true
+      task:
+        description: Task id from qualification/tasks
+        required: true
+        default: text-repair-v0
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: openworker-prebuilt-ollama-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Prebuilt OpenWorker + Qwen3 1.7B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OPENWORKER_VERSION: '0.0.0'
+      HARNESS_ARTIFACT_REF: ${{ inputs.artifact_ref }}
+      HARNESS_ADMISSION_REF: ${{ inputs.admission_ref }}
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-openworker-prebuilt-models'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
+      QUALIFICATION_TASK: ${{ inputs.task }}
+      CANDIDATE_META: '/tmp/model-spelunker-openworker-prebuilt-candidate.json'
+      RECEIPT: '/tmp/model-spelunker-openworker-prebuilt-receipt.json'
+      DIAGNOSTICS: '/tmp/model-spelunker-openworker-prebuilt-diagnostics.json'
+      SUBSTRATE_PROFILE_COMMIT: 'prebuilt-openworker-ollama-v1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout qualification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Hydrate admitted OpenWorker artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$HARNESS_ARTIFACT_REF"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull "$HARNESS_ARTIFACT_REF" >/dev/null
+          extract="$RUNNER_TEMP/openworker-artifact"
+          mkdir -p "$extract"
+          cid="$(docker create "$HARNESS_ARTIFACT_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$extract/"
+          docker rm "$cid" >/dev/null
+          test -s "$extract/build-receipt.json"
+
+          ARTIFACT_ROOT="$extract" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["ARTIFACT_ROOT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+          assert receipt["harness"]["name"]=="openworker"
+          assert receipt["source"]["revision"]==os.environ["OPENWORKER_UPSTREAM_SHA"]
+          for row in receipt["payload"]["files"]:
+              path=root/row["path"]
+              data=path.read_bytes()
+              assert len(data)==row["bytes"]
+              assert hashlib.sha256(data).hexdigest()==row["sha256"]
+          print("PASS admitted OpenWorker artifact integrity")
+          PY
+
+          venv="$RUNNER_TEMP/openworker-prebuilt-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$extract/wheelhouse"/*.whl
+          "$venv/bin/python" -c 'import coworker; import coworker.engine'
+          echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
+
+      - name: Install pinned Ollama ephemerally
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" \
+            --output "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+
+      - name: Start isolated Ollama and hydrate pinned model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env \
+            OLLAMA_HOST="$OLLAMA_HOST" \
+            OLLAMA_MODELS="$OLLAMA_MODELS" \
+            OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL" \
+            OLLAMA_MAX_LOADED_MODELS="$OLLAMA_MAX_LOADED_MODELS" \
+            OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH" \
+            ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null && break
+            sleep 1
+          done
+          curl --fail --silent "http://${OLLAMA_HOST}/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+
+          python3 - <<'PY'
+          import json,os,urllib.request
+          from pathlib import Path
+          with urllib.request.urlopen(f"http://{os.environ['OLLAMA_HOST']}/api/tags",timeout=10) as response:
+              data=json.load(response)
+          wanted=os.environ["OLLAMA_MODEL_TAG"]
+          row=next((m for m in data.get("models",[]) if m.get("name")==wanted),None)
+          if row is None:
+              raise SystemExit(f"model not present: {wanted}")
+          digest=str(row.get("digest") or "").removeprefix("sha256:")
+          if not digest.startswith(os.environ["OLLAMA_MODEL_DIGEST_PREFIX"]):
+              raise SystemExit(f"model digest drift: {digest}")
+
+          task_path=Path("qualification/tasks")/os.environ["QUALIFICATION_TASK"]/"task.json"
+          task=json.loads(task_path.read_text())
+          projected_tools=task.get("projected_tools") or ["read_file","write_file"]
+          candidate={
+              "harness":{
+                  "name":"openworker",
+                  "version":os.environ["OPENWORKER_UPSTREAM_SHA"],
+                  "artifact_ref":os.environ["HARNESS_ARTIFACT_REF"],
+                  "admission_ref":os.environ["HARNESS_ADMISSION_REF"],
+              },
+              "model":{
+                  "provider":"ollama",
+                  "id":wanted,
+                  "artifact_ref":f"ollama-sha256:{digest}",
+              },
+              "toolset":projected_tools,
+              "configuration":{
+                  "projection":projected_tools,
+                  "parallel_tool_calls":False,
+                  "max_tokens":2048,
+                  "reasoning_effort":"none",
+                  "max_iterations":4,
+                  "ollama_context_length":int(os.environ["OLLAMA_CONTEXT_LENGTH"]),
+                  "harness_delivery":"prebuilt-admitted-artifact",
+              },
+          }
+          Path(os.environ["CANDIDATE_META"]).write_text(json.dumps(candidate,indent=2,sort_keys=True)+"\n")
+          PY
+
+      - name: Run task through prebuilt OpenWorker
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY; do
+            unset "$key" || true
+          done
+          set +e
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-linux-x64-openworker-prebuilt-ollama \
+            --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            --diagnostics "$DIAGNOSTICS" \
+            "qualification/tasks/$QUALIFICATION_TASK" \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
+            -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          qualification_rc=$?
+          set -e
+          test -f "$RECEIPT"
+          QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          assert receipt["candidate"]["harness"]["artifact_ref"]==os.environ["HARNESS_ARTIFACT_REF"]
+          assert receipt["candidate"]["harness"]["admission_ref"]==os.environ["HARNESS_ADMISSION_REF"]
+          rc=int(os.environ["QUALIFICATION_RC"])
+          assert rc==(0 if receipt["observation"]["success"] else 1)
+          print(json.dumps(receipt,sort_keys=True))
+          print("QUALIFICATION_RESULT="+("PASS" if receipt["observation"]["success"] else "FAIL (valid observation)"))
+          PY
+
+      - name: Upload immutable qualification receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openworker-prebuilt-qualification-${{ inputs.task }}-${{ github.run_id }}
+          path: ${{ env.RECEIPT }}
+          if-no-files-found: ignore
+          retention-days: 30

@@ -46,6 +46,8 @@ jobs:
           actor_schema = json.loads(Path("qualification/actor-profile.schema.json").read_text())
           experiment_schema = json.loads(Path("qualification/experiment.schema.json").read_text())
           task_schema = json.loads(Path("qualification/task-profile.schema.json").read_text())
+          harness_build_schema = json.loads(Path("qualification/harness-build-receipt.schema.json").read_text())
+          harness_admission_schema = json.loads(Path("qualification/harness-admission-receipt.schema.json").read_text())
 
           candidates = hosted["candidates"]
           assert set(candidates) == {
@@ -86,6 +88,12 @@ jobs:
           jsonschema.Draft7Validator.check_schema(actor_schema)
           jsonschema.Draft7Validator.check_schema(experiment_schema)
           jsonschema.Draft7Validator.check_schema(task_schema)
+          jsonschema.Draft7Validator.check_schema(harness_build_schema)
+          jsonschema.Draft7Validator.check_schema(harness_admission_schema)
+          for path in sorted(Path("qualification/harness-artifacts").glob("*.admission*.json")):
+              admission = json.loads(path.read_text())
+              jsonschema.validate(admission, harness_admission_schema)
+              assert admission["admission"]["state"] == "BUILD_ADMITTED"
           jsonschema.validate(text_task, task_schema)
           jsonschema.validate(discovery_task, task_schema)
           jsonschema.validate(debugging_task, task_schema)

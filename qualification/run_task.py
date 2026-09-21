@@ -196,6 +196,47 @@ def provider_observations(stdout: str) -> list[dict[str, object]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def goose_stream_provider_observations(stdout: str) -> list[dict[str, object]]:
+    """Project Goose stream-json assistant turns into provider-round observations.
+
+    Goose emits one message event per streamed chunk, with all chunks from one
+    assistant turn sharing message.id. This mirrors Goose's own Harbor reporter:
+    dedupe assistant message events by id so streamed tokens do not inflate the
+    model-round count. Only explicitly observed inference metadata is retained.
+    """
+    turns: dict[str, dict[str, object]] = {}
+    anonymous: list[dict[str, object]] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("type") != "message":
+            continue
+        message = obj.get("message")
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        metadata = message.get("metadata")
+        inference = metadata.get("inference") if isinstance(metadata, dict) else None
+        observation: dict[str, object] = {}
+        if isinstance(inference, dict):
+            provider = inference.get("provider")
+            requested = inference.get("requestedModel")
+            if isinstance(provider, str) and provider:
+                observation["provider"] = provider
+            if isinstance(requested, str) and requested:
+                observation["requested_model"] = requested
+        message_id = message.get("id")
+        if isinstance(message_id, str) and message_id:
+            turns.setdefault(message_id, observation)
+        else:
+            anonymous.append(observation)
+    return list(turns.values()) + anonymous
+
+
 def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]:
     numeric_fields = (
         "request_message_bytes",
@@ -383,6 +424,8 @@ def main() -> int:
         state_changed = final_tree_digest != initial_tree_digest
         success = verifier.returncode == 0 and not timed_out
         provider_rounds = provider_observations(stdout)
+        if not provider_rounds and (candidate.get("harness") or {}).get("name") == "goose":
+            provider_rounds = goose_stream_provider_observations(stdout)
         engine_error = has_engine_error_event(stdout)
         if timed_out:
             failure_class = "timeout"

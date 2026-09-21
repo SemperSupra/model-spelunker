@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "codex-exec-prebuilt-first-text-repair-v0",
+  "decision_question": "Can the admitted source-built codex-exec artifact reach a valid bounded actor observation with Qwen3 1.7B on the smallest deterministic filesystem task?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "codex-exec-prebuilt-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "codex-exec-artifact-digest",
+    "compile-only-recursion-limit-patch",
+    "qwen3-1.7b-model-artifact",
+    "ollama-0.34.1",
+    "github-hosted-ubuntu-24.04-x64"
+  ],
+  "variable_under_test": null,
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "pre-model-integration-failure",
+    "repeated-invalid-tool-call-boundary",
+    "timeout-before-valid-task-completion"
+  ]
+}

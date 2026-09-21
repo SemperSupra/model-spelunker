@@ -1,0 +1,205 @@
+name: Codex Exec Artifact Build and Admission
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: codex-exec-artifact-build-admission-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CODEX_SHA: '6b9826e3aa83b1a5947db50f4332cb9c65f1b340'
+      CODEX_VERSION: '0.154.0'
+      RUST_TOOLCHAIN: '1.95.0'
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: '0'
+      CARGO_TARGET_DIR: '/tmp/codex-exec-admission-target'
+      BUILDER_CLASS: 'github-hosted/ubuntu-24.04-x64'
+      RECIPE_ID: 'codex-exec-release-recursion256-v1'
+    steps:
+      - name: Checkout artifact contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build pinned codex-exec with minimal compile-only patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+          src="$RUNNER_TEMP/codex-src"
+          git clone --quiet --filter=blob:none https://github.com/openai/codex.git "$src"
+          git -C "$src" checkout --quiet --detach "$CODEX_SHA"
+          test "$(git -C "$src" rev-parse HEAD)" = "$CODEX_SHA"
+
+          main="$src/codex-rs/exec/src/main.rs"
+          grep -q '^#!\[recursion_limit' "$main" && {
+            echo "upstream now contains recursion_limit; refusing to double-patch"
+            exit 1
+          }
+          patch_line='#![recursion_limit = "256"]'
+          tmp="$main.tmp"
+          { printf '%s\n' "$patch_line"; cat "$main"; } >"$tmp"
+          mv "$tmp" "$main"
+          echo "CODEX_PATCH_SHA256=$(printf '%s\n' "$patch_line" | sha256sum | awk '{print $1}')" >> "$GITHUB_ENV"
+
+          cd "$src/codex-rs"
+          cargo tree -p codex-exec --depth 1 >/dev/null
+          /usr/bin/time -v -o "$RUNNER_TEMP/codex-exec-build-time.txt" \
+            cargo build --locked --release -p codex-exec --bin codex-exec
+          bin="$CARGO_TARGET_DIR/release/codex-exec"
+          test -x "$bin"
+          "$bin" --version
+          "$bin" --help >/dev/null
+          echo "CODEX_SRC=$src" >> "$GITHUB_ENV"
+          echo "CODEX_BINARY=$bin" >> "$GITHUB_ENV"
+          echo "CODEX_TOOLCHAIN=$(rustc --version); $(cargo --version)" >> "$GITHUB_ENV"
+          tail -n 40 "$RUNNER_TEMP/codex-exec-build-time.txt"
+
+      - name: Generate immutable build receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/codex-exec-build-receipt.json"
+          RECEIPT="$receipt" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          binary=Path(os.environ["CODEX_BINARY"])
+          cargo_lock=Path(os.environ["CODEX_SRC"])/"codex-rs"/"Cargo.lock"
+          data=binary.read_bytes()
+          value={
+              "schema_version":1,
+              "record_type":"harness-build-receipt",
+              "harness":{"name":"codex-exec","declared_version":os.environ["CODEX_VERSION"]},
+              "source":{
+                  "repository":"https://github.com/openai/codex",
+                  "revision":os.environ["CODEX_SHA"],
+                  "lockfile_digest":"sha256:"+hashlib.sha256(cargo_lock.read_bytes()).hexdigest(),
+              },
+              "build":{
+                  "recipe_id":os.environ["RECIPE_ID"],
+                  "target":"x86_64-unknown-linux-gnu",
+                  "builder_class":os.environ["BUILDER_CLASS"],
+                  "toolchain":os.environ["CODEX_TOOLCHAIN"],
+                  "configuration":{
+                      "cargo_profile":"release",
+                      "package":"codex-exec",
+                      "binary":"codex-exec",
+                      "compile_only_patch":{
+                          "description":"crate recursion_limit raised to 256 after pinned upstream overflow",
+                          "sha256":os.environ["CODEX_PATCH_SHA256"],
+                      },
+                  },
+              },
+              "payload":{
+                  "kind":"native-binary",
+                  "files":[{
+                      "path":"codex-exec",
+                      "sha256":hashlib.sha256(data).hexdigest(),
+                      "bytes":len(data),
+                  }],
+              },
+          }
+          Path(os.environ["RECEIPT"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(value,sort_keys=True))
+          PY
+          echo "CODEX_BUILD_RECEIPT=$receipt" >> "$GITHUB_ENV"
+
+      - name: Publish OCI distribution artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/$owner/model-spelunker-harness-codex-exec"
+          tag="src-${CODEX_SHA:0:12}-r256-run-$GITHUB_RUN_ID"
+          context="$RUNNER_TEMP/codex-exec-oci"
+          mkdir -p "$context"
+          cp "$CODEX_BINARY" "$context/codex-exec"
+          chmod 0755 "$context/codex-exec"
+          cp "$CODEX_BUILD_RECEIPT" "$context/build-receipt.json"
+          cat >"$context/Dockerfile" <<'EOF'
+          FROM scratch
+          COPY codex-exec /artifact/codex-exec
+          COPY build-receipt.json /artifact/build-receipt.json
+          EOF
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --pull=false --no-cache -t "$image:$tag" "$context"
+          push_log="$RUNNER_TEMP/codex-exec-push.log"
+          docker push "$image:$tag" | tee "$push_log"
+          digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' "$push_log" | tail -1)"
+          test -n "$digest"
+          echo "CODEX_OCI_REF=$image@$digest" >> "$GITHUB_ENV"
+          echo "CODEX_OCI_DIGEST=$digest" >> "$GITHUB_ENV"
+
+      - name: Mechanically admit published artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          extract="$RUNNER_TEMP/codex-exec-admit"
+          mkdir -p "$extract"
+          docker pull "$CODEX_OCI_REF" >/dev/null
+          cid="$(docker create "$CODEX_OCI_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$extract/"
+          docker rm "$cid" >/dev/null
+          build_receipt="$extract/build-receipt.json"
+          build_receipt_sha="$(sha256sum "$build_receipt" | awk '{print $1}')"
+          expected="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["payload"]["files"][0]["sha256"])' "$build_receipt")"
+          actual="$(sha256sum "$extract/codex-exec" | awk '{print $1}')"
+          test "$actual" = "$expected"
+          chmod 0755 "$extract/codex-exec"
+          version_output="$("$extract/codex-exec" --version)"
+          printf '%s\n' "$version_output"
+          printf '%s' "$version_output" | grep -F "$CODEX_VERSION" >/dev/null
+          "$extract/codex-exec" --help >/dev/null
+
+          admission="$RUNNER_TEMP/codex-exec-admission-receipt.json"
+          ADMISSION="$admission" BUILD_RECEIPT_SHA="$build_receipt_sha" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          value={
+              "schema_version":1,
+              "record_type":"harness-artifact-admission",
+              "harness":{"name":"codex-exec","declared_version":os.environ["CODEX_VERSION"]},
+              "artifact":{
+                  "packaging":"oci-distribution",
+                  "ref":os.environ["CODEX_OCI_REF"],
+                  "digest":os.environ["CODEX_OCI_DIGEST"],
+                  "build_receipt_digest":"sha256:"+os.environ["BUILD_RECEIPT_SHA"],
+              },
+              "admission":{
+                  "state":"BUILD_ADMITTED",
+                  "target":"x86_64-unknown-linux-gnu",
+                  "checks":[
+                      {"name":"embedded-build-receipt","result":"PASS","evidence":None},
+                      {"name":"binary-sha256","result":"PASS","evidence":None},
+                      {"name":"version-identity","result":"PASS","evidence":os.environ["CODEX_VERSION"]},
+                      {"name":"cli-help","result":"PASS","evidence":None},
+                  ],
+              },
+          }
+          Path(os.environ["ADMISSION"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print("HARNESS_ADMISSION="+json.dumps(value,sort_keys=True))
+          PY
+          echo "CODEX_ADMISSION_RECEIPT=$admission" >> "$GITHUB_ENV"
+
+      - name: Upload receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codex-exec-harness-artifact-${{ github.run_id }}
+          path: |
+            ${{ env.CODEX_BUILD_RECEIPT }}
+            ${{ env.CODEX_ADMISSION_RECEIPT }}
+          if-no-files-found: warn
+          retention-days: 30

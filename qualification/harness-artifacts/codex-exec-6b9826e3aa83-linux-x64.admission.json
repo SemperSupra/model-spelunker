@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "record_type": "harness-artifact-admission",
+  "harness": {
+    "name": "codex-exec",
+    "declared_version": "0.154.0"
+  },
+  "artifact": {
+    "packaging": "oci-distribution",
+    "ref": "ghcr.io/sempersupra/model-spelunker-harness-codex-exec@sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338",
+    "digest": "sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338",
+    "build_receipt_digest": "sha256:7c988dea3989af6afe1d82a998ab2da2ca820eea1a6be194876ad80afec062a1"
+  },
+  "admission": {
+    "state": "BUILD_ADMITTED",
+    "target": "x86_64-unknown-linux-gnu",
+    "checks": [
+      {
+        "name": "embedded-build-receipt",
+        "result": "PASS",
+        "evidence": "gha-run:35580874486"
+      },
+      {
+        "name": "binary-sha256",
+        "result": "PASS",
+        "evidence": "sha256:da4bc5c13a97a4a21999919bde2a9e2c943904a7bd444893d5ac8fc35c0b51f3"
+      },
+      {
+        "name": "version-identity",
+        "result": "PASS",
+        "evidence": "0.154.0"
+      },
+      {
+        "name": "cli-help",
+        "result": "PASS",
+        "evidence": "gha-run:35580874486"
+      }
+    ]
+  }
+}

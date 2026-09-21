@@ -1,0 +1,373 @@
+name: Harness Artifact Build and Admission
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: harness-artifact-build-admission-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  openworker:
+    name: OpenWorker admitted artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OPENWORKER_VERSION: '0.0.0'
+      BUILDER_CLASS: 'github-hosted/ubuntu-24.04-x64'
+      RECIPE_ID: 'openworker-wheelhouse-v1'
+    steps:
+      - name: Checkout artifact contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build pinned offline wheelhouse
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/openworker-src"
+          wheelhouse="$RUNNER_TEMP/openworker-wheelhouse"
+          venv="$RUNNER_TEMP/openworker-build-venv"
+          git clone --quiet --filter=blob:none https://github.com/andrewyng/openworker.git "$src"
+          git -C "$src" checkout --quiet --detach "$OPENWORKER_SHA"
+          test "$(git -C "$src" rev-parse HEAD)" = "$OPENWORKER_SHA"
+
+          python3 -m venv "$venv"
+          "$venv/bin/python" -m pip install --disable-pip-version-check --upgrade pip wheel build
+          mkdir -p "$wheelhouse"
+          "$venv/bin/python" -m pip wheel --disable-pip-version-check --wheel-dir "$wheelhouse" "$src"
+
+          echo "OPENWORKER_SRC=$src" >> "$GITHUB_ENV"
+          echo "OPENWORKER_WHEELHOUSE=$wheelhouse" >> "$GITHUB_ENV"
+          echo "OPENWORKER_TOOLCHAIN=$("$venv/bin/python" --version 2>&1); pip $("$venv/bin/python" -m pip --version | awk '{print $2}')" >> "$GITHUB_ENV"
+
+      - name: Generate immutable build receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/openworker-build-receipt.json"
+          RECEIPT="$receipt" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["OPENWORKER_WHEELHOUSE"])
+          files=[]
+          for path in sorted(root.glob("*.whl")):
+              data=path.read_bytes()
+              files.append({
+                  "path":"wheelhouse/"+path.name,
+                  "sha256":hashlib.sha256(data).hexdigest(),
+                  "bytes":len(data),
+              })
+          if not files:
+              raise SystemExit("empty wheelhouse")
+          value={
+              "schema_version":1,
+              "record_type":"harness-build-receipt",
+              "harness":{"name":"openworker","declared_version":os.environ["OPENWORKER_VERSION"]},
+              "source":{
+                  "repository":"https://github.com/andrewyng/openworker",
+                  "revision":os.environ["OPENWORKER_SHA"],
+                  "lockfile_digest":None,
+              },
+              "build":{
+                  "recipe_id":os.environ["RECIPE_ID"],
+                  "target":"linux-x86_64-python3",
+                  "builder_class":os.environ["BUILDER_CLASS"],
+                  "toolchain":os.environ["OPENWORKER_TOOLCHAIN"],
+                  "configuration":{
+                      "packaging":"offline-wheelhouse",
+                      "pip_wheel":"dependency-closed-at-build-time",
+                  },
+              },
+              "payload":{"kind":"python-wheelhouse","files":files},
+          }
+          Path(os.environ["RECEIPT"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(value,sort_keys=True))
+          PY
+          echo "OPENWORKER_BUILD_RECEIPT=$receipt" >> "$GITHUB_ENV"
+
+      - name: Publish OCI distribution artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/$owner/model-spelunker-harness-openworker"
+          tag="src-${OPENWORKER_SHA:0:12}-run-$GITHUB_RUN_ID"
+          context="$RUNNER_TEMP/openworker-oci"
+          mkdir -p "$context/wheelhouse"
+          cp "$OPENWORKER_WHEELHOUSE"/*.whl "$context/wheelhouse/"
+          cp "$OPENWORKER_BUILD_RECEIPT" "$context/build-receipt.json"
+          cat >"$context/Dockerfile" <<'EOF'
+          FROM scratch
+          COPY wheelhouse /artifact/wheelhouse
+          COPY build-receipt.json /artifact/build-receipt.json
+          EOF
+
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --pull=false --no-cache -t "$image:$tag" "$context"
+          push_log="$RUNNER_TEMP/openworker-push.log"
+          docker push "$image:$tag" | tee "$push_log"
+          digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' "$push_log" | tail -1)"
+          test -n "$digest"
+          echo "OPENWORKER_OCI_REF=$image@$digest" >> "$GITHUB_ENV"
+          echo "OPENWORKER_OCI_DIGEST=$digest" >> "$GITHUB_ENV"
+
+      - name: Mechanically admit published artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          extract="$RUNNER_TEMP/openworker-admit"
+          mkdir -p "$extract"
+          docker pull "$OPENWORKER_OCI_REF" >/dev/null
+          cid="$(docker create "$OPENWORKER_OCI_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$extract/"
+          docker rm "$cid" >/dev/null
+
+          build_receipt="$extract/build-receipt.json"
+          test -s "$build_receipt"
+          build_receipt_sha="$(sha256sum "$build_receipt" | awk '{print $1}')"
+
+          python3 - "$build_receipt" "$extract" <<'PY'
+          import hashlib,json,sys
+          from pathlib import Path
+          receipt=json.loads(Path(sys.argv[1]).read_text())
+          root=Path(sys.argv[2])
+          for row in receipt["payload"]["files"]:
+              path=root / row["path"]
+              data=path.read_bytes()
+              assert len(data)==row["bytes"], path
+              assert hashlib.sha256(data).hexdigest()==row["sha256"], path
+          print("PASS payload hash verification")
+          PY
+
+          venv="$RUNNER_TEMP/openworker-admission-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$extract/wheelhouse"/*.whl
+          "$venv/bin/python" -c 'import coworker; import coworker.engine; print("PASS import surface")'
+          "$venv/bin/openworker" --help >/dev/null
+
+          admission="$RUNNER_TEMP/openworker-admission-receipt.json"
+          ADMISSION="$admission" BUILD_RECEIPT_SHA="$build_receipt_sha" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          value={
+              "schema_version":1,
+              "record_type":"harness-artifact-admission",
+              "harness":{"name":"openworker","declared_version":os.environ["OPENWORKER_VERSION"]},
+              "artifact":{
+                  "packaging":"oci-distribution",
+                  "ref":os.environ["OPENWORKER_OCI_REF"],
+                  "digest":os.environ["OPENWORKER_OCI_DIGEST"],
+                  "build_receipt_digest":"sha256:"+os.environ["BUILD_RECEIPT_SHA"],
+              },
+              "admission":{
+                  "state":"BUILD_ADMITTED",
+                  "target":"linux-x86_64-python3",
+                  "checks":[
+                      {"name":"embedded-build-receipt","result":"PASS","evidence":None},
+                      {"name":"payload-hashes","result":"PASS","evidence":None},
+                      {"name":"offline-wheelhouse-install-no-resolve","result":"PASS","evidence":None},
+                      {"name":"coworker-import-surface","result":"PASS","evidence":None},
+                      {"name":"openworker-cli-help","result":"PASS","evidence":None},
+                  ],
+              },
+          }
+          Path(os.environ["ADMISSION"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print("HARNESS_ADMISSION="+json.dumps(value,sort_keys=True))
+          PY
+          echo "OPENWORKER_ADMISSION_RECEIPT=$admission" >> "$GITHUB_ENV"
+
+      - name: Upload receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openworker-harness-artifact-${{ github.run_id }}
+          path: |
+            ${{ env.OPENWORKER_BUILD_RECEIPT }}
+            ${{ env.OPENWORKER_ADMISSION_RECEIPT }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  goose:
+    name: Goose admitted artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GOOSE_SHA: '2090ad1c65ddb39497601a936a9fe17d66254bfe'
+      GOOSE_VERSION: '1.51.0'
+      RUST_TOOLCHAIN: '1.96.1'
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: '0'
+      CARGO_TARGET_DIR: '/tmp/goose-admission-target'
+      BUILDER_CLASS: 'github-hosted/ubuntu-24.04-x64'
+      RECIPE_ID: 'goose-minimal-rustls-v1'
+    steps:
+      - name: Checkout artifact contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build pinned projected Goose
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+          src="$RUNNER_TEMP/goose-src"
+          git clone --quiet --filter=blob:none https://github.com/aaif-goose/goose.git "$src"
+          git -C "$src" checkout --quiet --detach "$GOOSE_SHA"
+          test "$(git -C "$src" rev-parse HEAD)" = "$GOOSE_SHA"
+          cd "$src"
+          cargo build --locked --release -p goose-cli --bin goose --no-default-features --features rustls-tls
+          bin="$CARGO_TARGET_DIR/release/goose"
+          test -x "$bin"
+          "$bin" --version
+          echo "GOOSE_SRC=$src" >> "$GITHUB_ENV"
+          echo "GOOSE_BINARY=$bin" >> "$GITHUB_ENV"
+          echo "GOOSE_TOOLCHAIN=$(rustc --version); $(cargo --version)" >> "$GITHUB_ENV"
+
+      - name: Generate immutable build receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/goose-build-receipt.json"
+          RECEIPT="$receipt" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          binary=Path(os.environ["GOOSE_BINARY"])
+          cargo_lock=Path(os.environ["GOOSE_SRC"])/"Cargo.lock"
+          data=binary.read_bytes()
+          lock_digest="sha256:"+hashlib.sha256(cargo_lock.read_bytes()).hexdigest()
+          value={
+              "schema_version":1,
+              "record_type":"harness-build-receipt",
+              "harness":{"name":"goose","declared_version":os.environ["GOOSE_VERSION"]},
+              "source":{
+                  "repository":"https://github.com/aaif-goose/goose",
+                  "revision":os.environ["GOOSE_SHA"],
+                  "lockfile_digest":lock_digest,
+              },
+              "build":{
+                  "recipe_id":os.environ["RECIPE_ID"],
+                  "target":"x86_64-unknown-linux-gnu",
+                  "builder_class":os.environ["BUILDER_CLASS"],
+                  "toolchain":os.environ["GOOSE_TOOLCHAIN"],
+                  "configuration":{
+                      "cargo_profile":"release",
+                      "default_features":False,
+                      "features":["rustls-tls"],
+                  },
+              },
+              "payload":{
+                  "kind":"native-binary",
+                  "files":[{
+                      "path":"goose",
+                      "sha256":hashlib.sha256(data).hexdigest(),
+                      "bytes":len(data),
+                  }],
+              },
+          }
+          Path(os.environ["RECEIPT"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(value,sort_keys=True))
+          PY
+          echo "GOOSE_BUILD_RECEIPT=$receipt" >> "$GITHUB_ENV"
+
+      - name: Publish OCI distribution artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/$owner/model-spelunker-harness-goose"
+          tag="src-${GOOSE_SHA:0:12}-run-$GITHUB_RUN_ID"
+          context="$RUNNER_TEMP/goose-oci"
+          mkdir -p "$context"
+          cp "$GOOSE_BINARY" "$context/goose"
+          chmod 0755 "$context/goose"
+          cp "$GOOSE_BUILD_RECEIPT" "$context/build-receipt.json"
+          cat >"$context/Dockerfile" <<'EOF'
+          FROM scratch
+          COPY goose /artifact/goose
+          COPY build-receipt.json /artifact/build-receipt.json
+          EOF
+
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --pull=false --no-cache -t "$image:$tag" "$context"
+          push_log="$RUNNER_TEMP/goose-push.log"
+          docker push "$image:$tag" | tee "$push_log"
+          digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' "$push_log" | tail -1)"
+          test -n "$digest"
+          echo "GOOSE_OCI_REF=$image@$digest" >> "$GITHUB_ENV"
+          echo "GOOSE_OCI_DIGEST=$digest" >> "$GITHUB_ENV"
+
+      - name: Mechanically admit published artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          extract="$RUNNER_TEMP/goose-admit"
+          mkdir -p "$extract"
+          docker pull "$GOOSE_OCI_REF" >/dev/null
+          cid="$(docker create "$GOOSE_OCI_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$extract/"
+          docker rm "$cid" >/dev/null
+
+          build_receipt="$extract/build-receipt.json"
+          build_receipt_sha="$(sha256sum "$build_receipt" | awk '{print $1}')"
+          expected="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["payload"]["files"][0]["sha256"])' "$build_receipt")"
+          actual="$(sha256sum "$extract/goose" | awk '{print $1}')"
+          test "$actual" = "$expected"
+          chmod 0755 "$extract/goose"
+          version_output="$("$extract/goose" --version)"
+          printf '%s\n' "$version_output"
+          printf '%s' "$version_output" | grep -F "$GOOSE_VERSION" >/dev/null
+          "$extract/goose" --help >/dev/null
+
+          admission="$RUNNER_TEMP/goose-admission-receipt.json"
+          ADMISSION="$admission" BUILD_RECEIPT_SHA="$build_receipt_sha" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          value={
+              "schema_version":1,
+              "record_type":"harness-artifact-admission",
+              "harness":{"name":"goose","declared_version":os.environ["GOOSE_VERSION"]},
+              "artifact":{
+                  "packaging":"oci-distribution",
+                  "ref":os.environ["GOOSE_OCI_REF"],
+                  "digest":os.environ["GOOSE_OCI_DIGEST"],
+                  "build_receipt_digest":"sha256:"+os.environ["BUILD_RECEIPT_SHA"],
+              },
+              "admission":{
+                  "state":"BUILD_ADMITTED",
+                  "target":"x86_64-unknown-linux-gnu",
+                  "checks":[
+                      {"name":"embedded-build-receipt","result":"PASS","evidence":None},
+                      {"name":"binary-sha256","result":"PASS","evidence":None},
+                      {"name":"version-identity","result":"PASS","evidence":os.environ["GOOSE_VERSION"]},
+                      {"name":"cli-help","result":"PASS","evidence":None},
+                  ],
+              },
+          }
+          Path(os.environ["ADMISSION"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print("HARNESS_ADMISSION="+json.dumps(value,sort_keys=True))
+          PY
+          echo "GOOSE_ADMISSION_RECEIPT=$admission" >> "$GITHUB_ENV"
+
+      - name: Upload receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: goose-harness-artifact-${{ github.run_id }}
+          path: |
+            ${{ env.GOOSE_BUILD_RECEIPT }}
+            ${{ env.GOOSE_ADMISSION_RECEIPT }}
+          if-no-files-found: warn
+          retention-days: 30

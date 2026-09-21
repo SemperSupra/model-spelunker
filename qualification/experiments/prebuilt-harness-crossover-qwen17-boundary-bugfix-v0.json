@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "prebuilt-harness-crossover-qwen17-boundary-bugfix-v0",
+  "decision_question": "With exact Qwen3 1.7B, Ollama 0.34.1, the current boundary-bugfix package, and GitHub-hosted Ubuntu held constant, how do the admitted OpenWorker and Goose harness realizations behave on bounded debugging?",
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "task_class": "software.bounded-debugging"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-1.7b-gha-ollama",
+    "goose-prebuilt-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "qwen3-1.7b-model-artifact",
+    "ollama-0.34.1",
+    "task-package",
+    "github-hosted-ubuntu-24.04-x64"
+  ],
+  "variable_under_test": "admitted-harness-realization-and-native-tool-surface",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "model-artifact-drift",
+    "unexpected-authority-expansion",
+    "unexplained-infrastructure-failure"
+  ]
+}
