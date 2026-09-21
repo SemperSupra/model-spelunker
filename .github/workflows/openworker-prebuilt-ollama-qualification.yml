@@ -1,11 +1,6 @@
 name: OpenWorker Prebuilt Ollama Qualification
 
 on:
-  push:
-    branches:
-      - feat/harness-artifact-admission
-    paths:
-      - 'qualification/openworker-prebuilt-bridge-trigger.json'
   workflow_dispatch:
     inputs:
       artifact_ref:
@@ -29,18 +24,14 @@ concurrency:
 
 jobs:
   qualify:
-    strategy:
-      fail-fast: false
-      matrix:
-        task: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.task) || '["text-repair-v0","boundary-bugfix-v0"]') }}
-    name: Prebuilt OpenWorker + Qwen3 1.7B / ${{ matrix.task }}
+    name: Prebuilt OpenWorker + Qwen3 1.7B
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       OPENWORKER_VERSION: '0.0.0'
-      HARNESS_ARTIFACT_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.artifact_ref || 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83' }}
-      HARNESS_ADMISSION_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.admission_ref || 'github:SemperSupra/model-spelunker@9ac78865c2b1f20e18ca39087d8b267b98993769:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission.json' }}
+      HARNESS_ARTIFACT_REF: ${{ inputs.artifact_ref }}
+      HARNESS_ADMISSION_REF: ${{ inputs.admission_ref }}
       OLLAMA_VERSION: '0.34.1'
       OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
       OLLAMA_MODEL_TAG: 'qwen3:1.7b'
@@ -51,7 +42,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
-      QUALIFICATION_TASK: ${{ matrix.task }}
+      QUALIFICATION_TASK: ${{ inputs.task }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-prebuilt-candidate.json'
       RECEIPT: '/tmp/model-spelunker-openworker-prebuilt-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-openworker-prebuilt-diagnostics.json'
@@ -211,7 +202,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: openworker-prebuilt-qualification-${{ matrix.task }}-${{ github.run_id }}
+          name: openworker-prebuilt-qualification-${{ inputs.task }}-${{ github.run_id }}
           path: ${{ env.RECEIPT }}
           if-no-files-found: ignore
           retention-days: 30
