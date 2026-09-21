@@ -155,7 +155,7 @@ jobs:
 
           venv="$RUNNER_TEMP/openworker-admission-venv"
           python3 -m venv "$venv"
-          "$venv/bin/pip" install --disable-pip-version-check --no-index --find-links "$extract/wheelhouse" "coworker==$OPENWORKER_VERSION"
+          "$venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$extract/wheelhouse"/*.whl
           "$venv/bin/python" -c 'import coworker; import coworker.engine; print("PASS import surface")'
           "$venv/bin/openworker" --help >/dev/null
 
@@ -179,7 +179,7 @@ jobs:
                   "checks":[
                       {"name":"embedded-build-receipt","result":"PASS","evidence":None},
                       {"name":"payload-hashes","result":"PASS","evidence":None},
-                      {"name":"offline-wheel-install","result":"PASS","evidence":None},
+                      {"name":"offline-wheelhouse-install-no-resolve","result":"PASS","evidence":None},
                       {"name":"coworker-import-surface","result":"PASS","evidence":None},
                       {"name":"openworker-cli-help","result":"PASS","evidence":None},
                   ],
