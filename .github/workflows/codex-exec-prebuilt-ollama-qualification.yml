@@ -1,0 +1,288 @@
+name: Codex Exec Prebuilt Ollama Qualification
+
+on:
+  push:
+    branches:
+      - feat/harness-artifact-admission
+    paths:
+      - 'qualification/codex-exec-prebuilt-bridge-trigger.json'
+  workflow_dispatch:
+    inputs:
+      artifact_ref:
+        description: Immutable admitted codex-exec OCI ref
+        required: true
+      admission_ref:
+        description: Durable admission receipt reference
+        required: true
+      task:
+        description: Task id from qualification/tasks
+        required: true
+        default: text-repair-v0
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: codex-exec-prebuilt-ollama-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Prebuilt codex-exec 0.154.0 + Qwen3 1.7B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CODEX_SHA: '6b9826e3aa83b1a5947db50f4332cb9c65f1b340'
+      CODEX_VERSION: '0.154.0'
+      HARNESS_ARTIFACT_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.artifact_ref || 'ghcr.io/sempersupra/model-spelunker-harness-codex-exec@sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338' }}
+      HARNESS_ADMISSION_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.admission_ref || 'github:SemperSupra/model-spelunker@312ed497f4d03355a726486433f0c70c72cd0bd3:qualification/harness-artifacts/codex-exec-6b9826e3aa83-linux-x64.admission.json' }}
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-codex-exec-prebuilt-models'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'text-repair-v0' }}
+      CODEX_HOME: '${{ github.workspace }}/.codex-exec-prebuilt-qual-home'
+      CANDIDATE_META: '/tmp/model-spelunker-codex-exec-prebuilt-candidate.json'
+      RECEIPT: '/tmp/model-spelunker-codex-exec-prebuilt-receipt.json'
+      DIAGNOSTICS: '/tmp/model-spelunker-codex-exec-prebuilt-diagnostics.json'
+      SUBSTRATE_PROFILE_COMMIT: 'codex-exec-prebuilt-qwen17-gha-v1'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - name: Checkout qualification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Hydrate admitted codex-exec artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull "$HARNESS_ARTIFACT_REF" >/dev/null
+          extract="$RUNNER_TEMP/codex-exec-artifact"
+          mkdir -p "$extract"
+          cid="$(docker create "$HARNESS_ARTIFACT_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$extract/"
+          docker rm "$cid" >/dev/null
+          test -s "$extract/build-receipt.json"
+          chmod 0755 "$extract/codex-exec"
+
+          ARTIFACT_ROOT="$extract" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["ARTIFACT_ROOT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+          assert receipt["harness"]["name"]=="codex-exec"
+          assert receipt["source"]["revision"]==os.environ["CODEX_SHA"]
+          row=receipt["payload"]["files"][0]
+          data=(root/row["path"]).read_bytes()
+          assert len(data)==row["bytes"]
+          assert hashlib.sha256(data).hexdigest()==row["sha256"]
+          patch=receipt["build"]["configuration"]["compile_only_patch"]
+          assert patch["sha256"]=="237e3b219738b5199a92236a2dfa0a8fd3ac25dad03586084d6616535a194e15"
+          print("PASS admitted codex-exec artifact integrity")
+          PY
+
+          "$extract/codex-exec" --version | grep -F "$CODEX_VERSION" >/dev/null
+          "$extract/codex-exec" --help >/dev/null
+          echo "CODEX_EXEC_BIN=$extract/codex-exec" >> "$GITHUB_ENV"
+
+      - name: Install pinned Ollama and hydrate exact model
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" \
+            --output "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$runtime" "$OLLAMA_MODELS" "$CODEX_HOME"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+          OLLAMA_HOST="$OLLAMA_HOST" nohup "$runtime/bin/ollama" serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null && break
+            sleep 1
+          done
+          curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null
+          OLLAMA_HOST="$OLLAMA_HOST" "$runtime/bin/ollama" pull "$OLLAMA_MODEL_TAG"
+
+          python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          with urllib.request.urlopen(f"http://{os.environ['OLLAMA_HOST']}/api/tags", timeout=10) as response:
+              data=json.load(response)
+          wanted=os.environ["OLLAMA_MODEL_TAG"]
+          row=next((m for m in data.get("models",[]) if m.get("name")==wanted),None)
+          if row is None:
+              raise SystemExit(f"model not present: {wanted}")
+          digest=str(row.get("digest") or "").removeprefix("sha256:")
+          if not digest.startswith(os.environ["OLLAMA_MODEL_DIGEST_PREFIX"]):
+              raise SystemExit(f"model digest drift: {digest}")
+
+          candidate={
+              "harness":{
+                  "name":"codex-exec",
+                  "version":os.environ["CODEX_VERSION"],
+                  "artifact_ref":os.environ["HARNESS_ARTIFACT_REF"],
+                  "admission_ref":os.environ["HARNESS_ADMISSION_REF"],
+              },
+              "model":{
+                  "provider":"ollama",
+                  "id":wanted,
+                  "artifact_ref":f"ollama-sha256:{digest}",
+              },
+              "toolset":["filesystem","shell"],
+              "configuration":{
+                  "source_revision":os.environ["CODEX_SHA"],
+                  "build_recipe":"codex-exec-release-recursion256-v1",
+                  "compile_only_patch_sha256":"237e3b219738b5199a92236a2dfa0a8fd3ac25dad03586084d6616535a194e15",
+                  "native_binary_sha256":"da4bc5c13a97a4a21999919bde2a9e2c943904a7bd444893d5ac8fc35c0b51f3",
+                  "mode":"oss",
+                  "local_provider":"ollama",
+                  "sandbox":"workspace-write",
+                  "ephemeral":True,
+                  "web_search":"disabled",
+                  "reasoning_effort":"none",
+                  "model_instructions_variant":"minimal-local-v1",
+                  "model_metadata_variant":"known-local-v1",
+                  "tool_surface":"unified-shell",
+                  "ollama_context_length":int(os.environ["OLLAMA_CONTEXT_LENGTH"]),
+                  "harness_delivery":"prebuilt-admitted-artifact",
+              },
+          }
+          Path(os.environ["CANDIDATE_META"]).write_text(json.dumps(candidate,indent=2,sort_keys=True)+"\n")
+          PY
+
+      - name: Build local model metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          catalog_file="$RUNNER_TEMP/codex-exec-local-models.json"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://raw.githubusercontent.com/openai/codex/$CODEX_SHA/codex-rs/models-manager/models.json" \
+            --output "$catalog_file"
+          CATALOG_FILE="$catalog_file" python3 - <<'PY'
+          import copy,json,os
+          from pathlib import Path
+          path=Path(os.environ["CATALOG_FILE"])
+          catalog=json.loads(path.read_text(encoding="utf-8"))
+          template=copy.deepcopy(catalog["models"][0])
+          template.update({
+              "slug":os.environ["OLLAMA_MODEL_TAG"],
+              "display_name":"Qwen3 1.7B local",
+              "description":"Qualification-only local Ollama model metadata.",
+              "default_reasoning_level":None,
+              "supported_reasoning_levels":[],
+              "shell_type":"unified_exec",
+              "visibility":"none",
+              "supported_in_api":True,
+              "priority":99,
+              "minimal_client_version":"0.154.0",
+              "support_verbosity":False,
+              "default_verbosity":None,
+              "apply_patch_tool_type":None,
+              "web_search_tool_type":"text",
+              "context_window":40960,
+              "max_context_window":40960,
+              "effective_context_window_percent":95,
+              "include_skills_usage_instructions":False,
+              "include_apps_usage_instructions":False,
+              "include_plugin_usage_instructions":False,
+              "supports_reasoning_summary_parameter":False,
+              "default_reasoning_summary":"none",
+              "supports_image_detail_original":False,
+              "input_modalities":["text"],
+              "experimental_supported_tools":[],
+              "supports_search_tool":False,
+              "supports_experimental_context":False,
+              "use_responses_lite":False,
+              "node_repl_auto_review_required":False,
+              "node_repl_disabled":True,
+              "tool_mode":"direct",
+              "multi_agent_version":None,
+              "multi_agent_reasoning_effort":None,
+              "model_messages":{"instructions_template":"Local coding model."},
+          })
+          path.write_text(json.dumps({"models":[template]},indent=2,sort_keys=True)+"\n")
+          PY
+          echo "CODEX_MODEL_CATALOG=$catalog_file" >> "$GITHUB_ENV"
+
+          instructions_file="$RUNNER_TEMP/codex-exec-minimal-local-instructions.md"
+          cat >"$instructions_file" <<'EOF'
+          You are a coding agent operating in the current workspace.
+          Follow the user's request exactly.
+          Use the available tools to inspect or modify files as needed.
+          Do not access the network.
+          Make the smallest correct change and stop.
+          EOF
+          echo "CODEX_INSTRUCTIONS_FILE=$instructions_file" >> "$GITHUB_ENV"
+
+      - name: Run task through prebuilt codex-exec
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset OPENAI_API_KEY || true
+          unset CODEX_API_KEY || true
+
+          set +e
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-linux-x64-codex-exec-prebuilt-ollama \
+            --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            --diagnostics "$DIAGNOSTICS" \
+            "qualification/tasks/$QUALIFICATION_TASK" \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
+            -- "$CODEX_EXEC_BIN" \
+              --oss \
+              --local-provider ollama \
+              --model "$OLLAMA_MODEL_TAG" \
+              --sandbox workspace-write \
+              --skip-git-repo-check \
+              --ephemeral \
+              --json \
+              -c 'web_search="disabled"' \
+              -c 'model_reasoning_effort="none"' \
+              -c "model_instructions_file=\"$CODEX_INSTRUCTIONS_FILE\"" \
+              -c "model_catalog_json=\"$CODEX_MODEL_CATALOG\"" \
+              -
+          qualification_rc=$?
+          set -e
+
+          test -f "$RECEIPT"
+          QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          rc=int(os.environ["QUALIFICATION_RC"])
+          assert receipt["candidate"]["harness"]["artifact_ref"]==os.environ["HARNESS_ARTIFACT_REF"]
+          assert receipt["candidate"]["harness"]["admission_ref"]==os.environ["HARNESS_ADMISSION_REF"]
+          assert rc==(0 if receipt["observation"]["success"] else 1)
+          print(json.dumps(receipt,sort_keys=True))
+          print("QUALIFICATION_RESULT="+("PASS" if receipt["observation"]["success"] else "FAIL (valid observation)"))
+          PY
+
+          echo '=== bounded candidate diagnostics ==='
+          cat "$DIAGNOSTICS" || true
+          echo '=== bounded Ollama timing diagnostics ==='
+          grep -E 'prompt processing|prompt eval|eval rate|total duration|load duration|prompt_eval|eval_count|processing task|new prompt' "$RUNNER_TEMP/ollama.log" | tail -n 120 || true
+
+      - name: Upload immutable qualification receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codex-exec-prebuilt-qualification-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
+          path: ${{ env.RECEIPT }}
+          if-no-files-found: ignore
+          retention-days: 30
