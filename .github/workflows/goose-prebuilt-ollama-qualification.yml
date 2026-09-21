@@ -1,6 +1,11 @@
 name: Goose Prebuilt Ollama Qualification
 
 on:
+  push:
+    branches:
+      - feat/harness-artifact-admission
+    paths:
+      - 'qualification/goose-prebuilt-text-repair-trigger.json'
   workflow_dispatch:
     inputs:
       artifact_ref:
@@ -43,7 +48,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'qwen3:1.7b'
-      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'boundary-bugfix-v0' }}
+      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'text-repair-v0' }}
       CANDIDATE_META: '/tmp/model-spelunker-goose-prebuilt-candidate.json'
       RECEIPT: '/tmp/model-spelunker-goose-prebuilt-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-goose-prebuilt-diagnostics.json'
