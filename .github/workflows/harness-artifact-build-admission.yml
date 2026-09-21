@@ -1,11 +1,6 @@
 name: Harness Artifact Build and Admission
 
 on:
-  push:
-    branches:
-      - feat/harness-artifact-admission
-    paths:
-      - 'qualification/harness-artifact-build-trigger.json'
   workflow_dispatch:
 
 permissions:
