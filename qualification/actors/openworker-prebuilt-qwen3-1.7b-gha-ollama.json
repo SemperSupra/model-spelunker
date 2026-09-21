@@ -5,7 +5,7 @@
     "name": "openworker",
     "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2",
     "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83",
-    "admission_ref": "github:SemperSupra/model-spelunker@9ac78865c2b1f20e18ca39087d8b267b98993769:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission.json"
+    "admission_ref": "github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json"
   },
   "model": {
     "provider": "ollama",
