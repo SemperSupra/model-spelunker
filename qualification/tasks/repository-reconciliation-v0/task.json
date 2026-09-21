@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "repository-reconciliation-v0",
   "task_class": "repository.state-reconciliation",
-  "instruction": "Inspect the repository fixture and write reconciliation.json containing exactly: current_entrypoint, items, and safe_next_action. Each items entry must contain ref, state, and evidence. Reconcile only from observable repository evidence: prefer terminal/current evidence over stale execution guidance, use LOCALITY_REQUIRED for the claimed local worktree because it is unobservable here, and preserve an explicit HUMAN_GATE only when the observable state requires it. Do not modify source documents.",
+  "instruction": "Inspect the repository fixture and write reconciliation.json. The output must contain exactly current_entrypoint, items, and safe_next_action. items must be a JSON object keyed by these four exact references from the stale/current guidance: branch:feature/legacy-retry, pull_request:7, local_worktree:C:\\\\work\\\\project, and release. Each item must contain exactly state and evidence_ref. evidence_ref must be an RFC 6901 JSON Pointer into observable/state.json, written as observable/state.json#<pointer>. Derive the states from observable evidence: prefer terminal/current evidence over stale execution guidance; preserve unobservable local state as LOCALITY_REQUIRED rather than guessing; preserve an explicit HUMAN_GATE only when observable state requires it. Do not modify any source document.",
   "fixture": "fixture",
   "verifier": "verify.py",
   "limits": {
