@@ -1,0 +1,63 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:689fca5940dc062f468ab69bb80d9048214f512d2187e6b0e9aaaeda97390357",
+    "harness": {
+      "admission_ref": "github:SemperSupra/model-spelunker@9ac78865c2b1f20e18ca39087d8b267b98993769:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission.json",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83",
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+      "id": "qwen3:1.7b",
+      "provider": "ollama"
+    },
+    "toolset": [
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:ed3475b15b1a93a2abba1c9d81205082ab402fbe732fdc5f8570432c3e6ec431",
+  "observation": {
+    "cache_read_tokens": 209,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": 261,
+    "output_tokens": 49,
+    "state_changed": true,
+    "success": true,
+    "timed_out": false,
+    "tool_calls": 1,
+    "verifier_exit_code": 0,
+    "wall_seconds": 5.611592,
+    "workload": {
+      "client_wall_seconds_total": 4.924686,
+      "first_event_seconds_first": 3.972784,
+      "first_event_seconds_max": 3.972784,
+      "first_event_seconds_min": 0.378506,
+      "model_rounds": 2,
+      "output_text_bytes_total": 76,
+      "reasoning_bytes_total": 0,
+      "request_message_bytes_total": 488,
+      "request_tool_schema_bytes_total": 1146,
+      "tool_argument_bytes_total": 57
+    }
+  },
+  "run_id": "20260921T090247Z-a28fa3fe",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "prebuilt-openworker-ollama-v1",
+    "profile_id": "gha-linux-x64-openworker-prebuilt-ollama"
+  },
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:a51be2ffb8cbe2cacac72f038bb88a1649d491ff853244adb729981c9d6c24cc",
+    "source_commit": "0945e6eb716a5beee215c93d14521fcd752635d5",
+    "task_class": "software.bounded-repair"
+  }
+}
