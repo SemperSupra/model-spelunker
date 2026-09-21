@@ -1,0 +1,58 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:9267a681601ba3b84326c22e04ca5b26d72089030f9c8d0a6ee525fc736e7696",
+    "harness": {
+      "admission_ref": "github:SemperSupra/model-spelunker@312ed497f4d03355a726486433f0c70c72cd0bd3:qualification/harness-artifacts/codex-exec-6b9826e3aa83-linux-x64.admission.json",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-codex-exec@sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338",
+      "name": "codex-exec",
+      "version": "0.154.0"
+    },
+    "model": {
+      "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+      "id": "qwen3:1.7b",
+      "provider": "ollama"
+    },
+    "toolset": [
+      "filesystem",
+      "shell"
+    ]
+  },
+  "evidence_digest": "sha256:13dc1fd9f7b154706b2b94fbd3244331701bd56d88928025d0418a69e22150e3",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 124,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "timeout",
+    "failure_signals": [
+      "timeout",
+      "state-unchanged",
+      "invalid-tool-call"
+    ],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "output_tokens": null,
+    "state_changed": false,
+    "success": false,
+    "timed_out": true,
+    "tool_calls": null,
+    "verifier_exit_code": 1,
+    "wall_seconds": 120.07712,
+    "workload": {
+      "model_rounds": 0
+    }
+  },
+  "run_id": "20260921T095245Z-38d89984",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "codex-exec-prebuilt-qwen17-gha-v1",
+    "profile_id": "gha-linux-x64-codex-exec-prebuilt-ollama"
+  },
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:a51be2ffb8cbe2cacac72f038bb88a1649d491ff853244adb729981c9d6c24cc",
+    "source_commit": "97a818db7cec57630df32c73889581bf35f9f007",
+    "task_class": "software.bounded-repair"
+  }
+}
