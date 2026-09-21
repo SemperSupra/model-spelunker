@@ -1,11 +1,6 @@
 name: Codex Exec Artifact Build and Admission
 
 on:
-  push:
-    branches:
-      - feat/harness-artifact-admission
-    paths:
-      - 'qualification/codex-exec-artifact-build-trigger.json'
   workflow_dispatch:
 
 permissions:
