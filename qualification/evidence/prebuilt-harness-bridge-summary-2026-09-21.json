@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "evidence_id": "prebuilt-harness-bridge-20260921",
+  "purpose": "Separate harness build/admission from Actor × Task qualification, bridge historical source-built realizations to immutable admitted artifacts, and stop each lane at the first informative boundary.",
+  "admitted_artifacts": {
+    "openworker": {
+      "source_revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83",
+      "admission_ref": "qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json",
+      "note": "Initial admission exposed direct-reference dependency re-resolution. The same immutable payload was re-admitted with resolver-free wheelhouse hydration; actor profiles bind the strengthened v2 admission provenance."
+    },
+    "goose": {
+      "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe",
+      "native_binary_sha256": "f117d4f40bedc3e5371e04355729f1ba27066a5552be691cd22296e6294e2699",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636",
+      "admission_ref": "qualification/harness-artifacts/goose-2090ad1c65dd-linux-x64.admission.json",
+      "note": "Native payload reproduced the previously characterized source-built Goose binary byte-for-byte."
+    },
+    "codex_exec": {
+      "source_revision": "6b9826e3aa83b1a5947db50f4332cb9c65f1b340",
+      "native_binary_sha256": "da4bc5c13a97a4a21999919bde2a9e2c943904a7bd444893d5ac8fc35c0b51f3",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-codex-exec@sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338",
+      "admission_ref": "qualification/harness-artifacts/codex-exec-6b9826e3aa83-linux-x64.admission.json",
+      "compile_only_patch": {
+        "description": "crate recursion_limit raised to 256 after pinned upstream rustc query-depth overflow",
+        "sha256": "237e3b219738b5199a92236a2dfa0a8fd3ac25dad03586084d6616535a194e15"
+      }
+    }
+  },
+  "bridge_observations": [
+    {
+      "actor": "openworker-prebuilt-qwen3-1.7b-gha-ollama",
+      "task": "text-repair-v0",
+      "run_id": "20260921T090247Z-a28fa3fe",
+      "outcome": "validated-pass",
+      "model_rounds": 2,
+      "tool_calls": 1,
+      "wall_seconds": 5.611592,
+      "interpretation": "Positive control passes from the admitted prebuilt artifact."
+    },
+    {
+      "actor": "openworker-prebuilt-qwen3-1.7b-gha-ollama",
+      "task": "boundary-bugfix-v0",
+      "run_id": "20260921T090308Z-a00f084a",
+      "outcome": "validated-fail",
+      "failure_class": "false-completion",
+      "model_rounds": 1,
+      "tool_calls": 0,
+      "state_changed": false,
+      "wall_seconds": 28.713492,
+      "interpretation": "Reproduces the structural source-built boundary: one model round, no tool call, unchanged state, verifier failure."
+    },
+    {
+      "actor": "goose-prebuilt-qwen3-1.7b-gha-ollama",
+      "task": "boundary-bugfix-v0",
+      "run_id": "20260921T095223Z-0d3da8cd",
+      "outcome": "validated-fail",
+      "failure_class": "timeout",
+      "model_rounds": 2,
+      "wall_seconds": 120.058191,
+      "interpretation": "Goose stream-json turn mapping removes the earlier zero-round instrumentation ambiguity; the admitted actor reaches inference and remains outside the task wall envelope."
+    },
+    {
+      "actor": "codex-exec-prebuilt-qwen3-1.7b-gha-ollama",
+      "task": "text-repair-v0",
+      "run_id": "20260921T095245Z-38d89984",
+      "outcome": "incomplete",
+      "failure_class": "timeout",
+      "model_rounds": 0,
+      "failure_signals": [
+        "timeout",
+        "state-unchanged",
+        "invalid-tool-call"
+      ],
+      "wall_seconds": 120.07712,
+      "interpretation": "The admitted binary runs and local Ollama logs show repeated prompt processing, but the standardized receipt does not yet carry model-round evidence. Preserve as an integration/measurement boundary rather than a task-capability restriction; do not fan out to a harder task."
+    }
+  ],
+  "decisions": [
+    "Build admission and actor qualification remain separate authorities.",
+    "Historical source-built evidence is preserved; admitted artifacts mint distinct configured actor identities.",
+    "OpenWorker bridge continuity is supported for the current controls; latency differences remain observations, not equivalence gates.",
+    "Goose bounded-debugging is now a terminal task-specific timeout observation for the prebuilt actor because two model rounds are directly observed.",
+    "Codex-exec stops at the simplest-task integration boundary; no bounded-debugging follow-on is justified until standardized post-model telemetry is available.",
+    "No universal harness ranking or automatic routing policy is derived."
+  ],
+  "downstream": {
+    "agent_dispatch_pr": 261,
+    "canonical_states": {
+      "openworker_text_repair": "PROVISIONAL",
+      "openworker_boundary_bugfix": "RESTRICTED",
+      "goose_boundary_bugfix": "RESTRICTED",
+      "codex_exec_text_repair": "UNCHARACTERIZED"
+    }
+  }
+}
