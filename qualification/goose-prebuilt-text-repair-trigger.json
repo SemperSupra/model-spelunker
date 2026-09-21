@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot current-package Goose admitted-artifact text-repair bridge rep",
+  "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636",
+  "task": "text-repair-v0",
+  "max_reps": 1,
+  "rationale": "Complete current-package two-task OpenWorker↔Goose crossover without rebuilding Goose."
+}
