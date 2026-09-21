@@ -3,9 +3,9 @@ name: Codex Exec Build Characterization
 on:
   push:
     branches:
-      - test/issue-54-harness-model-qualification
+      - exp/harness-crossover-qwen17
     paths:
-      - '.github/workflows/codex-exec-build-characterization.yml'
+      - 'qualification/codex-exec-characterization-trigger.json'
   workflow_dispatch:
 
 permissions:
