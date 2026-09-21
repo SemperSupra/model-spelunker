@@ -147,11 +147,12 @@ jobs:
             qualification/evidence/hosted-openrouter-free-validation-discovery-2026-09-20.json \
             qualification/evidence/hosted-deepseek-flash-validation-discovery-2026-09-20.json \
             qualification/evidence/hosted-openrouter-deepseek-v41-flash-validation-discovery-2026-09-20.json \
+            qualification/evidence/hosted-groq-gpt-oss-repository-reconciliation-2026-09-21.json \
             --output "$RUNNER_TEMP/current-envelopes.json"
           python - "$RUNNER_TEMP/current-envelopes.json" <<'PY'
           import json, sys
           data=json.load(open(sys.argv[1]))
-          assert len(data["envelopes"]) == 13
+          assert len(data["envelopes"]) == 14
           by_route={
               (
                   env["actor"]["candidate"]["model"]["provider"],
@@ -162,6 +163,7 @@ jobs:
           }
           bounded="software.bounded-repair"
           discovery="repository.capability-discovery"
+          reconciliation="repository.state-reconciliation"
           assert by_route[("deepseek","deepseek-flash",bounded)]["evidence_pattern"] == "PASS_ONLY"
           assert by_route[("google","gemini-3.7-flash",bounded)]["evidence_pattern"] == "PASS_ONLY"
           assert by_route[("groq","openai/gpt-oss-20b",bounded)]["evidence_pattern"] == "PASS_ONLY"
@@ -174,6 +176,12 @@ jobs:
           assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
           assert by_route[("openrouter","openrouter/free",discovery)]["evidence_pattern"] == "PASS_ONLY"
           assert by_route[("deepseek","deepseek-flash",discovery)]["evidence_pattern"] == "PASS_ONLY"
+
+          groq_reconciliation=by_route[("groq","openai/gpt-oss-20b",reconciliation)]
+          assert groq_reconciliation["evidence_pattern"] == "FAIL_ONLY"
+          assert groq_reconciliation["evidence"]["validated_fail"] == 1
+          assert groq_reconciliation["ksa_evidence"]["skills"]["repository_state_reconciliation"] == "NEGATIVE_BOUNDARY_OBSERVED"
+          assert groq_reconciliation["ksa_evidence"]["abilities"]["unknown_preservation"] == "NEGATIVE_BOUNDARY_OBSERVED"
 
           google=by_route[("google","gemini-3.7-flash",discovery)]
           assert google["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
