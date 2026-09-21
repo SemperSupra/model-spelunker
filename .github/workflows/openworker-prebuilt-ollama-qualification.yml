@@ -96,7 +96,7 @@ jobs:
 
           venv="$RUNNER_TEMP/openworker-prebuilt-venv"
           python3 -m venv "$venv"
-          "$venv/bin/pip" install --disable-pip-version-check --no-index --find-links "$extract/wheelhouse" "coworker==$OPENWORKER_VERSION"
+          "$venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$extract/wheelhouse"/*.whl
           "$venv/bin/python" -c 'import coworker; import coworker.engine'
           echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
 
