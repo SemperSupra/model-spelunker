@@ -196,6 +196,45 @@ def provider_observations(stdout: str) -> list[dict[str, object]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def goose_inference_message_ids(stdout: str) -> list[str]:
+    """Return unique Goose assistant message ids carrying inference metadata.
+
+    Goose stream-json may be interrupted before its end-of-run summary markers are
+    emitted. These per-message events are direct evidence that model inference was
+    occurring even when standardized provider-round telemetry is unavailable.
+    """
+    ids: list[str] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") != "message":
+            continue
+        message = event.get("message")
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        metadata = message.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        inference = metadata.get("inference")
+        if not isinstance(inference, dict):
+            continue
+        provider = inference.get("provider")
+        model = inference.get("requestedModel")
+        if not isinstance(provider, str) or not provider:
+            continue
+        if not isinstance(model, str) or not model:
+            continue
+        message_id = message.get("id")
+        if isinstance(message_id, str) and message_id and message_id not in ids:
+            ids.append(message_id)
+    return ids
+
+
 def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]:
     numeric_fields = (
         "request_message_bytes",
@@ -383,6 +422,12 @@ def main() -> int:
         state_changed = final_tree_digest != initial_tree_digest
         success = verifier.returncode == 0 and not timed_out
         provider_rounds = provider_observations(stdout)
+        goose_inference_ids = (
+            goose_inference_message_ids(stdout)
+            if candidate.get("harness", {}).get("name") == "goose"
+            else []
+        )
+        model_inference_observed = bool(provider_rounds or goose_inference_ids)
         engine_error = has_engine_error_event(stdout)
         if timed_out:
             failure_class = "timeout"
@@ -463,6 +508,7 @@ def main() -> int:
                 "output_tokens": metrics["output_tokens"],
                 "cache_read_tokens": metrics["cache_read_tokens"],
                 "cache_write_tokens": metrics["cache_write_tokens"],
+                "model_inference_observed": model_inference_observed,
                 "workload": workload,
                 "cost": None,
             },
