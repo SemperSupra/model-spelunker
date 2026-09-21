@@ -119,6 +119,9 @@ jobs:
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
 
+      - name: Self-test Goose timeout streaming
+        run: PYTHONPATH=. python qualification/test_goose_cli_streaming.py
+
       - name: Self-test Foundry hosted-realization projection
         run: PYTHONPATH=. python qualification/test_export_hosted_realization.py
 
