@@ -6,5 +6,7 @@
     "text-repair-v0",
     "boundary-bugfix-v0"
   ],
-  "max_parallel": 2
+  "max_parallel": 2,
+  "rerun": 2,
+  "note": "hydrate wheelhouse with --no-index --no-deps to avoid direct-reference re-resolution"
 }
