@@ -1,11 +1,6 @@
 name: Codex Exec Build Characterization
 
 on:
-  push:
-    branches:
-      - exp/harness-crossover-qwen17
-    paths:
-      - 'qualification/codex-exec-characterization-trigger.json'
   workflow_dispatch:
 
 permissions:
