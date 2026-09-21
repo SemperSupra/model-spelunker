@@ -1,11 +1,6 @@
 name: Goose Prebuilt Ollama Qualification
 
 on:
-  push:
-    branches:
-      - feat/harness-artifact-admission
-    paths:
-      - 'qualification/goose-prebuilt-bridge-trigger.json'
   workflow_dispatch:
     inputs:
       artifact_ref:
