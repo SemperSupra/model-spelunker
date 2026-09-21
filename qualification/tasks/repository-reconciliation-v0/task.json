@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "repository-reconciliation-v0",
   "task_class": "repository.state-reconciliation",
-  "instruction": "Inspect the repository fixture and produce reconciliation.json with the conservative current-state projection. Prefer observable terminal/current evidence over stale execution guidance. Preserve unobservable local state as UNKNOWN or LOCALITY_REQUIRED rather than guessing. Do not modify source documents.",
+  "instruction": "Inspect the repository fixture and write reconciliation.json containing exactly: current_entrypoint, items, and safe_next_action. Each items entry must contain ref, state, and evidence. Reconcile only from observable repository evidence: prefer terminal/current evidence over stale execution guidance, use LOCALITY_REQUIRED for the claimed local worktree because it is unobservable here, and preserve an explicit HUMAN_GATE only when the observable state requires it. Do not modify source documents.",
   "fixture": "fixture",
   "verifier": "verify.py",
   "limits": {
