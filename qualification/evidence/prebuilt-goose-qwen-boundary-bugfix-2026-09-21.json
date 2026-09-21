@@ -1,0 +1,69 @@
+{
+  "candidate": {
+    "build": {
+      "artifact_digest": "sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636",
+      "default_features": false,
+      "features": [
+        "rustls-tls"
+      ],
+      "kind": "prebuilt",
+      "profile": "admitted-oci+no-default-features+rustls-tls",
+      "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe",
+      "toolchain": "prebuilt"
+    },
+    "configuration_digest": "sha256:d4d0acfaaea0081264f01d4bd41f3bff8be83575ea152e6bd723390284bf6c74",
+    "harness": {
+      "admission_ref": "github:SemperSupra/model-spelunker@f03859d11da391706cedeb12a1d37e66bd234ee7:qualification/harness-artifacts/goose-2090ad1c65dd-linux-x64.admission.json",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636",
+      "name": "goose",
+      "version": "1.51.0"
+    },
+    "model": {
+      "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+      "id": "qwen3:1.7b",
+      "provider": "ollama"
+    },
+    "toolset": [
+      "developer"
+    ]
+  },
+  "evidence_digest": "sha256:e4d0cbc96d80838fb455993433852940d771fef9ab16ef704211ce6753e537ef",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 124,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "timeout",
+    "failure_signals": [
+      "timeout"
+    ],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "output_tokens": null,
+    "state_changed": true,
+    "success": false,
+    "timed_out": true,
+    "tool_calls": null,
+    "verifier_exit_code": 1,
+    "wall_seconds": 120.058191,
+    "workload": {
+      "model_rounds": 2,
+      "serving_providers": [
+        "ollama"
+      ]
+    }
+  },
+  "run_id": "20260921T095223Z-0d3da8cd",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "prebuilt-goose-ollama-v1",
+    "profile_id": "gha-linux-x64-goose-prebuilt-ollama"
+  },
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "package_digest": "sha256:52ffb636ec670b5f89c4acb0d2126c8ac34336c8bafa517097cfd49fd0477cc8",
+    "source_commit": "41014686f57040880a6da43bcb6e38da0be2957c",
+    "task_class": "software.bounded-debugging"
+  }
+}
