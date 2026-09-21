@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "purpose": "one-shot codex-exec admitted artifact build after observed recursion-depth seam",
-  "source_revision": "6b9826e3aa83b1a5947db50f4332cb9c65f1b340",
-  "version": "0.154.0",
-  "compile_only_patch": "recursion_limit=256",
-  "no_inference": true
-}
