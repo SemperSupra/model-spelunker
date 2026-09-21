@@ -1,11 +1,6 @@
 name: Codex Exec Prebuilt Ollama Qualification
 
 on:
-  push:
-    branches:
-      - feat/harness-artifact-admission
-    paths:
-      - 'qualification/codex-exec-prebuilt-bridge-trigger.json'
   workflow_dispatch:
     inputs:
       artifact_ref:
