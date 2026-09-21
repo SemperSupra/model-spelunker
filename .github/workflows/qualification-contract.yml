@@ -90,6 +90,10 @@ jobs:
           jsonschema.Draft7Validator.check_schema(task_schema)
           jsonschema.Draft7Validator.check_schema(harness_build_schema)
           jsonschema.Draft7Validator.check_schema(harness_admission_schema)
+          for path in sorted(Path("qualification/harness-artifacts").glob("*.admission*.json")):
+              admission = json.loads(path.read_text())
+              jsonschema.validate(admission, harness_admission_schema)
+              assert admission["admission"]["state"] == "BUILD_ADMITTED"
           jsonschema.validate(text_task, task_schema)
           jsonschema.validate(discovery_task, task_schema)
           jsonschema.validate(debugging_task, task_schema)
