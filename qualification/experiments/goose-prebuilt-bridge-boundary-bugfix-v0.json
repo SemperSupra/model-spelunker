@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "goose-prebuilt-bridge-boundary-bugfix-v0",
+  "decision_question": "Does the admitted prebuilt Goose artifact preserve the bounded-debugging execution boundary of the exact previously characterized Goose binary while removing source-build variability?",
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "task_class": "software.bounded-debugging"
+  },
+  "actors": [
+    "goose-qwen3-1.7b-gha-ollama",
+    "goose-prebuilt-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "native-goose-binary-sha256",
+    "qwen3-1.7b-model-artifact",
+    "ollama-0.34.1",
+    "task-package",
+    "github-hosted-ubuntu-24.04-x64"
+  ],
+  "variable_under_test": "harness-delivery-source-build-in-job-vs-admitted-prebuilt",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "model-artifact-drift",
+    "unexpected-authority-expansion",
+    "unexplained-behavioral-discontinuity"
+  ]
+}
