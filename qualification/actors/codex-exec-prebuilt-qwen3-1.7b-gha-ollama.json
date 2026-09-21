@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "codex-exec-prebuilt-qwen3-1.7b-gha-ollama",
+  "harness": {
+    "name": "codex-exec",
+    "version": "0.154.0",
+    "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-codex-exec@sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338",
+    "admission_ref": "github:SemperSupra/model-spelunker@312ed497f4d03355a726486433f0c70c72cd0bd3:qualification/harness-artifacts/codex-exec-6b9826e3aa83-linux-x64.admission.json"
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3:1.7b",
+    "realization": "local-artifact",
+    "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/ubuntu-24.04-x64",
+    "inference_route": "local:ollama-0.34.1",
+    "substrate_profile": "gha-linux-x64-codex-exec-prebuilt-ollama"
+  },
+  "toolset": [
+    "filesystem",
+    "shell"
+  ],
+  "configuration": {
+    "source_revision": "6b9826e3aa83b1a5947db50f4332cb9c65f1b340",
+    "build_recipe": "codex-exec-release-recursion256-v1",
+    "compile_only_patch_sha256": "237e3b219738b5199a92236a2dfa0a8fd3ac25dad03586084d6616535a194e15",
+    "native_binary_sha256": "da4bc5c13a97a4a21999919bde2a9e2c943904a7bd444893d5ac8fc35c0b51f3",
+    "mode": "oss",
+    "local_provider": "ollama",
+    "sandbox": "workspace-write",
+    "ephemeral": true,
+    "web_search": "disabled",
+    "reasoning_effort": "none",
+    "model_instructions_variant": "minimal-local-v1",
+    "model_metadata_variant": "known-local-v1",
+    "tool_surface": "unified-shell",
+    "ollama_context_length": 32768,
+    "harness_delivery": "prebuilt-admitted-artifact"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
