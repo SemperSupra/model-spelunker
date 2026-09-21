@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "evidence_id": "goose-qwen3-1.7b-boundary-bugfix-inference-validation-20260921",
+  "recorded_at": "2026-09-21T04:08:00Z",
+  "source": {
+    "workflow_run_id": 35558196878,
+    "workflow_job_id": 106205856308,
+    "source_head": "851aae18ae203dcb57592c4cd49b553aa7c54ad7",
+    "receipt_run_id": "20260921T035517Z-4827bcdf",
+    "receipt_evidence_digest": "sha256:a32f27c22c1d49ec4e1e1993537a0108877929375fa15c1d6d46ab5a3cce5f87",
+    "artifact_id": 10620629152,
+    "artifact_digest": "sha256:f44450e83b5035ce1b2995e4de939c1237e7dc16e4fcc61bac85d38f00f66501"
+  },
+  "candidate": {
+    "harness": "goose",
+    "harness_version": "1.51.0",
+    "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe",
+    "binary_digest": "sha256:f117d4f40bedc3e5371e04355729f1ba27066a5552be691cd22296e6294e2699",
+    "model": "qwen3:1.7b",
+    "model_artifact": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+    "task": "boundary-bugfix-v0",
+    "task_package_digest": "sha256:52ffb636ec670b5f89c4acb0d2126c8ac34336c8bafa517097cfd49fd0477cc8"
+  },
+  "original_receipt": {
+    "timed_out": true,
+    "candidate_exit_code": 124,
+    "verifier_exit_code": 1,
+    "state_changed": true,
+    "workload_model_rounds": 0
+  },
+  "direct_inference_evidence": {
+    "model_inference_observed": true,
+    "goose_stream": {
+      "assistant_inference_metadata_observed": true,
+      "provider": "ollama",
+      "requested_model": "qwen3:1.7b",
+      "observed_message_id": "chatcmpl-354"
+    },
+    "ollama": {
+      "prompt_1": {
+        "tokens": 443,
+        "prompt_eval_ms": 6624.31,
+        "tokens_per_second": 66.87
+      },
+      "prompt_2": {
+        "tokens_total": 1173,
+        "tokens_processed_at_capture": 1024,
+        "progress": 0.88,
+        "elapsed_seconds_at_capture": 15.46,
+        "tokens_per_second": 66.24
+      }
+    }
+  },
+  "disposition": {
+    "original_standardized_round_count": "INSUFFICIENT_OBSERVABILITY",
+    "model_inference": "OBSERVED",
+    "task_outcome": "TERMINAL_TIMEOUT_BOUNDARY",
+    "increase_timeout": "NOT_JUSTIFIED",
+    "repeat_same_rep_for_model_contact": "STOP"
+  },
+  "interpretation": "The emitted receipt's model_rounds=0 reflects missing standardized Goose end-of-run telemetry, not absence of model inference. Partial stream-json and Ollama timing prove active Qwen inference before the 120-second timeout. Preserve the uploaded receipt unchanged; use this validation record to interpret the run.",
+  "limitations": [
+    "Partial stdout tail does not support a trustworthy exact completed model-round count.",
+    "This evidence qualifies only the exact configured actor/task/substrate realization.",
+    "No universal Goose or Qwen ranking follows."
+  ]
+}
