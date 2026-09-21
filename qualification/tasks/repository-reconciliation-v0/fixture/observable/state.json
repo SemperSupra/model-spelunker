@@ -1,0 +1,20 @@
+{
+  "repository_head": "def5678",
+  "branches": {
+    "main": "def5678",
+    "feature/legacy-retry": null
+  },
+  "pull_requests": {
+    "7": {
+      "state": "closed",
+      "merged": true,
+      "merge_commit": "def5678",
+      "accepted": true
+    }
+  },
+  "local_worktrees": "UNOBSERVABLE",
+  "release": {
+    "approval_required": true,
+    "approval_observed": false
+  }
+}
