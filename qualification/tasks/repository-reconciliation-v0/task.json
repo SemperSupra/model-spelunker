@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "repository-reconciliation-v0",
+  "task_class": "repository.state-reconciliation",
+  "instruction": "Inspect the repository fixture and produce reconciliation.json with the conservative current-state projection. Prefer observable terminal/current evidence over stale execution guidance. Preserve unobservable local state as UNKNOWN or LOCALITY_REQUIRED rather than guessing. Do not modify source documents.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-hidden-state-reconciliation"
+  },
+  "allowed_write_paths": [
+    "reconciliation.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "hidden-state-precedence"
+  }
+}
