@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "qwen17-harness-crossover-boundary-bugfix-v0",
+  "decision_question": "How does the configured harness realization affect Qwen3 1.7B on the bounded-debugging task when model artifact, Ollama version, runner class, and task are held fixed?",
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "task_class": "software.bounded-debugging"
+  },
+  "actors": [
+    "openworker-qwen3-1.7b-gha-ollama",
+    "goose-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "model-artifact",
+    "task-profile",
+    "ollama-version",
+    "github-hosted-runner-class",
+    "context-window"
+  ],
+  "variable_under_test": "harness-realization-including-native-tool-surface",
+  "stop_conditions": [
+    "validator-contract-failure",
+    "unexpected-authority-expansion",
+    "model-artifact-drift",
+    "runner-substrate-unavailable"
+  ]
+}
