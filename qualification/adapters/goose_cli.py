@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -76,17 +75,12 @@ def main() -> int:
         "stream-json",
         "--stats",
     ]
-    completed = subprocess.run(
-        command,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        check=False,
-    )
-    sys.stdout.write(completed.stdout)
-    sys.stderr.write(completed.stderr)
-    return completed.returncode
+    # Replace the thin adapter process with Goose itself. This keeps the
+    # harness-neutral outer runner as the direct process owner, so partial
+    # stream-json/stderr survives an outer timeout and timeout signals reach
+    # Goose rather than terminating a buffering wrapper first.
+    os.execvpe(command[0], command, env)
+    raise AssertionError("os.execvpe returned unexpectedly")
 
 
 if __name__ == "__main__":
