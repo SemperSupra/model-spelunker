@@ -24,6 +24,10 @@ KSA_BY_TASK_CLASS = {
         "skills": ["fault_localization", "bounded_code_repair"],
         "abilities": ["evidence_discrimination", "scope_discipline"],
     },
+    "repository.state-reconciliation": {
+        "skills": ["repository_state_reconciliation"],
+        "abilities": ["evidence_precedence", "unknown_preservation"],
+    },
 }
 
 
@@ -70,8 +74,7 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
         obs.get("failure_signals") or []
     )
     zero_round_nonterminal = (
-        not obs.get("timed_out", False)
-        and obs.get("candidate_exit_code") == 0
+        not obs.get("success", False)
         and workload.get("model_rounds") == 0
     )
     return "incomplete" if engine_error or zero_round_nonterminal else "fail"
