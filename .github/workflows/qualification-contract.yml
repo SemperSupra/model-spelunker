@@ -168,7 +168,15 @@ jobs:
           assert by_route[("google","gemini-3.7-flash",bounded)]["evidence_pattern"] == "PASS_ONLY"
           assert by_route[("groq","openai/gpt-oss-20b",bounded)]["evidence_pattern"] == "PASS_ONLY"
           assert by_route[("openrouter","openai/gpt-oss-20b",bounded)]["evidence_pattern"] == "PASS_ONLY"
-          assert by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b",bounded)]["evidence_pattern"] == "FAIL_ONLY"
+          nvidia_bounded=by_route[("nvidia","nvidia/nemotron-3.5-lightning-30b-a3b",bounded)]
+          assert nvidia_bounded["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+          assert nvidia_bounded["evidence"]["validated_fail"] == 0
+          assert nvidia_bounded["evidence"]["incomplete"] == 1
+          assert all(
+              value == "INSUFFICIENT_EVIDENCE"
+              for family in nvidia_bounded["ksa_evidence"].values()
+              for value in family.values()
+          )
           assert by_route[("openrouter","openrouter/free",bounded)]["evidence_pattern"] == "PASS_ONLY"
 
           assert by_route[("ollama","qwen3:1.7b",discovery)]["evidence_pattern"] == "FAIL_ONLY"
