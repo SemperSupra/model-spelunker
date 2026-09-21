@@ -103,7 +103,12 @@
       "openworker_boundary_bugfix": "RESTRICTED",
       "goose_boundary_bugfix": "RESTRICTED",
       "codex_exec_text_repair": "UNCHARACTERIZED",
-      "goose_text_repair": "PENDING_AGENT_DISPATCH_IMPORT"
+      "goose_text_repair": "RESTRICTED"
+    },
+    "agent_dispatch_followup_pr": 262,
+    "agent_dispatch_merge_commits": {
+      "prebuilt_bridge": "4a0d0364218a2d694fe544c49a0da10e6ffc7644",
+      "goose_text_repair": "1bf70999bb3b5ff4e2e8b8642a2e347c8ddf0335"
     }
   }
 }
