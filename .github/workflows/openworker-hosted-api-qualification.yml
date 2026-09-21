@@ -11,6 +11,9 @@ on:
         description: Task id from qualification/tasks
         required: true
         default: text-repair-v0
+  push:
+    branches:
+      - experiment/reconciliation-groq-a1-002
 
 permissions:
   contents: read
@@ -27,7 +30,7 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
-      QUALIFICATION_TASK: ${{ inputs.task }}
+      QUALIFICATION_TASK: ${{ inputs.task || 'repository-reconciliation-v0' }}
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
@@ -46,7 +49,7 @@ jobs:
         id: treatment
         shell: bash
         env:
-          REQUESTED_CANDIDATE: ${{ inputs.candidate }}
+          REQUESTED_CANDIDATE: ${{ inputs.candidate || 'groq-gpt-oss-20b' }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
