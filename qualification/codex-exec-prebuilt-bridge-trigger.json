@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "purpose": "one-shot first actor qualification of admitted codex-exec artifact",
-  "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-codex-exec@sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338",
-  "task": "text-repair-v0",
-  "max_reps": 1,
-  "no_web_search": true,
-  "no_paid_credentials": true
-}
