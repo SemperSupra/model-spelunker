@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "run_id": "20260921T035311Z-3d04b5ba",
+  "task": {
+    "id": "repository-reconciliation-v0",
+    "task_class": "repository.state-reconciliation",
+    "source_commit": "7429c17f95db1ab09d46dd0baf412d5d49fc3aa3",
+    "package_digest": "sha256:7cb665342a496891be721c0e234e41ebf73ef9a94fdebb791146a98a6fb28000"
+  },
+  "candidate": {
+    "harness": {
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "id": "openai/gpt-oss-20b",
+      "provider": "groq",
+      "treatment_kind": "model"
+    },
+    "configuration_digest": "sha256:0e6b6625afe9848680ba27aa106298c3201b23a215d73b382fcf7ecd13a84774",
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "substrate": {
+    "profile_id": "gha-linux-x64-openworker-hosted-api",
+    "profile_commit": "15ea4903a060d06c56c20f9f81b02c06541298e0"
+  },
+  "observation": {
+    "success": false,
+    "failure_class": "false-completion",
+    "wall_seconds": 2.846048,
+    "human_interventions": 0,
+    "candidate_exit_code": 0,
+    "verifier_exit_code": 1,
+    "timed_out": false,
+    "state_changed": true,
+    "failure_signals": [
+      "false-completion"
+    ],
+    "engine_error_types": [],
+    "tool_calls": 4,
+    "input_tokens": 2051,
+    "output_tokens": 634,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "workload": {
+      "model_rounds": 4,
+      "request_message_bytes_total": 6585,
+      "request_tool_schema_bytes_total": 3872,
+      "output_text_bytes_total": 0,
+      "reasoning_bytes_total": 1592,
+      "tool_argument_bytes_total": 801,
+      "client_wall_seconds_total": 1.957819,
+      "first_event_seconds_first": 0.520595,
+      "first_event_seconds_min": 0.17469,
+      "first_event_seconds_max": 0.520595
+    },
+    "cost": null
+  },
+  "evidence_digest": "sha256:8c3bc3236efb4a94314846c5eb01ef266f4df47c4104676d17213cb4bb938770"
+}

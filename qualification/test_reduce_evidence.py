@@ -8,12 +8,15 @@ def receipt(
     *,
     model_rounds: int | None = None,
     engine_error: str | None = None,
+    timed_out: bool = False,
+    candidate_exit_code: int = 0,
+    task_class: str = "software.bounded-repair",
 ):
     observation = {"success": success}
     if model_rounds is not None:
         observation.update({
-            "timed_out": False,
-            "candidate_exit_code": 0,
+            "timed_out": timed_out,
+            "candidate_exit_code": candidate_exit_code,
             "workload": {"model_rounds": model_rounds},
         })
     if engine_error is not None:
@@ -21,7 +24,7 @@ def receipt(
         observation["failure_signals"] = ["engine-error-event"]
     return {
         "run_id": run_id,
-        "task": {"id": "text-repair-v0", "task_class": "software.bounded-repair"},
+        "task": {"id": "fixture-task", "task_class": task_class},
         "candidate": {
             "harness": {"name": "fixture", "version": "1"},
             "model": {"provider": "none", "id": "none"},
@@ -77,4 +80,25 @@ assert partial_engine_failure["evidence"]["incomplete"] == 1
 assert (
     partial_engine_failure["ksa_evidence"]["skills"]["bounded_change_execution"]
     == "INSUFFICIENT_EVIDENCE"
+)
+
+
+zero_round_timeout = reduce_receipts(
+    [receipt("run-h", False, model_rounds=0, timed_out=True, candidate_exit_code=124)]
+)[0]
+assert zero_round_timeout["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+assert zero_round_timeout["evidence"]["validated_fail"] == 0
+assert zero_round_timeout["evidence"]["incomplete"] == 1
+
+reconciliation_failure = reduce_receipts(
+    [receipt("run-i", False, model_rounds=4, task_class="repository.state-reconciliation")]
+)[0]
+assert reconciliation_failure["evidence_pattern"] == "FAIL_ONLY"
+assert (
+    reconciliation_failure["ksa_evidence"]["skills"]["repository_state_reconciliation"]
+    == "NEGATIVE_BOUNDARY_OBSERVED"
+)
+assert (
+    reconciliation_failure["ksa_evidence"]["abilities"]["unknown_preservation"]
+    == "NEGATIVE_BOUNDARY_OBSERVED"
 )
