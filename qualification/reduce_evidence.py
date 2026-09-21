@@ -76,6 +76,7 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     zero_round_nonterminal = (
         not obs.get("success", False)
         and workload.get("model_rounds") == 0
+        and not obs.get("model_inference_observed", False)
     )
     return "incomplete" if engine_error or zero_round_nonterminal else "fail"
 
