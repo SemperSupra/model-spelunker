@@ -8,28 +8,24 @@ from pathlib import Path
 
 EXPECTED = {
     "current_entrypoint": "docs/current.md",
-    "items": [
-        {
-            "ref": "branch:feature/legacy-retry",
+    "items": {
+        "branch:feature/legacy-retry": {
             "state": "SUPERSEDED",
-            "evidence": "observable/state.json:branches.feature/legacy-retry=null",
+            "evidence_ref": "observable/state.json#/branches/feature~1legacy-retry",
         },
-        {
-            "ref": "pull_request:7",
+        "pull_request:7": {
             "state": "TERMINAL",
-            "evidence": "observable/state.json:pull_requests.7 merged=true accepted=true merge_commit=def5678",
+            "evidence_ref": "observable/state.json#/pull_requests/7",
         },
-        {
-            "ref": r"local_worktree:C:\\work\\project",
+        r"local_worktree:C:\\work\\project": {
             "state": "LOCALITY_REQUIRED",
-            "evidence": "observable/state.json:local_worktrees=UNOBSERVABLE",
+            "evidence_ref": "observable/state.json#/local_worktrees",
         },
-        {
-            "ref": "release",
+        "release": {
             "state": "HUMAN_GATE",
-            "evidence": "observable/state.json:release approval_required=true approval_observed=false",
+            "evidence_ref": "observable/state.json#/release",
         },
-    ],
+    },
     "safe_next_action": "WAIT_FOR_RELEASE_APPROVAL",
 }
 
@@ -108,7 +104,7 @@ def self_test() -> int:
         assert check(root)
 
         bad = json.loads(json.dumps(EXPECTED))
-        bad["items"][2]["state"] = "READY"
+        bad["items"][r"local_worktree:C:\\work\\project"]["state"] = "READY"
         (root / "reconciliation.json").write_text(
             json.dumps(bad, indent=2) + "\n", encoding="utf-8"
         )
