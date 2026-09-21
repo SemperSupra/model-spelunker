@@ -389,6 +389,9 @@
             "minLength": 1,
             "maxLength": 128
           }
+        },
+        "model_inference_observed": {
+          "type": "boolean"
         }
       }
     },
