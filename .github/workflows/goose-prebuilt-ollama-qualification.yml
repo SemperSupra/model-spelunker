@@ -1,6 +1,11 @@
 name: Goose Prebuilt Ollama Qualification
 
 on:
+  push:
+    branches:
+      - feat/harness-artifact-admission
+    paths:
+      - 'qualification/goose-prebuilt-bridge-trigger.json'
   workflow_dispatch:
     inputs:
       artifact_ref:
@@ -30,8 +35,8 @@ jobs:
     env:
       GOOSE_SHA: '2090ad1c65ddb39497601a936a9fe17d66254bfe'
       GOOSE_VERSION: '1.51.0'
-      HARNESS_ARTIFACT_REF: ${{ inputs.artifact_ref }}
-      HARNESS_ADMISSION_REF: ${{ inputs.admission_ref }}
+      HARNESS_ARTIFACT_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.artifact_ref || 'ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636' }}
+      HARNESS_ADMISSION_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.admission_ref || 'github:SemperSupra/model-spelunker@f03859d11da391706cedeb12a1d37e66bd234ee7:qualification/harness-artifacts/goose-2090ad1c65dd-linux-x64.admission.json' }}
       OLLAMA_VERSION: '0.34.1'
       OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
       OLLAMA_MODEL_TAG: 'qwen3:1.7b'
@@ -43,7 +48,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'qwen3:1.7b'
-      QUALIFICATION_TASK: ${{ inputs.task }}
+      QUALIFICATION_TASK: ${{ github.event_name == 'workflow_dispatch' && inputs.task || 'boundary-bugfix-v0' }}
       CANDIDATE_META: '/tmp/model-spelunker-goose-prebuilt-candidate.json'
       RECEIPT: '/tmp/model-spelunker-goose-prebuilt-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-goose-prebuilt-diagnostics.json'
@@ -200,7 +205,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: goose-prebuilt-qualification-${{ inputs.task }}-${{ github.run_id }}
+          name: goose-prebuilt-qualification-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
           path: ${{ env.RECEIPT }}
           if-no-files-found: ignore
           retention-days: 30
