@@ -1,0 +1,206 @@
+name: Goose Prebuilt Ollama Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_ref:
+        description: Immutable admitted Goose OCI ref (ghcr.io/...@sha256:...)
+        required: true
+      admission_ref:
+        description: Durable admission receipt reference
+        required: true
+      task:
+        description: Task id from qualification/tasks
+        required: true
+        default: boundary-bugfix-v0
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: goose-prebuilt-ollama-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Prebuilt Goose + Qwen3 1.7B
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GOOSE_SHA: '2090ad1c65ddb39497601a936a9fe17d66254bfe'
+      GOOSE_VERSION: '1.51.0'
+      HARNESS_ARTIFACT_REF: ${{ inputs.artifact_ref }}
+      HARNESS_ADMISSION_REF: ${{ inputs.admission_ref }}
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_BIND: '127.0.0.1:11434'
+      GOOSE_OLLAMA_HOST: 'http://127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-goose-prebuilt-models'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      MODEL_SPELUNKER_MODEL: 'qwen3:1.7b'
+      QUALIFICATION_TASK: ${{ inputs.task }}
+      CANDIDATE_META: '/tmp/model-spelunker-goose-prebuilt-candidate.json'
+      RECEIPT: '/tmp/model-spelunker-goose-prebuilt-receipt.json'
+      DIAGNOSTICS: '/tmp/model-spelunker-goose-prebuilt-diagnostics.json'
+      GOOSE_XDG_CONFIG_HOME: '/tmp/model-spelunker-goose-prebuilt-config'
+      GOOSE_XDG_DATA_HOME: '/tmp/model-spelunker-goose-prebuilt-data'
+      SUBSTRATE_PROFILE_COMMIT: 'prebuilt-goose-ollama-v1'
+    steps:
+      - name: Checkout qualification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Hydrate admitted Goose artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$HARNESS_ARTIFACT_REF"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull "$HARNESS_ARTIFACT_REF" >/dev/null
+          extract="$RUNNER_TEMP/goose-artifact"
+          mkdir -p "$extract"
+          cid="$(docker create "$HARNESS_ARTIFACT_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$extract/"
+          docker rm "$cid" >/dev/null
+          test -s "$extract/build-receipt.json"
+          test -x "$extract/goose" || chmod 0755 "$extract/goose"
+
+          ARTIFACT_ROOT="$extract" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["ARTIFACT_ROOT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+          assert receipt["harness"]["name"]=="goose"
+          assert receipt["source"]["revision"]==os.environ["GOOSE_SHA"]
+          row=receipt["payload"]["files"][0]
+          data=(root/row["path"]).read_bytes()
+          assert len(data)==row["bytes"]
+          assert hashlib.sha256(data).hexdigest()==row["sha256"]
+          print("PASS admitted Goose artifact integrity")
+          PY
+          "$extract/goose" --version | grep -F "$GOOSE_VERSION" >/dev/null
+          echo "GOOSE_BIN=$extract/goose" >> "$GITHUB_ENV"
+
+      - name: Install pinned Ollama and hydrate exact model
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" \
+            --output "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$runtime" "$OLLAMA_MODELS" "$GOOSE_XDG_CONFIG_HOME" "$GOOSE_XDG_DATA_HOME"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+          OLLAMA_HOST="$OLLAMA_BIND" nohup "$runtime/bin/ollama" serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+
+          for attempt in $(seq 1 60); do
+            curl --fail --silent "http://$OLLAMA_BIND/api/tags" >/dev/null && break
+            sleep 1
+          done
+          curl --fail --silent "http://$OLLAMA_BIND/api/tags" >/dev/null
+          OLLAMA_HOST="$OLLAMA_BIND" "$runtime/bin/ollama" pull "$OLLAMA_MODEL_TAG"
+
+          python3 - <<'PY'
+          import json,os,urllib.request
+          from pathlib import Path
+          with urllib.request.urlopen(f"http://{os.environ['OLLAMA_BIND']}/api/tags",timeout=10) as response:
+              data=json.load(response)
+          wanted=os.environ["OLLAMA_MODEL_TAG"]
+          row=next((m for m in data.get("models",[]) if m.get("name")==wanted),None)
+          if row is None:
+              raise SystemExit(f"model not present: {wanted}")
+          digest=str(row.get("digest") or "").removeprefix("sha256:")
+          if not digest.startswith(os.environ["OLLAMA_MODEL_DIGEST_PREFIX"]):
+              raise SystemExit(f"model digest drift: {digest}")
+
+          artifact_digest=os.environ["HARNESS_ARTIFACT_REF"].rsplit("@",1)[-1]
+          candidate={
+              "harness":{
+                  "name":"goose",
+                  "version":os.environ["GOOSE_VERSION"],
+                  "artifact_ref":os.environ["HARNESS_ARTIFACT_REF"],
+                  "admission_ref":os.environ["HARNESS_ADMISSION_REF"],
+              },
+              "model":{
+                  "provider":"ollama",
+                  "id":wanted,
+                  "artifact_ref":f"ollama-sha256:{digest}",
+              },
+              "toolset":["developer"],
+              "build":{
+                  "kind":"prebuilt",
+                  "profile":"admitted-oci+no-default-features+rustls-tls",
+                  "source_revision":os.environ["GOOSE_SHA"],
+                  "toolchain":"prebuilt",
+                  "default_features":False,
+                  "features":["rustls-tls"],
+                  "artifact_digest":artifact_digest,
+              },
+              "configuration":{
+                  "provider":"ollama",
+                  "thinking_effort":"off",
+                  "mode":"auto",
+                  "no_session":True,
+                  "no_profile":True,
+                  "builtins":["developer"],
+                  "max_turns":4,
+                  "max_tool_repetitions":2,
+                  "output_format":"stream-json",
+                  "ollama_context_length":int(os.environ["OLLAMA_CONTEXT_LENGTH"]),
+                  "harness_delivery":"prebuilt-admitted-artifact",
+              },
+          }
+          Path(os.environ["CANDIDATE_META"]).write_text(json.dumps(candidate,indent=2,sort_keys=True)+"\n")
+          PY
+
+      - name: Run task through prebuilt Goose
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY; do
+            unset "$key" || true
+          done
+          set +e
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-linux-x64-goose-prebuilt-ollama \
+            --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            --diagnostics "$DIAGNOSTICS" \
+            "qualification/tasks/$QUALIFICATION_TASK" \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
+            -- python3 "$GITHUB_WORKSPACE/qualification/adapters/goose_cli.py"
+          qualification_rc=$?
+          set -e
+          test -f "$RECEIPT"
+          QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          assert receipt["candidate"]["harness"]["artifact_ref"]==os.environ["HARNESS_ARTIFACT_REF"]
+          assert receipt["candidate"]["harness"]["admission_ref"]==os.environ["HARNESS_ADMISSION_REF"]
+          rc=int(os.environ["QUALIFICATION_RC"])
+          assert rc==(0 if receipt["observation"]["success"] else 1)
+          print(json.dumps(receipt,sort_keys=True))
+          print("QUALIFICATION_RESULT="+("PASS" if receipt["observation"]["success"] else "FAIL (valid observation)"))
+          PY
+
+      - name: Upload immutable qualification receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: goose-prebuilt-qualification-${{ inputs.task }}-${{ github.run_id }}
+          path: ${{ env.RECEIPT }}
+          if-no-files-found: ignore
+          retention-days: 30
