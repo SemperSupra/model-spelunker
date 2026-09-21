@@ -1,0 +1,64 @@
+{
+  "candidate": {
+    "build": {
+      "artifact_digest": "sha256:f117d4f40bedc3e5371e04355729f1ba27066a5552be691cd22296e6294e2699",
+      "default_features": false,
+      "features": [
+        "rustls-tls"
+      ],
+      "kind": "source",
+      "profile": "no-default-features+rustls-tls",
+      "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe",
+      "toolchain": "rust 1.96.1"
+    },
+    "configuration_digest": "sha256:02df3c7f83c010b4be685afd987253d7af30f6b327b918ec0c755ff8df2abf81",
+    "harness": {
+      "name": "goose",
+      "version": "1.51.0"
+    },
+    "model": {
+      "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+      "id": "qwen3:1.7b",
+      "provider": "ollama"
+    },
+    "toolset": [
+      "developer"
+    ]
+  },
+  "evidence_digest": "sha256:dec3a22c0ac41d1deb5e42ee5516ecbbc127f05954fe4d0399671b120b98c330",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 124,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "timeout",
+    "failure_signals": [
+      "timeout"
+    ],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "output_tokens": null,
+    "state_changed": true,
+    "success": false,
+    "timed_out": true,
+    "tool_calls": null,
+    "verifier_exit_code": 1,
+    "wall_seconds": 120.120739,
+    "workload": {
+      "model_rounds": 0
+    }
+  },
+  "run_id": "20260921T032003Z-0518a77d",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "4f064a8b06bff7ebea0c1286bee47ead6adee6de",
+    "profile_id": "gha-linux-x64-goose-minimal-ollama"
+  },
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "package_digest": "sha256:52ffb636ec670b5f89c4acb0d2126c8ac34336c8bafa517097cfd49fd0477cc8",
+    "source_commit": "399fe9705346be113909d6d47dad7b37e78bfdd6",
+    "task_class": "software.bounded-debugging"
+  }
+}
