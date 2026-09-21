@@ -11,6 +11,7 @@ def receipt(
     timed_out: bool = False,
     candidate_exit_code: int = 0,
     task_class: str = "software.bounded-repair",
+    model_inference_observed: bool | None = None,
 ):
     observation = {"success": success}
     if model_rounds is not None:
@@ -19,6 +20,8 @@ def receipt(
             "candidate_exit_code": candidate_exit_code,
             "workload": {"model_rounds": model_rounds},
         })
+    if model_inference_observed is not None:
+        observation["model_inference_observed"] = model_inference_observed
     if engine_error is not None:
         observation["engine_error_types"] = [engine_error]
         observation["failure_signals"] = ["engine-error-event"]
@@ -102,3 +105,20 @@ assert (
     reconciliation_failure["ksa_evidence"]["abilities"]["unknown_preservation"]
     == "NEGATIVE_BOUNDARY_OBSERVED"
 )
+
+
+zero_round_with_direct_inference = reduce_receipts(
+    [
+        receipt(
+            "run-j",
+            False,
+            model_rounds=0,
+            timed_out=True,
+            candidate_exit_code=124,
+            model_inference_observed=True,
+        )
+    ]
+)[0]
+assert zero_round_with_direct_inference["evidence_pattern"] == "FAIL_ONLY"
+assert zero_round_with_direct_inference["evidence"]["validated_fail"] == 1
+assert zero_round_with_direct_inference["evidence"]["incomplete"] == 0
