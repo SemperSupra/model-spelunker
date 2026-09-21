@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "boundary-bugfix-v0",
+  "task_class": "software.bounded-debugging",
+  "instruction": "Repair src/retry.py so backoff_seconds follows the repository retry policy exactly. Preserve the public function signature and return type. Do not modify policy documentation. The verifier includes boundary cases not shown in the repository.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-hidden-tests"
+  },
+  "allowed_write_paths": [
+    "src/retry.py"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "medium",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-boundary-tests"
+  }
+}

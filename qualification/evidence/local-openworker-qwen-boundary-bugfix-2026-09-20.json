@@ -1,0 +1,65 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:5d496ebc5a174c40b52e54cbe2711e0cccd8cce8bd3f133c33fcbafa647878bd",
+    "harness": {
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+      "id": "qwen3:1.7b",
+      "provider": "ollama"
+    },
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:436bf64706ca43a4d02cd0fc57c5a1e1069445c27dbfafb7b185549bef854fba",
+  "observation": {
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "false-completion",
+    "failure_signals": [
+      "false-completion",
+      "state-unchanged"
+    ],
+    "human_interventions": 0,
+    "input_tokens": 297,
+    "output_tokens": 125,
+    "state_changed": false,
+    "success": false,
+    "timed_out": false,
+    "tool_calls": 0,
+    "verifier_exit_code": 1,
+    "wall_seconds": 14.960082,
+    "workload": {
+      "client_wall_seconds_total": 14.24629,
+      "first_event_seconds_first": 5.243828,
+      "first_event_seconds_max": 5.243828,
+      "first_event_seconds_min": 5.243828,
+      "model_rounds": 1,
+      "output_text_bytes_total": 609,
+      "reasoning_bytes_total": 0,
+      "request_message_bytes_total": 271,
+      "request_tool_schema_bytes_total": 968,
+      "tool_argument_bytes_total": 0
+    }
+  },
+  "run_id": "20260920T173611Z-000df49a",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "93a108783bd60dc830fab1b67b78eaab8bfdae97",
+    "profile_id": "gha-linux-x64-openworker-ollama"
+  },
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "package_digest": "sha256:52ffb636ec670b5f89c4acb0d2126c8ac34336c8bafa517097cfd49fd0477cc8",
+    "source_commit": "82b832181e2c60967e6ebc2d34b3e90c1e422440",
+    "task_class": "software.bounded-debugging"
+  }
+}

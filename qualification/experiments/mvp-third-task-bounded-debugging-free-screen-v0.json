@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "id": "mvp-third-task-bounded-debugging-free-screen-v0",
+  "decision_question": "Which currently reachable free or zero-token-price OpenWorker actor realizations can repair a bounded Python defect against hidden boundary tests under the same GitHub-hosted execution venue?",
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "task_class": "software.bounded-debugging"
+  },
+  "actors": [
+    "openworker-gemini-3.7-flash-gha-google",
+    "openworker-groq-gpt-oss-20b-gha-direct",
+    "openworker-nemotron-3.5-lightning-gha-nvidia",
+    "openworker-openrouter-free-gha",
+    "openworker-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "task",
+    "harness_revision",
+    "github-hosted-runner-class",
+    "task_projected_tool_surface"
+  ],
+  "variable_under_test": "model-and-inference-realization",
+  "stop_conditions": [
+    "validator-contract-failure",
+    "unexpected-authority-expansion",
+    "provider-admission-failure",
+    "route-unavailable"
+  ]
+}

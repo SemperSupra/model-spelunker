@@ -388,7 +388,7 @@ def main() -> int:
             failure_class = "timeout"
         elif candidate_exit != 0:
             failure_class = "candidate-error"
-        elif verifier.returncode != 0 and engine_error and not provider_rounds:
+        elif verifier.returncode != 0 and engine_error:
             failure_class = "candidate-error-event"
         elif verifier.returncode != 0:
             failure_class = "false-completion"
