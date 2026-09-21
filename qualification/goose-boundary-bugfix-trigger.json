@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "purpose": "one-shot same-model different-harness crossover: Goose 1.51.0 + Qwen3 1.7B on software.bounded-debugging",
+  "task": "boundary-bugfix-v0",
+  "model": "qwen3:1.7b",
+  "harness": "goose-1.51.0-minimal"
+}
