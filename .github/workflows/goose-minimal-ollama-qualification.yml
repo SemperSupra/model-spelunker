@@ -2,6 +2,11 @@ name: Goose Minimal Ollama Qualification
 
 on:
   workflow_dispatch:
+    inputs:
+      task:
+        description: Task id from qualification/tasks
+        required: true
+        default: text-repair-v0
 
 permissions:
   contents: read
@@ -33,6 +38,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'qwen3:1.7b'
+      QUALIFICATION_TASK: ${{ inputs.task }}
       CANDIDATE_META: '/tmp/model-spelunker-goose-candidate.json'
       RECEIPT: '/tmp/model-spelunker-goose-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-goose-diagnostics.json'
@@ -159,7 +165,7 @@ jobs:
             --substrate-profile-id gha-linux-x64-goose-minimal-ollama \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
             --diagnostics "$DIAGNOSTICS" \
-            qualification/tasks/text-repair-v0 \
+            "qualification/tasks/$QUALIFICATION_TASK" \
             "$CANDIDATE_META" \
             "$RECEIPT" \
             -- python3 "$GITHUB_WORKSPACE/qualification/adapters/goose_cli.py"
@@ -184,6 +190,15 @@ jobs:
           cat "$DIAGNOSTICS"
           echo '=== bounded Ollama timing diagnostics ==='
           grep -E 'prompt processing|prompt eval|eval rate|total duration|load duration|prompt_eval|eval_count|processing task|new prompt' "$RUNNER_TEMP/ollama.log" | tail -n 120 || true
+
+      - name: Upload immutable qualification receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: goose-ollama-qualification-${{ inputs.task }}-${{ github.run_id }}
+          path: ${{ env.RECEIPT }}
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Show bounded Ollama diagnostics on infrastructure failure
         if: failure()
