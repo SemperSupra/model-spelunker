@@ -1,9 +1,0 @@
-{
-  "schema_version": 1,
-  "purpose": "one-shot Goose admitted-artifact bridge on software.bounded-debugging",
-  "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636",
-  "task": "boundary-bugfix-v0",
-  "max_reps": 1,
-  "rerun": 2,
-  "note": "rerun after Goose stream-json assistant-turn mapping fix"
-}
