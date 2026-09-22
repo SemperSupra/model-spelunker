@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://semper-supra.example/model-spelunker/observation-bundle.schema.json",
+  "title": "ObservationBundle",
+  "type": "object",
+  "required": ["probe_id", "instrument", "model_identity", "artifact_provenance", "evidence_level", "observations", "provenance"],
+  "properties": {
+    "probe_id": {"type": "string"},
+    "instrument": {"type": "string"},
+    "instrument_version": {"type": ["string", "null"]},
+    "model_identity": {"type": "object", "additionalProperties": true},
+    "artifact_provenance": {
+      "description": "Explicit large-artifact provenance disposition. Artifact-backed models should resolve through Model Artifact Foundry identity; remote/service models must state why no local artifact identity applies.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["tracked", "foundry_repository", "logical_artifact_id", "upstream_revision", "identity_kind", "identity_digest", "verified"],
+          "properties": {
+            "tracked": {"const": true},
+            "foundry_repository": {"const": "SemperSupra/model-artifact-foundry"},
+            "logical_artifact_id": {"type": "string", "minLength": 1},
+            "upstream_provider": {"type": ["string", "null"]},
+            "upstream_repository": {"type": ["string", "null"]},
+            "upstream_revision": {"type": "string", "minLength": 1},
+            "identity_kind": {"enum": ["oci", "content-manifest"]},
+            "identity_digest": {"type": "string", "minLength": 1},
+            "foundry_record_ref": {"type": ["string", "null"]},
+            "consumer_selection_ref": {"type": ["string", "null"]},
+            "verified": {"type": "boolean"},
+            "verification_ref": {"type": ["string", "null"]},
+            "tokenizer_artifact": {"type": ["object", "null"], "additionalProperties": true}
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": ["tracked", "reason"],
+          "properties": {
+            "tracked": {"const": false},
+            "reason": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "access_tier": {"enum": ["A0", "A1", "A2", "A3", "A4"]},
+    "evidence_level": {
+      "enum": ["OBSERVED", "REPRODUCED", "RELATIONAL", "PREDICTIVE", "CAUSAL", "FUNCTIONALLY_RECOVERED"]
+    },
+    "claim_tags": {"type": "array", "items": {"type": "string"}},
+    "observations": {"type": "object", "additionalProperties": true},
+    "derived_metrics": {"type": "object", "additionalProperties": true},
+    "artifacts": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "uncertainty": {"type": "object", "additionalProperties": true},
+    "known_assumptions": {"type": "array", "items": {"type": "string"}},
+    "known_failure_modes": {"type": "array", "items": {"type": "string"}},
+    "contradictions": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "cost": {"type": "object", "additionalProperties": true},
+    "provenance": {
+      "type": "object",
+      "required": ["run_id"],
+      "properties": {
+        "run_id": {"type": "string"},
+        "code_revision": {"type": ["string", "null"]},
+        "model_revision": {"type": ["string", "null"]},
+        "tokenizer_revision": {"type": ["string", "null"]},
+        "environment": {"type": "object", "additionalProperties": true},
+        "randomness": {"type": "object", "additionalProperties": true},
+        "raw_input_hash": {"type": ["string", "null"]},
+        "raw_output_hash": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
