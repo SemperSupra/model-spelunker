@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: openworker-hosted-api-${{ github.ref }}-${{ matrix.candidate }}
+  group: api-boundary-free-screening-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
