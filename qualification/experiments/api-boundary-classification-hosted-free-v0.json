@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "api-boundary-classification-hosted-free-v0",
+  "decision_question": "Which currently configured hosted/free OpenWorker actor realizations can conservatively classify mobile API authentication boundaries from bounded evidence while preserving UNKNOWN and distinguishing pre-auth bootstrap from confirmed anonymous access?",
+  "task": {
+    "id": "api-boundary-classification-v0",
+    "task_class": "reverse-engineering.api-boundary-classification"
+  },
+  "actors": [
+    "openworker-openrouter-free-gha",
+    "openworker-deepseek-flash-gha-direct",
+    "openworker-deepseek-v41-flash-gha-openrouter-deepseek",
+    "openworker-groq-gpt-oss-20b-gha-direct",
+    "openworker-groq-gpt-oss-20b-gha-openrouter-groq",
+    "openworker-gemini-3.7-flash-gha-google",
+    "openworker-nemotron-3.5-lightning-gha-nvidia"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "task",
+    "openworker-harness-revision",
+    "github-hosted-runner-class",
+    "task-projected-tool-surface",
+    "sanitized-fixture"
+  ],
+  "variable_under_test": "hosted-model-and-provider-route-realization",
+  "stop_conditions": [
+    "validator-contract-failure",
+    "unexpected-authority-expansion",
+    "provider-admission-failure",
+    "route-unavailable",
+    "free-tier-quota-boundary"
+  ]
+}
