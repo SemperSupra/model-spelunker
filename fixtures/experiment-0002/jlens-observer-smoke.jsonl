@@ -1,0 +1,4 @@
+{"case_id":"jlens-country-capital-001","prompt":"Fact: Lyon is a city in a country. The capital of that country is","intermediate":" France","downstream":" Paris"}
+{"case_id":"jlens-country-currency-001","prompt":"Fact: The currency used in the country shaped like a boot is","intermediate":" Italy","downstream":" euro"}
+{"case_id":"jlens-country-language-001","prompt":"Fact: The main language spoken in the country whose capital is Berlin is","intermediate":" Germany","downstream":" German"}
+{"case_id":"jlens-country-continent-001","prompt":"Fact: The continent containing the country whose capital is Tokyo is","intermediate":" Japan","downstream":" Asia"}

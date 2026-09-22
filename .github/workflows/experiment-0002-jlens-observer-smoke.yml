@@ -1,0 +1,71 @@
+name: experiment-0002-jlens-observer-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jlens-observer-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: 'false'
+      TORCH_NUM_THREADS: '2'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-experiment-0001.txt
+
+      - name: Install CPU PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
+
+      - name: Install experiment dependencies
+        run: |
+          python -m pip install -r requirements-experiment-0001.txt
+          python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
+
+      - name: Run pinned Jacobian-lens observer calibration
+        run: |
+          python tools/run_jlens_observer_smoke.py \
+            --model EleutherAI/pythia-70m-deduped \
+            --lens-repo neuronpedia/jacobian-lens \
+            --lens-revision 91271eb5b15a43eebed7bb447618738754f1379a \
+            --lens-file pythia-70m-deduped/jlens/Salesforce-wikitext/pythia-70m-deduped_jacobian_lens.pt \
+            --output-dir artifacts/experiment-0002-jlens-observer
+
+      - name: Summarize observer calibration
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          summary = json.loads(Path('artifacts/experiment-0002-jlens-observer/summary.json').read_text())
+          for key in (
+              'model',
+              'resolved_model_revision',
+              'lens_revision',
+              'lens_n_prompts',
+              'case_count',
+              'cases_where_best_jlens_rank_beats_best_vanilla',
+              'median_best_jlens_rank',
+              'median_best_vanilla_rank',
+          ):
+              print(f'{key}={summary[key]}')
+          PY
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-0002-jlens-observer-${{ github.run_id }}
+          path: artifacts/experiment-0002-jlens-observer
+          if-no-files-found: error
+          retention-days: 14
