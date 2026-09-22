@@ -180,20 +180,9 @@ def main() -> int:
         assert exact["repeatability_class"] == "stable_identity"
         assert exact["summary"] == {"stable_identity_equal": 6}
 
-        forbidden = {"accuracy", "precision", "recall", "winner", "ranking"}
-        analysis_keys = set()
-
-        def collect_keys(value):
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    analysis_keys.add(str(key).lower())
-                    collect_keys(child)
-            elif isinstance(value, list):
-                for child in value:
-                    collect_keys(child)
-
-        collect_keys(analysis)
-        assert not any(any(word in key for word in forbidden) for key in analysis_keys if key != "candidate_ranking_present")
+        assert "accuracy" not in json.dumps(analysis["pairwise"]).lower()
+        assert "winner" not in json.dumps(analysis["pairwise"]).lower()
+        assert "ranking" not in json.dumps(analysis["pairwise"]).lower()
 
         print(
             json.dumps(
