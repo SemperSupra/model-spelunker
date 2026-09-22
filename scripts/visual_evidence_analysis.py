@@ -265,10 +265,14 @@ def analyze_batches(batches: Iterable[Batch]) -> dict[str, Any]:
 
 
 def compare_batch_sets(left_batches: Iterable[Batch], right_batches: Iterable[Batch]) -> dict[str, Any]:
-    left = {b.key: b for b in left_batches}
-    right = {b.key: b for b in right_batches}
-    if len(left) != len(list(left.values())) or len(right) != len(list(right.values())):
+    left_list = list(left_batches)
+    right_list = list(right_batches)
+    left_keys = [b.key for b in left_list]
+    right_keys = [b.key for b in right_list]
+    if len(left_keys) != len(set(left_keys)) or len(right_keys) != len(set(right_keys)):
         raise ValueError("duplicate batch key")
+    left = {b.key: b for b in left_list}
+    right = {b.key: b for b in right_list}
 
     if set(left) != set(right):
         payload = {
