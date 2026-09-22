@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "api-boundary-classification-v0",
+  "task_class": "reverse-engineering.api-boundary-classification",
+  "instruction": "Inspect fixture/evidence.json and write classification.json. The output must contain exactly schema_version and endpoints. schema_version must be 1. endpoints must be an object keyed by every exact endpoint id e01 through e12. Each endpoint value must contain exactly class, evidence_refs, and next_action. class must be one of CONFIRMED_ANONYMOUS, PREAUTH_BOOTSTRAP, ANONYMOUS_READ_CANDIDATE, SESSION_BOUND, UNKNOWN. evidence_refs must be a non-empty sorted array of RFC 6901 JSON pointers into fixture/evidence.json, written as fixture/evidence.json#<pointer>. next_action must be one of NONE, BOUNDED_ANONYMOUS_PROBE, AUTH_BOUNDARY, RECOVER_MORE_CONTEXT. Use only observable evidence. Do not infer anonymous server access merely because no endpoint-specific auth annotation or session guard was observed. CONFIRMED_ANONYMOUS requires a successful live anonymous probe. PREAUTH_BOOTSTRAP is for endpoints explicitly reachable before a session as part of bootstrap/login establishment; it does not mean unrestricted anonymous read access. ANONYMOUS_READ_CANDIDATE is for read-only endpoints without a proven session requirement that still lack live anonymous qualification. SESSION_BOUND requires observable session/account gating or account-bound mutation. Preserve UNKNOWN when the evidence is conflicting or insufficient. Do not modify fixture files.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 180
+  },
+  "success": {
+    "kind": "deterministic-hidden-evidence-classification"
+  },
+  "allowed_write_paths": [
+    "classification.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "high",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-evidence-ground-truth"
+  }
+}
