@@ -193,12 +193,18 @@ def main() -> int:
         assert "source_identity_map" in revealed
         assert store.reveal_source_identities("asset-a", "reveal-a") == mapping
 
+        blind_view = store.view("asset-a")
+        cat_alias = next(
+            alias
+            for alias, value in blind_view["automated"]["sources"].items()
+            if any(concept.get("concept_key") == "cat" for concept in value.get("concepts", []))
+        )
         payload = {
             "asset_id": "asset-a",
             "subject_type": "concept_id",
             "subject": "cat",
             "decision": "supported",
-            "evidence_refs": ["human-0", "source-A:cat"],
+            "evidence_refs": ["human-0", f"{cat_alias}:cat"],
             "note": "synthetic explicit adjudication",
             "idempotency_key": "adj-a-cat-1",
         }
