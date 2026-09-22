@@ -148,6 +148,16 @@ def main() -> int:
             },
             digest_salt="same-semantics-new-identity",
         )
+        try:
+            compare_batch_sets(
+                [load_batch(direct_a), load_batch(direct_a)],
+                [load_batch(direct_b)],
+            )
+        except ValueError as exc:
+            assert "duplicate batch key" in str(exc)
+        else:
+            raise AssertionError("duplicate comparator batch key must fail closed")
+
         semantic_stable = compare_batch_sets(
             map(load_batch, [direct_a, deterministic_a, active_a]),
             map(load_batch, [direct_b, deterministic_b, active_b]),

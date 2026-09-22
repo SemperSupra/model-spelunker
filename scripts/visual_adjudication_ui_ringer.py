@@ -183,12 +183,18 @@ def main() -> int:
             assert "source_identity_map" in revealed_view
             assert "direct-v0" in revealed_view and "active-v0" in revealed_view
 
+            current_view = json.loads(call("/api/view/asset-a").read())
+            cat_alias = next(
+                alias
+                for alias, value in current_view["automated"]["sources"].items()
+                if any(concept.get("concept_key") == "cat" for concept in value.get("concepts", []))
+            )
             adjudication = {
                 "asset_id": "asset-a",
                 "subject_type": "concept_id",
                 "subject": "cat",
                 "decision": "supported",
-                "evidence_refs": ["human-0", "source-A:cat"],
+                "evidence_refs": ["human-0", f"{cat_alias}:cat"],
                 "note": "synthetic UI adjudication",
                 "idempotency_key": "adj-ui-a",
             }

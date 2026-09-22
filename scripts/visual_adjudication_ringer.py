@@ -193,12 +193,18 @@ def main() -> int:
         assert "source_identity_map" in revealed
         assert store.reveal_source_identities("asset-a", "reveal-a") == mapping
 
+        blind_view = store.view("asset-a")
+        cat_alias = next(
+            alias
+            for alias, value in blind_view["automated"]["sources"].items()
+            if any(concept.get("concept_key") == "cat" for concept in value.get("concepts", []))
+        )
         payload = {
             "asset_id": "asset-a",
             "subject_type": "concept_id",
             "subject": "cat",
             "decision": "supported",
-            "evidence_refs": ["human-0", "source-A:cat"],
+            "evidence_refs": ["human-0", f"{cat_alias}:cat"],
             "note": "synthetic explicit adjudication",
             "idempotency_key": "adj-a-cat-1",
         }
@@ -213,6 +219,16 @@ def main() -> int:
         conflicting = dict(payload)
         conflicting["decision"] = "contradicted"
         expect_value_error(lambda: store.record(conflicting), "idempotency_key")
+
+        unresolved = dict(payload)
+        unresolved["idempotency_key"] = "bad-ref"
+        unresolved["evidence_refs"] = ["nonexistent-evidence"]
+        expect_value_error(lambda: store.record(unresolved), "unresolved evidence_refs")
+
+        unsupported_without_evidence = dict(payload)
+        unsupported_without_evidence["idempotency_key"] = "no-evidence"
+        unsupported_without_evidence["evidence_refs"] = []
+        expect_value_error(lambda: store.record(unsupported_without_evidence), "requires evidence_refs")
 
         extra_authority = dict(payload)
         extra_authority["idempotency_key"] = "bad-extra"

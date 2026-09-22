@@ -50,7 +50,10 @@ Allowed decisions are:
 - needs_followup.
 
 Events carry idempotency keys and fail closed if one key is reused for a different
-decision. They remain layer=adjudication, ground_truth=false, gold=false.
+decision. Evidence references must resolve to the bound asset's blind human event,
+seed concept, pseudonymous automated concept, or comparison cue. Supported or
+contradicted decisions require at least one such evidence reference. Events remain
+layer=adjudication, ground_truth=false, gold=false.
 
 ## Public ringer
 

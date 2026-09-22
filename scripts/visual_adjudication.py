@@ -270,6 +270,34 @@ class AdjudicationStore:
             for e in events
         )
 
+    def _allowed_evidence_refs(self, asset_id: str) -> set[str]:
+        item = self.queue["items"][asset_id]
+        refs = {str(self.blind["first_pass"][asset_id].get("event_id") or "")}
+        seed = item.get("seed_reference", {})
+        for concept in seed.get("concepts", []) if isinstance(seed, dict) else []:
+            if isinstance(concept, dict) and concept.get("concept_id"):
+                refs.add(f"seed:{concept['concept_id']}")
+        automated = item.get("automated", {})
+        candidates = automated.get("candidates", {}) if isinstance(automated, dict) else {}
+        if isinstance(candidates, dict):
+            for candidate_name, value in candidates.items():
+                alias = self.source_aliases.get(str(candidate_name))
+                if not alias or not isinstance(value, dict):
+                    continue
+                for concept in value.get("concepts", []):
+                    if not isinstance(concept, dict):
+                        continue
+                    key = concept.get("concept_key") or concept.get("concept_id") or concept.get("label")
+                    if key:
+                        refs.add(f"{alias}:{key}")
+        comparison = item.get("comparison", {})
+        if isinstance(comparison, dict):
+            for row in comparison.get("cross_candidate_disagreements", []):
+                if isinstance(row, dict) and row.get("concept_key"):
+                    refs.add(f"comparison:{row['concept_key']}")
+        refs.discard("")
+        return refs
+
     def view(self, asset_id: str) -> dict[str, Any]:
         if not isinstance(asset_id, str) or not self._asset_known(asset_id):
             raise ValueError("unknown asset")
@@ -357,6 +385,12 @@ class AdjudicationStore:
             raise ValueError("invalid adjudication decision")
         if not isinstance(refs, list) or len(refs) > 200 or any(not isinstance(x, str) or not x.strip() for x in refs):
             raise ValueError("invalid evidence_refs")
+        allowed_refs = self._allowed_evidence_refs(asset_id)
+        unresolved = sorted(set(refs) - allowed_refs)
+        if unresolved:
+            raise ValueError(f"unresolved evidence_refs: {unresolved}")
+        if decision in {"supported", "contradicted"} and not refs:
+            raise ValueError("supported/contradicted adjudication requires evidence_refs")
         if not isinstance(note, str) or len(note) > 20000:
             raise ValueError("invalid note")
         if not isinstance(key, str) or not key.strip():
