@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Optional
@@ -158,6 +159,7 @@ class CapabilityEnforcingProvider(ProviderClient):
             "generation_time",
             "moderation_latency",
             "data_region",
+            "is_byok",
         )
         for observation in self.provider_observations:
             response_id = observation.get("_response_id")
@@ -175,18 +177,28 @@ class CapabilityEnforcingProvider(ProviderClient):
                 },
                 method="GET",
             )
-            try:
-                with urllib.request.urlopen(request, timeout=20) as response:
-                    payload = json.load(response)
-                data = payload.get("data") if isinstance(payload, dict) else None
-                if isinstance(data, dict):
-                    observation["openrouter_generation"] = {
-                        name: data.get(name)
-                        for name in allowed
-                        if data.get(name) is not None
-                    }
-            except Exception as exc:
-                observation["openrouter_generation_error"] = type(exc).__name__
+            for attempt in range(4):
+                try:
+                    with urllib.request.urlopen(request, timeout=20) as response:
+                        payload = json.load(response)
+                    data = payload.get("data") if isinstance(payload, dict) else None
+                    if isinstance(data, dict):
+                        observation["openrouter_generation"] = {
+                            name: data.get(name)
+                            for name in allowed
+                            if data.get(name) is not None
+                        }
+                    break
+                except urllib.error.HTTPError as exc:
+                    retryable = exc.code in {404, 429, 500, 502}
+                    if retryable and attempt < 3:
+                        time.sleep(0.25 * (2 ** attempt))
+                        continue
+                    observation["openrouter_generation_error"] = f"HTTPError:{exc.code}"
+                    break
+                except Exception as exc:
+                    observation["openrouter_generation_error"] = type(exc).__name__
+                    break
 
     def capabilities(self, model: str) -> ModelCapabilities:
         return self.delegate.capabilities(model)
