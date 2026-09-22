@@ -1,0 +1,364 @@
+name: API Boundary Free Screening (temporary launch wrapper)
+
+on:
+  push:
+    branches:
+      - experiment/api-boundary-free-screening
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openworker-hosted-api-${{ github.ref }}-${{ matrix.candidate }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        candidate:
+          - openrouter-free-router
+          - groq-gpt-oss-20b
+          - openrouter-groq-gpt-oss-20b-byok
+          - google-gemini-3.7-flash
+          - nvidia-nemotron-3.5-lightning
+    environment: hosted-qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      HOSTED_CATALOG: 'qualification/models/hosted-api.json'
+      QUALIFICATION_TASK: 'api-boundary-classification-v0'
+      HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
+      CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
+      RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
+      SUBSTRATE_PROFILE_COMMIT: '15ea4903a060d06c56c20f9f81b02c06541298e0'
+      MODEL_SPELUNKER_MAX_TOKENS: '2048'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - name: Checkout qualification harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve treatment from catalog
+        id: treatment
+        shell: bash
+        env:
+          REQUESTED_CANDIDATE: ${{ matrix.candidate }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          candidate_id=os.environ["REQUESTED_CANDIDATE"]
+          catalog=json.loads(Path(os.environ["HOSTED_CATALOG"]).read_text())
+          candidate=catalog["candidates"].get(candidate_id)
+          if candidate is None:
+              raise SystemExit(f"unknown hosted candidate: {candidate_id}")
+
+          values={
+              "HOSTED_CANDIDATE_ID": candidate_id,
+              "HOSTED_TREATMENT_KIND": candidate["treatment_kind"],
+              "HOSTED_PROVIDER": candidate["provider"],
+              "HOSTED_MODEL": candidate["model"],
+              "HOSTED_API_BASE": candidate["api_base"],
+              "HOSTED_COST_CLASS": candidate["cost_class"],
+              "HOSTED_EXTRA_BODY_JSON": json.dumps(candidate.get("extra_body") or {},sort_keys=True,separators=(",",":")),
+              "MODEL_SPELUNKER_MODEL": f'{candidate["provider"]}:{candidate["model"]}',
+              "MODEL_SPELUNKER_REASONING_EFFORT": candidate["reasoning_effort"],
+          }
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
+              for key,value in values.items():
+                  env.write(f"{key}={value}\n")
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as out:
+              out.write(f"provider={candidate['provider']}\n")
+
+          print(json.dumps({
+              "candidate_id":candidate_id,
+              "treatment_kind":candidate["treatment_kind"],
+              "provider":candidate["provider"],
+              "model":candidate["model"],
+              "cost_class":candidate["cost_class"],
+              "reasoning_effort":candidate["reasoning_effort"],
+              "extra_body":candidate.get("extra_body"),
+          },sort_keys=True))
+          PY
+
+      - name: Clone immutable OpenWorker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/openworker"
+          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"
+          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_UPSTREAM_SHA"
+          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_UPSTREAM_SHA"
+
+      - name: Install OpenWorker in isolated environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          source "$RUNNER_TEMP/openworker-venv/bin/activate"
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+
+      - name: Stage DeepSeek credential
+        if: steps.treatment.outputs.provider == 'deepseek'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-DEEPSEEK_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
+      - name: Stage Groq credential
+        if: steps.treatment.outputs.provider == 'groq'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-GROQ_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
+      - name: Stage Google credential
+        if: steps.treatment.outputs.provider == 'google'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-GOOGLE_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
+      - name: Stage NVIDIA credential
+        if: steps.treatment.outputs.provider == 'nvidia'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-NVIDIA_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
+      - name: Stage OpenRouter credential
+        if: steps.treatment.outputs.provider == 'openrouter'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-OPENROUTER_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
+      - name: Zero-inference provider admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$HOSTED_KEY_FILE"
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          provider=os.environ["HOSTED_PROVIDER"]
+          model=os.environ["HOSTED_MODEL"]
+          base=os.environ["HOSTED_API_BASE"].rstrip("/")
+          key=Path(os.environ["HOSTED_KEY_FILE"]).read_text(encoding="utf-8")
+          if not key:
+              raise SystemExit("selected provider key file is empty")
+
+          def get(url):
+              request=urllib.request.Request(
+                  url,
+                  headers={"Accept":"application/json","Authorization":"Bearer "+key,"User-Agent":"Model-Spelunker/1.0 (+https://github.com/SemperSupra/model-spelunker)"},
+                  method="GET",
+              )
+              try:
+                  with urllib.request.urlopen(request,timeout=20) as response:
+                      return json.load(response),dict(response.headers.items())
+              except urllib.error.HTTPError as exc:
+                  body=exc.read(512).decode("utf-8",errors="replace")
+                  raise SystemExit(f"{provider} admission failed: HTTP {exc.code}: {body}") from exc
+
+          if provider=="deepseek":
+              data,_=get(base+"/user/balance")
+              if data.get("is_available") is not True:
+                  raise SystemExit("DeepSeek authenticated but API balance is unavailable")
+              evidence={"authenticated":True,"available":True}
+
+          elif provider=="groq":
+              data,headers=get(base+"/models")
+              ids={row.get("id") for row in data.get("data",[]) if isinstance(row,dict)}
+              if model not in ids:
+                  raise SystemExit(f"Groq model is not active for this key: {model}")
+              evidence={
+                  "authenticated":True,
+                  "model_active":True,
+                  "rate_limit_requests":headers.get("x-ratelimit-limit-requests"),
+                  "rate_limit_tokens":headers.get("x-ratelimit-limit-tokens"),
+              }
+
+          elif provider in {"google","nvidia"}:
+              data,_=get(base+"/models")
+              rows=data.get("data",[]) if isinstance(data,dict) else []
+              ids={str(row.get("id") or "") for row in rows if isinstance(row,dict)}
+              normalized={item.removeprefix("models/") for item in ids}
+              if model not in normalized:
+                  sample=sorted(item for item in normalized if item)[:20]
+                  raise SystemExit(f"{provider} model is not active for this key: {model}; visible={sample}")
+              evidence={"authenticated":True,"model_active":True}
+
+          elif provider=="openrouter":
+              data,_=get(base+"/key")
+              info=data.get("data") or {}
+              evidence={
+                  "authenticated":True,
+                  "is_free_tier":info.get("is_free_tier"),
+                  "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
+              }
+
+          else:
+              raise SystemExit(f"unsupported provider: {provider}")
+
+          print("HOSTED_ADMISSION="+json.dumps(evidence,sort_keys=True))
+          PY
+
+      - name: Build candidate metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          task_path=Path("qualification/tasks") / os.environ["QUALIFICATION_TASK"] / "task.json"
+          if not task_path.is_file():
+              raise SystemExit(f"unknown qualification task: {os.environ['QUALIFICATION_TASK']}")
+          task=json.loads(task_path.read_text(encoding="utf-8"))
+          projected_tools=task.get("projected_tools") or ["read_file","write_file"]
+
+          configuration={
+              "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
+              "projection":projected_tools,
+              "parallel_tool_calls":False,
+              "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
+              "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
+              "max_iterations":4,
+              "api_base":os.environ["HOSTED_API_BASE"],
+              "cost_class":os.environ["HOSTED_COST_CLASS"],
+              "provider_alias_semantics":"hosted mutable service",
+          }
+          extra_body=json.loads(os.environ["HOSTED_EXTRA_BODY_JSON"])
+          if extra_body:
+              configuration["extra_body"]=extra_body
+
+          candidate={
+              "harness":{
+                  "name":"openworker",
+                  "version":os.environ["OPENWORKER_UPSTREAM_SHA"],
+              },
+              "model":{
+                  "provider":os.environ["HOSTED_PROVIDER"],
+                  "id":os.environ["HOSTED_MODEL"],
+                  "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
+              },
+              "toolset":projected_tools,
+              "configuration":configuration,
+          }
+          Path(os.environ["CANDIDATE_META"]).write_text(
+              json.dumps(candidate,indent=2,sort_keys=True)+"\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(candidate,sort_keys=True))
+          PY
+
+      - name: Run same harness-neutral task
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$HOSTED_KEY_FILE"
+          provider_key="$(cat "$HOSTED_KEY_FILE")"
+          case "$HOSTED_PROVIDER" in
+            deepseek) export DEEPSEEK_API_KEY="$provider_key" ;;
+            groq) export GROQ_API_KEY="$provider_key" ;;
+            google) export GOOGLE_API_KEY="$provider_key" ;;
+            nvidia) export NVIDIA_API_KEY="$provider_key" ;;
+            openrouter) export OPENROUTER_API_KEY="$provider_key" ;;
+            *) echo "unsupported provider: $HOSTED_PROVIDER" >&2; exit 2 ;;
+          esac
+          unset provider_key
+          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OLLAMA_API_KEY; do
+            unset "$key" || true
+          done
+          case "$HOSTED_PROVIDER" in
+            google) ;;
+            *) unset GOOGLE_API_KEY || true ;;
+          esac
+          case "$HOSTED_PROVIDER" in
+            nvidia) ;;
+            *) unset NVIDIA_API_KEY || true ;;
+          esac
+          if [ "$HOSTED_EXTRA_BODY_JSON" != "{}" ]; then
+            export MODEL_SPELUNKER_EXTRA_BODY="$HOSTED_EXTRA_BODY_JSON"
+          else
+            unset MODEL_SPELUNKER_EXTRA_BODY || true
+          fi
+
+          set +e
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-linux-x64-openworker-hosted-api \
+            --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            "qualification/tasks/$QUALIFICATION_TASK" \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
+            -- "$RUNNER_TEMP/openworker-venv/bin/python" \
+              "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          qualification_rc=$?
+          set -e
+
+          test -f "$RECEIPT"
+          QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          rc=int(os.environ["QUALIFICATION_RC"])
+          assert receipt["candidate"]["model"]["provider"]==os.environ["HOSTED_PROVIDER"]
+          assert receipt["candidate"]["model"]["id"]==os.environ["HOSTED_MODEL"]
+          assert receipt["candidate"]["model"]["treatment_kind"]==os.environ["HOSTED_TREATMENT_KIND"]
+          assert rc==(0 if receipt["observation"]["success"] else 1)
+          print(json.dumps(receipt,sort_keys=True))
+          print("QUALIFICATION_RESULT=" + ("PASS" if receipt["observation"]["success"] else "FAIL (valid observation)"))
+          PY
+
+      - name: Upload immutable qualification receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hosted-qualification-${{ inputs.candidate }}-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
+          path: ${{ env.RECEIPT }}
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Remove staged provider credential
+        if: always()
+        shell: bash
+        run: rm -f "$HOSTED_KEY_FILE"
