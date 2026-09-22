@@ -38,6 +38,43 @@ def tree_digest(root: Path) -> str:
     return "sha256:" + hasher.hexdigest()
 
 
+def snapshot_allowed_outputs(
+    workdir: Path, allowed_paths: list[str], snapshot_dir: Path
+) -> dict[str, object]:
+    """Copy only declared task outputs out of the disposable workspace.
+
+    The snapshot is evidence, not acceptance. Missing outputs are recorded rather
+    than synthesized, and source/fixture files are never copied implicitly.
+    """
+    root = workdir.resolve()
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    files: dict[str, object] = {}
+    for relative in allowed_paths:
+        source = (workdir / relative).resolve()
+        try:
+            source.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"allowed output escapes workspace: {relative}") from exc
+        if not source.is_file():
+            files[relative] = {"present": False}
+            continue
+        data = source.read_bytes()
+        target = snapshot_dir / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        files[relative] = {
+            "present": True,
+            "sha256": sha256_bytes(data),
+            "size_bytes": len(data),
+        }
+    manifest = {"schema_version": 1, "files": files}
+    (snapshot_dir / "snapshot_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
 def engine_error_types(stdout: str) -> list[str]:
     out: list[str] = []
     for line in stdout.splitlines():
@@ -373,6 +410,11 @@ def main() -> int:
         type=Path,
         help="Optional bounded raw diagnostics file. Use only on credential-free qualification reps.",
     )
+    parser.add_argument(
+        "--snapshot-dir",
+        type=Path,
+        help="Optional evidence directory for copies of only task-declared allowed outputs.",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -536,6 +578,13 @@ def main() -> int:
                 json.dumps(diagnostics, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+        if args.snapshot_dir is not None:
+            snapshot = snapshot_allowed_outputs(
+                workdir,
+                list(task.get("allowed_write_paths") or []),
+                args.snapshot_dir,
+            )
+            print("MODEL_SPELUNKER_OUTPUT_SNAPSHOT=" + json.dumps(snapshot, sort_keys=True))
         print(json.dumps(receipt, sort_keys=True))
         return 0 if success else 1
 
