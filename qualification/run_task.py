@@ -278,6 +278,8 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
     service_tiers: set[str] = set()
     provider_reported_cost_total = 0.0
     provider_cost_seen = False
+    is_byok_values: set[bool] = set()
+    provider_metadata_errors: set[str] = set()
     native_totals = {
         "native_prompt_tokens_total": 0,
         "native_completion_tokens_total": 0,
@@ -297,6 +299,10 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         if isinstance(tier, str) and tier:
             service_tiers.add(tier)
 
+        metadata_error = item.get("openrouter_generation_error")
+        if isinstance(metadata_error, str) and metadata_error:
+            provider_metadata_errors.add(metadata_error)
+
         generation = item.get("openrouter_generation")
         if isinstance(generation, dict):
             provider = generation.get("provider_name")
@@ -308,6 +314,9 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
             generation_tier = generation.get("service_tier")
             if isinstance(generation_tier, str) and generation_tier:
                 service_tiers.add(generation_tier)
+            is_byok = generation.get("is_byok")
+            if isinstance(is_byok, bool):
+                is_byok_values.add(is_byok)
 
             cost = generation.get("total_cost")
             if isinstance(cost, (int, float)) and cost >= 0:
@@ -339,6 +348,10 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         summary["system_fingerprints"] = sorted(system_fingerprints)
     if service_tiers:
         summary["service_tiers"] = sorted(service_tiers)
+    if is_byok_values:
+        summary["is_byok_values"] = sorted(is_byok_values)
+    if provider_metadata_errors:
+        summary["provider_metadata_errors"] = sorted(provider_metadata_errors)
     if provider_cost_seen:
         summary["provider_reported_cost_total"] = round(provider_reported_cost_total, 12)
     for key, value in native_totals.items():
