@@ -147,9 +147,22 @@ jobs:
           snapshot="$("$venv/bin/python" "$resolve" | tail -1)"
           test -d "$snapshot"
           model="$snapshot/model.safetensors"
-          test -s "$model"
-          test "$(stat -f %z "$model")" = "$MODEL_SAFETENSORS_BYTES"
-          echo "$MODEL_SAFETENSORS_SHA256  $model" | shasum -a 256 -c -
+          test -e "$model"
+          MODEL_FILE="$model" "$venv/bin/python" - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          path=Path(os.environ["MODEL_FILE"])
+          resolved=path.resolve()
+          h=hashlib.sha256()
+          with resolved.open("rb") as stream:
+              for chunk in iter(lambda: stream.read(1024*1024), b""):
+                  h.update(chunk)
+          actual_bytes=resolved.stat().st_size
+          actual_sha=h.hexdigest()
+          assert actual_bytes==int(os.environ["MODEL_SAFETENSORS_BYTES"]), (actual_bytes, os.environ["MODEL_SAFETENSORS_BYTES"])
+          assert actual_sha==os.environ["MODEL_SAFETENSORS_SHA256"], actual_sha
+          print("PASS pinned model artifact", actual_bytes, actual_sha)
+          PY
 
           "$venv/bin/python" - <<'PY'
           import mlx.core as mx
