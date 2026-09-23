@@ -24,7 +24,7 @@ import aisuite as ai
 
 from coworker.engine import ApprovalOutcome, PermissionRequest, TurnEngine
 from coworker.permissions import PermissionEngine
-from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient
+from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient, StreamChunk
 from coworker.providers.router import ProviderRouter
 from coworker.tools import ToolRegistry
 
@@ -254,6 +254,24 @@ class CapabilityEnforcingProvider(ProviderClient):
         tools: Optional[list[dict[str, Any]]] = None,
         **settings: Any,
     ):
+        if (
+            _PROVIDER == "openrouter"
+            and os.environ.get("MODEL_SPELUNKER_OPENROUTER_TRANSPORT") == "complete-for-provenance"
+        ):
+            # The pinned OpenWorker streaming compat provider reconstructs the final
+            # AssistantTurn without raw response metadata. OpenRouter route provenance
+            # depends on response id/model/provider, so use the provider's existing
+            # non-streaming complete() path for this explicitly distinct treatment.
+            yield StreamChunk(
+                turn=self.complete(
+                    model=model,
+                    messages=messages,
+                    tools=tools,
+                    **settings,
+                )
+            )
+            return
+
         started = time.monotonic()
         first_event_at: float | None = None
         for chunk in self.delegate.stream(
