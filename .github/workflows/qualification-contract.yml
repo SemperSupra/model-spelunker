@@ -157,6 +157,12 @@ jobs:
       - name: Self-test Foundry hosted-realization projection
         run: PYTHONPATH=. python qualification/test_export_hosted_realization.py
 
+      - name: Verify prebuilt actor/admission bindings
+        run: PYTHONPATH=. python qualification/check_admitted_actor_bindings.py
+
+      - name: Self-test venue-portability receipt comparator
+        run: PYTHONPATH=. python qualification/test_compare_portable_receipts.py
+
       - name: Reduce current actor qualification evidence
         run: |
           PYTHONPATH=. python qualification/reduce_evidence.py \

@@ -1,0 +1,129 @@
+name: Qualification Portability Rehearsal
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/**'
+      - '.github/workflows/qualification-portability-rehearsal.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualification-portability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-vs-container:
+    name: Native GHA vs local-shaped container contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Run native contract rep
+        shell: bash
+        env:
+          NATIVE_RECEIPT: ${{ runner.temp }}/qualification-native.json
+        run: |
+          set -euo pipefail
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-native-contract-rehearsal \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            qualification/tasks/text-repair-v0 \
+            qualification/test-candidate.json \
+            "$NATIVE_RECEIPT" \
+            -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
+
+      - name: Run same rep in constrained local-shaped container
+        shell: bash
+        env:
+          CONTAINER_RECEIPT: ${{ runner.temp }}/qualification-container.json
+          CONTAINER_IMAGE: python:3.12-slim-bookworm
+        run: |
+          set -euo pipefail
+          docker info >/dev/null
+          docker pull "$CONTAINER_IMAGE" >/dev/null
+          image_ref="$(docker inspect --format '{{index .RepoDigests 0}}' "$CONTAINER_IMAGE")"
+          printf '%s\n' "$image_ref" > "$RUNNER_TEMP/qualification-portability-container-image.txt"
+
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            -v "$RUNNER_TEMP:/out:rw" \
+            -w /repo \
+            "$CONTAINER_IMAGE" \
+            /bin/sh -ec '
+              if env | grep -q "^GITHUB_"; then
+                echo "unexpected GitHub-specific environment leaked into portable execution" >&2
+                exit 2
+              fi
+              test ! -e /var/run/docker.sock
+              python qualification/run_task.py \
+                --task-commit "'"$GITHUB_SHA"'" \
+                --substrate-profile-id container-local-shape-contract-rehearsal \
+                --substrate-profile-commit "'"$GITHUB_SHA"'" \
+                qualification/tasks/text-repair-v0 \
+                qualification/test-candidate.json \
+                /out/qualification-container.json \
+                -- python /repo/qualification/test_candidate.py
+            '
+
+          test -s "$CONTAINER_RECEIPT"
+
+      - name: Validate and compare portable receipts
+        shell: bash
+        env:
+          NATIVE_RECEIPT: ${{ runner.temp }}/qualification-native.json
+          CONTAINER_RECEIPT: ${{ runner.temp }}/qualification-container.json
+          SUMMARY: ${{ runner.temp }}/qualification-portability-summary.json
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          import jsonschema
+
+          schema=json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          for name in ("NATIVE_RECEIPT","CONTAINER_RECEIPT"):
+              receipt=json.loads(Path(os.environ[name]).read_text())
+              jsonschema.validate(receipt,schema)
+          print("PASS both venue-shaped receipts validate")
+          PY
+
+          PYTHONPATH=. python qualification/compare_portable_receipts.py \
+            "$NATIVE_RECEIPT" \
+            "$CONTAINER_RECEIPT" \
+            --output "$SUMMARY"
+
+          cat "$RUNNER_TEMP/qualification-portability-container-image.txt"
+          cat "$SUMMARY"
+
+      - name: Run fail-closed portability unit controls
+        run: PYTHONPATH=. python qualification/test_compare_portable_receipts.py
+
+      - name: Upload bounded rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qualification-portability-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qualification-native.json
+            ${{ runner.temp }}/qualification-container.json
+            ${{ runner.temp }}/qualification-portability-summary.json
+            ${{ runner.temp }}/qualification-portability-container-image.txt
+          if-no-files-found: ignore
+          retention-days: 30
