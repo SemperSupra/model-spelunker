@@ -1,15 +1,6 @@
 name: Visual Concept Worker macOS MPS Qualification
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'scripts/visual_concept_worker_core.py'
-      - 'scripts/visual_concept_worker_ringer.py'
-      - 'config/visual-concept-worker-public-safe.json'
-      - 'config/visual-concept-worker-public-safe-siglip.json'
-      - '.github/workflows/visual-concept-worker-macos-mps.yml'
   workflow_dispatch:
 
 permissions:
