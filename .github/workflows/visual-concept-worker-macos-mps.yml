@@ -25,9 +25,6 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        runner:
-          - macos-26
-          - xcode-27
         include:
           - runner: macos-26
             analyzer: clip
