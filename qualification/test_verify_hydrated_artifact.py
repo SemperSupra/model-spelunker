@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from qualification.verify_hydrated_artifact import verify
+from verify_hydrated_artifact import verify
 
 
 def digest(data: bytes) -> str:
