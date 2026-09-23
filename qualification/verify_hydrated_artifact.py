@@ -38,8 +38,17 @@ def verify(root: Path, admission: dict, manifest_digest: str | None=None) -> int
         raise ValueError(f"build receipt digest mismatch: {actual_build} != {expected_build}")
 
     receipt=json.loads(build_receipt.read_text(encoding="utf-8"))
-    if receipt["harness"]["name"]!=admission["harness"]["name"]:
+    # Older/Linux build receipts carry an explicit harness identity. The accepted
+    # macOS characterization receipt predates that field but is already bound by
+    # the admission's exact build-receipt digest. Preserve the stronger explicit
+    # check when present; otherwise require target consistency when available.
+    receipt_harness=(receipt.get("harness") or {}).get("name")
+    if receipt_harness is not None and receipt_harness!=admission["harness"]["name"]:
         raise ValueError("harness name mismatch")
+    receipt_target=(receipt.get("build") or {}).get("target")
+    admission_target=(admission.get("admission") or {}).get("target")
+    if receipt_target is not None and admission_target is not None and receipt_target!=admission_target:
+        raise ValueError(f"build target mismatch: {receipt_target} != {admission_target}")
 
     checked=0
     for row in receipt["payload"]["files"]:
