@@ -70,17 +70,29 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     if bool(obs.get("success")):
         return "pass"
     workload = obs.get("workload") or {}
-    engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in set(
-        obs.get("failure_signals") or []
-    )
+    signals = set(obs.get("failure_signals") or [])
+    engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
+    validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
     zero_round_nonterminal = (
         not obs.get("success", False)
         and workload.get("model_rounds") == 0
     )
-    return "incomplete" if engine_error or zero_round_nonterminal else "fail"
+    return "incomplete" if engine_error or validator_error or zero_round_nonterminal else "fail"
 
 
 def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen_runs: dict[str, str] = {}
+    for receipt in deduped:
+        run_id = receipt["run_id"]
+        fingerprint = digest(receipt)
+        prior = seen_runs.get(run_id)
+        if prior is None:
+            seen_runs[run_id] = fingerprint
+            deduped.append(receipt)
+        elif prior != fingerprint:
+            raise ValueError(f"duplicate run_id with divergent receipt: {run_id}")
+
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     actor_records: dict[str, dict[str, Any]] = {}
 
