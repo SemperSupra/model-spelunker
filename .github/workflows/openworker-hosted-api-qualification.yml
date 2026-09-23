@@ -1,22 +1,17 @@
 name: OpenWorker Hosted API Qualification
 
 on:
-  workflow_dispatch:
-    inputs:
-      candidate:
-        description: Candidate id from qualification/models/hosted-api.json
-        required: true
-        default: groq-gpt-oss-20b
-      task:
-        description: Task id from qualification/tasks
-        required: true
-        default: text-repair-v0
+  push:
+    branches:
+      - exp/gemini-native-provider-crossover
+    paths:
+      - ".github/workflows/openworker-hosted-api-qualification.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: openworker-hosted-api-${{ github.ref }}-${{ inputs.candidate }}
+  group: openworker-hosted-api-${{ github.ref }}-gemini-native-3.7-flash
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +22,7 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
-      QUALIFICATION_TASK: ${{ inputs.task }}
+      QUALIFICATION_TASK: 'validation-discovery-v0'
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
@@ -46,7 +41,7 @@ jobs:
         id: treatment
         shell: bash
         env:
-          REQUESTED_CANDIDATE: ${{ inputs.candidate }}
+          REQUESTED_CANDIDATE: gemini-native-3.7-flash
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -384,7 +379,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: hosted-qualification-${{ inputs.candidate }}-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
+          name: hosted-qualification-gemini-native-3.7-flash-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
           path: ${{ env.RECEIPT }}
           if-no-files-found: ignore
           retention-days: 30
