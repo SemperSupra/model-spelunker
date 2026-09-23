@@ -12,7 +12,8 @@ on:
       - "qualification/run_android_embodied.py"
       - "qualification/run_task.py"
       - "qualification/test_android_embodied.py"
-      - "qualification/tasks/android-settings-24h-hybrid-v0/**"\n      - "qualification/tasks/android-settings-24h-hybrid-v0/**"
+      - "qualification/tasks/android-settings-24h-struct-v0/**"
+      - "qualification/tasks/android-settings-24h-hybrid-v0/**"
   workflow_dispatch:
 
 permissions:
