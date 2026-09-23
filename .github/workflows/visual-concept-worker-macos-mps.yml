@@ -1,0 +1,144 @@
+name: Visual Concept Worker macOS MPS Qualification
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/visual_concept_worker_core.py'
+      - 'scripts/visual_concept_worker_ringer.py'
+      - 'config/visual-concept-worker-public-safe.json'
+      - 'config/visual-concept-worker-public-safe-siglip.json'
+      - '.github/workflows/visual-concept-worker-macos-mps.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-concept-macos-mps-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-workload:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        runner:
+          - macos-26
+          - xcode-27
+        include:
+          - runner: macos-26
+            analyzer: clip
+            config: config/visual-concept-worker-public-safe.json
+          - runner: macos-26
+            analyzer: siglip
+            config: config/visual-concept-worker-public-safe-siglip.json
+          - runner: xcode-27
+            analyzer: clip
+            config: config/visual-concept-worker-public-safe.json
+          - runner: xcode-27
+            analyzer: siglip
+            config: config/visual-concept-worker-public-safe-siglip.json
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned inference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input             torch==2.14.0             transformers==5.17.0             pillow==12.3.0             requests==2.34.2             sentencepiece==0.2.2             protobuf==7.36.1
+
+      - name: Require MPS without CPU fallback
+        shell: bash
+        env:
+          PYTORCH_ENABLE_MPS_FALLBACK: '0'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, torch
+          evidence={
+              "torch":torch.__version__,
+              "is_built":torch.backends.mps.is_built(),
+              "is_available":torch.backends.mps.is_available(),
+              "fallback":os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"),
+          }
+          print(json.dumps(evidence,sort_keys=True))
+          assert evidence["is_built"] is True
+          assert evidence["is_available"] is True
+          assert evidence["fallback"]=="0"
+          PY
+
+      - name: Execute existing public Visual Concept Worker on MPS
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+          PYTORCH_ENABLE_MPS_FALLBACK: '0'
+          VISUAL_CONCEPT_DEVICE: mps
+          CANDIDATE_CONFIG: ${{ matrix.config }}
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_worker_ringer.py             --config "$CANDIDATE_CONFIG"             --output "$RUNNER_TEMP/visual-concept-worker-mps.json"
+
+      - name: Validate existing workload contract plus MPS placement
+        shell: bash
+        env:
+          CANDIDATE_CONFIG: ${{ matrix.config }}
+          CANDIDATE_NAME: ${{ matrix.analyzer }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          cfg=json.loads(Path(os.environ["CANDIDATE_CONFIG"]).read_text())
+          result=json.loads((Path(os.environ["RUNNER_TEMP"])/"visual-concept-worker-mps.json").read_text())
+          assert result["schema_version"]=="visual_concept_worker_run.v0.1"
+          assert result["execution_lane"]=="public-ringer"
+          assert result["candidate"]["backend_family"]==os.environ["CANDIDATE_NAME"]
+          assert result["candidate"]["candidate_digest"]
+          assert result["input"]["sha256"]
+          assert result["observations"]
+          assert result["observations"][0]["label"] in cfg["expected_top_labels"], result["observations"][:3]
+          assert result["safeguards"]["ground_truth"] is False
+          assert result["safeguards"]["semantic_authority"] is False
+          assert result["public_ringer"]["private_benchmark_content_present"] is False
+          assert result["public_ringer"]["private_semantic_authority_present"] is False
+          runtime=result["runtime"]
+          assert runtime["device"]=="mps"
+          assert runtime["model_device"].startswith("mps")
+          assert runtime["mps_built"] is True
+          assert runtime["mps_available"] is True
+          assert runtime["mps_fallback_env"]=="0"
+          for obs in result["observations"]:
+              assert obs["evidence"][0]["metadata"]["execution_device"]=="mps"
+          print(json.dumps({
+              "status":"SUPPORTED",
+              "runner":os.environ.get("RUNNER_NAME"),
+              "candidate":os.environ["CANDIDATE_NAME"],
+              "top3":[x["label"] for x in result["observations"][:3]],
+              "runtime":runtime,
+          },sort_keys=True))
+          PY
+
+      - name: Upload public-safe workload receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: visual-concept-mps-${{ matrix.runner }}-${{ matrix.analyzer }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/visual-concept-worker-mps.json
+          if-no-files-found: error
+          retention-days: 7
