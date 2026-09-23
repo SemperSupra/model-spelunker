@@ -1,0 +1,32 @@
+{
+  "schema_version": 2,
+  "id": "container-local-shape-contract-rehearsal",
+  "venue": {
+    "kind": "local",
+    "persistence": "ephemeral"
+  },
+  "platform": {
+    "os": "debian-12",
+    "arch": "x64"
+  },
+  "isolation": {
+    "process_scope": "container",
+    "filesystem_scope": "ephemeral-workspace",
+    "network_scope": "isolated"
+  },
+  "artifact_consumption": {
+    "oci_registry_pull": false,
+    "digest_verification": false,
+    "hydrate_methods": []
+  },
+  "capabilities": [
+    "shell",
+    "ephemeral-filesystem",
+    "local-process-execution"
+  ],
+  "resources": {
+    "cpu_arch": "x64",
+    "accelerators": []
+  },
+  "notes": "Constrained container test shape used only to expose hidden host assumptions. Not a GARM/local substrate claim."
+}
