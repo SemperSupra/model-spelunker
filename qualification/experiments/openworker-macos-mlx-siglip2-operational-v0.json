@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "openworker-macos-mlx-siglip2-operational-v0",
+  "decision_question": "Can the admitted ARM macOS OpenWorker harness with the locally served Qwen3-4B MLX realization produce a mechanically source-bound first candidate for the real prospective SigLIP 2 Method-IR work sample?",
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v0",
+    "task_class": "research.method-evidence-binding"
+  },
+  "actors": [
+    "openworker-qwen3-4b-gha-macos-mlx"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "siglip2-source-packet",
+    "task-profile",
+    "openworker-admitted-artifact",
+    "qwen3-4b-model-revision",
+    "mlx-lm-version",
+    "macos-26-runner-class",
+    "task-projected-tool-surface",
+    "memory-hygiene-control"
+  ],
+  "variable_under_test": "first-real-operational-configured-actor-observation-on-macos-mlx",
+  "stop_conditions": [
+    "source-hydration-integrity-failure",
+    "artifact-integrity-failure",
+    "model-artifact-drift",
+    "unexpected-authority-expansion",
+    "validator-error",
+    "held-out-boundary-regression"
+  ]
+}
