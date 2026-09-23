@@ -330,6 +330,10 @@ async def run(instruction: str) -> int:
         "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1"),
         "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
         "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
+        "mlx": (
+            "MODEL_SPELUNKER_MLX_API_KEY",
+            os.environ.get("MODEL_SPELUNKER_MLX_BASE_URL", "http://127.0.0.1:8080/v1"),
+        ),
     }
     if _PROVIDER in compatible:
         from coworker.providers.openai_provider import OpenAIProvider
