@@ -70,6 +70,8 @@ jobs:
               "HOSTED_EXTRA_BODY_JSON": json.dumps(candidate.get("extra_body") or {},sort_keys=True,separators=(",",":")),
               "MODEL_SPELUNKER_MODEL": f'{candidate["provider"]}:{candidate["model"]}',
               "MODEL_SPELUNKER_REASONING_EFFORT": candidate["reasoning_effort"],
+              "MODEL_SPELUNKER_TRANSPORT_MODE": ("complete-for-provenance" if candidate["provider"] == "openrouter" else "streaming"),
+              "MODEL_SPELUNKER_OPENROUTER_TRANSPORT": ("complete-for-provenance" if candidate["provider"] == "openrouter" else ""),
           }
           with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as env:
               for key,value in values.items():
@@ -259,6 +261,7 @@ jobs:
               "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
               "max_iterations":4,
               "api_base":os.environ["HOSTED_API_BASE"],
+              "transport_mode":os.environ["MODEL_SPELUNKER_TRANSPORT_MODE"],
               "cost_class":os.environ["HOSTED_COST_CLASS"],
               "provider_alias_semantics":"hosted mutable service",
           }
