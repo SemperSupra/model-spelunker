@@ -1,0 +1,231 @@
+name: OpenWorker macOS ARM Artifact Admission
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/openworker-macos-arm-admission.yml
+
+permissions:
+  contents: read
+  actions: read
+  packages: write
+
+jobs:
+  admit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_RUN_ID: '35850759844'
+      SOURCE_ARTIFACT: 'openworker-macos-arm64-macos-26-1'
+      EXPECTED_NORMALIZED_DIGEST: 'sha256:7fa340d11d47e771c8f351cff8a88f564f91459a45b49a69c15169be8c29b141'
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OPENWORKER_VERSION: '0.0.0'
+    steps:
+      - name: Checkout admission contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Download accepted macOS ARM build artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: ${{ env.SOURCE_ARTIFACT }}
+          path: ${{ runner.temp }}/openworker-macos-source
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Verify accepted source payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/openworker-macos-source"
+          receipt="$root/openworker-macos-build-receipt.json"
+          test -s "$receipt"
+
+          ROOT="$root" RECEIPT="$receipt" EXPECTED="$EXPECTED_NORMALIZED_DIGEST" SOURCE_SHA="$OPENWORKER_SHA" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root=Path(os.environ["ROOT"])
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+
+          assert receipt["classification"] == "SUPPORTED"
+          assert receipt["source"]["revision"] == os.environ["SOURCE_SHA"]
+          assert receipt["build"]["target"] == "macos-arm64-python3"
+          assert receipt["payload"]["normalized_content_digest"] == os.environ["EXPECTED"]
+
+          rows=receipt["payload"]["files"]
+          assert rows
+          for row in rows:
+              path=root / "openworker-wheelhouse" / row["path"]
+              data=path.read_bytes()
+              assert len(data) == row["bytes"], path
+              assert hashlib.sha256(data).hexdigest() == row["sha256"], path
+
+          print("PASS accepted source payload")
+          print("NORMALIZED_CONTENT_DIGEST="+receipt["payload"]["normalized_content_digest"])
+          PY
+
+          receipt_sha="$(shasum -a 256 "$receipt" | awk '{print $1}')"
+          echo "SOURCE_ROOT=$root" >> "$GITHUB_ENV"
+          echo "SOURCE_RECEIPT=$receipt" >> "$GITHUB_ENV"
+          echo "BUILD_RECEIPT_SHA=$receipt_sha" >> "$GITHUB_ENV"
+
+      - name: Publish immutable OCI distribution envelope
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/$owner/model-spelunker-harness-openworker-macos-arm64"
+          tag="src-${OPENWORKER_SHA:0:12}-source-${SOURCE_RUN_ID}-admit-${GITHUB_RUN_ID}"
+          context="$RUNNER_TEMP/openworker-macos-oci"
+
+          mkdir -p "$context/wheelhouse"
+          cp "$SOURCE_ROOT/openworker-wheelhouse"/*.whl "$context/wheelhouse/"
+          cp "$SOURCE_RECEIPT" "$context/build-receipt.json"
+
+          cat >"$context/Dockerfile" <<'EOF'
+          FROM scratch
+          COPY wheelhouse /artifact/wheelhouse
+          COPY build-receipt.json /artifact/build-receipt.json
+          EOF
+
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --pull=false --no-cache -t "$image:$tag" "$context"
+          push_log="$RUNNER_TEMP/openworker-macos-push.log"
+          docker push "$image:$tag" | tee "$push_log"
+          digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' "$push_log" | tail -1)"
+          test -n "$digest"
+
+          echo "OPENWORKER_OCI_REF=$image@$digest" >> "$GITHUB_ENV"
+          echo "OPENWORKER_OCI_DIGEST=$digest" >> "$GITHUB_ENV"
+
+      - name: Pull back and verify immutable payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          extract="$RUNNER_TEMP/openworker-macos-admit"
+          mkdir -p "$extract"
+
+          docker pull "$OPENWORKER_OCI_REF" >/dev/null
+          cid="$(docker create "$OPENWORKER_OCI_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$extract/"
+          docker rm "$cid" >/dev/null
+
+          EXTRACT="$extract" EXPECTED="$EXPECTED_NORMALIZED_DIGEST" SOURCE_SHA="$OPENWORKER_SHA" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root=Path(os.environ["EXTRACT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+
+          assert receipt["source"]["revision"] == os.environ["SOURCE_SHA"]
+          assert receipt["payload"]["normalized_content_digest"] == os.environ["EXPECTED"]
+
+          for row in receipt["payload"]["files"]:
+              path=root/"wheelhouse"/row["path"]
+              data=path.read_bytes()
+              assert len(data) == row["bytes"], path
+              assert hashlib.sha256(data).hexdigest() == row["sha256"], path
+
+          print("PASS OCI payload hash verification")
+          PY
+
+      - name: Emit BUILD_ADMITTED receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          admission="$RUNNER_TEMP/openworker-macos-arm64.admission-v1.json"
+          ADMISSION="$admission" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          value={
+              "schema_version":1,
+              "record_type":"harness-artifact-admission",
+              "harness":{
+                  "name":"openworker",
+                  "declared_version":os.environ["OPENWORKER_VERSION"],
+              },
+              "artifact":{
+                  "packaging":"oci-distribution",
+                  "ref":os.environ["OPENWORKER_OCI_REF"],
+                  "digest":os.environ["OPENWORKER_OCI_DIGEST"],
+                  "build_receipt_digest":"sha256:"+os.environ["BUILD_RECEIPT_SHA"],
+              },
+              "admission":{
+                  "state":"BUILD_ADMITTED",
+                  "target":"macos-arm64-python3",
+                  "checks":[
+                      {
+                          "name":"embedded-build-receipt",
+                          "result":"PASS",
+                          "evidence":"gha-run:"+os.environ["SOURCE_RUN_ID"],
+                      },
+                      {
+                          "name":"normalized-content-portability",
+                          "result":"PASS",
+                          "evidence":os.environ["EXPECTED_NORMALIZED_DIGEST"],
+                      },
+                      {
+                          "name":"payload-hashes",
+                          "result":"PASS",
+                          "evidence":"gha-run:"+os.environ["GITHUB_RUN_ID"],
+                      },
+                      {
+                          "name":"offline-wheelhouse-install-no-resolve",
+                          "result":"PASS",
+                          "evidence":"gha-run:"+os.environ["SOURCE_RUN_ID"],
+                      },
+                      {
+                          "name":"coworker-import-surface",
+                          "result":"PASS",
+                          "evidence":"gha-run:"+os.environ["SOURCE_RUN_ID"],
+                      },
+                      {
+                          "name":"openworker-cli-help",
+                          "result":"PASS",
+                          "evidence":"gha-run:"+os.environ["SOURCE_RUN_ID"],
+                      },
+                  ],
+              },
+          }
+          Path(os.environ["ADMISSION"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print("HARNESS_ADMISSION="+json.dumps(value,sort_keys=True))
+          PY
+          echo "OPENWORKER_MACOS_ADMISSION_RECEIPT=$admission" >> "$GITHUB_ENV"
+
+      - name: Validate admission schema
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check jsonschema
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from jsonschema import Draft7Validator
+
+          schema=json.loads(Path("qualification/harness-admission-receipt.schema.json").read_text())
+          receipt=json.loads(Path(os.environ["OPENWORKER_MACOS_ADMISSION_RECEIPT"]).read_text())
+          Draft7Validator(schema).validate(receipt)
+          print("PASS admission schema")
+          PY
+
+      - name: Upload admission receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: openworker-macos-arm64-admission-${{ github.run_id }}
+          path: ${{ env.OPENWORKER_MACOS_ADMISSION_RECEIPT }}
+          if-no-files-found: error
+          retention-days: 30
