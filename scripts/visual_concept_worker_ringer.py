@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 from typing import Any, Sequence
@@ -25,8 +26,18 @@ class PublicHFScorer:
         self.prompt_template = config.get("parameters", {}).get("prompt_template", "a photo of a {}")
         self.score_transform = config.get("parameters", {}).get("score_transform", "softmax")
         self.text_padding = config.get("parameters", {}).get("text_padding", True)
+        requested_device = os.environ.get("VISUAL_CONCEPT_DEVICE", "cpu").strip().lower()
+        if requested_device == "mps":
+            if not torch.backends.mps.is_built() or not torch.backends.mps.is_available():
+                raise RuntimeError("explicit MPS execution requested but MPS is unavailable")
+            self.device = torch.device("mps")
+        elif requested_device == "cpu":
+            self.device = torch.device("cpu")
+        else:
+            raise RuntimeError(f"unsupported VISUAL_CONCEPT_DEVICE: {requested_device}")
         self.processor = AutoProcessor.from_pretrained(self.model_id, revision=self.model_revision)
         self.model = AutoModelForZeroShotImageClassification.from_pretrained(self.model_id, revision=self.model_revision)
+        self.model.to(self.device)
         self.model.eval()
 
     def _transform(self, logits: torch.Tensor) -> torch.Tensor:
@@ -43,9 +54,18 @@ class PublicHFScorer:
         labels = [str(item["label"]) for item in concepts]
         prompts = [self.prompt_template.format(label) for label in labels]
         inputs = self.processor(text=prompts, images=image, return_tensors="pt", padding=self.text_padding)
+        inputs = {
+            key: value.to(self.device) if isinstance(value, torch.Tensor) else value
+            for key, value in inputs.items()
+        }
         with torch.inference_mode():
             outputs = self.model(**inputs)
-        logits = outputs.logits_per_image[0].float()
+        device_logits = outputs.logits_per_image[0]
+        if device_logits.device.type != self.device.type:
+            raise RuntimeError(
+                f"backend device drift: logits on {device_logits.device}, expected {self.device}"
+            )
+        logits = device_logits.float().cpu()
         scores = self._transform(logits)
         return [
             BackendScore(
@@ -53,7 +73,11 @@ class PublicHFScorer:
                 concept_id=concepts[i].get("concept_id"),
                 score=float(scores[i].item()),
                 raw_score=float(logits[i].item()),
-                metadata={"prompt": prompts[i], "score_transform": self.score_transform},
+                metadata={
+                    "prompt": prompts[i],
+                    "score_transform": self.score_transform,
+                    "execution_device": self.device.type,
+                },
             )
             for i in range(len(labels))
         ]
@@ -102,6 +126,14 @@ def main() -> int:
         "public_safe": True,
         "private_benchmark_content_present": False,
         "private_semantic_authority_present": False,
+    }
+    result["runtime"] = {
+        "torch": torch.__version__,
+        "device": scorer.device.type,
+        "model_device": str(next(scorer.model.parameters()).device),
+        "mps_built": bool(torch.backends.mps.is_built()),
+        "mps_available": bool(torch.backends.mps.is_available()),
+        "mps_fallback_env": os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"),
     }
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
