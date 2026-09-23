@@ -74,6 +74,15 @@
         }
       },
       "route_note": "OpenRouter pinned to DeepSeek with provider fallback disabled. Direct DeepSeek deepseek-flash currently maps to DeepSeek-V4.1-Flash; exact provider-served realization remains receipt/provenance evidence."
+    },
+    "gemini-native-3.7-flash": {
+      "treatment_kind": "model",
+      "provider": "gemini",
+      "model": "gemini-3.7-flash",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta",
+      "reasoning_effort": "omit",
+      "cost_class": "free-tier-account",
+      "route_note": "Native Google GenAI provider path through pinned OpenWorker GeminiProvider; same account key as Google OpenAI-compat treatment."
     }
   }
 }
