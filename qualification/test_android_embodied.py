@@ -7,7 +7,8 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "qualification" / "adapters" / "android_mobile_tools.py"
-TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-struct-v0"\nHYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-v0"
+TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-struct-v0"
+HYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-v0"
 
 
 def load_tools():
