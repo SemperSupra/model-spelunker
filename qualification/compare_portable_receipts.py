@@ -78,16 +78,69 @@ def compare(native: dict[str, Any], alternate: dict[str, Any]) -> dict[str, Any]
     }
 
 
+
+def compare_structural(native: dict[str, Any], alternate: dict[str, Any]) -> dict[str, Any]:
+    """Compare stochastic actor reps without pretending their traces are byte-identical."""
+    if native.get("schema_version") != alternate.get("schema_version"):
+        fail("schema_version drift")
+
+    ntask=native["task"]
+    atask=alternate["task"]
+    for field in ("id","task_class","package_digest"):
+        if ntask.get(field)!=atask.get(field):
+            fail(f"task.{field} drift")
+
+    if native.get("candidate") != alternate.get("candidate"):
+        fail("candidate drift")
+
+    nobs=native["observation"]
+    aobs=alternate["observation"]
+    structural_fields=(
+        "success",
+        "failure_class",
+        "timed_out",
+        "state_changed",
+        "failure_signals",
+        "engine_error_types",
+    )
+    observed_differences={
+        field:{"native":nobs.get(field),"alternate":aobs.get(field)}
+        for field in structural_fields
+        if nobs.get(field)!=aobs.get(field)
+    }
+    return {
+        "schema_version":1,
+        "mode":"stochastic-structural",
+        "identity_match":True,
+        "structural_outcome_match":not observed_differences,
+        "task_id":ntask["id"],
+        "task_package_digest":ntask["package_digest"],
+        "candidate_configuration_digest":native["candidate"]["configuration_digest"],
+        "native_substrate":native["substrate"],
+        "alternate_substrate":alternate["substrate"],
+        "observed_differences":observed_differences,
+        "notes":[
+            "Token counts, wall time, model rounds, tool counts, and output traces are observations rather than equality gates.",
+            "A structural outcome difference is experiment evidence; it is not automatically a methodology failure.",
+        ],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("native", type=Path)
     parser.add_argument("alternate", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--mode", choices=["deterministic","stochastic-structural"], default="deterministic")
     args = parser.parse_args()
 
     native = json.loads(args.native.read_text(encoding="utf-8"))
     alternate = json.loads(args.alternate.read_text(encoding="utf-8"))
-    result = compare(native, alternate)
+    result = (
+        compare(native, alternate)
+        if args.mode == "deterministic"
+        else compare_structural(native, alternate)
+    )
     payload = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
