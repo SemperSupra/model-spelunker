@@ -331,7 +331,17 @@ async def run(instruction: str) -> int:
         "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
         "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
     }
-    if _PROVIDER in compatible:
+    local_base_url = os.environ.get("MODEL_SPELUNKER_OPENAI_BASE_URL", "").strip()
+    if local_base_url:
+        from urllib.parse import urlparse
+        from coworker.providers.openai_provider import OpenAIProvider
+
+        parsed = urlparse(local_base_url)
+        if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise RuntimeError("MODEL_SPELUNKER_OPENAI_BASE_URL must be a loopback HTTP endpoint")
+        delegate = OpenAIProvider(api_key="local-not-needed", base_url=local_base_url)
+        engine_model = _BARE_MODEL
+    elif _PROVIDER in compatible:
         from coworker.providers.openai_provider import OpenAIProvider
 
         key_name, base_url = compatible[_PROVIDER]
