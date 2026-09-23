@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from copy import deepcopy
 
-from qualification.compare_portable_receipts import compare
+from qualification.compare_portable_receipts import compare, compare_structural
 
 
 def receipt(profile_id: str, run_id: str) -> dict:
@@ -86,3 +86,23 @@ else:
     raise AssertionError("same substrate id did not fail closed")
 
 print("PASS portable receipt comparator")
+
+
+stochastic_native = receipt("gha-actor", "run-stochastic-a")
+stochastic_alt = receipt("local-actor", "run-stochastic-b")
+stochastic_alt["observation"]["wall_seconds"] = 9.9
+stochastic_alt["observation"]["workload"]["model_rounds"] = 3
+stochastic_alt["observation"]["tool_calls"] = 2
+structural = compare_structural(stochastic_native, stochastic_alt)
+assert structural["identity_match"] is True
+assert structural["structural_outcome_match"] is True
+
+stochastic_alt["observation"]["success"] = False
+stochastic_alt["observation"]["failure_class"] = "timeout"
+stochastic_alt["observation"]["timed_out"] = True
+structural = compare_structural(stochastic_native, stochastic_alt)
+assert structural["identity_match"] is True
+assert structural["structural_outcome_match"] is False
+assert "success" in structural["observed_differences"]
+assert "failure_class" in structural["observed_differences"]
+print("PASS stochastic structural comparator preserves differences as evidence")
