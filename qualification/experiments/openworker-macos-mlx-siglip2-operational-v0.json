@@ -2,11 +2,9 @@
   "schema_version": 1,
   "id": "openworker-macos-mlx-siglip2-operational-v0",
   "decision_question": "Can the admitted ARM macOS OpenWorker harness with the locally served Qwen3-4B MLX realization produce a mechanically source-bound first candidate for the real prospective SigLIP 2 Method-IR work sample?",
-  "evidence_mode": "operational",
   "task": {
     "id": "method-ir-siglip2-b16-256-v0",
-    "task_class": "research.method-evidence-binding",
-    "authority_ref": "SemperSupra/model-spelunker#72"
+    "task_class": "research.method-evidence-binding"
   },
   "actors": [
     "openworker-qwen3-4b-gha-macos-mlx"
@@ -34,6 +32,5 @@
     "unexpected-authority-expansion",
     "validator-error",
     "held-out-boundary-regression"
-  ],
-  "acceptance_boundary": "Mechanical source-binding pass creates immutable C1 only. Scientific acceptance requires independent Method-IR project reconciliation before downstream use."
+  ]
 }
