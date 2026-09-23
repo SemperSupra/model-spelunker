@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "id": "openworker-macos-mlx-text-repair-v0",
+  "decision_question": "Can the admitted OpenWorker macOS ARM harness plus pinned Qwen3-4B MLX local inference complete the frozen bounded-repair task on each standard ARM macOS runner image without authority expansion or cache-purge treatment?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-4b-macos26-mlx",
+    "openworker-prebuilt-qwen3-4b-xcode27-mlx"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-admitted-artifact",
+    "model-artifact",
+    "mlx-lm-version",
+    "task-profile",
+    "task-projected-tool-surface",
+    "memory-hygiene-control"
+  ],
+  "variable_under_test": "github-hosted-arm-macos-runner-image",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "unexpected-authority-expansion",
+    "model-artifact-drift",
+    "validator-error",
+    "environment-resource-failure"
+  ]
+}
