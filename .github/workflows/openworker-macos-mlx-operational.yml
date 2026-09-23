@@ -6,6 +6,8 @@ on:
       - exp/mlx-tool-call-preflight-qwen3-4b
     paths:
       - qualification/adapters/openworker_projected.py
+      - qualification/verify_hydrated_artifact.py
+      - qualification/test_verify_hydrated_artifact.py
       - qualification/actors/openworker-qwen3-4b-gha-macos-mlx.json
       - qualification/experiments/openworker-macos-mlx-siglip2-operational-v0.json
       - qualification/tasks/method-ir-siglip2-b16-256-v0/**
@@ -64,6 +66,12 @@ jobs:
             brew install skopeo
           fi
           skopeo --version
+
+      - name: Verify portable artifact contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/test_verify_hydrated_artifact.py
 
       - name: Hydrate admitted OpenWorker artifact
         shell: bash
