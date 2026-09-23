@@ -7,7 +7,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "qualification" / "adapters" / "android_mobile_tools.py"
-TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-struct-v0"
+TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-struct-v0"\nHYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-v0"
 
 
 def load_tools():
@@ -35,6 +35,18 @@ class AndroidEmbodiedContractTests(unittest.TestCase):
         self.assertNotIn("adb", tools)
         self.assertNotIn("mobile_open_section", tools)
         self.assertEqual(task["allowed_write_paths"], ["result.json"])
+
+    def test_hybrid_changes_only_the_bounded_action_surface(self):
+        structural = json.loads((TASK / "task.json").read_text(encoding="utf-8"))
+        hybrid = json.loads((HYBRID_TASK / "task.json").read_text(encoding="utf-8"))
+        structural_tools = set(structural["projected_tools"])
+        hybrid_tools = set(hybrid["projected_tools"])
+        self.assertEqual(
+            hybrid_tools - structural_tools,
+            {"mobile_open_section"},
+        )
+        self.assertEqual(structural["success"], hybrid["success"])
+        self.assertEqual(structural["allowed_write_paths"], hybrid["allowed_write_paths"])
 
     def test_verifier_self_test(self):
         cp = subprocess.run([sys.executable, str(TASK / "verify.py"), "--self-test"], capture_output=True, text=True)

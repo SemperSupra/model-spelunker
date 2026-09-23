@@ -12,7 +12,7 @@ on:
       - "qualification/run_android_embodied.py"
       - "qualification/run_task.py"
       - "qualification/test_android_embodied.py"
-      - "qualification/tasks/android-settings-24h-struct-v0/**"
+      - "qualification/tasks/android-settings-24h-hybrid-v0/**"\n      - "qualification/tasks/android-settings-24h-hybrid-v0/**"
   workflow_dispatch:
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile             qualification/adapters/android_mobile_tools.py             qualification/adapters/android_reference_actor.py             qualification/run_android_embodied.py             qualification/run_task.py
-          python3 qualification/tasks/android-settings-24h-struct-v0/verify.py --self-test
+          python3 qualification/tasks/android-settings-24h-hybrid-v0/verify.py --self-test
           python3 -m unittest -v qualification/test_android_embodied.py
 
   qualify:
@@ -132,7 +132,7 @@ jobs:
           python3 - <<'PY'
           import json, os
           from pathlib import Path
-          task=json.loads(Path("qualification/tasks/android-settings-24h-struct-v0/task.json").read_text())
+          task=json.loads(Path("qualification/tasks/android-settings-24h-hybrid-v0/task.json").read_text())
           candidate={
               "harness":{"name":"openworker","version":os.environ["OPENWORKER_UPSTREAM_SHA"]},
               "model":{
@@ -166,7 +166,7 @@ jobs:
           set -euo pipefail
           export OPENROUTER_API_KEY="$SELECTED_API_KEY"
           set +e
-          python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-struct-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-hybrid-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
           rc=$?
           set -e
           rm -f "$HOSTED_KEY_FILE"
