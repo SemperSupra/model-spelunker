@@ -42,8 +42,6 @@ jobs:
       MODEL_SAFETENSORS_SHA256: '2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f'
       MODEL_SAFETENSORS_BYTES: '2263022417'
       MLX_PORT: '8080'
-      RECEIPT: ${{ runner.temp }}/openworker-macos-mlx/receipt.json
-      DIAGNOSTICS: ${{ runner.temp }}/openworker-macos-mlx/diagnostics.json
       PYTHONDONTWRITEBYTECODE: '1'
 
     steps:
@@ -57,6 +55,8 @@ jobs:
           ACTOR_ID: ${{ matrix.actor }}
         run: |
           set -euo pipefail
+          echo "RECEIPT=$RUNNER_TEMP/openworker-macos-mlx/receipt.json" >> "$GITHUB_ENV"
+          echo "DIAGNOSTICS=$RUNNER_TEMP/openworker-macos-mlx/diagnostics.json" >> "$GITHUB_ENV"
           python3 qualification/tasks/text-repair-v0/verify.py --self-test
           python3 - <<'PY'
           import json, os
@@ -224,8 +224,8 @@ jobs:
         with:
           name: openworker-macos-mlx-${{ matrix.runner }}-${{ github.run_id }}
           path: |
-            ${{ env.RECEIPT }}
-            ${{ env.DIAGNOSTICS }}
+            ${{ runner.temp }}/openworker-macos-mlx/receipt.json
+            ${{ runner.temp }}/openworker-macos-mlx/diagnostics.json
             ${{ runner.temp }}/openworker-macos-mlx/mlx-server-tail.log
           if-no-files-found: warn
           retention-days: 30
