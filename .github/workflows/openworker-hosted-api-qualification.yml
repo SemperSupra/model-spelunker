@@ -1,17 +1,22 @@
 name: OpenWorker Hosted API Qualification
 
 on:
-  push:
-    branches:
-      - exp/execution-failure-triage-v0
-    paths:
-      - ".github/workflows/openworker-hosted-api-qualification.yml"
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Candidate id from qualification/models/hosted-api.json
+        required: true
+        default: groq-gpt-oss-20b
+      task:
+        description: Task id from qualification/tasks
+        required: true
+        default: text-repair-v0
 
 permissions:
   contents: read
 
 concurrency:
-  group: openworker-hosted-api-${{ github.ref }}-nvidia-nemotron-3.5-lightning
+  group: openworker-hosted-api-${{ github.ref }}-${{ inputs.candidate }}
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +27,7 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
-      QUALIFICATION_TASK: 'execution-failure-triage-v0'
+      QUALIFICATION_TASK: ${{ inputs.task }}
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
@@ -41,7 +46,7 @@ jobs:
         id: treatment
         shell: bash
         env:
-          REQUESTED_CANDIDATE: nvidia-nemotron-3.5-lightning
+          REQUESTED_CANDIDATE: ${{ inputs.candidate }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -345,7 +350,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: hosted-qualification-nvidia-nemotron-3.5-lightning-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
+          name: hosted-qualification-${{ inputs.candidate }}-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
           path: ${{ env.RECEIPT }}
           if-no-files-found: ignore
           retention-days: 30
