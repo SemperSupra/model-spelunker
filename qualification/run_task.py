@@ -175,6 +175,22 @@ def detect_failure_signals(
     return signals
 
 
+def _terminate_candidate_group(proc: subprocess.Popen[str]) -> None:
+    if os.name != "posix":
+        if proc.poll() is None:
+            proc.terminate()
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    time.sleep(0.05)
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
 def run_candidate_process(
     command: list[str],
     *,
@@ -183,7 +199,7 @@ def run_candidate_process(
     timeout: int,
     env: dict[str, str],
 ) -> tuple[int, str, str, bool]:
-    """Run a candidate in its own process group so timeout cleanup reaches children."""
+    """Run a candidate in its own process group and never leave descendants behind."""
     proc = subprocess.Popen(
         command,
         cwd=cwd,
@@ -196,24 +212,15 @@ def run_candidate_process(
     )
     try:
         stdout, stderr = proc.communicate(input=input_text, timeout=timeout)
-        return proc.returncode, stdout, stderr, False
+        return_code=proc.returncode
+        _terminate_candidate_group(proc)
+        return return_code, stdout, stderr, False
     except subprocess.TimeoutExpired:
-        if os.name == "posix":
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-        else:
-            proc.terminate()
+        _terminate_candidate_group(proc)
         try:
             stdout, stderr = proc.communicate(timeout=1)
         except subprocess.TimeoutExpired:
-            if os.name == "posix":
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            else:
+            if proc.poll() is None:
                 proc.kill()
             stdout, stderr = proc.communicate()
         return 124, stdout or "", stderr or "", True
