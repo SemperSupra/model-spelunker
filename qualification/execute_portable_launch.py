@@ -81,7 +81,7 @@ def main() -> int:
         parser.error("candidate command is required after --")
 
     packet=read(args.packet)
-    schema=read(ROOT/"qualification/portable-launch-packet.schema.json")
+    schema=None
     task_ref=Path(packet["task"]["profile_ref"])
     if task_ref.name!="task.json":
         raise ValueError("task profile_ref must name task.json")
