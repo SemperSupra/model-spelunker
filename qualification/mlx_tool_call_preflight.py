@@ -162,7 +162,7 @@ def main()->int:
                                             "model":str(snapshot),
                                             "messages":[{
                                                 "role":"user",
-                                                "content":"You must use the write_value tool once. Do not answer normally."
+                                                "content":"Call the write_value tool exactly once with content exactly READY. Do not respond with prose."
                                             }],
                                             "tools":[{
                                                 "type":"function",
