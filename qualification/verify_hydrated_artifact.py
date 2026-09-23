@@ -51,10 +51,24 @@ def verify(root: Path, admission: dict, manifest_digest: str | None=None) -> int
         raise ValueError(f"build target mismatch: {receipt_target} != {admission_target}")
 
     checked=0
-    for row in receipt["payload"]["files"]:
-        path=artifact_root/row["path"]
-        if not path.is_file():
-            raise ValueError(f"missing payload file: {row['path']}")
+    payload=receipt["payload"]
+    payload_kind=payload.get("kind")
+    for row in payload["files"]:
+        relative=Path(row["path"])
+        candidates=[artifact_root/relative]
+        # The macOS OpenWorker characterization predates the Linux packaging
+        # convention: its python-wheelhouse receipt names files relative to the
+        # wheelhouse directory, while the OCI envelope stores them under
+        # /artifact/wheelhouse. Bind that layout only when the receipt declares
+        # the python-wheelhouse payload kind.
+        if payload_kind=="python-wheelhouse" and len(relative.parts)==1:
+            candidates.append(artifact_root/"wheelhouse"/relative)
+        existing=[path for path in candidates if path.is_file()]
+        if len(existing)!=1:
+            raise ValueError(
+                f"expected exactly one payload file for {row['path']}, found {len(existing)}"
+            )
+        path=existing[0]
         if path.stat().st_size!=row["bytes"]:
             raise ValueError(f"payload size mismatch: {row['path']}")
         actual=sha256_file(path).removeprefix("sha256:")
