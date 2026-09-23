@@ -239,6 +239,8 @@ def main() -> int:
                 ) + "\n",
                 encoding="utf-8",
             )
+            reference_env = dict(qual_env)
+            reference_env["MODEL_SPELUNKER_PUBLIC_DIAGNOSTICS"] = "1"
             ref_rc = invoke_task(
                 repo_root=repo_root,
                 task_dir=task_dir,
@@ -248,7 +250,7 @@ def main() -> int:
                 candidate_meta=reference_meta,
                 receipt=args.reference_receipt.resolve(),
                 command=[sys.executable, str(repo_root / "qualification" / "adapters" / "android_reference_actor.py")],
-                env=qual_env,
+                env=reference_env,
             )
             ref_receipt = json.loads(args.reference_receipt.read_text(encoding="utf-8"))
             if ref_rc != 0 or ref_receipt.get("observation", {}).get("success") is not True:

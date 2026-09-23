@@ -84,11 +84,22 @@ def parse_ui_xml(xml_text: str) -> dict[str, Any]:
 
 def mobile_observe_ui() -> str:
     """Return a bounded JSON view of visible Android UI nodes."""
-    _run(["shell", "uiautomator", "dump", "/sdcard/model-spelunker-window.xml"])
-    xml_text = _run(["exec-out", "cat", "/sdcard/model-spelunker-window.xml"])
-    observed = parse_ui_xml(xml_text)
-    _record("mobile_observe_ui", visible_nodes=len(observed["nodes"]))
-    return json.dumps(observed, sort_keys=True)
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            _run(["shell", "uiautomator", "dump", "/sdcard/model-spelunker-window.xml"])
+            xml_text = _run(["exec-out", "cat", "/sdcard/model-spelunker-window.xml"])
+            observed = parse_ui_xml(xml_text)
+            _record(
+                "mobile_observe_ui",
+                visible_nodes=len(observed["nodes"]),
+                attempt=attempt + 1,
+            )
+            return json.dumps(observed, sort_keys=True)
+        except Exception as exc:
+            last_error = exc
+            time.sleep(0.5)
+    raise RuntimeError(f"bounded UI observation failed after retries: {last_error}")
 
 
 def mobile_tap(x: int, y: int) -> str:
