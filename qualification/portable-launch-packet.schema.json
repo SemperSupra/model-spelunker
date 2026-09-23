@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/SemperSupra/model-spelunker/qualification/portable-launch-packet.schema.json",
+  "title": "Portable Qualification Launch Packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "launch_id",
+    "task",
+    "actor",
+    "substrate",
+    "authority",
+    "limits",
+    "credentials",
+    "outputs"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "launch_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "maxLength": 128
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_ref",
+        "package_digest"
+      ],
+      "properties": {
+        "profile_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "package_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_ref"
+      ],
+      "properties": {
+        "profile_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "substrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_ref",
+        "profile_digest"
+      ],
+      "properties": {
+        "profile_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_ref",
+        "tool_refs"
+      ],
+      "properties": {
+        "profile_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tool_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wall_seconds"
+      ],
+      "properties": {
+        "wall_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        }
+      }
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "refs"
+      ],
+      "properties": {
+        "refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+          }
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt",
+        "diagnostics"
+      ],
+      "properties": {
+        "receipt": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]+$"
+        },
+        "diagnostics": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]+$"
+        }
+      }
+    }
+  }
+}
