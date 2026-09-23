@@ -45,6 +45,7 @@ jobs:
       HARNESS_ARTIFACT_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236'
       HARNESS_BUILD_RECEIPT_SHA256: '054c5dcca5a619e18c725858f476e60ab399af110907738495cd9fdf7f95b7f9'
       CRANE_VERSION: 'v0.22.1'
+      CRANE_DARWIN_ARM64_SHA256: '2231fc8df8806d20d680ff1225db44e095a55dd6ac1ae8eced4faf4b278b78fb'
       MLX_LM_VERSION: '0.31.3'
       MODEL_REPO: 'mlx-community/Qwen3-4B-Instruct-2507-4bit'
       MODEL_REVISION: '50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b'
@@ -86,10 +87,15 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          command -v go >/dev/null
           bin="$RUNNER_TEMP/crane-bin"
           mkdir -p "$bin"
-          GOBIN="$bin" go install "github.com/google/go-containerregistry/cmd/crane@$CRANE_VERSION"
+          crane_archive="$RUNNER_TEMP/go-containerregistry_Darwin_arm64.tar.gz"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/google/go-containerregistry/releases/download/$CRANE_VERSION/go-containerregistry_Darwin_arm64.tar.gz" \
+            --output "$crane_archive"
+          echo "$CRANE_DARWIN_ARM64_SHA256  $crane_archive" | shasum -a 256 -c -
+          tar -xzf "$crane_archive" -C "$bin" crane
+          "$bin/crane" version
           "$bin/crane" auth login ghcr.io -u "$GITHUB_ACTOR" -p "$GHCR_TOKEN"
 
           tarball="$RUNNER_TEMP/openworker-macos-arm64.tar"
