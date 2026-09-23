@@ -11,13 +11,13 @@ def digest(data: bytes) -> str:
     return "sha256:"+hashlib.sha256(data).hexdigest()
 
 
-def make_case(root: Path, receipt: dict, target: str):
+def make_case(root: Path, receipt: dict, target: str, *, row_path: str="wheelhouse/openworker.whl"):
     artifact=root/"artifact"
     payload=artifact/"wheelhouse"/"openworker.whl"
     payload.parent.mkdir(parents=True,exist_ok=True)
     payload.write_bytes(b"wheel-payload\n")
     row={
-        "path":"wheelhouse/openworker.whl",
+        "path":row_path,
         "bytes":payload.stat().st_size,
         "sha256":hashlib.sha256(payload.read_bytes()).hexdigest(),
     }
@@ -47,8 +47,10 @@ with tempfile.TemporaryDirectory(prefix="hydrated-verify-test-") as tmp:
         {
             "source":{"repository":"https://github.com/andrewyng/openworker","revision":"abc"},
             "build":{"target":"macos-arm64-python3"},
+            "payload":{"kind":"python-wheelhouse"},
         },
         "macos-arm64-python3",
+        row_path="openworker.whl",
     )
     assert verify(root,admission)==1
 
