@@ -62,12 +62,15 @@ print('MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=[{"requested_model":"fixture","reso
     diagnostics=root/"diagnostics.json"
     env=dict(os.environ)
     env["QUALIFICATION_CREDENTIAL_FILE"]=str(credential)
+    env["UNRELATED_HOST_SECRET"]=SENTINEL+"_UNRELATED"
     proc=subprocess.run([
         sys.executable,str(ROOT/"qualification/run_task.py"),
         "--task-commit","a"*40,
         "--substrate-profile-id","credential-hygiene-fixture",
         "--substrate-profile-commit","b"*40,
         "--diagnostics",str(diagnostics),
+        "--candidate-env-mode","minimal",
+        "--pass-env","QUALIFICATION_CREDENTIAL_FILE",
         str(task),str(meta),str(receipt),
         "--",sys.executable,str(candidate),
     ],text=True,capture_output=True,env=env)
