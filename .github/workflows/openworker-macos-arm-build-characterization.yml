@@ -75,17 +75,37 @@ jobs:
           import json
           import os
           import platform
+          import zipfile
           from pathlib import Path
 
           root=Path(os.environ["OPENWORKER_WHEELHOUSE"])
+
+          def wheel_content_digest(path):
+              h=hashlib.sha256()
+              with zipfile.ZipFile(path) as whl:
+                  for name in sorted(whl.namelist()):
+                      data=whl.read(name)
+                      h.update(name.encode())
+                      h.update(b"\\0")
+                      h.update(str(len(data)).encode())
+                      h.update(b"\\0")
+                      h.update(hashlib.sha256(data).digest())
+              return h.hexdigest()
+
           files=[]
+          payload_hash=hashlib.sha256()
           for path in sorted(root.glob("*.whl")):
               data=path.read_bytes()
+              content_sha=wheel_content_digest(path)
               files.append({
                   "path":path.name,
                   "sha256":hashlib.sha256(data).hexdigest(),
+                  "content_sha256":content_sha,
                   "bytes":len(data),
               })
+              payload_hash.update(path.name.encode())
+              payload_hash.update(b"\\0")
+              payload_hash.update(bytes.fromhex(content_sha))
           if not files:
               raise SystemExit("empty wheelhouse")
 
@@ -127,6 +147,7 @@ jobs:
               },
               "payload":{
                   "kind":"python-wheelhouse",
+                  "normalized_content_digest":"sha256:"+payload_hash.hexdigest(),
                   "files":files,
               },
           }
@@ -150,3 +171,43 @@ jobs:
         shell: bash
         run: |
           printf 'OPENWORKER_MACOS_ARTIFACT_DIGEST=%s\n' '${{ steps.payload.outputs.artifact-digest }}'
+
+
+  compare-content:
+    name: Compare normalized ARM wheelhouse content
+    needs: characterize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download both characterization artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          pattern: openworker-macos-arm64-*
+          path: ${{ runner.temp }}/openworker-macos-compare
+
+      - name: Require one portable normalized payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${RUNNER_TEMP}/openworker-macos-compare" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root=Path(os.environ["ROOT"])
+          receipts=sorted(root.rglob("openworker-macos-build-receipt.json"))
+          if len(receipts) != 2:
+              raise SystemExit(f"expected 2 receipts, found {len(receipts)}")
+          rows=[json.loads(path.read_text()) for path in receipts]
+          digests={row["payload"]["normalized_content_digest"] for row in rows}
+          revisions={row["source"]["revision"] for row in rows}
+          toolchains={row["build"]["toolchain"] for row in rows}
+          if len(digests) != 1:
+              raise SystemExit(f"normalized payload drift: {sorted(digests)}")
+          if len(revisions) != 1:
+              raise SystemExit(f"source revision drift: {sorted(revisions)}")
+          if len(toolchains) != 1:
+              raise SystemExit(f"toolchain drift: {sorted(toolchains)}")
+          print("OPENWORKER_MACOS_PORTABLE_CONTENT=PASS")
+          print("NORMALIZED_CONTENT_DIGEST="+next(iter(digests)))
+          PY
