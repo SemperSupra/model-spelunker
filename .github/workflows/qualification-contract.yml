@@ -170,6 +170,9 @@ jobs:
             --actor-profile qualification/actors/openworker-prebuilt-qwen3-1.7b-gha-ollama.json \
             --substrate-profile qualification/fixtures/substrate-profile-gha-v2.json
 
+      - name: Self-test portable launch packet fault injection
+        run: PYTHONPATH=. python qualification/test_portable_launch_packet_faults.py
+
       - name: Self-test daemonless artifact hydration
         run: PYTHONPATH=. python qualification/test_hydrate_oci_layout.py
 
