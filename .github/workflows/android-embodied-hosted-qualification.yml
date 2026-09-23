@@ -1,0 +1,210 @@
+name: Android Embodied Hosted Qualification
+
+on:
+  push:
+    branches:
+      - exp/android-embodied-qualification
+    paths:
+      - ".github/workflows/android-embodied-hosted-qualification.yml"
+      - "qualification/adapters/android_mobile_tools.py"
+      - "qualification/adapters/android_reference_actor.py"
+      - "qualification/adapters/openworker_projected.py"
+      - "qualification/run_android_embodied.py"
+      - "qualification/run_task.py"
+      - "qualification/test_android_embodied.py"
+      - "qualification/tasks/android-settings-24h-struct-v0/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-embodied-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate mobile task and harness contract
+        run: |
+          set -euo pipefail
+          python3 -m py_compile             qualification/adapters/android_mobile_tools.py             qualification/adapters/android_reference_actor.py             qualification/run_android_embodied.py             qualification/run_task.py
+          python3 qualification/tasks/android-settings-24h-struct-v0/verify.py --self-test
+          python3 -m unittest -v qualification/test_android_embodied.py
+
+  qualify:
+    needs: contract
+    environment: hosted-qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OPENWORKER_UPSTREAM_SHA: "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+      HOSTED_CATALOG: "qualification/models/hosted-api.json"
+      HOSTED_CANDIDATE_ID: "openrouter-free-router"
+      HOSTED_KEY_FILE: "/tmp/model-spelunker-openrouter.key"
+      CANDIDATE_META: "/tmp/model-spelunker-android-candidate.json"
+      RECEIPT: "/tmp/model-spelunker-android-receipt.json"
+      REFERENCE_RECEIPT: "/tmp/model-spelunker-android-reference-receipt.json"
+      MODEL_SPELUNKER_MAX_TOKENS: "2048"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve fixed free-router treatment
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          catalog=json.loads(Path(os.environ["HOSTED_CATALOG"]).read_text(encoding="utf-8"))
+          c=catalog["candidates"][os.environ["HOSTED_CANDIDATE_ID"]]
+          assert c["provider"] == "openrouter"
+          assert c["model"] == "openrouter/free"
+          assert c["cost_class"] == "zero-token-price"
+          values={
+              "MODEL_SPELUNKER_MODEL": f'{c["provider"]}:{c["model"]}',
+              "MODEL_SPELUNKER_REASONING_EFFORT": c["reasoning_effort"],
+              "HOSTED_PROVIDER": c["provider"],
+              "HOSTED_MODEL": c["model"],
+              "HOSTED_API_BASE": c["api_base"],
+              "HOSTED_TREATMENT_KIND": c["treatment_kind"],
+              "HOSTED_COST_CLASS": c["cost_class"],
+          }
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as f:
+              for k,v in values.items():
+                  f.write(f"{k}={v}\n")
+          PY
+
+      - name: Clone immutable OpenWorker source
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/openworker"
+          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"
+          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_UPSTREAM_SHA"
+          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_UPSTREAM_SHA"
+
+      - name: Install OpenWorker in isolated environment
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          source "$RUNNER_TEMP/openworker-venv/bin/activate"
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+
+      - name: Stage OpenRouter credential and perform zero-inference admission
+        env:
+          SELECTED_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-OPENROUTER_API_KEY"; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+          python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          key=Path(os.environ["HOSTED_KEY_FILE"]).read_text(encoding="utf-8")
+          req=urllib.request.Request(
+              "https://openrouter.ai/api/v1/key",
+              headers={"Accept":"application/json","Authorization":"Bearer "+key},
+          )
+          with urllib.request.urlopen(req,timeout=20) as response:
+              data=json.load(response)
+          info=data.get("data") or {}
+          print("OPENROUTER_ADMISSION="+json.dumps({
+              "authenticated": True,
+              "is_free_tier": info.get("is_free_tier"),
+              "treatment_kind": os.environ["HOSTED_TREATMENT_KIND"],
+          },sort_keys=True))
+          PY
+
+      - name: Build exact configured-actor metadata
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          task=json.loads(Path("qualification/tasks/android-settings-24h-struct-v0/task.json").read_text())
+          candidate={
+              "harness":{"name":"openworker","version":os.environ["OPENWORKER_UPSTREAM_SHA"]},
+              "model":{
+                  "provider":os.environ["HOSTED_PROVIDER"],
+                  "id":os.environ["HOSTED_MODEL"],
+                  "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
+              },
+              "toolset":task["projected_tools"],
+              "configuration":{
+                  "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
+                  "projection":task["projected_tools"],
+                  "parallel_tool_calls":False,
+                  "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
+                  "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
+                  "max_iterations":4,
+                  "api_base":os.environ["HOSTED_API_BASE"],
+                  "cost_class":os.environ["HOSTED_COST_CLASS"],
+                  "provider_alias_semantics":"hosted mutable router service",
+              },
+          }
+          Path(os.environ["CANDIDATE_META"]).write_text(
+              json.dumps(candidate,indent=2,sort_keys=True)+"\n",encoding="utf-8"
+          )
+          PY
+
+      - name: Calibrate then execute one embodied actor rep
+        id: embodied
+        env:
+          SELECTED_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          export OPENROUTER_API_KEY="$SELECTED_API_KEY"
+          set +e
+          python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-struct-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          rm -f "$HOSTED_KEY_FILE"
+          echo "qualification_rc=$rc" >> "$GITHUB_OUTPUT"
+          test -f "$REFERENCE_RECEIPT"
+          if [ "$rc" -ne 0 ]; then
+            echo "ANDROID_EMBODIED_RESULT=nonzero-$rc"
+          fi
+
+      - name: Inspect bounded receipts
+        if: always()
+        run: |
+          set -euo pipefail
+          for f in "$REFERENCE_RECEIPT" "$RECEIPT"; do
+            if [ -f "$f" ]; then
+              python3 - "$f" <<'PY'
+          import json, pathlib, sys
+          r=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          print(json.dumps({
+              "run_id":r.get("run_id"),
+              "task":(r.get("task") or {}).get("id"),
+              "candidate":(r.get("candidate") or {}).get("model"),
+              "success":(r.get("observation") or {}).get("success"),
+              "failure_class":(r.get("observation") or {}).get("failure_class"),
+              "mobile_action_count":(r.get("observation") or {}).get("mobile_action_count"),
+              "failure_signals":(r.get("observation") or {}).get("failure_signals"),
+          },sort_keys=True))
+          PY
+            fi
+          done
+
+      - name: Upload public-safe qualification receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-embodied-${{ github.run_attempt }}
+          path: |
+            /tmp/model-spelunker-android-reference-receipt.json
+            /tmp/model-spelunker-android-receipt.json
+          if-no-files-found: warn
+          retention-days: 7

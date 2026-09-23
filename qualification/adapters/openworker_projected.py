@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Minimal projected OpenWorker adapter for Model Spelunker qualification.
 
-This adapter intentionally exposes only read_file/write_file to the model and leaves
-task correctness to the external Model Spelunker verifier.
+This adapter exposes only the task-declared file/mobile tools and leaves task
+correctness to the external Model Spelunker verifier.
 """
 
 from __future__ import annotations
@@ -23,10 +23,12 @@ from typing import Any, Optional
 import aisuite as ai
 
 from coworker.engine import ApprovalOutcome, PermissionRequest, TurnEngine
-from coworker.permissions import PermissionEngine
+from coworker.permissions import Mode, PermissionEngine
 from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient
 from coworker.providers.router import ProviderRouter
 from coworker.tools import ToolRegistry
+
+from android_mobile_tools import mobile_action_log, mobile_tool_functions
 
 
 MODEL = os.environ.get("MODEL_SPELUNKER_MODEL", "ollama:qwen3:1.7b")
@@ -288,6 +290,8 @@ def registry_for(workspace: Path) -> ToolRegistry:
         getattr(func, "__name__", ""): func
         for func in ai.toolkits.files(root=str(workspace), allow_write=True)
     }
+    for func in mobile_tool_functions():
+        available[func.__name__] = func
     requested = tuple(
         name.strip()
         for name in os.environ.get(
@@ -297,7 +301,7 @@ def registry_for(workspace: Path) -> ToolRegistry:
     )
     missing = [name for name in requested if name not in available]
     if missing:
-        raise RuntimeError(f"OpenWorker file toolkit missing required tools: {missing}")
+        raise RuntimeError(f"OpenWorker projected toolkit missing required tools: {missing}")
 
     registry = ToolRegistry()
     for name in requested:
@@ -325,7 +329,13 @@ async def run(instruction: str) -> int:
     write_target = os.environ.get("MODEL_SPELUNKER_WRITE_TARGET", "value.txt")
     target = (workspace / write_target).resolve()
     registry = registry_for(workspace)
-    permissions = PermissionEngine(workspace_root=workspace)
+    permissions = PermissionEngine(
+        workspace_root=workspace,
+        mode=Mode.CUSTOM,
+        auto_allow_tools={
+            name for name in registry.names() if name.startswith("mobile_")
+        },
+    )
     compatible = {
         "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1"),
         "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
@@ -418,6 +428,12 @@ async def run(instruction: str) -> int:
         "cache_write": int(usage_totals.get("cache_write", 0)),
     }
     summary["usage"] = usage_summary
+    summary["mobile_actions"] = mobile_action_log()
+    print(
+        "MODEL_SPELUNKER_MOBILE_ACTIONS="
+        + json.dumps(summary["mobile_actions"], sort_keys=True),
+        flush=True,
+    )
     print("OPENWORKER_SUMMARY=" + json.dumps(summary, sort_keys=True), flush=True)
     print("MODEL_SPELUNKER_USAGE=" + json.dumps(usage_summary, sort_keys=True), flush=True)
     print(f"MODEL_SPELUNKER_TOOL_CALLS={len(summary['tool_calls'])}", flush=True)

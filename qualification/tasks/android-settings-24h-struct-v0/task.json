@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "android-settings-24h-struct-v0",
+  "task_class": "mobile.android.settings-state-navigation",
+  "instruction": "Using only the provided mobile UI tools, turn on Android Settings > Use 24-hour format. This structural treatment does not provide a Settings shortcut: navigate through the normal Settings UI. Observe the UI after actions rather than assuming a tap worked. Do not modify any unrelated setting. When the device visibly shows Use 24-hour format enabled, write result.json containing exactly {\"schema_version\":1,\"completed\":true}.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 180
+  },
+  "success": {
+    "kind": "deterministic-verifier-only-device-state"
+  },
+  "allowed_write_paths": [
+    "result.json"
+  ],
+  "projected_tools": [
+    "mobile_observe_ui",
+    "mobile_tap",
+    "mobile_swipe",
+    "mobile_back",
+    "mobile_launch_settings",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "medium",
+    "recovery_requirement": "medium",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "verifier-only-device-state"
+  }
+}
