@@ -4,24 +4,23 @@ name: OpenWorker macOS MLX Failure Triage
 on:
   pull_request:
     branches:
-      - exp/openworker-macos-mlx-triage-text-repair
+      - exp/openworker-macos-mlx-text-repair
     paths:
       - qualification/tasks/execution-failure-triage-v0/**
-      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-triage-triage.json
-      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-triage-triage.json
-      - qualification/experiments/openworker-macos-mlx-triage-execution-failure-triage-v0.json
-      - .github/workflows/openworker-macos-mlx-triage-failure-triage.yml
+      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-triage.json
+      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-triage.json
+      - qualification/experiments/openworker-macos-mlx-execution-failure-triage-v0.json
+      - .github/workflows/openworker-macos-mlx-failure-triage.yml
   push:
     branches:
-      - exp/openworker-macos-mlx-triage-failure-triage
+      - exp/openworker-macos-mlx-failure-triage
     paths:
       - qualification/tasks/execution-failure-triage-v0/**
-      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-triage-triage.json
-      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-triage-triage.json
-      - qualification/experiments/openworker-macos-mlx-triage-execution-failure-triage-v0.json
-      - .github/workflows/openworker-macos-mlx-triage-failure-triage.yml
+      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-triage.json
+      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-triage.json
+      - qualification/experiments/openworker-macos-mlx-execution-failure-triage-v0.json
+      - .github/workflows/openworker-macos-mlx-failure-triage.yml
   workflow_dispatch:
-
 permissions:
   contents: read
   packages: read
