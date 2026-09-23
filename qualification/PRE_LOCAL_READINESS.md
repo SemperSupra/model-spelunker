@@ -18,6 +18,7 @@ future local substrate.
 | No dependency resolution in OpenWorker qualification | Offline wheelhouse uses `--no-index --no-deps` | PASS |
 | Actor-admission binding is checked | Each prebuilt actor must bind exactly one local BUILD_ADMITTED receipt with the same immutable artifact digest | PASS |
 | Portable launch binding exists | Launch packet binds task, actor, substrate digest, authority/tools, limits, logical credential refs, and output paths | PASS |
+| Launch packet drives execution | Native and constrained-container canaries are executed through `execute_portable_launch.py`; candidate metadata is derived from the bound actor and receipts bind launch/substrate digests | PASS |
 | Launch packet rejects venue coupling | GHA temp/workspace/run identifiers and Docker commands are prohibited | PASS |
 | Task/tool/substrate drift fails closed | Fault tests mutate task digest, tool projection, substrate digest, and venue-specific output paths | PASS |
 | Candidate environment can be minimized | Portable rehearsal uses `--candidate-env-mode minimal`; only explicit credential refs are passed when needed | PASS |
@@ -48,6 +49,11 @@ persistent sovereign worker:
 4. OpenWorker's original offline install path attempted to re-resolve a direct
    dependency. Admission/qualification now installs the captured wheelhouse with
    `--no-index --no-deps`.
+5. The first portability launch packet named the OpenWorker actor while the canary
+   actually executed the deterministic contract-test candidate. That mismatch was
+   caught during handoff review. The rehearsal now uses an explicit
+   `contract-test-portable` actor and both venue packets drive execution end to end
+   through the same portable launcher.
 
 These are methodology results, not actor-performance results.
 
