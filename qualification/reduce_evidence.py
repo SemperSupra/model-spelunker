@@ -83,7 +83,7 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
 def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     deduped: list[dict[str, Any]] = []
     seen_runs: dict[str, str] = {}
-    for receipt in deduped:
+    for receipt in receipts:
         run_id = receipt["run_id"]
         fingerprint = digest(receipt)
         prior = seen_runs.get(run_id)
@@ -96,7 +96,7 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     actor_records: dict[str, dict[str, Any]] = {}
 
-    for receipt in receipts:
+    for receipt in deduped:
         actor = actor_realization(receipt)
         actor_id = digest(actor)
         actor_records[actor_id] = actor
