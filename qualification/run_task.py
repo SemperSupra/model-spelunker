@@ -479,22 +479,21 @@ def main() -> int:
         initial_tree_digest = tree_digest(workdir)
 
         started = time.monotonic()
-        try:
-            candidate_env = dict(os.environ)
-            candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
-            allowed = task.get("allowed_write_paths") or []
-            if len(allowed) == 1:
-                candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
-            projected_tools = task.get("projected_tools") or []
-            if projected_tools:
-                candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
-            candidate_exit, stdout, stderr, timed_out = run_candidate_process(
-                command,
-                cwd=workdir,
-                input_text=task["instruction"] + "\n",
-                timeout=timeout,
-                env=candidate_env,
-            )
+        candidate_env = dict(os.environ)
+        candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
+        allowed = task.get("allowed_write_paths") or []
+        if len(allowed) == 1:
+            candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
+        projected_tools = task.get("projected_tools") or []
+        if projected_tools:
+            candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
+        candidate_exit, stdout, stderr, timed_out = run_candidate_process(
+            command,
+            cwd=workdir,
+            input_text=task["instruction"] + "\n",
+            timeout=timeout,
+            env=candidate_env,
+        )
 
         verifier = subprocess.run(
             [sys.executable, str(args.task_dir / task["verifier"]), str(workdir)],
