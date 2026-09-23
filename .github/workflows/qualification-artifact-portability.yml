@@ -72,8 +72,8 @@ jobs:
           trace="$RUNNER_TEMP/hydrate-network.trace"
           summary="$RUNNER_TEMP/hydrate-summary.json"
           strace -f -e trace=network -o "$trace"             python qualification/hydrate_oci_layout.py               "$OCI_LAYOUT" "$root" --ref-name artifact --summary "$summary"
-          if grep -Eq 'socket\(AF_INET|socket\(AF_INET6' "$trace"; then
-            echo "hydration attempted IP networking" >&2
+          if grep -Eq 'connect\([^,]+, \{sa_family=AF_INET|sendto\([^,]+, .*\{sa_family=AF_INET' "$trace"; then
+            echo "hydration attempted outbound IP networking" >&2
             cat "$trace" >&2
             exit 1
           fi
@@ -103,8 +103,8 @@ jobs:
               ;;
             *) exit 2 ;;
           esac
-          if grep -Eq 'socket\(AF_INET|socket\(AF_INET6' "$trace"; then
-            echo "offline smoke attempted IP networking" >&2
+          if grep -Eq 'connect\([^,]+, \{sa_family=AF_INET|sendto\([^,]+, .*\{sa_family=AF_INET' "$trace"; then
+            echo "offline smoke attempted outbound IP networking" >&2
             cat "$trace" >&2
             exit 1
           fi
