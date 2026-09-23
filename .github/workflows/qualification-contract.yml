@@ -98,6 +98,9 @@ jobs:
           jsonschema.Draft7Validator.check_schema(harness_build_schema)
           jsonschema.Draft7Validator.check_schema(harness_admission_schema)
           jsonschema.Draft7Validator.check_schema(launch_packet_schema)
+          for path in sorted(Path("qualification/launch-packets").glob("*.json")):
+              launch_packet = json.loads(path.read_text())
+              jsonschema.validate(launch_packet, launch_packet_schema)
           for path in sorted(Path("qualification/harness-artifacts").glob("*.admission*.json")):
               admission = json.loads(path.read_text())
               jsonschema.validate(admission, harness_admission_schema)
