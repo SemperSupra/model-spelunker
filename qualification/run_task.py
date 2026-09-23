@@ -476,6 +476,10 @@ def main() -> int:
     parser.add_argument("--substrate-profile-id", required=True)
     parser.add_argument("--substrate-profile-commit", required=True)
     parser.add_argument(
+        "--substrate-profile-digest",
+        help="Optional canonical digest of the external substrate profile bound by the launch packet.",
+    )
+    parser.add_argument(
         "--diagnostics",
         type=Path,
         help="Optional bounded raw diagnostics file. Use only on credential-free qualification reps.",
@@ -631,6 +635,11 @@ def main() -> int:
             "substrate": {
                 "profile_id": args.substrate_profile_id,
                 "profile_commit": args.substrate_profile_commit,
+                **(
+                    {"profile_digest": args.substrate_profile_digest}
+                    if args.substrate_profile_digest
+                    else {}
+                ),
             },
             "observation": {
                 "success": success,
