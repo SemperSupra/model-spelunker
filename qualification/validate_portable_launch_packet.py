@@ -8,7 +8,6 @@ import hashlib
 import json
 from pathlib import Path
 
-import jsonschema
 
 from qualification.run_task import tree_digest
 
@@ -27,7 +26,7 @@ def read(path: Path) -> dict:
 
 def validate_packet(
     packet: dict,
-    schema: dict,
+    schema: dict | None,
     task_dir: Path,
     actor_profile: Path,
     substrate_profile: Path,
@@ -36,7 +35,9 @@ def validate_packet(
     actor=read(actor_profile)
     substrate=read(substrate_profile)
 
-    jsonschema.Draft7Validator(schema).validate(packet)
+    if schema is not None:
+        import jsonschema
+        jsonschema.Draft7Validator(schema).validate(packet)
 
     if packet["task"]["profile_ref"] != str(task_dir/"task.json"):
         raise ValueError("task profile_ref does not match supplied task package")
