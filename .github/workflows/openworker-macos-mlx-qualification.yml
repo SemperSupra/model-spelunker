@@ -10,6 +10,15 @@ on:
       - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx.json
       - qualification/experiments/openworker-macos-mlx-text-repair-v0.json
       - .github/workflows/openworker-macos-mlx-qualification.yml
+  push:
+    branches:
+      - exp/openworker-macos-mlx-text-repair
+    paths:
+      - qualification/adapters/openworker_projected.py
+      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx.json
+      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx.json
+      - qualification/experiments/openworker-macos-mlx-text-repair-v0.json
+      - .github/workflows/openworker-macos-mlx-qualification.yml
   workflow_dispatch:
 
 permissions:
