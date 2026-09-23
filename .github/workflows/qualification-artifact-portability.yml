@@ -1,0 +1,111 @@
+name: Harness Artifact Portability
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/**'
+      - '.github/workflows/qualification-artifact-portability.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: artifact-portability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hydrate:
+    name: Daemonless hydrate / ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: openworker
+            ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83
+            admission: qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json
+            smoke: openworker
+          - name: goose
+            ref: ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636
+            admission: qualification/harness-artifacts/goose-2090ad1c65dd-linux-x64.admission.json
+            smoke: goose
+          - name: codex-exec
+            ref: ghcr.io/sempersupra/model-spelunker-harness-codex-exec@sha256:56e23dcbd8c96143d8a20c0ecf8babbcbe1619c78bb9b8fe195dd5a40bc32338
+            admission: qualification/harness-artifacts/codex-exec-6b9826e3aa83-linux-x64.admission.json
+            smoke: codex-exec
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install fetch and syscall probes
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends skopeo strace >/dev/null
+          skopeo --version
+          strace --version | head -1
+
+      - name: Fetch immutable artifact into OCI layout
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          ARTIFACT_REF: ${{ matrix.ref }}
+        run: |
+          set -euo pipefail
+          layout="$RUNNER_TEMP/oci-layout"
+          auth="$RUNNER_TEMP/skopeo-auth.json"
+          printf '%s' "$GHCR_TOKEN" | skopeo login             --authfile "$auth"             --username "$GITHUB_ACTOR"             --password-stdin ghcr.io >/dev/null
+          skopeo copy             --preserve-digests             --authfile "$auth"             "docker://$ARTIFACT_REF"             "oci:$layout:artifact" >/dev/null
+          rm -f "$auth"
+          echo "OCI_LAYOUT=$layout" >> "$GITHUB_ENV"
+
+      - name: Hydrate without a container daemon or network syscalls
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/hydrated"
+          trace="$RUNNER_TEMP/hydrate-network.trace"
+          summary="$RUNNER_TEMP/hydrate-summary.json"
+          strace -f -e trace=network -o "$trace"             python qualification/hydrate_oci_layout.py               "$OCI_LAYOUT" "$root" --ref-name artifact --summary "$summary"
+          if grep -Eq 'socket\(AF_INET|socket\(AF_INET6' "$trace"; then
+            echo "hydration attempted IP networking" >&2
+            cat "$trace" >&2
+            exit 1
+          fi
+          manifest_digest="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["manifest_digest"])' "$summary")"
+          python qualification/verify_hydrated_artifact.py             "$root" "${{ matrix.admission }}" --manifest-digest "$manifest_digest"
+          echo "HYDRATED_ROOT=$root" >> "$GITHUB_ENV"
+
+      - name: Smoke admitted payload with network syscalls prohibited by policy check
+        shell: bash
+        env:
+          SMOKE_KIND: ${{ matrix.smoke }}
+        run: |
+          set -euo pipefail
+          trace="$RUNNER_TEMP/smoke-network.trace"
+          case "$SMOKE_KIND" in
+            openworker)
+              python3 -m venv "$RUNNER_TEMP/openworker-venv"
+              strace -f -e trace=network -o "$trace"                 bash -c '"$0"/bin/pip install --disable-pip-version-check --no-index --no-deps "$1"/artifact/wheelhouse/*.whl >/dev/null && "$0"/bin/python -c "import coworker; import coworker.engine"'                 "$RUNNER_TEMP/openworker-venv" "$HYDRATED_ROOT"
+              ;;
+            goose)
+              chmod +x "$HYDRATED_ROOT/artifact/goose"
+              strace -f -e trace=network -o "$trace"                 "$HYDRATED_ROOT/artifact/goose" --version >/dev/null
+              ;;
+            codex-exec)
+              chmod +x "$HYDRATED_ROOT/artifact/codex-exec"
+              strace -f -e trace=network -o "$trace"                 "$HYDRATED_ROOT/artifact/codex-exec" --version >/dev/null
+              ;;
+            *) exit 2 ;;
+          esac
+          if grep -Eq 'socket\(AF_INET|socket\(AF_INET6' "$trace"; then
+            echo "offline smoke attempted IP networking" >&2
+            cat "$trace" >&2
+            exit 1
+          fi
+          echo "PASS ${{ matrix.name }} daemonless hydration and offline smoke"
