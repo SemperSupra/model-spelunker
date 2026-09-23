@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "record_type": "harness-artifact-admission",
+  "harness": {
+    "name": "openworker",
+    "declared_version": "0.0.0"
+  },
+  "artifact": {
+    "packaging": "oci-distribution",
+    "ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236",
+    "digest": "sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236",
+    "build_receipt_digest": "sha256:054c5dcca5a619e18c725858f476e60ab399af110907738495cd9fdf7f95b7f9"
+  },
+  "admission": {
+    "state": "BUILD_ADMITTED",
+    "target": "macos-arm64-python3",
+    "checks": [
+      {
+        "name": "embedded-build-receipt",
+        "result": "PASS",
+        "evidence": "gha-run:35850759844"
+      },
+      {
+        "name": "normalized-content-portability",
+        "result": "PASS",
+        "evidence": "sha256:7fa340d11d47e771c8f351cff8a88f564f91459a45b49a69c15169be8c29b141"
+      },
+      {
+        "name": "payload-hashes",
+        "result": "PASS",
+        "evidence": "gha-run:35851140626"
+      },
+      {
+        "name": "offline-wheelhouse-install-no-resolve",
+        "result": "PASS",
+        "evidence": "gha-run:35850759844"
+      },
+      {
+        "name": "coworker-import-surface",
+        "result": "PASS",
+        "evidence": "gha-run:35850759844"
+      },
+      {
+        "name": "openworker-cli-help",
+        "result": "PASS",
+        "evidence": "gha-run:35850759844"
+      }
+    ]
+  }
+}
