@@ -192,6 +192,13 @@
         "profile_commit": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}$"
+        },
+        "profile_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$"
         }
       }
     },
