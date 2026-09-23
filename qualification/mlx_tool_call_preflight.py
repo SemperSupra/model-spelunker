@@ -15,10 +15,10 @@ import urllib.error
 import urllib.request
 
 MLX_LM_VERSION="0.31.3"
-MODEL_REPO="mlx-community/Qwen3-0.6B-4bit"
-MODEL_REVISION="73e3e38"
+MODEL_REPO="mlx-community/Qwen3-4B-Instruct-2507-4bit"
+MODEL_REVISION="50d4277"
 PORT=8080
-SCHEMA="mlx-tool-call-preflight/v1"
+SCHEMA="mlx-tool-call-preflight/v2"
 
 
 def run(argv:list[str], timeout:int=300, cwd:str|None=None):
@@ -48,11 +48,40 @@ def sha256_file(path:pathlib.Path)->str:
             h.update(chunk)
     return h.hexdigest()
 
+def physmem_line()->str|None:
+    rc,out,err=run(["top","-l","1","-s","0","-n","0"],timeout=20)
+    if rc!=0:
+        return None
+    for line in out.splitlines():
+        if line.startswith("PhysMem:"):
+            return line.strip()
+    return None
+
+def apply_memory_hygiene(mode:str)->dict:
+    ev={"mode":mode,"before_physmem":physmem_line()}
+    if mode=="control":
+        ev["action"]="none"
+        ev["after_physmem"]=ev["before_physmem"]
+        return ev
+    purge="/usr/sbin/purge"
+    if not pathlib.Path(purge).exists():
+        ev["action"]="purge"
+        ev["result"]={"exit_code":None,"error":"purge unavailable"}
+        ev["after_physmem"]=physmem_line()
+        return ev
+    rc,out,err=run(["sudo","-n",purge],timeout=120)
+    ev["action"]="purge"
+    ev["result"]={"exit_code":rc,"stdout":out[-1000:] or None,"stderr":err[-2000:] or None}
+    time.sleep(3)
+    ev["after_physmem"]=physmem_line()
+    return ev
+
 
 def main()->int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--label",required=True)
     ap.add_argument("--out",required=True)
+    ap.add_argument("--memory-hygiene",choices=("control","purge"),default="control")
     args=ap.parse_args()
 
     receipt={
@@ -69,7 +98,10 @@ def main()->int:
             "mlx_lm_version":MLX_LM_VERSION,
             "model_repo":MODEL_REPO,
             "requested_revision":MODEL_REVISION,
+            "memory_hygiene":args.memory_hygiene,
+            "upstream_oracle_ref":"mlx-lm v0.31.3 mlx_lm/examples/openai_tool_use.py",
         },
+        "memory_hygiene":None,
         "classification":"INCONCLUSIVE",
         "reason":"",
         "warnings":[
@@ -132,6 +164,10 @@ def main()->int:
                                 receipt["classification"]="ORACLE_FAILURE"
                                 receipt["reason"]="MLX GPU default device could not be established"
                             else:
+                                receipt["memory_hygiene"]=apply_memory_hygiene(args.memory_hygiene)
+                                if args.memory_hygiene=="purge" and ((receipt["memory_hygiene"].get("result") or {}).get("exit_code")!=0):
+                                    receipt["classification"]="ENVIRONMENT_FAILURE"
+                                    receipt["reason"]="requested purge treatment failed"
                                 log_path=root/"server.log"
                                 with log_path.open("w") as log:
                                     server=subprocess.Popen(
@@ -160,26 +196,24 @@ def main()->int:
                                     else:
                                         payload={
                                             "model":str(snapshot),
-                                            "messages":[{
-                                                "role":"user",
-                                                "content":"Call the write_value tool exactly once with content exactly READY. Do not respond with prose."
-                                            }],
+                                            "messages":[{"role":"user","content":"What's the weather in Boston?"}],
                                             "tools":[{
                                                 "type":"function",
                                                 "function":{
-                                                    "name":"write_value",
-                                                    "description":"Write a value to the target file.",
+                                                    "name":"get_current_weather",
+                                                    "description":"Get the current weather in a given location",
                                                     "parameters":{
                                                         "type":"object",
-                                                        "properties":{"content":{"type":"string"}},
-                                                        "required":["content"],
-                                                        "additionalProperties":False,
+                                                        "properties":{
+                                                            "location":{"type":"string","description":"The city and state, e.g. San Francisco, CA"},
+                                                            "unit":{"type":"string","enum":["celsius","fahrenheit"]},
+                                                        },
+                                                        "required":["location"],
                                                     },
                                                 },
                                             }],
-                                            "tool_choice":"required",
                                             "temperature":0,
-                                            "max_tokens":128,
+                                            "max_tokens":256,
                                         }
                                         try:
                                             response=post_json(f"http://127.0.0.1:{PORT}/v1/chat/completions",payload,timeout=180)
@@ -195,9 +229,10 @@ def main()->int:
                                                 except json.JSONDecodeError:
                                                     parsed_args=None
                                                 valid=(
-                                                    fn.get("name")=="write_value"
+                                                    fn.get("name")=="get_current_weather"
                                                     and isinstance(parsed_args,dict)
-                                                    and isinstance(parsed_args.get("content"),str)
+                                                    and isinstance(parsed_args.get("location"),str)
+                                                    and "Boston" in parsed_args.get("location","")
                                                 )
                                             receipt["tool_call_oracle"]={
                                                 "call_count":len(calls),
@@ -206,7 +241,7 @@ def main()->int:
                                             }
                                             if valid:
                                                 receipt["classification"]="SUPPORTED"
-                                                receipt["reason"]="local MLX-LM server emitted a valid OpenAI structured tool call"
+                                                receipt["reason"]="documented Qwen3-4B MLX-LM tool-use path emitted a valid OpenAI structured tool call"
                                             else:
                                                 receipt["classification"]="ORACLE_FAILURE"
                                                 receipt["reason"]="model/server completed but did not emit the required structured tool call"
