@@ -85,6 +85,7 @@ jobs:
           TOKENIZERS_PARALLELISM: 'false'
           PYTORCH_ENABLE_MPS_FALLBACK: '0'
           VISUAL_CONCEPT_DEVICE: mps
+          VISUAL_CONCEPT_ATTN_IMPLEMENTATION: eager
           CANDIDATE_CONFIG: ${{ matrix.config }}
         run: |
           set -euo pipefail
@@ -120,6 +121,7 @@ jobs:
           assert runtime["mps_built"] is True
           assert runtime["mps_available"] is True
           assert runtime["mps_fallback_env"]=="0"
+          assert runtime["attention_implementation"]=="eager"
           for obs in result["observations"]:
               assert obs["evidence"][0]["metadata"]["execution_device"]=="mps"
           print(json.dumps({
@@ -135,7 +137,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: visual-concept-mps-${{ matrix.runner }}-${{ matrix.analyzer }}-${{ github.run_attempt }}
+          name: visual-concept-mps-eager-${{ matrix.runner }}-${{ matrix.analyzer }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/visual-concept-worker-mps.json
           if-no-files-found: error
           retention-days: 7
