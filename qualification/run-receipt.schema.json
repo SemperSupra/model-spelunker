@@ -280,7 +280,8 @@
               "sandbox-policy-incompatible",
               "unexpected-external-network",
               "repeated-tool-failure",
-              "engine-error-event"
+              "engine-error-event",
+              "validator-error"
             ]
           }
         },
