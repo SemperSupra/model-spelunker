@@ -8,7 +8,6 @@ import hashlib
 import json
 from pathlib import Path
 
-import jsonschema
 
 from qualification.run_task import tree_digest
 
@@ -25,35 +24,41 @@ def read(path: Path) -> dict:
     return value
 
 
-def main() -> int:
-    parser=argparse.ArgumentParser()
-    parser.add_argument("packet",type=Path)
-    parser.add_argument("--schema",type=Path,default=Path("qualification/portable-launch-packet.schema.json"))
-    parser.add_argument("--task-dir",type=Path,required=True)
-    parser.add_argument("--actor-profile",type=Path,required=True)
-    parser.add_argument("--substrate-profile",type=Path,required=True)
-    args=parser.parse_args()
+def validate_packet(
+    packet: dict,
+    schema: dict | None,
+    task_dir: Path,
+    actor_profile: Path,
+    substrate_profile: Path,
+) -> tuple[dict, dict, dict]:
+    task=read(task_dir/"task.json")
+    actor=read(actor_profile)
+    substrate=read(substrate_profile)
 
-    packet=read(args.packet)
-    schema=read(args.schema)
-    task=read(args.task_dir/"task.json")
-    actor=read(args.actor_profile)
-    substrate=read(args.substrate_profile)
+    required_top={"schema_version","launch_id","task","actor","substrate","authority","limits","credentials","outputs"}
+    if set(packet) != required_top:
+        missing=sorted(required_top-set(packet))
+        extra=sorted(set(packet)-required_top)
+        raise ValueError(f"launch packet shape mismatch: missing={missing} extra={extra}")
+    if packet.get("schema_version") != 1:
+        raise ValueError("unsupported launch packet schema_version")
 
-    jsonschema.Draft7Validator(schema).validate(packet)
+    if schema is not None:
+        import jsonschema
+        jsonschema.Draft7Validator(schema).validate(packet)
 
-    if packet["task"]["profile_ref"] != str(args.task_dir/"task.json"):
+    if packet["task"]["profile_ref"] != str(task_dir/"task.json"):
         raise ValueError("task profile_ref does not match supplied task package")
-    actual_task_digest=tree_digest(args.task_dir)
+    actual_task_digest=tree_digest(task_dir)
     if packet["task"]["package_digest"] != actual_task_digest:
         raise ValueError(
             f"task package digest mismatch: {packet['task']['package_digest']} != {actual_task_digest}"
         )
 
-    if packet["actor"]["profile_ref"] != str(args.actor_profile):
+    if packet["actor"]["profile_ref"] != str(actor_profile):
         raise ValueError("actor profile_ref does not match supplied actor profile")
 
-    if packet["substrate"]["profile_ref"] != str(args.substrate_profile):
+    if packet["substrate"]["profile_ref"] != str(substrate_profile):
         raise ValueError("substrate profile_ref does not match supplied substrate profile")
     actual_substrate_digest=canonical_digest(substrate)
     if packet["substrate"]["profile_digest"] != actual_substrate_digest:
@@ -69,6 +74,10 @@ def main() -> int:
     if sorted(packet["authority"]["tool_refs"]) != required_tools:
         raise ValueError("launch tool refs disagree with task projection")
 
+    actor_tools=sorted(f"tool:{name}" for name in actor.get("toolset") or [])
+    if actor_tools != required_tools:
+        raise ValueError("configured actor toolset disagrees with task projection")
+
     if packet["limits"]["wall_seconds"] != task["limits"]["wall_seconds"]:
         raise ValueError("launch wall limit disagrees with task package")
 
@@ -77,6 +86,28 @@ def main() -> int:
     for fragment in forbidden_fragments:
         if fragment in serialized:
             raise ValueError(f"venue-specific launch content is prohibited: {fragment}")
+
+    return task, actor, substrate
+
+
+def main() -> int:
+    parser=argparse.ArgumentParser()
+    parser.add_argument("packet",type=Path)
+    parser.add_argument("--schema",type=Path,default=Path("qualification/portable-launch-packet.schema.json"))
+    parser.add_argument("--task-dir",type=Path,required=True)
+    parser.add_argument("--actor-profile",type=Path,required=True)
+    parser.add_argument("--substrate-profile",type=Path,required=True)
+    args=parser.parse_args()
+
+    packet=read(args.packet)
+    schema=read(args.schema)
+    task,actor,substrate=validate_packet(
+        packet,
+        schema,
+        args.task_dir,
+        args.actor_profile,
+        args.substrate_profile,
+    )
 
     print(
         "PASS portable launch packet "

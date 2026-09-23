@@ -30,95 +30,75 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validate portable launch binding before execution
+      - name: Validate both venue bindings
         shell: bash
         run: |
+          set -euo pipefail
           python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
-          PYTHONPATH=. python qualification/validate_portable_launch_packet.py \
-            qualification/launch-packets/contract-portability-openworker-text-repair-v1.json \
-            --task-dir qualification/tasks/text-repair-v0 \
-            --actor-profile qualification/actors/openworker-prebuilt-qwen3-1.7b-gha-ollama.json \
-            --substrate-profile qualification/fixtures/substrate-profile-gha-v2.json
+          PYTHONPATH=. python qualification/validate_portable_launch_packet.py             qualification/launch-packets/contract-portability-gha-v1.json             --task-dir qualification/tasks/text-repair-v0             --actor-profile qualification/actors/contract-test-portable.json             --substrate-profile qualification/fixtures/substrate-profile-gha-v2.json
+          PYTHONPATH=. python qualification/validate_portable_launch_packet.py             qualification/launch-packets/contract-portability-container-v1.json             --task-dir qualification/tasks/text-repair-v0             --actor-profile qualification/actors/contract-test-portable.json             --substrate-profile qualification/fixtures/substrate-profile-container-v2.json
 
-      - name: Run native contract rep
+      - name: Execute native packet through portable kernel
         shell: bash
         env:
-          NATIVE_RECEIPT: ${{ runner.temp }}/qualification-native.json
+          NATIVE_ROOT: ${{ runner.temp }}/native-launch
         run: |
           set -euo pipefail
-          python qualification/run_task.py \
-            --task-commit "$GITHUB_SHA" \
-            --substrate-profile-id gha-native-contract-rehearsal \
-            --substrate-profile-commit "$GITHUB_SHA" \
-            --candidate-env-mode minimal \
-            qualification/tasks/text-repair-v0 \
-            qualification/test-candidate.json \
-            "$NATIVE_RECEIPT" \
-            -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
+          PYTHONPATH=. python qualification/execute_portable_launch.py             qualification/launch-packets/contract-portability-gha-v1.json             --task-commit "$GITHUB_SHA"             --substrate-profile-commit "$GITHUB_SHA"             --output-root "$NATIVE_ROOT"             -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
+          test -s "$NATIVE_ROOT/out/receipt.json"
 
-      - name: Run same rep in constrained local-shaped container
+      - name: Execute alternate packet in constrained local-shaped container
         shell: bash
         env:
-          CONTAINER_RECEIPT: ${{ runner.temp }}/qualification-container.json
           CONTAINER_IMAGE: python:3.12-slim-bookworm
+          CONTAINER_ROOT: ${{ runner.temp }}/container-launch
         run: |
           set -euo pipefail
+          mkdir -p "$CONTAINER_ROOT"
           docker info >/dev/null
           docker pull "$CONTAINER_IMAGE" >/dev/null
           image_ref="$(docker inspect --format '{{index .RepoDigests 0}}' "$CONTAINER_IMAGE")"
           printf '%s\n' "$image_ref" > "$RUNNER_TEMP/qualification-portability-container-image.txt"
 
-          docker run --rm \
-            --network none \
-            --read-only \
-            --tmpfs /tmp:rw,nosuid,nodev,size=64m \
-            -v "$GITHUB_WORKSPACE:/repo:ro" \
-            -v "$RUNNER_TEMP:/out:rw" \
-            -w /repo \
-            "$CONTAINER_IMAGE" \
-            /bin/sh -ec '
+          docker run --rm             --network none             --read-only             --tmpfs /tmp:rw,nosuid,nodev,size=64m             -e PORTABLE_TASK_COMMIT="$GITHUB_SHA"             -v "$GITHUB_WORKSPACE:/repo:ro"             -v "$RUNNER_TEMP:/out:rw"             -w /repo             "$CONTAINER_IMAGE"             /bin/sh -ec '
               if env | grep -q "^GITHUB_"; then
                 echo "unexpected GitHub-specific environment leaked into portable execution" >&2
                 exit 2
               fi
               test ! -e /var/run/docker.sock
-              python qualification/run_task.py \
-                --task-commit "'"$GITHUB_SHA"'" \
-                --substrate-profile-id container-local-shape-contract-rehearsal \
-                --substrate-profile-commit "'"$GITHUB_SHA"'" \
-                qualification/tasks/text-repair-v0 \
-                qualification/test-candidate.json \
-                /out/qualification-container.json \
-                -- python /repo/qualification/test_candidate.py
+              PYTHONPATH=/repo python qualification/execute_portable_launch.py                 qualification/launch-packets/contract-portability-container-v1.json                 --task-commit "$PORTABLE_TASK_COMMIT"                 --substrate-profile-commit "$PORTABLE_TASK_COMMIT"                 --output-root /out/container-launch                 -- python /repo/qualification/test_candidate.py
             '
 
-          test -s "$CONTAINER_RECEIPT"
+          test -s "$CONTAINER_ROOT/out/receipt.json"
 
       - name: Validate and compare portable receipts
         shell: bash
         env:
-          NATIVE_RECEIPT: ${{ runner.temp }}/qualification-native.json
-          CONTAINER_RECEIPT: ${{ runner.temp }}/qualification-container.json
+          NATIVE_RECEIPT: ${{ runner.temp }}/native-launch/out/receipt.json
+          CONTAINER_RECEIPT: ${{ runner.temp }}/container-launch/out/receipt.json
           SUMMARY: ${{ runner.temp }}/qualification-portability-summary.json
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
           python - <<'PY'
           import json, os
           from pathlib import Path
           import jsonschema
 
           schema=json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          rows=[]
           for name in ("NATIVE_RECEIPT","CONTAINER_RECEIPT"):
               receipt=json.loads(Path(os.environ[name]).read_text())
               jsonschema.validate(receipt,schema)
-          print("PASS both venue-shaped receipts validate")
+              assert receipt.get("launch")
+              assert receipt["substrate"].get("profile_digest")
+              rows.append(receipt)
+          assert rows[0]["candidate"] == rows[1]["candidate"]
+          assert rows[0]["launch"]["packet_digest"] != rows[1]["launch"]["packet_digest"]
+          assert rows[0]["substrate"]["profile_digest"] != rows[1]["substrate"]["profile_digest"]
+          print("PASS both packet-driven venue receipts validate")
           PY
 
-          PYTHONPATH=. python qualification/compare_portable_receipts.py \
-            "$NATIVE_RECEIPT" \
-            "$CONTAINER_RECEIPT" \
-            --output "$SUMMARY"
+          PYTHONPATH=. python qualification/compare_portable_receipts.py             "$NATIVE_RECEIPT"             "$CONTAINER_RECEIPT"             --output "$SUMMARY"
 
           cat "$RUNNER_TEMP/qualification-portability-container-image.txt"
           cat "$SUMMARY"
@@ -132,8 +112,8 @@ jobs:
         with:
           name: qualification-portability-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/qualification-native.json
-            ${{ runner.temp }}/qualification-container.json
+            ${{ runner.temp }}/native-launch/out/receipt.json
+            ${{ runner.temp }}/container-launch/out/receipt.json
             ${{ runner.temp }}/qualification-portability-summary.json
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore

@@ -7,7 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-PACKET=ROOT/"qualification/launch-packets/contract-portability-openworker-text-repair-v1.json"
+PACKET=ROOT/"qualification/launch-packets/contract-portability-gha-v1.json"
 BASE=json.loads(PACKET.read_text())
 
 
@@ -20,7 +20,7 @@ def run(packet: dict) -> subprocess.CompletedProcess[str]:
             sys.executable,str(ROOT/"qualification/validate_portable_launch_packet.py"),
             str(path),
             "--task-dir","qualification/tasks/text-repair-v0",
-            "--actor-profile","qualification/actors/openworker-prebuilt-qwen3-1.7b-gha-ollama.json",
+            "--actor-profile","qualification/actors/contract-test-portable.json",
             "--substrate-profile","qualification/fixtures/substrate-profile-gha-v2.json",
         ],cwd=ROOT,text=True,capture_output=True)
     finally:

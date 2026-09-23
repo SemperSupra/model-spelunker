@@ -98,6 +98,9 @@ jobs:
           jsonschema.Draft7Validator.check_schema(harness_build_schema)
           jsonschema.Draft7Validator.check_schema(harness_admission_schema)
           jsonschema.Draft7Validator.check_schema(launch_packet_schema)
+          for path in sorted(Path("qualification/launch-packets").glob("*.json")):
+              launch_packet = json.loads(path.read_text())
+              jsonschema.validate(launch_packet, launch_packet_schema)
           for path in sorted(Path("qualification/harness-artifacts").glob("*.admission*.json")):
               admission = json.loads(path.read_text())
               jsonschema.validate(admission, harness_admission_schema)
@@ -162,13 +165,18 @@ jobs:
       - name: Verify prebuilt actor/admission bindings
         run: PYTHONPATH=. python qualification/check_admitted_actor_bindings.py
 
-      - name: Validate portable launch packet binding
+      - name: Validate portable launch packet bindings
         run: |
           PYTHONPATH=. python qualification/validate_portable_launch_packet.py \
-            qualification/launch-packets/contract-portability-openworker-text-repair-v1.json \
+            qualification/launch-packets/contract-portability-gha-v1.json \
             --task-dir qualification/tasks/text-repair-v0 \
-            --actor-profile qualification/actors/openworker-prebuilt-qwen3-1.7b-gha-ollama.json \
+            --actor-profile qualification/actors/contract-test-portable.json \
             --substrate-profile qualification/fixtures/substrate-profile-gha-v2.json
+          PYTHONPATH=. python qualification/validate_portable_launch_packet.py \
+            qualification/launch-packets/contract-portability-container-v1.json \
+            --task-dir qualification/tasks/text-repair-v0 \
+            --actor-profile qualification/actors/contract-test-portable.json \
+            --substrate-profile qualification/fixtures/substrate-profile-container-v2.json
 
       - name: Self-test portable launch packet fault injection
         run: PYTHONPATH=. python qualification/test_portable_launch_packet_faults.py

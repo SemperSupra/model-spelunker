@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "task": {
+    "profile_ref": "qualification/tasks/text-repair-v0/task.json",
+    "package_digest": "sha256:a51be2ffb8cbe2cacac72f038bb88a1649d491ff853244adb729981c9d6c24cc"
+  },
+  "actor": {
+    "profile_ref": "qualification/actors/contract-test-portable.json"
+  },
+  "authority": {
+    "profile_ref": "task-scoped-workcell",
+    "tool_refs": [
+      "tool:read_file",
+      "tool:write_file"
+    ]
+  },
+  "limits": {
+    "wall_seconds": 120
+  },
+  "credentials": {
+    "refs": []
+  },
+  "outputs": {
+    "receipt": "out/receipt.json",
+    "diagnostics": "out/diagnostics.json"
+  },
+  "launch_id": "contract-portability-container-v1",
+  "substrate": {
+    "profile_ref": "qualification/fixtures/substrate-profile-container-v2.json",
+    "profile_digest": "sha256:fce9184e427b2bdc44f974444f2906b3e6e41d0988e23f320e8b8e045d355e30"
+  }
+}

@@ -192,6 +192,13 @@
         "profile_commit": {
           "type": "string",
           "pattern": "^[0-9a-f]{40}$"
+        },
+        "profile_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$"
         }
       }
     },
@@ -410,6 +417,25 @@
     "evidence_digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "launch_id",
+        "packet_digest"
+      ],
+      "properties": {
+        "launch_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "maxLength": 128
+        },
+        "packet_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
     }
   }
 }
