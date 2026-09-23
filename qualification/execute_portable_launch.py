@@ -71,12 +71,13 @@ def main() -> int:
     parser.add_argument("--task-commit",required=True)
     parser.add_argument("--substrate-profile-commit",required=True)
     parser.add_argument("--output-root",type=Path,required=True)
-    parser.add_argument("command",nargs=argparse.REMAINDER)
-    args=parser.parse_args()
 
-    command=list(args.command)
-    if command and command[0]=="--":
-        command=command[1:]
+    argv=sys.argv[1:]
+    if "--" not in argv:
+        parser.error("candidate command is required after --")
+    split=argv.index("--")
+    args=parser.parse_args(argv[:split])
+    command=argv[split+1:]
     if not command:
         parser.error("candidate command is required after --")
 
