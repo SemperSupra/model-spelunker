@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -172,6 +173,50 @@ def detect_failure_signals(
         add("repeated-tool-failure")
 
     return signals
+
+
+def run_candidate_process(
+    command: list[str],
+    *,
+    cwd: Path,
+    input_text: str,
+    timeout: int,
+    env: dict[str, str],
+) -> tuple[int, str, str, bool]:
+    """Run a candidate in its own process group so timeout cleanup reaches children."""
+    proc = subprocess.Popen(
+        command,
+        cwd=cwd,
+        text=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        start_new_session=(os.name == "posix"),
+    )
+    try:
+        stdout, stderr = proc.communicate(input=input_text, timeout=timeout)
+        return proc.returncode, stdout, stderr, False
+    except subprocess.TimeoutExpired:
+        if os.name == "posix":
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        else:
+            proc.terminate()
+        try:
+            stdout, stderr = proc.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            else:
+                proc.kill()
+            stdout, stderr = proc.communicate()
+        return 124, stdout or "", stderr or "", True
 
 
 def new_run_id() -> str:
@@ -443,29 +488,13 @@ def main() -> int:
             projected_tools = task.get("projected_tools") or []
             if projected_tools:
                 candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
-            completed = subprocess.run(
+            candidate_exit, stdout, stderr, timed_out = run_candidate_process(
                 command,
                 cwd=workdir,
-                text=True,
-                input=task["instruction"] + "\n",
-                capture_output=True,
+                input_text=task["instruction"] + "\n",
                 timeout=timeout,
-                check=False,
                 env=candidate_env,
             )
-            candidate_exit = completed.returncode
-            stdout = completed.stdout
-            stderr = completed.stderr
-            timed_out = False
-        except subprocess.TimeoutExpired as exc:
-            candidate_exit = 124
-            stdout = exc.stdout or ""
-            stderr = exc.stderr or ""
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode("utf-8", errors="replace")
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode("utf-8", errors="replace")
-            timed_out = True
 
         verifier = subprocess.run(
             [sys.executable, str(args.task_dir / task["verifier"]), str(workdir)],
@@ -477,12 +506,15 @@ def main() -> int:
 
         final_tree_digest = tree_digest(workdir)
         state_changed = final_tree_digest != initial_tree_digest
+        validator_error = verifier.returncode not in {0, 1}
         success = verifier.returncode == 0 and not timed_out
         provider_rounds = provider_observations(stdout)
         if not provider_rounds and (candidate.get("harness") or {}).get("name") == "goose":
             provider_rounds = goose_stream_provider_observations(stdout)
         engine_error = has_engine_error_event(stdout)
-        if timed_out:
+        if validator_error:
+            failure_class = "validator-error"
+        elif timed_out:
             failure_class = "timeout"
         elif candidate_exit != 0:
             failure_class = "candidate-error"
@@ -501,6 +533,8 @@ def main() -> int:
             verifier_exit=verifier.returncode,
             state_changed=state_changed,
         )
+        if validator_error and "validator-error" not in failure_signals:
+            failure_signals.append("validator-error")
         metrics = harness_metrics(stdout)
         error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
