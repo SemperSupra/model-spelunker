@@ -35,8 +35,16 @@ class PublicHFScorer:
             self.device = torch.device("cpu")
         else:
             raise RuntimeError(f"unsupported VISUAL_CONCEPT_DEVICE: {requested_device}")
+        self.attention_implementation = os.environ.get("VISUAL_CONCEPT_ATTN_IMPLEMENTATION", "").strip() or None
         self.processor = AutoProcessor.from_pretrained(self.model_id, revision=self.model_revision)
-        self.model = AutoModelForZeroShotImageClassification.from_pretrained(self.model_id, revision=self.model_revision)
+        model_kwargs = {}
+        if self.attention_implementation is not None:
+            model_kwargs["attn_implementation"] = self.attention_implementation
+        self.model = AutoModelForZeroShotImageClassification.from_pretrained(
+            self.model_id,
+            revision=self.model_revision,
+            **model_kwargs,
+        )
         self.model.to(self.device)
         self.model.eval()
 
@@ -134,6 +142,7 @@ def main() -> int:
         "mps_built": bool(torch.backends.mps.is_built()),
         "mps_available": bool(torch.backends.mps.is_available()),
         "mps_fallback_env": os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK"),
+        "attention_implementation": scorer.attention_implementation,
     }
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
