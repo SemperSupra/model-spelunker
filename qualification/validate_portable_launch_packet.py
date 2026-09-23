@@ -35,6 +35,14 @@ def validate_packet(
     actor=read(actor_profile)
     substrate=read(substrate_profile)
 
+    required_top={"schema_version","launch_id","task","actor","substrate","authority","limits","credentials","outputs"}
+    if set(packet) != required_top:
+        missing=sorted(required_top-set(packet))
+        extra=sorted(set(packet)-required_top)
+        raise ValueError(f"launch packet shape mismatch: missing={missing} extra={extra}")
+    if packet.get("schema_version") != 1:
+        raise ValueError("unsupported launch packet schema_version")
+
     if schema is not None:
         import jsonschema
         jsonschema.Draft7Validator(schema).validate(packet)
