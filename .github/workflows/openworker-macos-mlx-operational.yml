@@ -1,0 +1,275 @@
+name: OpenWorker macOS MLX Operational Qualification
+
+on:
+  pull_request:
+    branches:
+      - exp/mlx-tool-call-preflight-qwen3-4b
+    paths:
+      - qualification/adapters/openworker_projected.py
+      - qualification/actors/openworker-qwen3-4b-gha-macos-mlx.json
+      - qualification/experiments/openworker-macos-mlx-siglip2-operational-v0.json
+      - qualification/tasks/method-ir-siglip2-b16-256-v0/**
+      - .github/workflows/openworker-macos-mlx-operational.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  siglip2-operational:
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      OPENWORKER_ARTIFACT_REF: ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236
+      OPENWORKER_ADMISSION: qualification/harness-artifacts/openworker-5bc10d928e0b-macos-arm64.admission-v1.json
+      MODEL_REPO: mlx-community/Qwen3-4B-Instruct-2507-4bit
+      MODEL_REVISION: 50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b
+      MODEL_FILE_SHA256: 2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f
+      MODEL_FILE_BYTES: '2263022417'
+      MLX_LM_VERSION: '0.31.3'
+      TASK_ID: method-ir-siglip2-b16-256-v0
+      ACTOR_META: qualification/actors/openworker-qwen3-4b-gha-macos-mlx.json
+      RECEIPT: /tmp/model-spelunker-macos-mlx-siglip2-receipt.json
+      DIAGNOSTICS: /tmp/model-spelunker-macos-mlx-siglip2-diagnostics.json
+      SNAPSHOT_DIR: /tmp/model-spelunker-macos-mlx-siglip2-c1
+      MODEL_SPELUNKER_REASONING_EFFORT: omit
+      MODEL_SPELUNKER_MAX_TOKENS: '2048'
+      MODEL_SPELUNKER_OPENAI_BASE_URL: http://127.0.0.1:8080/v1
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - name: Checkout frozen operational package
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Hydrate and verify frozen SigLIP2 public sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          task="qualification/tasks/$TASK_ID"
+          python3 "$task/prepare_fixture.py"
+          python3 "$task/verify.py" --self-test
+          test -s "$task/fixture/prepared_sources.json"
+          test -s "$task/fixture/sources/document.tex"
+          test -s "$task/fixture/sources/tables/zeroshot_main.tex"
+          test -s "$task/fixture/sources/README_siglip2.md"
+
+      - name: Install daemonless OCI fetcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v skopeo >/dev/null 2>&1; then
+            brew install skopeo
+          fi
+          skopeo --version
+
+      - name: Hydrate admitted OpenWorker artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          layout="$RUNNER_TEMP/openworker-oci"
+          auth="$RUNNER_TEMP/skopeo-auth.json"
+          root="$RUNNER_TEMP/openworker-hydrated"
+          summary="$RUNNER_TEMP/openworker-hydrate-summary.json"
+
+          printf '%s' "$GHCR_TOKEN" | skopeo login \
+            --authfile "$auth" \
+            --username "$GITHUB_ACTOR" \
+            --password-stdin ghcr.io >/dev/null
+          skopeo copy \
+            --preserve-digests \
+            --authfile "$auth" \
+            "docker://$OPENWORKER_ARTIFACT_REF" \
+            "oci:$layout:artifact" >/dev/null
+          rm -f "$auth"
+
+          python3 qualification/hydrate_oci_layout.py \
+            "$layout" "$root" \
+            --ref-name artifact \
+            --summary "$summary"
+
+          manifest_digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["manifest_digest"])' "$summary")"
+          python3 qualification/verify_hydrated_artifact.py \
+            "$root" "$OPENWORKER_ADMISSION" \
+            --manifest-digest "$manifest_digest"
+
+          venv="$RUNNER_TEMP/openworker-macos-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install \
+            --disable-pip-version-check \
+            --no-index \
+            --no-deps \
+            "$root"/artifact/wheelhouse/*.whl >/dev/null
+          "$venv/bin/python" -c 'import coworker; import coworker.engine'
+          echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
+
+      - name: Materialize pinned MLX model and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/mlx-runtime-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install \
+            --disable-pip-version-check \
+            --no-cache-dir \
+            "mlx-lm==$MLX_LM_VERSION" >/dev/null
+
+          MLX_PY="$venv/bin/python" "$venv/bin/python" - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from huggingface_hub import snapshot_download
+
+          snapshot=Path(snapshot_download(
+              repo_id=os.environ["MODEL_REPO"],
+              revision=os.environ["MODEL_REVISION"],
+          ))
+          if snapshot.name != os.environ["MODEL_REVISION"]:
+              raise SystemExit(f"resolved revision drift: {snapshot.name}")
+          model=(snapshot/"model.safetensors").resolve()
+          data_hash=hashlib.sha256()
+          size=0
+          with model.open("rb") as f:
+              for block in iter(lambda:f.read(1024*1024),b""):
+                  size += len(block)
+                  data_hash.update(block)
+          if size != int(os.environ["MODEL_FILE_BYTES"]):
+              raise SystemExit(f"model size drift: {size}")
+          if data_hash.hexdigest() != os.environ["MODEL_FILE_SHA256"]:
+              raise SystemExit(f"model digest drift: {data_hash.hexdigest()}")
+
+          inventory=[]
+          for path in sorted(p for p in snapshot.iterdir() if p.is_file() or p.is_symlink()):
+              resolved=path.resolve()
+              if not resolved.is_file():
+                  continue
+              h=hashlib.sha256()
+              count=0
+              with resolved.open("rb") as f:
+                  for block in iter(lambda:f.read(1024*1024),b""):
+                      count += len(block); h.update(block)
+              inventory.append({"path":path.name,"bytes":count,"sha256":h.hexdigest()})
+
+          out=Path(os.environ["RUNNER_TEMP"])/"mlx-model-inventory.json"
+          out.write_text(json.dumps({
+              "repo":os.environ["MODEL_REPO"],
+              "revision":snapshot.name,
+              "files":inventory,
+          },indent=2,sort_keys=True)+"\n")
+          env=Path(os.environ["GITHUB_ENV"])
+          with env.open("a") as f:
+              f.write(f"MLX_VENV={os.environ['MLX_PY'].rsplit('/bin/python',1)[0]}\n")
+              f.write(f"MODEL_SNAPSHOT={snapshot}\n")
+          print(f"MODEL_SNAPSHOT={snapshot}")
+          print(f"MODEL_FILE_SHA256={data_hash.hexdigest()}")
+          PY
+
+      - name: Require MLX GPU and start local model service
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$MLX_VENV/bin/python" - <<'PY'
+          import mlx.core as mx
+          mx.set_default_device(mx.gpu)
+          if "gpu" not in str(mx.default_device()).lower():
+              raise SystemExit("MLX GPU unavailable")
+          print("MLX_DEFAULT_DEVICE="+str(mx.default_device()))
+          PY
+
+          launcher="$RUNNER_TEMP/start-mlx-server.py"
+          cat >"$launcher" <<'PY'
+          import os
+          import runpy
+          import sys
+          import mlx.core as mx
+          mx.set_default_device(mx.gpu)
+          sys.argv=[
+              "mlx_lm.server",
+              "--model", os.environ["MODEL_SNAPSHOT"],
+              "--port", "8080",
+          ]
+          runpy.run_module("mlx_lm.server",run_name="__main__")
+          PY
+
+          nohup "$MLX_VENV/bin/python" "$launcher" >"$RUNNER_TEMP/mlx-server.log" 2>&1 &
+          echo "MLX_SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 180); do
+            curl --fail --silent http://127.0.0.1:8080/v1/models >/dev/null && break
+            if ! kill -0 "$!" 2>/dev/null; then
+              cat "$RUNNER_TEMP/mlx-server.log" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8080/v1/models >/dev/null
+
+      - name: Run real SigLIP2 Method-IR work sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MODEL_SPELUNKER_MODEL="local-openai:$MODEL_SNAPSHOT"
+
+          rm -rf "$SNAPSHOT_DIR"
+          mkdir -p "$SNAPSHOT_DIR"
+
+          set +e
+          python3 qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-macos26-arm64-openworker-mlx-qwen3-4b \
+            --substrate-profile-commit macos26-openworker-mlx-qwen3-4b-v1 \
+            --diagnostics "$DIAGNOSTICS" \
+            --snapshot-dir "$SNAPSHOT_DIR" \
+            --candidate-env-mode minimal \
+            --pass-env MODEL_SPELUNKER_MODEL \
+            --pass-env MODEL_SPELUNKER_REASONING_EFFORT \
+            --pass-env MODEL_SPELUNKER_MAX_TOKENS \
+            --pass-env MODEL_SPELUNKER_OPENAI_BASE_URL \
+            "qualification/tasks/$TASK_ID" \
+            "$ACTOR_META" \
+            "$RECEIPT" \
+            -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+
+          test -s "$RECEIPT"
+          QUALIFICATION_RC="$rc" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          obs=receipt["observation"]
+          rc=int(os.environ["QUALIFICATION_RC"])
+          assert rc==(0 if obs["success"] else 1)
+          print("OPERATIONAL_C1_SUCCESS="+str(bool(obs["success"])).lower())
+          print("OPERATIONAL_C1_FAILURE_CLASS="+str(obs.get("failure_class")))
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+
+          # A valid negative is still an operational observation.
+          exit 0
+
+      - name: Upload immutable C1 evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: macos-mlx-siglip2-operational-c1-${{ github.run_id }}
+          path: |
+            ${{ env.RECEIPT }}
+            ${{ env.DIAGNOSTICS }}
+            ${{ env.SNAPSHOT_DIR }}
+            ${{ runner.temp }}/mlx-model-inventory.json
+            ${{ runner.temp }}/mlx-server.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Stop local model service
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${MLX_SERVER_PID:-}" ]; then
+            kill "$MLX_SERVER_PID" 2>/dev/null || true
+          fi
