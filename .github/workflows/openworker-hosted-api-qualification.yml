@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: openworker-hosted-api-${{ github.ref }}-${{ matrix.candidate }}
+  group: openworker-hosted-api-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
