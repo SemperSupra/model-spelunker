@@ -102,3 +102,27 @@ assert (
     reconciliation_failure["ksa_evidence"]["abilities"]["unknown_preservation"]
     == "NEGATIVE_BOUNDARY_OBSERVED"
 )
+
+
+validator_failure = receipt("run-validator", False, model_rounds=2)
+validator_failure["observation"]["failure_class"] = "validator-error"
+validator_failure["observation"]["failure_signals"] = ["validator-error"]
+env = reduce_receipts([validator_failure])[0]
+assert env["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+assert env["evidence"]["validated_fail"] == 0
+assert env["evidence"]["incomplete"] == 1
+
+duplicate = receipt("run-dup", True)
+env = reduce_receipts([duplicate, duplicate])[0]
+assert env["evidence"]["reps"] == 1
+assert env["evidence"]["validated_pass"] == 1
+
+divergent = receipt("run-dup", False)
+try:
+    reduce_receipts([duplicate, divergent])
+except ValueError as exc:
+    assert "divergent receipt" in str(exc)
+else:
+    raise AssertionError("divergent duplicate run_id did not fail closed")
+
+print("PASS duplicate and validator-error reducer controls")

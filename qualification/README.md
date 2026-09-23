@@ -175,3 +175,67 @@ For OpenRouter, the adapter may enrich completed generations through the metadat
 native token/timing/cost information without retrieving stored prompt/completion
 content.
 
+
+
+## Portable execution boundary
+
+Qualification workflows are adapters around a portable procedure; GitHub Actions is
+not the procedure itself.
+
+The portable boundary is represented by `portable-launch-packet.schema.json`. A
+launch packet binds an immutable task package, configured actor profile, external
+substrate profile/digest, authority/tool projection, wall-clock limit, logical
+credential references, and output locations. It deliberately excludes
+`GITHUB_WORKSPACE`, runner temp paths, workflow/run identifiers, scheduler state,
+and container-engine commands.
+
+Infrastructure profiles describe venue facts only. They must not copy harness,
+model, authentication, billing, task, tool, or authority state. This allows the
+same actor/task binding to move between GHA and a future GARM/local substrate while
+changing only the substrate reference.
+
+### Artifact fetch and hydration
+
+Artifact consumption is split into three operations:
+
+1. **fetch** an immutable OCI digest into a local OCI layout/cache while network is available;
+2. **hydrate/verify** the cached layout without rebuilding, resolving dependencies,
+   or requiring a container daemon;
+3. **execute** the verified native payload under the task/authority envelope.
+
+`hydrate_oci_layout.py` is intentionally a narrow distribution-envelope extractor,
+not a container runtime. It supports regular files/directories and OCI whiteouts,
+verifies every blob digest, and rejects links, devices, and path traversal.
+
+### Persistent-worker hygiene
+
+The qualification runner creates a fresh task workspace per rep. Candidate processes
+run in a dedicated process group; timeout cleanup terminates that group so child
+processes cannot silently survive into a later rep. Contract tests exercise repeated
+runs on the same host, stale-file injection, and timeout child cleanup.
+
+Credentials remain execution-time references. File-backed credential contents are
+not part of actor metadata and contract tests assert a sentinel secret cannot appear
+in receipts or bounded diagnostics.
+
+### Failure-plane attribution
+
+A verifier exit code outside the deterministic `0=pass / 1=task-fail` contract is a
+`validator-error`. It is infrastructure/validation evidence and is nonterminal for
+actor qualification even when model rounds occurred. Likewise, duplicate immutable
+run ids cannot increase evidence strength; identical duplicates are counted once and
+divergent duplicates fail closed.
+
+### Portability comparison semantics
+
+Two comparison modes are deliberately distinct:
+
+- **deterministic portability canary** — task/candidate/evidence and behavioral
+  observations must match exactly except for run id, substrate id, and wall time;
+- **stochastic actor substrate crossover** — actor/task identity must match, while
+  outcome/failure differences are preserved as experiment evidence rather than
+  treated automatically as methodology failure. Token counts, model rounds, tool
+  counts, latency, and traces remain observations rather than equality gates.
+
+The current GHA constrained-container rehearsal is a hidden-assumption probe. It is
+not treated as a simulation of future sovereign hardware or kernel behavior.

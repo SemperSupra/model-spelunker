@@ -50,6 +50,7 @@ jobs:
           task_schema = json.loads(Path("qualification/task-profile.schema.json").read_text())
           harness_build_schema = json.loads(Path("qualification/harness-build-receipt.schema.json").read_text())
           harness_admission_schema = json.loads(Path("qualification/harness-admission-receipt.schema.json").read_text())
+          launch_packet_schema = json.loads(Path("qualification/portable-launch-packet.schema.json").read_text())
 
           candidates = hosted["candidates"]
           assert set(candidates) == {
@@ -96,6 +97,7 @@ jobs:
           jsonschema.Draft7Validator.check_schema(task_schema)
           jsonschema.Draft7Validator.check_schema(harness_build_schema)
           jsonschema.Draft7Validator.check_schema(harness_admission_schema)
+          jsonschema.Draft7Validator.check_schema(launch_packet_schema)
           for path in sorted(Path("qualification/harness-artifacts").glob("*.admission*.json")):
               admission = json.loads(path.read_text())
               jsonschema.validate(admission, harness_admission_schema)
@@ -159,6 +161,33 @@ jobs:
 
       - name: Verify prebuilt actor/admission bindings
         run: PYTHONPATH=. python qualification/check_admitted_actor_bindings.py
+
+      - name: Validate portable launch packet binding
+        run: |
+          PYTHONPATH=. python qualification/validate_portable_launch_packet.py \
+            qualification/launch-packets/contract-portability-openworker-text-repair-v1.json \
+            --task-dir qualification/tasks/text-repair-v0 \
+            --actor-profile qualification/actors/openworker-prebuilt-qwen3-1.7b-gha-ollama.json \
+            --substrate-profile qualification/fixtures/substrate-profile-gha-v2.json
+
+      - name: Self-test portable launch packet fault injection
+        run: PYTHONPATH=. python qualification/test_portable_launch_packet_faults.py
+
+      - name: Self-test daemonless artifact hydration
+        run: PYTHONPATH=. python qualification/test_hydrate_oci_layout.py
+
+      - name: Self-test artifact admission fault injection
+        run: PYTHONPATH=. python qualification/test_artifact_admission_faults.py
+
+      - name: Self-test persistent worker lifecycle
+        run: |
+          PYTHONPATH=. python qualification/test_candidate_lifecycle.py
+          PYTHONPATH=. python qualification/test_persistent_worker_hygiene.py
+
+      - name: Self-test credential and validator failure hygiene
+        run: |
+          PYTHONPATH=. python qualification/test_credential_reference_hygiene.py
+          PYTHONPATH=. python qualification/test_run_task_validator_error.py
 
       - name: Self-test venue-portability receipt comparator
         run: PYTHONPATH=. python qualification/test_compare_portable_receipts.py

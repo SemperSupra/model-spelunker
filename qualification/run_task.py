@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -173,6 +174,75 @@ def detect_failure_signals(
 
     return signals
 
+
+def _terminate_candidate_group(proc: subprocess.Popen[str]) -> None:
+    if os.name != "posix":
+        if proc.poll() is None:
+            proc.terminate()
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    time.sleep(0.05)
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def run_candidate_process(
+    command: list[str],
+    *,
+    cwd: Path,
+    input_text: str,
+    timeout: int,
+    env: dict[str, str],
+) -> tuple[int, str, str, bool]:
+    """Run a candidate in its own process group and never leave descendants behind.
+
+    Regular temp files are used for stdout/stderr so a background descendant that
+    inherits those descriptors cannot keep the parent-side capture pipe open after
+    the candidate process itself exits.
+    """
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout_file, tempfile.TemporaryFile(
+        mode="w+", encoding="utf-8"
+    ) as stderr_file:
+        proc = subprocess.Popen(
+            command,
+            cwd=cwd,
+            text=True,
+            stdin=subprocess.PIPE,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            env=env,
+            start_new_session=(os.name == "posix"),
+        )
+        if proc.stdin is None:
+            raise RuntimeError("candidate stdin unavailable")
+        proc.stdin.write(input_text)
+        proc.stdin.close()
+
+        timed_out=False
+        try:
+            return_code=proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out=True
+            return_code=124
+        finally:
+            _terminate_candidate_group(proc)
+            if proc.poll() is None:
+                try:
+                    proc.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout=stdout_file.read()
+        stderr=stderr_file.read()
+        return return_code, stdout, stderr, timed_out
 
 def new_run_id() -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -415,6 +485,18 @@ def main() -> int:
         type=Path,
         help="Optional evidence directory for copies of only task-declared allowed outputs.",
     )
+    parser.add_argument(
+        "--candidate-env-mode",
+        choices=["inherit", "minimal"],
+        default="inherit",
+        help="Environment policy for the candidate process. Portable/local launches should prefer minimal.",
+    )
+    parser.add_argument(
+        "--pass-env",
+        action="append",
+        default=[],
+        help="Environment variable name to pass explicitly in minimal mode; may be repeated.",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -434,38 +516,38 @@ def main() -> int:
         initial_tree_digest = tree_digest(workdir)
 
         started = time.monotonic()
-        try:
+        if args.candidate_env_mode == "inherit":
             candidate_env = dict(os.environ)
-            candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
-            allowed = task.get("allowed_write_paths") or []
-            if len(allowed) == 1:
-                candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
-            projected_tools = task.get("projected_tools") or []
-            if projected_tools:
-                candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
-            completed = subprocess.run(
-                command,
-                cwd=workdir,
-                text=True,
-                input=task["instruction"] + "\n",
-                capture_output=True,
-                timeout=timeout,
-                check=False,
-                env=candidate_env,
-            )
-            candidate_exit = completed.returncode
-            stdout = completed.stdout
-            stderr = completed.stderr
-            timed_out = False
-        except subprocess.TimeoutExpired as exc:
-            candidate_exit = 124
-            stdout = exc.stdout or ""
-            stderr = exc.stderr or ""
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode("utf-8", errors="replace")
-            if isinstance(stderr, bytes):
-                stderr = stderr.decode("utf-8", errors="replace")
-            timed_out = True
+        else:
+            baseline = {
+                "PATH",
+                "HOME",
+                "LANG",
+                "LC_ALL",
+                "TMPDIR",
+                "SSL_CERT_FILE",
+                "SSL_CERT_DIR",
+            }
+            requested = baseline | set(args.pass_env)
+            candidate_env = {
+                key: value
+                for key, value in os.environ.items()
+                if key in requested
+            }
+        candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
+        allowed = task.get("allowed_write_paths") or []
+        if len(allowed) == 1:
+            candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
+        projected_tools = task.get("projected_tools") or []
+        if projected_tools:
+            candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
+        candidate_exit, stdout, stderr, timed_out = run_candidate_process(
+            command,
+            cwd=workdir,
+            input_text=task["instruction"] + "\n",
+            timeout=timeout,
+            env=candidate_env,
+        )
 
         verifier = subprocess.run(
             [sys.executable, str(args.task_dir / task["verifier"]), str(workdir)],
@@ -477,12 +559,15 @@ def main() -> int:
 
         final_tree_digest = tree_digest(workdir)
         state_changed = final_tree_digest != initial_tree_digest
+        validator_error = verifier.returncode not in {0, 1}
         success = verifier.returncode == 0 and not timed_out
         provider_rounds = provider_observations(stdout)
         if not provider_rounds and (candidate.get("harness") or {}).get("name") == "goose":
             provider_rounds = goose_stream_provider_observations(stdout)
         engine_error = has_engine_error_event(stdout)
-        if timed_out:
+        if validator_error:
+            failure_class = "validator-error"
+        elif timed_out:
             failure_class = "timeout"
         elif candidate_exit != 0:
             failure_class = "candidate-error"
@@ -501,6 +586,8 @@ def main() -> int:
             verifier_exit=verifier.returncode,
             state_changed=state_changed,
         )
+        if validator_error and "validator-error" not in failure_signals:
+            failure_signals.append("validator-error")
         metrics = harness_metrics(stdout)
         error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
