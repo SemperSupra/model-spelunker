@@ -479,6 +479,8 @@ def main() -> int:
         "--substrate-profile-digest",
         help="Optional canonical digest of the external substrate profile bound by the launch packet.",
     )
+    parser.add_argument("--launch-id")
+    parser.add_argument("--launch-packet-digest")
     parser.add_argument(
         "--diagnostics",
         type=Path,
@@ -509,6 +511,9 @@ def main() -> int:
         command = command[1:]
     if not command:
         parser.error("candidate command is required after --")
+
+    if bool(args.launch_id) != bool(args.launch_packet_digest):
+        parser.error("--launch-id and --launch-packet-digest must be supplied together")
 
     task = json.loads((args.task_dir / "task.json").read_text(encoding="utf-8"))
     candidate = json.loads(args.candidate_metadata.read_text(encoding="utf-8"))
@@ -641,6 +646,16 @@ def main() -> int:
                     else {}
                 ),
             },
+            **(
+                {
+                    "launch": {
+                        "launch_id": args.launch_id,
+                        "packet_digest": args.launch_packet_digest,
+                    }
+                }
+                if args.launch_id and args.launch_packet_digest
+                else {}
+            ),
             "observation": {
                 "success": success,
                 "failure_class": failure_class,
