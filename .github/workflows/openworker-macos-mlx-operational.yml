@@ -1,17 +1,6 @@
 name: OpenWorker macOS MLX Operational Qualification
 
 on:
-  pull_request:
-    branches:
-      - exp/mlx-tool-call-preflight-qwen3-4b
-    paths:
-      - qualification/adapters/openworker_projected.py
-      - qualification/verify_hydrated_artifact.py
-      - qualification/test_verify_hydrated_artifact.py
-      - qualification/actors/openworker-qwen3-4b-gha-macos-mlx.json
-      - qualification/experiments/openworker-macos-mlx-siglip2-operational-v0.json
-      - qualification/tasks/method-ir-siglip2-b16-256-v0/**
-      - .github/workflows/openworker-macos-mlx-operational.yml
   workflow_dispatch:
 
 permissions:
