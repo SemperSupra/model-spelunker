@@ -199,32 +199,50 @@ def run_candidate_process(
     timeout: int,
     env: dict[str, str],
 ) -> tuple[int, str, str, bool]:
-    """Run a candidate in its own process group and never leave descendants behind."""
-    proc = subprocess.Popen(
-        command,
-        cwd=cwd,
-        text=True,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        start_new_session=(os.name == "posix"),
-    )
-    try:
-        stdout, stderr = proc.communicate(input=input_text, timeout=timeout)
-        return_code=proc.returncode
-        _terminate_candidate_group(proc)
-        return return_code, stdout, stderr, False
-    except subprocess.TimeoutExpired:
-        _terminate_candidate_group(proc)
-        try:
-            stdout, stderr = proc.communicate(timeout=1)
-        except subprocess.TimeoutExpired:
-            if proc.poll() is None:
-                proc.kill()
-            stdout, stderr = proc.communicate()
-        return 124, stdout or "", stderr or "", True
+    """Run a candidate in its own process group and never leave descendants behind.
 
+    Regular temp files are used for stdout/stderr so a background descendant that
+    inherits those descriptors cannot keep the parent-side capture pipe open after
+    the candidate process itself exits.
+    """
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout_file, tempfile.TemporaryFile(
+        mode="w+", encoding="utf-8"
+    ) as stderr_file:
+        proc = subprocess.Popen(
+            command,
+            cwd=cwd,
+            text=True,
+            stdin=subprocess.PIPE,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            env=env,
+            start_new_session=(os.name == "posix"),
+        )
+        if proc.stdin is None:
+            raise RuntimeError("candidate stdin unavailable")
+        proc.stdin.write(input_text)
+        proc.stdin.close()
+
+        timed_out=False
+        try:
+            return_code=proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out=True
+            return_code=124
+        finally:
+            _terminate_candidate_group(proc)
+            if proc.poll() is None:
+                try:
+                    proc.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout=stdout_file.read()
+        stderr=stderr_file.read()
+        return return_code, stdout, stderr, timed_out
 
 def new_run_id() -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
