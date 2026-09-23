@@ -50,6 +50,7 @@ jobs:
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-native-contract-rehearsal \
             --substrate-profile-commit "$GITHUB_SHA" \
+            --candidate-env-mode minimal \
             qualification/tasks/text-repair-v0 \
             qualification/test-candidate.json \
             "$NATIVE_RECEIPT" \
