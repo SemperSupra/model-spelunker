@@ -17,6 +17,47 @@ def sha256_file(path: Path) -> str:
     return "sha256:"+h.hexdigest()
 
 
+def verify(root: Path, admission: dict, manifest_digest: str | None=None) -> int:
+    if admission["admission"]["state"]!="BUILD_ADMITTED":
+        raise ValueError("artifact is not BUILD_ADMITTED")
+
+    expected_manifest=admission["artifact"]["digest"]
+    if manifest_digest and manifest_digest!=expected_manifest:
+        raise ValueError(
+            f"manifest digest mismatch: {manifest_digest} != {expected_manifest}"
+        )
+
+    artifact_root=root/"artifact"
+    build_receipt=artifact_root/"build-receipt.json"
+    if not build_receipt.is_file():
+        raise ValueError("missing embedded build receipt")
+
+    expected_build=admission["artifact"]["build_receipt_digest"]
+    actual_build=sha256_file(build_receipt)
+    if actual_build!=expected_build:
+        raise ValueError(f"build receipt digest mismatch: {actual_build} != {expected_build}")
+
+    receipt=json.loads(build_receipt.read_text(encoding="utf-8"))
+    if receipt["harness"]["name"]!=admission["harness"]["name"]:
+        raise ValueError("harness name mismatch")
+
+    checked=0
+    for row in receipt["payload"]["files"]:
+        path=artifact_root/row["path"]
+        if not path.is_file():
+            raise ValueError(f"missing payload file: {row['path']}")
+        if path.stat().st_size!=row["bytes"]:
+            raise ValueError(f"payload size mismatch: {row['path']}")
+        actual=sha256_file(path).removeprefix("sha256:")
+        if actual!=row["sha256"]:
+            raise ValueError(f"payload digest mismatch: {row['path']}")
+        checked+=1
+
+    if checked==0:
+        raise ValueError("embedded build receipt has no payload files")
+    return checked
+
+
 def main() -> int:
     parser=argparse.ArgumentParser()
     parser.add_argument("root",type=Path)
@@ -25,43 +66,10 @@ def main() -> int:
     args=parser.parse_args()
 
     admission=json.loads(args.admission.read_text(encoding="utf-8"))
-    if admission["admission"]["state"]!="BUILD_ADMITTED":
-        raise SystemExit("artifact is not BUILD_ADMITTED")
-
-    expected_manifest=admission["artifact"]["digest"]
-    if args.manifest_digest and args.manifest_digest!=expected_manifest:
-        raise SystemExit(
-            f"manifest digest mismatch: {args.manifest_digest} != {expected_manifest}"
-        )
-
-    artifact_root=args.root/"artifact"
-    build_receipt=artifact_root/"build-receipt.json"
-    if not build_receipt.is_file():
-        raise SystemExit("missing embedded build receipt")
-
-    expected_build=admission["artifact"]["build_receipt_digest"]
-    actual_build=sha256_file(build_receipt)
-    if actual_build!=expected_build:
-        raise SystemExit(f"build receipt digest mismatch: {actual_build} != {expected_build}")
-
-    receipt=json.loads(build_receipt.read_text(encoding="utf-8"))
-    if receipt["harness"]["name"]!=admission["harness"]["name"]:
-        raise SystemExit("harness name mismatch")
-
-    checked=0
-    for row in receipt["payload"]["files"]:
-        path=artifact_root/row["path"]
-        if not path.is_file():
-            raise SystemExit(f"missing payload file: {row['path']}")
-        if path.stat().st_size!=row["bytes"]:
-            raise SystemExit(f"payload size mismatch: {row['path']}")
-        actual=sha256_file(path).removeprefix("sha256:")
-        if actual!=row["sha256"]:
-            raise SystemExit(f"payload digest mismatch: {row['path']}")
-        checked+=1
-
-    if checked==0:
-        raise SystemExit("embedded build receipt has no payload files")
+    try:
+        checked=verify(args.root,admission,args.manifest_digest)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     print(f"PASS {admission['harness']['name']} hydrated payload: {checked} files")
     return 0
 
