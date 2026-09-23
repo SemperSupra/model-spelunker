@@ -485,6 +485,18 @@ def main() -> int:
         type=Path,
         help="Optional evidence directory for copies of only task-declared allowed outputs.",
     )
+    parser.add_argument(
+        "--candidate-env-mode",
+        choices=["inherit", "minimal"],
+        default="inherit",
+        help="Environment policy for the candidate process. Portable/local launches should prefer minimal.",
+    )
+    parser.add_argument(
+        "--pass-env",
+        action="append",
+        default=[],
+        help="Environment variable name to pass explicitly in minimal mode; may be repeated.",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -504,7 +516,24 @@ def main() -> int:
         initial_tree_digest = tree_digest(workdir)
 
         started = time.monotonic()
-        candidate_env = dict(os.environ)
+        if args.candidate_env_mode == "inherit":
+            candidate_env = dict(os.environ)
+        else:
+            baseline = {
+                "PATH",
+                "HOME",
+                "LANG",
+                "LC_ALL",
+                "TMPDIR",
+                "SSL_CERT_FILE",
+                "SSL_CERT_DIR",
+            }
+            requested = baseline | set(args.pass_env)
+            candidate_env = {
+                key: value
+                for key, value in os.environ.items()
+                if key in requested
+            }
         candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
         allowed = task.get("allowed_write_paths") or []
         if len(allowed) == 1:
