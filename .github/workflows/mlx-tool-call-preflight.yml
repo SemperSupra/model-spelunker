@@ -2,20 +2,24 @@ name: MLX Tool Call Preflight
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - exp/openworker-macos-arm-build-characterization
-    paths:
-      - qualification/mlx_tool_call_preflight.py
-      - .github/workflows/mlx-tool-call-preflight.yml
 
 permissions:
   contents: read
 
 jobs:
   preflight:
-    runs-on: macos-26
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        runner:
+          - macos-26
+          - xcode-27
+        memory_hygiene:
+          - control
+          - purge
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -25,12 +29,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/mlx-tool-preflight"
-          python3 qualification/mlx_tool_call_preflight.py             --label "macos-26"             --out "${RUNNER_TEMP}/mlx-tool-preflight/receipt.json"
+          python3 qualification/mlx_tool_call_preflight.py \
+            --label "${{ matrix.runner }}" \
+            --memory-hygiene "${{ matrix.memory_hygiene }}" \
+            --out "${RUNNER_TEMP}/mlx-tool-preflight/receipt.json"
       - name: Upload receipt
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: mlx-tool-call-preflight-${{ github.run_id }}
+          name: mlx-tool-call-preflight-${{ matrix.runner }}-${{ matrix.memory_hygiene }}-${{ github.run_id }}
           path: ${{ runner.temp }}/mlx-tool-preflight/receipt.json
           if-no-files-found: error
           retention-days: 30
