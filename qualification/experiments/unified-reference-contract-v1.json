@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "id": "unified-reference-contract-v1",
+  "decision_question": "Does the unified qualification kernel preserve explicit deployment topology and task KSA evidence roles through a deterministic reference execution without changing the established task oracle?",
+  "task": {
+    "id": "text-repair-v1",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "contract-test-portable-v2"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "deterministic-contract-candidate",
+    "text-repair-v1-task-and-verifier",
+    "task-scoped-authority",
+    "stdio-local-subprocess-deployment"
+  ],
+  "variable_under_test": null,
+  "claim_type": "feasibility",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "deployment-topology-binding",
+    "task-ksa-binding",
+    "observed-resource-identity"
+  ],
+  "design_block": "unified-characterization-reference-2026-09",
+  "stop_conditions": [
+    "validator-integrity-failure",
+    "task-package-invalidated",
+    "deployment-binding-missing",
+    "ksa-binding-missing"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "uncontrolled-candidate-drift"
+  ]
+}
