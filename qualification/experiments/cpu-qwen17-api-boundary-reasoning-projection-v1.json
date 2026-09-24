@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "id": "cpu-qwen17-api-boundary-reasoning-projection-v1",
+  "decision_question": "On corrected api-boundary-classification-v1, does removing OpenWorker's explicit reasoning_effort=none projection change the exact Qwen3 1.7B configured actor's behavior under the same public CPU, tool, token, iteration, runtime, and authority envelope?",
+  "task": {
+    "id": "api-boundary-classification-v1",
+    "task_class": "reverse-engineering.api-boundary-classification"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-1.7b-gha-ollama",
+    "openworker-prebuilt-qwen3-1.7b-gha-ollama-reasoning-omitted"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "qwen3-1.7b-model-artifact",
+    "openworker-5bc10d9-admitted-prebuilt-artifact",
+    "ollama-0.34.1",
+    "api-boundary-classification-v1-task-package",
+    "projected-tools-list-read-write",
+    "max-tokens-2048",
+    "max-iterations-4",
+    "github-hosted-ubuntu-24.04-x64",
+    "task-scoped-authority"
+  ],
+  "variable_under_test": "reasoning-effort-projection:none-vs-omitted",
+  "claim_type": "factor-effect",
+  "experimental_role": "boundary",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "reasoning-bytes",
+    "output-tokens",
+    "model-rounds",
+    "tool-calls",
+    "wall-seconds"
+  ],
+  "design_block": "cpu-qwen17-api-boundary-reasoning-2026-09",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "model-artifact-drift",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion",
+    "treatment-does-not-change-model-facing-request"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "zero-model-round-ingress-failure",
+    "validator-error",
+    "uncontrolled-model-harness-tool-or-budget-drift"
+  ]
+}
