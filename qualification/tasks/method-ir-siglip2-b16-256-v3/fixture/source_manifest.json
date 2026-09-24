@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "specimen_id": "siglip2-2502.14786v1-b16-256-core",
+  "license_note": "Paper source is CC BY 4.0 per arXiv record. big_vision README carries its own CC-BY/Apache licensing notice.",
+  "arxiv": {
+    "id": "2502.14786v1",
+    "source_url": "https://arxiv.org/src/2502.14786v1",
+    "tar_sha256": "4f523801d9c71bc8bc676cd940d825f539dbf91fe797d571ed4196112c88de85",
+    "tar_size_bytes": 172083,
+    "selected_files": {
+      "document.tex": {
+        "sha256": "05900ab2c395d94c90f4e071373d7a5617a910e04f94f37f8ce2959b3a17c1fd",
+        "size_bytes": 42642
+      },
+      "tables/zeroshot_main.tex": {
+        "sha256": "4e473fe2f5323fc52ad29cccbff8c7e2d0e65fe4d56c7e446e8a0750fb7d5be5",
+        "size_bytes": 10967
+      }
+    }
+  },
+  "checkpoint_readme": {
+    "repository": "google-research/big_vision",
+    "revision": "0127fb6b337ee2a27bf4e54dea79cff176527356",
+    "git_blob": "1c1af0a38209b7cbeb87c34c420c3c4455bdaa48",
+    "path": "big_vision/configs/proj/image_text/README_siglip2.md",
+    "raw_url": "https://raw.githubusercontent.com/google-research/big_vision/0127fb6b337ee2a27bf4e54dea79cff176527356/big_vision/configs/proj/image_text/README_siglip2.md",
+    "sha256": "3c1862c16c6c75a97278fe9556482618db1d0419997eaefd4006ec9149994eef",
+    "size_bytes": 7763
+  },
+  "freeze_evidence": {
+    "github_actions_run": 35773156049,
+    "artifact_id": 10714468935,
+    "artifact_sha256": "2b8abce68928beb6457dd1550ef8268adf4f90d26f55c65e7918a316d61be47e"
+  }
+}
