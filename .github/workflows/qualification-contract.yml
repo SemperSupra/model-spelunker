@@ -213,7 +213,7 @@ jobs:
             qualification/tasks/text-repair-v1 \
             qualification/test-candidate-v2.json \
             "$RECEIPT_SUCCESS_ITER" \
-            -- python -c 'from pathlib import Path; import json; Path("value.txt").write_text("READY\\n", encoding="utf-8"); print("OPENWORKER_EVENT="+json.dumps({"type":"EventType.TURN_END","status":"max_iterations_exceeded","iterations":1},sort_keys=True))'
+            -- python -c 'from pathlib import Path; import json; Path("value.txt").write_text("READY\n", encoding="utf-8"); print("OPENWORKER_EVENT="+json.dumps({"type":"EventType.TURN_END","status":"max_iterations_exceeded","iterations":1},sort_keys=True))'
           python - "$RECEIPT_SUCCESS_ITER" <<'PY'
           import json,sys
           receipt=json.load(open(sys.argv[1]))
