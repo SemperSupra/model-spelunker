@@ -1,0 +1,349 @@
+name: Speech SLU Hosted Qualification
+
+on:
+  push:
+    branches:
+      - exp/speech-slu-qualification
+    paths:
+      - ".github/workflows/speech-slu-hosted-qualification.yml"
+      - "qualification/prepare_speech_slu.py"
+      - "qualification/adapters/openworker_projected.py"
+      - "qualification/run_task.py"
+      - "qualification/tasks/speech-slu-jfk-v0/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: speech-slu-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate speech task and harness contract
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            qualification/prepare_speech_slu.py \
+            qualification/adapters/openworker_projected.py \
+            qualification/run_task.py \
+            qualification/tasks/speech-slu-jfk-v0/verify.py
+          python3 qualification/tasks/speech-slu-jfk-v0/verify.py --self-test
+
+  qualify:
+    needs: contract
+    environment: hosted-qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OPENWORKER_UPSTREAM_SHA: "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+      FOUNDRY_REF: "6622753fd5914be87fb1b6d987ceb7cae46c7ff5"
+      LOGICAL_ID: "asr/faster-whisper/tiny"
+      EXPECTED_DIGEST: "sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42"
+      FIXTURE_COMMIT: "6e3be77e1a105e59086e3e21ff5f609fd6fa89a5"
+      HOSTED_CATALOG: "qualification/models/hosted-api.json"
+      HOSTED_CANDIDATE_ID: "deepseek-flash"
+      CANDIDATE_META: "/tmp/model-spelunker-speech-candidate.json"
+      RECEIPT: "/tmp/model-spelunker-speech-receipt.json"
+      SNAPSHOT_DIR: "/tmp/model-spelunker-speech-snapshot"
+      MODEL_SPELUNKER_MAX_TOKENS: "2048"
+      MODEL_SPELUNKER_MAX_ITERATIONS: "4"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact approved Foundry revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: SemperSupra/model-artifact-foundry
+          ref: ${{ env.FOUNDRY_REF }}
+          path: foundry
+          persist-credentials: false
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+
+      - name: Derive ASR runtime cache key
+        id: runtime-key
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/speech"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
+          print(f"python_tag={sys.implementation.cache_tag}")
+          PY
+
+      - name: Restore exact ASR runtime
+        id: runtime-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .asr-venv
+          key: model-spelunker-speech-slu-fw1.2.1-ct2-4.6.0-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.python_tag }}
+
+      - name: Build exact ASR runtime on cache miss
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          python3 -m venv .asr-venv
+          .asr-venv/bin/python -m pip install --quiet --disable-pip-version-check --no-input \
+            "faster-whisper==1.2.1" \
+            "ctranslate2==4.6.0"
+
+      - name: Verify exact approved Foundry selector
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          catalog=json.loads(Path("foundry/catalog/approved.json").read_text(encoding="utf-8"))
+          entry=catalog["artifacts"][os.environ["LOGICAL_ID"]]
+          assert entry["approved_digest"] == os.environ["EXPECTED_DIGEST"]
+          assert entry["upstream_exact_revision"] == "d90ca5fe260221311c53c58e660288d3deb8d356"
+          assert entry["license_spdx_id"] == "MIT"
+          PY
+
+      - name: Acquire exact pinned human-speech fixture
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import hashlib, json, os, urllib.request
+          from pathlib import Path
+          commit=os.environ["FIXTURE_COMMIT"]
+          url=f"https://raw.githubusercontent.com/openai/whisper/{commit}/tests/jfk.flac"
+          req=urllib.request.Request(url,headers={"User-Agent":"SemperSupra-model-spelunker/1"})
+          data=urllib.request.urlopen(req,timeout=120).read()
+          root=Path(os.environ["RUNNER_TEMP"])/"speech"
+          fixture=root/"jfk.flac"
+          fixture.write_bytes(data)
+          meta={
+              "repository":"openai/whisper",
+              "commit_sha":commit,
+              "path":"tests/jfk.flac",
+              "size_bytes":len(data),
+              "sha256":"sha256:"+hashlib.sha256(data).hexdigest(),
+          }
+          (root/"fixture.json").write_text(json.dumps(meta,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+          print(json.dumps(meta,sort_keys=True))
+          PY
+
+      - name: Authenticate bounded Foundry read
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io \
+            --username "$GITHUB_ACTOR" \
+            --password-stdin
+
+      - name: Hydrate exact approved ASR model
+        id: hydrate
+        run: |
+          set -euo pipefail
+          cache="$RUNNER_TEMP/speech/foundry-cache"
+          MODEL_DIR="$(.asr-venv/bin/python foundry/tools/hydrate.py \
+            --catalog foundry/catalog/approved.json \
+            --id "$LOGICAL_ID" \
+            --cache-root "$cache" \
+            --oras "$(command -v oras)" | tail -n1)"
+          test -d "$MODEL_DIR"
+          echo "model_dir=$MODEL_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Transcribe and enforce pre-inference ASR gate
+        id: asr
+        env:
+          MODEL_DIR: ${{ steps.hydrate.outputs.model_dir }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/speech"
+          .asr-venv/bin/python qualification/prepare_speech_slu.py \
+            --model-dir "$MODEL_DIR" \
+            --fixture "$root/jfk.flac" \
+            --fixture-meta "$root/fixture.json" \
+            --transcript-output "$root/transcript.txt" \
+            --evidence-output "$root/asr-evidence.json"
+          TRANSCRIPT_SHA="$(python3 - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          p=Path(os.environ["RUNNER_TEMP"])/"speech"/"transcript.txt"
+          text=p.read_text(encoding="utf-8").strip()
+          print("sha256:"+hashlib.sha256(text.encode("utf-8")).hexdigest())
+          PY
+          )"
+          echo "transcript_sha=$TRANSCRIPT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve fixed DeepSeek reasoning treatment
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          catalog=json.loads(Path(os.environ["HOSTED_CATALOG"]).read_text(encoding="utf-8"))
+          c=catalog["candidates"][os.environ["HOSTED_CANDIDATE_ID"]]
+          assert c["provider"] == "deepseek"
+          assert c["model"] == "deepseek-flash"
+          values={
+              "MODEL_SPELUNKER_MODEL":f'{c["provider"]}:{c["model"]}',
+              "MODEL_SPELUNKER_REASONING_EFFORT":c["reasoning_effort"],
+              "HOSTED_PROVIDER":c["provider"],
+              "HOSTED_MODEL":c["model"],
+              "HOSTED_API_BASE":c["api_base"],
+              "HOSTED_TREATMENT_KIND":c["treatment_kind"],
+              "HOSTED_COST_CLASS":c["cost_class"],
+          }
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as f:
+              for k,v in values.items():
+                  f.write(f"{k}={v}\n")
+          PY
+
+      - name: Clone immutable OpenWorker source
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/openworker"
+          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"
+          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_UPSTREAM_SHA"
+          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_UPSTREAM_SHA"
+
+      - name: Install OpenWorker in isolated environment
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          source "$RUNNER_TEMP/openworker-venv/bin/activate"
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+
+      - name: DeepSeek zero-inference admission
+        env:
+          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-DEEPSEEK_API_KEY"; exit 78; }
+          python3 - <<'PY'
+          import json, os, urllib.request
+          key=os.environ["SELECTED_API_KEY"]
+          base=os.environ["HOSTED_API_BASE"].rstrip("/")
+          req=urllib.request.Request(
+              base+"/user/balance",
+              headers={"Accept":"application/json","Authorization":"Bearer "+key},
+          )
+          with urllib.request.urlopen(req,timeout=20) as response:
+              data=json.load(response)
+          if data.get("is_available") is not True:
+              raise SystemExit("DeepSeek authenticated but API balance is unavailable")
+          print("DEEPSEEK_ADMISSION="+json.dumps({"authenticated":True,"available":True},sort_keys=True))
+          PY
+
+      - name: Build exact configured-actor metadata
+        env:
+          TRANSCRIPT_SHA: ${{ steps.asr.outputs.transcript_sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          task=json.loads(Path("qualification/tasks/speech-slu-jfk-v0/task.json").read_text(encoding="utf-8"))
+          candidate={
+              "harness":{"name":"openworker","version":os.environ["OPENWORKER_UPSTREAM_SHA"]},
+              "model":{
+                  "provider":os.environ["HOSTED_PROVIDER"],
+                  "id":os.environ["HOSTED_MODEL"],
+                  "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
+              },
+              "toolset":task["projected_tools"],
+              "configuration":{
+                  "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
+                  "projection":task["projected_tools"],
+                  "parallel_tool_calls":False,
+                  "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
+                  "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
+                  "max_iterations":int(os.environ["MODEL_SPELUNKER_MAX_ITERATIONS"]),
+                  "api_base":os.environ["HOSTED_API_BASE"],
+                  "cost_class":os.environ["HOSTED_COST_CLASS"],
+                  "observation_channel":"verified-asr-transcript",
+                  "asr_logical_id":os.environ["LOGICAL_ID"],
+                  "asr_digest":os.environ["EXPECTED_DIGEST"],
+                  "transcript_sha256":os.environ["TRANSCRIPT_SHA"],
+              },
+          }
+          Path(os.environ["CANDIDATE_META"]).write_text(
+              json.dumps(candidate,indent=2,sort_keys=True)+"\n",encoding="utf-8"
+          )
+          PY
+
+      - name: Execute one speech-mediated reasoning rep
+        id: qualify
+        env:
+          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_SPELUNKER_SPEECH_TRANSCRIPT_FILE: ${{ runner.temp }}/speech/transcript.txt
+          MODEL_SPELUNKER_SPEECH_TRANSCRIPT_SHA256: ${{ steps.asr.outputs.transcript_sha }}
+        run: |
+          set -euo pipefail
+          export DEEPSEEK_API_KEY="$SELECTED_API_KEY"
+          set +e
+          python3 qualification/run_task.py \
+            qualification/tasks/speech-slu-jfk-v0 \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id "gha-ubuntu-24.04-x64-openworker-hosted-asr" \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --snapshot-dir "$SNAPSHOT_DIR" \
+            -- "$RUNNER_TEMP/openworker-venv/bin/python" \
+              "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          unset DEEPSEEK_API_KEY
+          echo "qualification_rc=$rc" >> "$GITHUB_OUTPUT"
+          test -f "$RECEIPT"
+          if [ "$rc" -ne 0 ]; then
+            echo "SPEECH_SLU_RESULT=nonzero-$rc"
+          fi
+
+      - name: Inspect bounded speech receipt
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f "$RECEIPT" ]; then
+            python3 - "$RECEIPT" <<'PY'
+          import json, pathlib, sys
+          r=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          print(json.dumps({
+              "run_id":r.get("run_id"),
+              "task":(r.get("task") or {}).get("id"),
+              "candidate":(r.get("candidate") or {}).get("model"),
+              "success":(r.get("observation") or {}).get("success"),
+              "failure_class":(r.get("observation") or {}).get("failure_class"),
+              "failure_signals":(r.get("observation") or {}).get("failure_signals"),
+              "model_rounds":((r.get("observation") or {}).get("workload") or {}).get("model_rounds"),
+              "tool_calls":(r.get("observation") or {}).get("tool_calls"),
+          },sort_keys=True))
+          PY
+          fi
+
+      - name: Upload bounded speech qualification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: speech-slu-${{ github.run_attempt }}
+          path: |
+            /tmp/model-spelunker-speech-receipt.json
+            /tmp/model-spelunker-speech-snapshot/**
+            ${{ runner.temp }}/speech/asr-evidence.json
+            ${{ runner.temp }}/speech/fixture.json
+          if-no-files-found: warn
+          retention-days: 7
