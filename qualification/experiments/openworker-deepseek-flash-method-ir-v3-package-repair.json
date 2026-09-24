@@ -57,6 +57,5 @@
     "credential-absence",
     "provider-admission-failure",
     "uncontrolled-model-harness-tool-token-iteration-wall-or-authority-drift"
-  ],
-  "execution_note": "2026-09-24 exact v3 replay authorized solely to fix the pre-inference experimental-role assertion; task, actor, provider, tools, 4096-token budget, 12-iteration ceiling, wall, and authority unchanged."
+  ]
 }
