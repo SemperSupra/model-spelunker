@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-flash-method-ir-v2-4096-iter12-boundary",
+  "decision_question": "With the 4096-token output ceiling held fixed after resolving the prior truncation symptom, does increasing only max_iterations from 8 to 12 allow the same DeepSeek/OpenWorker configured actor to produce a mechanically valid Method-IR candidate?",
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v2",
+    "task_class": "research.method-evidence-binding"
+  },
+  "actors": [
+    "openworker-deepseek-flash-ubuntu24-method-ir-v2-compact-source-4096-iter12"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "exact-method-ir-siglip2-b16-256-v2-task-package-and-verifier",
+    "same-frozen-source-bytes",
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-hosted-provider-alias",
+    "reasoning-effort-none",
+    "max-tokens-4096",
+    "compact-source-tool-projection:list_files+search_files+read_file_lines+write_file",
+    "task-scoped-write-authority-method_ir.json",
+    "effective-wall-seconds-360",
+    "gha-linux-x64-openworker-hosted-api"
+  ],
+  "variable_under_test": "max_iterations:8->12",
+  "claim_type": "boundary",
+  "experimental_role": "boundary",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "state-changed",
+    "write-file-attempt-and-status",
+    "model-calls-started",
+    "model-calls-completed",
+    "tool-calls-completed",
+    "finish-reason",
+    "wall-seconds",
+    "source-bound-output-snapshot"
+  ],
+  "design_block": "method-ir-v2-deepseek-4096-iteration-boundary-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-semantic-failure-after-output-file",
+    "iteration-censored-at-12",
+    "timeout-censored-at-360",
+    "provider-or-harness-ingress-failure",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "task-package-or-frozen-source-drift",
+    "validator-error",
+    "credential-absence",
+    "provider-admission-failure",
+    "uncontrolled-task-tool-token-wall-authority-or-provider-route-drift"
+  ]
+}
