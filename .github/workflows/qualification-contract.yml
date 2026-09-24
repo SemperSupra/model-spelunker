@@ -283,8 +283,10 @@ jobs:
           groq_reconciliation=by_route[("groq","openai/gpt-oss-20b",reconciliation)]
           assert groq_reconciliation["evidence_pattern"] == "FAIL_ONLY"
           assert groq_reconciliation["evidence"]["validated_fail"] == 1
-          assert groq_reconciliation["ksa_evidence"]["skills"]["repository_state_reconciliation"] == "NEGATIVE_BOUNDARY_OBSERVED"
-          assert groq_reconciliation["ksa_evidence"]["abilities"]["unknown_preservation"] == "NEGATIVE_BOUNDARY_OBSERVED"
+          assert groq_reconciliation["ksa_evidence"]["skills"]["repository_state_reconciliation"] == "INSUFFICIENT_EVIDENCE"
+          assert groq_reconciliation["ksa_evidence"]["abilities"]["unknown_preservation"] == "INSUFFICIENT_EVIDENCE"
+          assert groq_reconciliation["ksa_evidence_detail"]["skills"]["repository_state_reconciliation"]["nonisolating_task_negative_trials"] == 1
+          assert groq_reconciliation["ksa_evidence_detail"]["abilities"]["unknown_preservation"]["nonisolating_task_negative_trials"] == 1
 
           google=by_route[("google","gemini-3.7-flash",discovery)]
           assert google["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
