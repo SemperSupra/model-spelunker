@@ -1,0 +1,87 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:6975403b44513e89dba51ea543b90c8ad5e764cc66fbf6fe6fc3072e92192b9d",
+    "harness": {
+      "admission_ref": "github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83",
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+      "id": "qwen3:1.7b",
+      "provider": "ollama"
+    },
+    "toolset": [
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:db22b76b921706594e01a65209df57fd1f69002c9b2763c1c2f2f2b02976523d",
+  "experiment": {
+    "claim_type": "factor-effect",
+    "design_block": "cpu-qwen17-reference-2026-09",
+    "digest": "sha256:65d859537f9f591dcb4aceb9381a6fa80831fa42b81fec1c71ba6056bb0c5014",
+    "experimental_role": "control",
+    "id": "cpu-reference-qwen17-text-repair-v1",
+    "primary_responses": [
+      "semantic-verifier-result",
+      "termination-class",
+      "wall-seconds",
+      "model-rounds",
+      "observed-cpu-resource-envelope"
+    ]
+  },
+  "observation": {
+    "cache_read_tokens": 209,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": 257,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": 44,
+    "state_changed": true,
+    "success": true,
+    "termination_class": "semantic-success",
+    "timed_out": false,
+    "tool_calls": 1,
+    "verifier_exit_code": 0,
+    "wall_seconds": 9.419455,
+    "workload": {
+      "client_wall_seconds_total": 8.62808,
+      "first_event_seconds_first": 7.02198,
+      "first_event_seconds_max": 7.02198,
+      "first_event_seconds_min": 0.883622,
+      "model_rounds": 2,
+      "output_text_bytes_total": 76,
+      "reasoning_bytes_total": 0,
+      "request_message_bytes_total": 467,
+      "request_tool_schema_bytes_total": 1146,
+      "tool_argument_bytes_total": 40
+    }
+  },
+  "resources": {
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": "0-3",
+    "logical_cpus_visible": 4,
+    "memory_total_bytes": 16766414848
+  },
+  "run_id": "20260924T152331Z-2694764a",
+  "schema_version": 2,
+  "substrate": {
+    "profile_commit": "prebuilt-openworker-ollama-v1",
+    "profile_id": "gha-linux-x64-openworker-prebuilt-ollama"
+  },
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:a51be2ffb8cbe2cacac72f038bb88a1649d491ff853244adb729981c9d6c24cc",
+    "source_commit": "07c9926c8e055979dcd07f1664f7066903df1edb",
+    "task_class": "software.bounded-repair"
+  }
+}

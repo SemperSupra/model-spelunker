@@ -28,6 +28,48 @@ def canonical_json_digest(value: object) -> str:
     )
 
 
+def observed_resources() -> dict[str, object]:
+    """Capture cheap execution-resource facts without turning every rep into a profiler."""
+    cpu_model = None
+    cpuinfo = Path("/proc/cpuinfo")
+    if cpuinfo.exists():
+        for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.lower().startswith("model name") and ":" in line:
+                cpu_model = line.split(":", 1)[1].strip()
+                break
+
+    memory_total_bytes = None
+    try:
+        memory_total_bytes = int(os.sysconf("SC_PAGE_SIZE")) * int(os.sysconf("SC_PHYS_PAGES"))
+    except (AttributeError, OSError, ValueError):
+        pass
+
+    cpu_quota_cores = None
+    cpu_max = Path("/sys/fs/cgroup/cpu.max")
+    if cpu_max.exists():
+        parts = cpu_max.read_text(encoding="utf-8", errors="replace").strip().split()
+        if len(parts) == 2 and parts[0] != "max":
+            try:
+                quota, period = int(parts[0]), int(parts[1])
+                if quota > 0 and period > 0:
+                    cpu_quota_cores = round(quota / period, 6)
+            except ValueError:
+                pass
+
+    cpuset = None
+    cpuset_path = Path("/sys/fs/cgroup/cpuset.cpus.effective")
+    if cpuset_path.exists():
+        cpuset = cpuset_path.read_text(encoding="utf-8", errors="replace").strip() or None
+
+    return {
+        "logical_cpus_visible": os.cpu_count(),
+        "cpu_model": cpu_model,
+        "memory_total_bytes": memory_total_bytes,
+        "cpu_quota_cores": cpu_quota_cores,
+        "cpuset_cpus_effective": cpuset,
+    }
+
+
 def tree_digest(root: Path) -> str:
     hasher = hashlib.sha256()
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
@@ -512,6 +554,11 @@ def main() -> int:
         help="Optional bounded raw diagnostics file. Use only on credential-free qualification reps.",
     )
     parser.add_argument(
+        "--experiment",
+        type=Path,
+        help="Optional v2 scientific experiment declaration bound into the immutable receipt.",
+    )
+    parser.add_argument(
         "--snapshot-dir",
         type=Path,
         help="Optional evidence directory for copies of only task-declared allowed outputs.",
@@ -543,6 +590,21 @@ def main() -> int:
     task = json.loads((args.task_dir / "task.json").read_text(encoding="utf-8"))
     validate_task_workspace_layout(args.task_dir, task)
     candidate = json.loads(args.candidate_metadata.read_text(encoding="utf-8"))
+    experiment_meta = None
+    if args.experiment is not None:
+        experiment_doc = json.loads(args.experiment.read_text(encoding="utf-8"))
+        if experiment_doc.get("schema_version") != 2:
+            raise ValueError("scientific experiment declaration must use schema_version 2")
+        if (experiment_doc.get("task") or {}).get("id") != task["id"]:
+            raise ValueError("experiment task id does not match executed task")
+        experiment_meta = {
+            "id": experiment_doc["id"],
+            "digest": canonical_json_digest(experiment_doc),
+            "claim_type": experiment_doc["claim_type"],
+            "experimental_role": experiment_doc["experimental_role"],
+            "design_block": experiment_doc.get("design_block"),
+            "primary_responses": experiment_doc["primary_responses"],
+        }
     timeout = int(task["limits"]["wall_seconds"])
 
     with tempfile.TemporaryDirectory(prefix="model-spelunker-qual-") as temp:
@@ -624,6 +686,17 @@ def main() -> int:
         else:
             failure_class = None
 
+        if success:
+            termination_class = "semantic-success"
+        elif validator_error:
+            termination_class = "validator-invalid"
+        elif timed_out:
+            termination_class = "timeout-censored"
+        elif candidate_exit != 0 or engine_error:
+            termination_class = "execution-error"
+        else:
+            termination_class = "semantic-failure"
+
         failure_signals = detect_failure_signals(
             stdout,
             stderr,
@@ -670,7 +743,7 @@ def main() -> int:
         }
 
         receipt = {
-            "schema_version": 1,
+            "schema_version": 2 if experiment_meta is not None else 1,
             "run_id": new_run_id(),
             "task": {
                 "id": task["id"],
@@ -694,6 +767,8 @@ def main() -> int:
                     else {}
                 ),
             },
+            "resources": observed_resources(),
+            **({"experiment": experiment_meta} if experiment_meta is not None else {}),
             **(
                 {
                     "launch": {
@@ -706,6 +781,7 @@ def main() -> int:
             ),
             "observation": {
                 "success": success,
+                "termination_class": termination_class,
                 "failure_class": failure_class,
                 "wall_seconds": round(wall_seconds, 6),
                 "human_interventions": 0,

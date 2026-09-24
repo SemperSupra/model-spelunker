@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "id": "cpu-operational-qwen17-api-boundary-v1",
+  "decision_question": "Can the admitted OpenWorker plus Qwen3 1.7B CPU actor perform the corrected API-boundary classification work sample inside the current bounded public-runner resource envelope without weakening the deterministic verifier?",
+  "task": {
+    "id": "api-boundary-classification-v1",
+    "task_class": "reverse-engineering.api-boundary-classification"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "qwen3-1.7b-model-artifact",
+    "openworker-admitted-prebuilt-artifact",
+    "ollama-0.34.1",
+    "api-boundary-classification-v1-task-package",
+    "github-hosted-ubuntu-24.04-x64"
+  ],
+  "variable_under_test": "prospective-operational-task-realization",
+  "claim_type": "feasibility",
+  "experimental_role": "operational",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "wall-seconds",
+    "model-rounds",
+    "observed-cpu-resource-envelope"
+  ],
+  "design_block": "cpu-qwen17-operational-2026-09",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "model-artifact-drift",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "zero-model-round-ingress-failure",
+    "validator-error",
+    "uncontrolled-model-or-harness-drift"
+  ]
+}

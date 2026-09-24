@@ -1,0 +1,29 @@
+name: CPU Characterization Bootstrap
+
+on:
+  push:
+    branches:
+      - exp/cpu-performance-envelope-v1
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  reference:
+    if: contains(github.event.head_commit.message, '[cpu-envelope-bootstrap]')
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83
+      admission_ref: github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json
+      task: text-repair-v0
+      experiment: cpu-reference-qwen17-text-repair-v1.json
+
+  operational:
+    if: contains(github.event.head_commit.message, '[cpu-envelope-bootstrap]')
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83
+      admission_ref: github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json
+      task: api-boundary-classification-v1
+      experiment: cpu-operational-qwen17-api-boundary-v1.json

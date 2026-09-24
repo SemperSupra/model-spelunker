@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -69,15 +70,35 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     obs = receipt["observation"]
     if bool(obs.get("success")):
         return "pass"
+    termination = obs.get("termination_class")
     workload = obs.get("workload") or {}
     signals = set(obs.get("failure_signals") or [])
-    engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
-    validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
     zero_round_nonterminal = (
         not obs.get("success", False)
         and workload.get("model_rounds") == 0
     )
-    return "incomplete" if engine_error or validator_error or zero_round_nonterminal else "fail"
+    if zero_round_nonterminal:
+        return "incomplete"
+    if termination == "timeout-censored" or obs.get("timed_out") or "timeout" in signals:
+        return "censored"
+    engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
+    validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
+    return "incomplete" if engine_error or validator_error else "fail"
+
+
+def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -> dict[str, float] | None:
+    if trials <= 0:
+        return None
+    p = successes / trials
+    z2 = z * z
+    denom = 1.0 + z2 / trials
+    center = (p + z2 / (2.0 * trials)) / denom
+    half = z * math.sqrt((p * (1.0 - p) / trials) + z2 / (4.0 * trials * trials)) / denom
+    return {
+        "estimate": round(p, 6),
+        "lower_95": round(max(0.0, center - half), 6),
+        "upper_95": round(min(1.0, center + half), 6),
+    }
 
 
 def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -109,6 +130,9 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         successes = outcomes.count("pass")
         failures = outcomes.count("fail")
         incomplete = outcomes.count("incomplete")
+        censored = outcomes.count("censored")
+        semantic_trials = successes + failures
+        task_ids = sorted({r["task"]["id"] for r in rows})
         mapping = KSA_BY_TASK_CLASS.get(task_class, {})
         state = ksa_state(successes, failures)
         ksa = {
@@ -127,6 +151,11 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "validated_pass": successes,
                     "validated_fail": failures,
                     "incomplete": incomplete,
+                    "censored": censored,
+                    "semantic_trials": semantic_trials,
+                    "success_interval_wilson_95": wilson_interval(successes, semantic_trials),
+                    "unique_task_instances": len(task_ids),
+                    "task_ids": task_ids,
                     "run_ids": sorted(r["run_id"] for r in rows),
                 },
                 "ksa_evidence": ksa,

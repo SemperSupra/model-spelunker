@@ -16,7 +16,8 @@
     "schema_version": {
       "type": "integer",
       "enum": [
-        1
+        1,
+        2
       ]
     },
     "id": {
@@ -92,6 +93,73 @@
       "items": {
         "type": "string"
       }
+    },
+    "claim_type": {
+      "type": "string",
+      "enum": [
+        "feasibility",
+        "reliability",
+        "performance",
+        "factor-effect",
+        "boundary",
+        "drift"
+      ]
+    },
+    "experimental_role": {
+      "type": "string",
+      "enum": [
+        "screening",
+        "control",
+        "boundary",
+        "replicate",
+        "holdout",
+        "drift-sentinel",
+        "operational"
+      ]
+    },
+    "primary_responses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "design_block": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "exclusion_conditions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "claim_type",
+          "experimental_role",
+          "primary_responses",
+          "stop_conditions",
+          "exclusion_conditions"
+        ]
+      }
+    }
+  ]
 }

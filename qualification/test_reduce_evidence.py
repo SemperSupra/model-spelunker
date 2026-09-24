@@ -126,3 +126,27 @@ else:
     raise AssertionError("divergent duplicate run_id did not fail closed")
 
 print("PASS duplicate and validator-error reducer controls")
+
+
+# Scientific characterization controls: timeout is performance censoring, not semantic failure.
+censored = reduce_receipts([receipt("run-timeout", False, model_rounds=2, timed_out=True, candidate_exit_code=124)])[0]
+assert censored["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+assert censored["evidence"]["validated_fail"] == 0
+assert censored["evidence"]["censored"] == 1
+assert censored["evidence"]["semantic_trials"] == 0
+assert censored["evidence"]["success_interval_wilson_95"] is None
+
+mixed_tasks = [
+    receipt("run-task-a", True),
+    receipt("run-task-b", True),
+]
+mixed_tasks[1]["task"]["id"] = "fixture-task-2"
+env = reduce_receipts(mixed_tasks)[0]
+assert env["evidence"]["unique_task_instances"] == 2
+assert env["evidence"]["semantic_trials"] == 2
+interval = env["evidence"]["success_interval_wilson_95"]
+assert interval is not None
+assert interval["estimate"] == 1.0
+assert 0.0 < interval["lower_95"] < 1.0
+assert interval["upper_95"] == 1.0
+print("PASS characterization censoring and uncertainty controls")
