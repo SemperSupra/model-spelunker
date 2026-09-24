@@ -41,6 +41,7 @@ jobs:
           debugging_task = json.loads(Path("qualification/tasks/boundary-bugfix-v0/task.json").read_text())
           reconciliation_task = json.loads(Path("qualification/tasks/repository-reconciliation-v0/task.json").read_text())
           api_boundary_task = json.loads(Path("qualification/tasks/api-boundary-classification-v0/task.json").read_text())
+          api_boundary_task_v1 = json.loads(Path("qualification/tasks/api-boundary-classification-v1/task.json").read_text())
           method_ir_task = json.loads(Path("qualification/tasks/method-ir-siglip2-b16-256-v0/task.json").read_text())
           json.loads(Path("qualification/test-candidate.json").read_text())
           hosted = json.loads(Path("qualification/models/hosted-api.json").read_text())
@@ -84,12 +85,14 @@ jobs:
           assert debugging_task["task_class"] == "software.bounded-debugging"
           assert reconciliation_task["task_class"] == "repository.state-reconciliation"
           assert api_boundary_task["task_class"] == "reverse-engineering.api-boundary-classification"
+          assert api_boundary_task_v1["task_class"] == "reverse-engineering.api-boundary-classification"
           assert method_ir_task["task_class"] == "research.method-evidence-binding"
           assert text_task["allowed_write_paths"] == ["value.txt"]
           assert discovery_task["allowed_write_paths"] == ["result.json"]
           assert debugging_task["allowed_write_paths"] == ["src/retry.py"]
           assert reconciliation_task["allowed_write_paths"] == ["reconciliation.json"]
           assert api_boundary_task["allowed_write_paths"] == ["classification.json"]
+          assert api_boundary_task_v1["allowed_write_paths"] == ["classification.json"]
           assert method_ir_task["allowed_write_paths"] == ["method_ir.json"]
           jsonschema.Draft7Validator.check_schema(schema)
           jsonschema.Draft7Validator.check_schema(actor_schema)
@@ -110,6 +113,7 @@ jobs:
           jsonschema.validate(debugging_task, task_schema)
           jsonschema.validate(reconciliation_task, task_schema)
           jsonschema.validate(api_boundary_task, task_schema)
+          jsonschema.validate(api_boundary_task_v1, task_schema)
           jsonschema.validate(method_ir_task, task_schema)
           actor_ids = set()
           for path in sorted(Path("qualification/actors").glob("*.json")):
@@ -124,6 +128,7 @@ jobs:
               debugging_task["id"]: debugging_task["task_class"],
               reconciliation_task["id"]: reconciliation_task["task_class"],
               api_boundary_task["id"]: api_boundary_task["task_class"],
+              api_boundary_task_v1["id"]: api_boundary_task_v1["task_class"],
               method_ir_task["id"]: method_ir_task["task_class"],
           }
           for path in sorted(Path("qualification/experiments").glob("*.json")):
@@ -142,7 +147,11 @@ jobs:
           python qualification/tasks/boundary-bugfix-v0/verify.py --self-test
           python qualification/tasks/repository-reconciliation-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v0/verify.py --self-test
+          python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
+
+      - name: Enforce task workspace-layout contract
+        run: PYTHONPATH=. python qualification/test_task_workspace_contract.py
 
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
