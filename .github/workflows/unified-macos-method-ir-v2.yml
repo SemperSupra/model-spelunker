@@ -1,4 +1,4 @@
-# execution-trigger: compact-source replay after admission and concurrency repair; treatment semantics unchanged
+# execution-trigger: 360s wall-boundary replay; compact-source treatment semantics otherwise unchanged
 name: Unified macOS MLX Method-IR v2 Wall Boundary
 
 on:
