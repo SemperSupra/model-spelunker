@@ -1,26 +1,7 @@
 name: OpenWorker macOS MLX API Boundary v1
 
 on:
-  pull_request:
-    branches:
-      - exp/openworker-macos-mlx-text-repair
-    paths:
-      - qualification/tasks/api-boundary-classification-v1/**
-      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-api-boundary-v1-api-boundary-v1.json
-      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-api-boundary-v1-api-boundary-v1.json
-      - qualification/experiments/openworker-macos-mlx-api-boundary-classification-v1.json
-      - .github/workflows/openworker-macos-mlx-api-boundary-v1.yml
-  push:
-    branches:
-      - exp/openworker-macos-mlx-api-boundary-v1
-    paths:
-      - qualification/tasks/api-boundary-classification-v1/**
-      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-api-boundary-v1-api-boundary-v1.json
-      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-api-boundary-v1-api-boundary-v1.json
-      - qualification/experiments/openworker-macos-mlx-api-boundary-classification-v1.json
-      - .github/workflows/openworker-macos-mlx-api-boundary-v1.yml
   workflow_dispatch:
-
 permissions:
   contents: read
   packages: read
