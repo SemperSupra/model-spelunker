@@ -46,8 +46,8 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: "5bc10d928e0b64aae74313349a3b17bd19643ae2"
       HOSTED_CATALOG: "qualification/models/hosted-api.json"
-      HOSTED_CANDIDATE_ID: "groq-gpt-oss-20b"
-      HOSTED_KEY_FILE: "/tmp/model-spelunker-groq.key"
+      HOSTED_CANDIDATE_ID: "nvidia-nemotron-3.5-lightning"
+      HOSTED_KEY_FILE: "/tmp/model-spelunker-nvidia.key"
       CANDIDATE_META: "/tmp/model-spelunker-android-candidate.json"
       RECEIPT: "/tmp/model-spelunker-android-receipt.json"
       REFERENCE_RECEIPT: "/tmp/model-spelunker-android-reference-receipt.json"
@@ -60,7 +60,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve fixed Groq treatment
+      - name: Resolve fixed NVIDIA treatment
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -68,9 +68,9 @@ jobs:
           from pathlib import Path
           catalog=json.loads(Path(os.environ["HOSTED_CATALOG"]).read_text(encoding="utf-8"))
           c=catalog["candidates"][os.environ["HOSTED_CANDIDATE_ID"]]
-          assert c["provider"] == "groq"
-          assert c["model"] == "openai/gpt-oss-20b"
-          assert c["cost_class"] == "free-tier-account-unverified"
+          assert c["provider"] == "nvidia"
+          assert c["model"] == "nvidia/nemotron-3.5-lightning-30b-a3b"
+          assert c["cost_class"] == "free-endpoint"
           values={
               "MODEL_SPELUNKER_MODEL": f'{c["provider"]}:{c["model"]}',
               "MODEL_SPELUNKER_REASONING_EFFORT": c["reasoning_effort"],
@@ -101,12 +101,12 @@ jobs:
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
 
-      - name: Stage Groq credential and perform zero-inference admission
+      - name: Stage NVIDIA credential and perform zero-inference admission
         env:
-          SELECTED_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SELECTED_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
           set -euo pipefail
-          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-GROQ_API_KEY"; exit 78; }
+          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-NVIDIA_API_KEY"; exit 78; }
           umask 077
           printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
           python3 - <<'PY'
@@ -120,11 +120,12 @@ jobs:
           )
           with urllib.request.urlopen(req,timeout=20) as response:
               data=json.load(response)
-          ids={row.get("id") for row in data.get("data",[]) if isinstance(row,dict)}
+          rows=data.get("data",[]) if isinstance(data,dict) else []
+          ids={str(row.get("id") or "") for row in rows if isinstance(row,dict)}
           model=os.environ["HOSTED_MODEL"]
           if model not in ids:
-              raise SystemExit(f"Groq model is not active for this key: {model}")
-          print("GROQ_ADMISSION="+json.dumps({
+              raise SystemExit(f"NVIDIA model is not active for this key: {model}")
+          print("NVIDIA_ADMISSION="+json.dumps({
               "authenticated": True,
               "model_active": True,
               "treatment_kind": os.environ["HOSTED_TREATMENT_KIND"],
@@ -166,10 +167,10 @@ jobs:
       - name: Calibrate then execute one embodied actor rep
         id: embodied
         env:
-          SELECTED_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SELECTED_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: |
           set -euo pipefail
-          export GROQ_API_KEY="$SELECTED_API_KEY"
+          export NVIDIA_API_KEY="$SELECTED_API_KEY"
           set +e
           python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-struct-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
           rc=$?
