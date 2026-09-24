@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "android-settings-24h-hybrid-de-DE-v0",
+  "task_class": "mobile.android.settings-state-navigation",
+  "instruction": "Aktiviere in den Android-Einstellungen das 24-Stunden-Format. Verwende nach eigenem Ermessen die bereitgestellten mobilen Werkzeuge. Beobachte die Benutzeroberfläche nach Aktionen, statt anzunehmen, dass eine Aktion funktioniert hat. Ändere keine andere Einstellung. Wenn auf dem Gerät sichtbar ist, dass das 24-Stunden-Format aktiviert ist, schreibe result.json mit genau {\"schema_version\":1,\"completed\":true}.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 180
+  },
+  "success": {
+    "kind": "deterministic-verifier-only-device-state"
+  },
+  "allowed_write_paths": [
+    "result.json"
+  ],
+  "projected_tools": [
+    "mobile_observe_ui",
+    "mobile_tap",
+    "mobile_swipe",
+    "mobile_back",
+    "mobile_launch_settings",
+    "mobile_open_section",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "high",
+    "recovery_requirement": "medium",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "verifier-only-device-state"
+  },
+  "locale": "de-DE"
+}

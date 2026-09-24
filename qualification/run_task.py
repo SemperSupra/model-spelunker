@@ -583,6 +583,17 @@ def main() -> int:
             timeout=timeout,
             env=candidate_env,
         )
+        if candidate_env.get("MODEL_SPELUNKER_PUBLIC_DIAGNOSTICS") == "1":
+            print(
+                "MODEL_SPELUNKER_PUBLIC_STDOUT_TAIL="
+                + json.dumps(stdout[-4096:]),
+                flush=True,
+            )
+            print(
+                "MODEL_SPELUNKER_PUBLIC_STDERR_TAIL="
+                + json.dumps(stderr[-4096:]),
+                flush=True,
+            )
 
         verifier = subprocess.run(
             [sys.executable, str(args.task_dir / task["verifier"]), str(workdir)],
@@ -624,6 +635,17 @@ def main() -> int:
         if validator_error and "validator-error" not in failure_signals:
             failure_signals.append("validator-error")
         metrics = harness_metrics(stdout)
+        mobile_actions: list[dict[str, object]] = []
+        mobile_raw = last_marker(stdout, "MODEL_SPELUNKER_MOBILE_ACTIONS=")
+        if mobile_raw:
+            try:
+                mobile_parsed = json.loads(mobile_raw)
+            except json.JSONDecodeError:
+                mobile_parsed = []
+            if isinstance(mobile_parsed, list):
+                mobile_actions = [
+                    item for item in mobile_parsed if isinstance(item, dict)
+                ]
         error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
 
@@ -694,6 +716,8 @@ def main() -> int:
                 "failure_signals": failure_signals,
                 "engine_error_types": error_types,
                 "tool_calls": metrics["tool_calls"],
+                "mobile_action_count": len(mobile_actions),
+                "mobile_actions": mobile_actions,
                 "input_tokens": metrics["input_tokens"],
                 "output_tokens": metrics["output_tokens"],
                 "cache_read_tokens": metrics["cache_read_tokens"],

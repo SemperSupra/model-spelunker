@@ -1,0 +1,90 @@
+import importlib.util
+import json
+import pathlib
+import subprocess
+import sys
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "qualification" / "adapters" / "android_mobile_tools.py"
+TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-struct-v0"
+HYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-v0"
+GERMAN_HYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-de-DE-v0"
+
+REFERENCE = ROOT / "qualification" / "adapters" / "android_reference_actor.py"
+
+
+def load_tools():
+    spec = importlib.util.spec_from_file_location("android_mobile_tools_test", TOOLS)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_reference():
+    adapters = str(REFERENCE.parent)
+    if adapters not in sys.path:
+        sys.path.insert(0, adapters)
+    spec = importlib.util.spec_from_file_location("android_reference_actor_test", REFERENCE)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+class AndroidEmbodiedContractTests(unittest.TestCase):
+    def test_ui_parser_exposes_only_bounded_attributes(self):
+        module = load_tools()
+        xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hierarchy rotation="0"><node index="0" text="Use 24-hour format" resource-id="android:id/title" class="android.widget.TextView" clickable="true" enabled="true" checked="false" scrollable="false" bounds="[10,20][210,120]" password="true" /></hierarchy>'''
+        parsed = module.parse_ui_xml(xml)
+        self.assertEqual(parsed["schema_version"], 1)
+        self.assertEqual(parsed["nodes"][0]["text"], "Use 24-hour format")
+        self.assertEqual(parsed["nodes"][0]["bounds"], [10, 20, 210, 120])
+        self.assertNotIn("password", parsed["nodes"][0])
+
+    def test_task_does_not_project_verifier_truth_or_generic_shell(self):
+        task = json.loads((TASK / "task.json").read_text(encoding="utf-8"))
+        tools = set(task["projected_tools"])
+        self.assertNotIn("run_shell", tools)
+        self.assertNotIn("adb", tools)
+        self.assertNotIn("mobile_open_section", tools)
+        self.assertEqual(task["allowed_write_paths"], ["result.json"])
+
+    def test_hybrid_changes_only_the_bounded_action_surface(self):
+        structural = json.loads((TASK / "task.json").read_text(encoding="utf-8"))
+        hybrid = json.loads((HYBRID_TASK / "task.json").read_text(encoding="utf-8"))
+        structural_tools = set(structural["projected_tools"])
+        hybrid_tools = set(hybrid["projected_tools"])
+        self.assertEqual(
+            hybrid_tools - structural_tools,
+            {"mobile_open_section"},
+        )
+        self.assertEqual(structural["success"], hybrid["success"])
+        self.assertEqual(structural["allowed_write_paths"], hybrid["allowed_write_paths"])
+
+
+    def test_german_hybrid_changes_only_locale_and_instruction(self):
+        base = json.loads((HYBRID_TASK / "task.json").read_text(encoding="utf-8"))
+        german = json.loads((GERMAN_HYBRID_TASK / "task.json").read_text(encoding="utf-8"))
+        self.assertEqual(german["locale"], "de-DE")
+        self.assertEqual(german["projected_tools"], base["projected_tools"])
+        self.assertEqual(german["success"], base["success"])
+        self.assertEqual(german["allowed_write_paths"], base["allowed_write_paths"])
+        self.assertEqual(german["limits"], base["limits"])
+        self.assertNotEqual(german["instruction"], base["instruction"])
+
+    def test_reference_prefers_exact_label_over_substring(self):
+        module = load_reference()
+        wanted = ("system",)
+        self.assertEqual(module._match_rank({"text": "System update"}, wanted), 1)
+        self.assertEqual(module._match_rank({"text": "System"}, wanted), 2)
+        self.assertEqual(module._match_rank({"text": "Security"}, wanted), 0)
+
+    def test_verifier_self_test(self):
+        cp = subprocess.run([sys.executable, str(TASK / "verify.py"), "--self-test"], capture_output=True, text=True)
+        self.assertEqual(cp.returncode, 0, cp.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

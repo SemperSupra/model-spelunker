@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "android-settings-24h-hybrid-v0",
+  "task_class": "mobile.android.settings-state-navigation",
+  "instruction": "Turn on Android Settings > Use 24-hour format. Use any of the provided mobile tools you judge appropriate. Observe the UI after actions rather than assuming an action worked. Do not modify any unrelated setting. When the device visibly shows Use 24-hour format enabled, write result.json containing exactly {\"schema_version\":1,\"completed\":true}.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 180
+  },
+  "success": {
+    "kind": "deterministic-verifier-only-device-state"
+  },
+  "allowed_write_paths": [
+    "result.json"
+  ],
+  "projected_tools": [
+    "mobile_observe_ui",
+    "mobile_tap",
+    "mobile_swipe",
+    "mobile_back",
+    "mobile_launch_settings",
+    "mobile_open_section",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "high",
+    "recovery_requirement": "medium",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "verifier-only-device-state"
+  }
+}
