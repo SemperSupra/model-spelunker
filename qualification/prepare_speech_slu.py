@@ -12,7 +12,7 @@ from faster_whisper import WhisperModel
 LOGICAL_ID = "asr/faster-whisper/tiny"
 UPSTREAM_REVISION = "d90ca5fe260221311c53c58e660288d3deb8d356"
 APPROVED_DIGEST = "sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42"
-EXPECTED_PHRASES = ("my fellow americans", "your country", "do for you")
+EXPECTED_PHRASES = ("my fellow americans", "ask not what your country can do for you", "what you can do for your country")
 
 
 def sha256_bytes(data: bytes) -> str:
