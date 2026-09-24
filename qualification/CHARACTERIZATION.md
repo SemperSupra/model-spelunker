@@ -69,6 +69,11 @@ A timeout after real execution begins is performance-envelope evidence, not
 automatically a semantic actor failure. A task packaging defect, validator error,
 or execution-plane failure never becomes negative actor/KSA evidence.
 
+Experiment orchestration is part of measurement validity. Unrelated branch maintenance
+must not cancel or replace an in-flight scientific cell. Concurrency keys should bind the
+experiment/treatment cell or use non-cancelling serialization; an orchestration
+cancellation is invalid methodology evidence, not a right-censored actor observation.
+
 ## Resource and deployment envelope
 
 Record cheap observed facts that can affect placement:
