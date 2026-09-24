@@ -296,13 +296,13 @@ jobs:
           export DEEPSEEK_API_KEY="$SELECTED_API_KEY"
           set +e
           python3 qualification/run_task.py \
-            qualification/tasks/speech-slu-jfk-v0 \
-            "$CANDIDATE_META" \
-            "$RECEIPT" \
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id "gha-ubuntu-24.04-x64-openworker-hosted-asr" \
             --substrate-profile-commit "$GITHUB_SHA" \
             --snapshot-dir "$SNAPSHOT_DIR" \
+            qualification/tasks/speech-slu-jfk-v0 \
+            "$CANDIDATE_META" \
+            "$RECEIPT" \
             -- "$RUNNER_TEMP/openworker-venv/bin/python" \
               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
           rc=$?
