@@ -58,5 +58,6 @@
     "credential-absence",
     "provider-admission-failure",
     "uncontrolled-task-tool-iteration-wall-authority-or-provider-route-drift"
-  ]
+  ],
+  "execution_note": "2026-09-24 initial bounded output4096 treatment authorized after 2048-token write_file argument truncation."
 }
