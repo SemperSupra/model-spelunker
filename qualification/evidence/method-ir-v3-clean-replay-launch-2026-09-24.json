@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "kind": "qualification-launch-record",
+  "experiment_id": "openworker-deepseek-flash-method-ir-v3-package-repair",
+  "disposition": "AUTHORIZED_REPLAY_AFTER_METHODOLOGY_REPAIR",
+  "prerequisites": {
+    "qualification_contract_run": 36056863356,
+    "qualification_contract_conclusion": "success",
+    "task_id": "method-ir-siglip2-b16-256-v3",
+    "task_contract_change": "actor-visible evidence-ref base path and absence_search null semantics only",
+    "frozen_source_bytes": true,
+    "verifier_semantics_unchanged": true,
+    "actor_model_runtime_tools_budgets_unchanged": true,
+    "max_tokens": 4096,
+    "max_iterations": 12,
+    "wall_seconds": 360
+  },
+  "excluded_prior_attempts": [
+    {
+      "run_id": 36055915315,
+      "reason": "pre-inference experimental-role assertion defect"
+    },
+    {
+      "run_id": 36056190976,
+      "reason": "experiment catalog schema invalid because non-schema execution_note metadata was present"
+    }
+  ],
+  "claim_boundary": "This launch may produce task-conditioned evidence only. Structural PASS still requires independent scientific reconciliation."
+}

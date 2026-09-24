@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "id": "method-ir-siglip2-b16-256-v3",
+  "task_class": "research.method-evidence-binding",
+  "instruction": "Inspect only the local files under sources plus source_manifest.json and write method_ir.json. Reconstruct the bounded publication-visible method needed to evaluate CLAIM_SIGLIP2_B16_256_CORE: for fixed-resolution ViT-B/16 at 256px, compare the corresponding SigLIP and SigLIP 2 published ImageNet-1k validation zero-shot classification result and COCO text-to-image / image-to-text recall@1 results, then state whether publication-visible material is sufficient to reproduce those evaluations. Do not use model prior to fill missing details. Output exactly schema_version, claim, protocol_fields, and execution_readiness. schema_version must be 1. claim must contain exactly claim_id, comparison, and evidence_refs; claim_id must be CLAIM_SIGLIP2_B16_256_CORE. comparison must contain exactly siglip and siglip2; each must contain exactly imagenet1k_val, coco_text_to_image_recall_at_1, coco_image_to_text_recall_at_1, and evidence_refs. Numeric result fields may be numbers or null if genuinely not recoverable. protocol_fields must contain exactly checkpoint_identity, architecture_resolution, text_tokenizer_normalization, image_preprocessing, imagenet1k_evaluation, coco_retrieval_evaluation, metric_definitions, software_runtime, randomness_repetition. Each protocol field must contain exactly status, value, evidence_refs, and absence_search. status must be one of EXPLICIT_PAPER, EXPLICIT_CHECKPOINT_README, INFERABLE_WITH_EVIDENCE, AMBIGUOUS, CONTRADICTORY, MISSING, NOT_APPLICABLE. value must be a string or null. For MISSING, value must be null, evidence_refs must be empty, and absence_search must briefly state what local source material was checked. For every other status except NOT_APPLICABLE, cite at least one evidence_ref and set absence_search to null. For NOT_APPLICABLE, evidence_refs must be empty and absence_search must be null. Evidence refs must be sorted unique references of the form source:<relative-path>:L<start> or source:<relative-path>:L<start>-L<end>, using line numbers from the raw local source files. The <relative-path> is relative to the sources/ directory itself: use document.tex, tables/zeroshot_main.tex, or README_siglip2.md and DO NOT include a leading sources/ prefix. execution_readiness must contain exactly status, blocking_fields, and notes; status must be RUNNABLE, PARTIAL, or BLOCKED; blocking_fields must be a sorted unique array containing only protocol_fields keys. Preserve ambiguity and missing information rather than silently resolving it. Do not modify source files.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 240
+  },
+  "success": {
+    "kind": "structural-source-binding-preflight; scientific acceptance requires independent project reconciliation"
+  },
+  "allowed_write_paths": [
+    "method_ir.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "high",
+    "planning_horizon": "medium",
+    "tool_discovery": "low",
+    "recovery_requirement": "medium",
+    "context_volume": "medium",
+    "environment_uncertainty": "low",
+    "verification_strength": "mechanical-source-binding-plus-independent-reconciliation"
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "source_bound_research_synthesis",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "evidence_span_binding",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "ambiguity_preservation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "unknown_preservation",
+      "evidence_role": "supporting"
+    }
+  ],
+  "demand_factors": {
+    "source_files": 3,
+    "protocol_fields": 9,
+    "compared_models": 2,
+    "required_metric_values": 6,
+    "allowed_output_files": 1
+  }
+}

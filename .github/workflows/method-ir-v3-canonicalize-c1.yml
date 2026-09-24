@@ -1,0 +1,136 @@
+name: Method-IR v3 deterministic C1 canonicalization
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  canonicalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SOURCE_RUN_ID: '36057034170'
+      SOURCE_ARTIFACT_ID: '10832199146'
+      SOURCE_CANDIDATE_SHA256: '96b367ebaaf32aebf77ffc63ed192e4d11a1507a74d2050176452cc167972298'
+      TASK_ID: 'method-ir-siglip2-b16-256-v3'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Hydrate frozen task sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "qualification/tasks/$TASK_ID/prepare_fixture.py"
+          python3 "qualification/tasks/$TASK_ID/verify.py" --self-test
+
+      - name: Recover exact preserved C1 artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/c1"
+          mkdir -p "$out"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$SOURCE_ARTIFACT_ID/zip" > "$out/artifact.zip"
+          unzip -q "$out/artifact.zip" -d "$out/artifact"
+          candidate="$out/artifact/output-snapshot/method_ir.json"
+          test -s "$candidate"
+          echo "$SOURCE_CANDIDATE_SHA256  $candidate" | sha256sum -c -
+          echo "C1_PATH=$candidate" >> "$GITHUB_ENV"
+          echo "RECOVERY_OUT=$RUNNER_TEMP/method-ir-v3-canonicalized" >> "$GITHUB_ENV"
+
+      - name: Canonicalize ordering only and prove semantic equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RECOVERY_OUT"
+          C1_PATH="$C1_PATH" OUT="$RECOVERY_OUT" python3 - <<'PY'
+          import copy, hashlib, json, os
+          from pathlib import Path
+
+          src=Path(os.environ["C1_PATH"])
+          out=Path(os.environ["OUT"])
+          original=json.loads(src.read_text(encoding="utf-8"))
+          fixed=copy.deepcopy(original)
+          changed=[]
+
+          def sort_unique(container,key,pointer):
+              before=container[key]
+              after=sorted(set(before))
+              if before != after:
+                  changed.append({
+                      "pointer":pointer,
+                      "before":before,
+                      "after":after,
+                  })
+                  container[key]=after
+
+          sort_unique(fixed["claim"],"evidence_refs","/claim/evidence_refs")
+          for model,row in fixed["claim"]["comparison"].items():
+              sort_unique(row,"evidence_refs",f"/claim/comparison/{model}/evidence_refs")
+          for name,row in fixed["protocol_fields"].items():
+              sort_unique(row,"evidence_refs",f"/protocol_fields/{name}/evidence_refs")
+          sort_unique(
+              fixed["execution_readiness"],
+              "blocking_fields",
+              "/execution_readiness/blocking_fields",
+          )
+
+          # Prove the transform is order-only: recursively normalize the original
+          # with the same list canonicalization and require exact object equality.
+          normalized=copy.deepcopy(original)
+          normalized["claim"]["evidence_refs"]=sorted(set(normalized["claim"]["evidence_refs"]))
+          for row in normalized["claim"]["comparison"].values():
+              row["evidence_refs"]=sorted(set(row["evidence_refs"]))
+          for row in normalized["protocol_fields"].values():
+              row["evidence_refs"]=sorted(set(row["evidence_refs"]))
+          normalized["execution_readiness"]["blocking_fields"]=sorted(
+              set(normalized["execution_readiness"]["blocking_fields"])
+          )
+          assert normalized == fixed
+          assert changed, "expected at least one canonicalization change"
+
+          candidate=out/"method_ir.canonical.json"
+          candidate.write_text(json.dumps(fixed,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+          receipt={
+              "schema_version":1,
+              "kind":"deterministic-order-canonicalization",
+              "source_run_id":os.environ["SOURCE_RUN_ID"],
+              "source_candidate_sha256":hashlib.sha256(src.read_bytes()).hexdigest(),
+              "output_candidate_sha256":hashlib.sha256(candidate.read_bytes()).hexdigest(),
+              "changed_fields":changed,
+              "semantic_transform":"none; sorted-unique list ordering only",
+          }
+          (out/"canonicalization-receipt.json").write_text(
+              json.dumps(receipt,indent=2,sort_keys=True)+"\n",
+              encoding="utf-8",
+          )
+          print("CANONICALIZATION_CHANGED_FIELDS="+str(len(changed)))
+          print("CANONICAL_OUTPUT_SHA256="+receipt["output_candidate_sha256"])
+          PY
+
+      - name: Run frozen structural verifier on canonical derivative
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/verify-work"
+          mkdir -p "$work"
+          cp -R "qualification/tasks/$TASK_ID/fixture/." "$work/"
+          cp "$RECOVERY_OUT/method_ir.canonical.json" "$work/method_ir.json"
+          python3 "qualification/tasks/$TASK_ID/verify.py" "$work"
+          echo 'STRUCTURAL_VERIFIER=PASS' | tee "$RECOVERY_OUT/structural-verifier.txt"
+
+      - name: Upload derivative and deterministic receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: method-ir-v3-canonicalized-${{ github.run_id }}
+          path: |
+            ${{ env.RECOVERY_OUT }}/**
+          if-no-files-found: error
+          retention-days: 30
