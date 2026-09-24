@@ -9,6 +9,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "qualification" / "adapters" / "android_mobile_tools.py"
 TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-struct-v0"
 HYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-v0"
+GERMAN_HYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-de-DE-v0"
 
 REFERENCE = ROOT / "qualification" / "adapters" / "android_reference_actor.py"
 
@@ -62,6 +63,16 @@ class AndroidEmbodiedContractTests(unittest.TestCase):
         self.assertEqual(structural["success"], hybrid["success"])
         self.assertEqual(structural["allowed_write_paths"], hybrid["allowed_write_paths"])
 
+
+    def test_german_hybrid_changes_only_locale_and_instruction(self):
+        base = json.loads((HYBRID_TASK / "task.json").read_text(encoding="utf-8"))
+        german = json.loads((GERMAN_HYBRID_TASK / "task.json").read_text(encoding="utf-8"))
+        self.assertEqual(german["locale"], "de-DE")
+        self.assertEqual(german["projected_tools"], base["projected_tools"])
+        self.assertEqual(german["success"], base["success"])
+        self.assertEqual(german["allowed_write_paths"], base["allowed_write_paths"])
+        self.assertEqual(german["limits"], base["limits"])
+        self.assertNotEqual(german["instruction"], base["instruction"])
 
     def test_reference_prefers_exact_label_over_substring(self):
         module = load_reference()
