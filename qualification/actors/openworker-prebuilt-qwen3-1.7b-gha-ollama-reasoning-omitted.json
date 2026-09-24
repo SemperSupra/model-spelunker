@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "openworker-prebuilt-qwen3-1.7b-gha-ollama-reasoning-omitted",
+  "harness": {
+    "name": "openworker",
+    "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83",
+    "admission_ref": "github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json"
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3:1.7b",
+    "realization": "local-artifact",
+    "artifact_ref": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/ubuntu-24.04-x64",
+    "inference_route": "local:ollama-0.34.1",
+    "substrate_profile": "gha-linux-x64-openworker-prebuilt-ollama"
+  },
+  "toolset": [
+    "read_file",
+    "write_file"
+  ],
+  "configuration": {
+    "context": 32768,
+    "reasoning_effort": "omit",
+    "max_iterations": 4,
+    "harness_delivery": "prebuilt-admitted-artifact"
+  },
+  "authority_profile": "task-scoped-workcell"
+}

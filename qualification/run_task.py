@@ -332,6 +332,29 @@ def harness_metrics(stdout: str) -> dict[str, int | None]:
     }
 
 
+def model_call_start_summary(stdout: str) -> dict[str, object]:
+    starts: list[dict[str, object]] = []
+    prefix = "MODEL_SPELUNKER_MODEL_CALL_STARTED="
+    for line in stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            starts.append(value)
+    summary: dict[str, object] = {"model_calls_started": len(starts)}
+    for source, target in (
+        ("request_message_bytes", "started_request_message_bytes_total"),
+        ("request_tool_schema_bytes", "started_request_tool_schema_bytes_total"),
+    ):
+        values = [x.get(source) for x in starts if isinstance(x.get(source), (int, float))]
+        if values:
+            summary[target] = float(sum(values))
+    return summary
+
+
 def provider_observations(stdout: str) -> list[dict[str, object]]:
     raw = last_marker(stdout, "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=")
     if not raw:
@@ -721,6 +744,7 @@ def main() -> int:
                 ]
         error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
+        workload.update(model_call_start_summary(stdout))
 
         evidence = {
             "candidate_exit_code": candidate_exit,
