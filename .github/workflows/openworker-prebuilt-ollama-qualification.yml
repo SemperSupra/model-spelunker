@@ -13,6 +13,25 @@ on:
         description: Task id from qualification/tasks
         required: true
         default: text-repair-v0
+      experiment:
+        description: Optional v2 experiment declaration filename from qualification/experiments
+        required: false
+        default: ''
+  workflow_call:
+    inputs:
+      artifact_ref:
+        required: true
+        type: string
+      admission_ref:
+        required: true
+        type: string
+      task:
+        required: true
+        type: string
+      experiment:
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -43,6 +62,7 @@ jobs:
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
       QUALIFICATION_TASK: ${{ inputs.task }}
+      QUALIFICATION_EXPERIMENT: ${{ inputs.experiment }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-prebuilt-candidate.json'
       RECEIPT: '/tmp/model-spelunker-openworker-prebuilt-receipt.json'
       DIAGNOSTICS: '/tmp/model-spelunker-openworker-prebuilt-diagnostics.json'
@@ -173,12 +193,17 @@ jobs:
           for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY; do
             unset "$key" || true
           done
+          experiment_args=()
+          if [[ -n "$QUALIFICATION_EXPERIMENT" ]]; then
+            experiment_args=(--experiment "qualification/experiments/$QUALIFICATION_EXPERIMENT")
+          fi
           set +e
           python qualification/run_task.py \
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-linux-x64-openworker-prebuilt-ollama \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
             --diagnostics "$DIAGNOSTICS" \
+            "${experiment_args[@]}" \
             "qualification/tasks/$QUALIFICATION_TASK" \
             "$CANDIDATE_META" \
             "$RECEIPT" \
