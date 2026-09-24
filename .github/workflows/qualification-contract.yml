@@ -217,6 +217,9 @@ jobs:
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
 
+      - name: Self-test candidate timeout cleanup
+        run: PYTHONPATH=. python qualification/test_candidate_process_cleanup.py
+
       - name: Self-test OpenRouter generation provenance projection
         run: PYTHONPATH=. python qualification/test_run_task_openrouter_metadata.py
 
