@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "kind": "deterministic-order-canonicalization",
+  "source_run_id": "36057034170",
+  "source_candidate_sha256": "96b367ebaaf32aebf77ffc63ed192e4d11a1507a74d2050176452cc167972298",
+  "output_candidate_sha256": "4e016bfbf9a23adb8a5bb7369e0183ad2c55286c3d2b14749c3dda5151809d6c",
+  "semantic_transform": "none; sorted-unique list ordering only",
+  "structural_verifier": {
+    "workflow_run_id": 36057727710,
+    "artifact_id": 10832997506,
+    "result": "PASS"
+  },
+  "changed_fields": [
+    "/protocol_fields/text_tokenizer_normalization/evidence_refs",
+    "/protocol_fields/image_preprocessing/evidence_refs",
+    "/protocol_fields/imagenet1k_evaluation/evidence_refs",
+    "/protocol_fields/coco_retrieval_evaluation/evidence_refs",
+    "/protocol_fields/software_runtime/evidence_refs"
+  ]
+}
