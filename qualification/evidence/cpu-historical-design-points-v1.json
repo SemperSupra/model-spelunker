@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "purpose": "Noncanonical historical CPU design points retained to avoid duplicate experiments; these are not run receipts and must not be counted as semantic reliability trials.",
+  "authority": "SemperSupra/model-spelunker#54",
+  "observations": [
+    {
+      "id": "codex-qwen17-initial-timeout",
+      "source": {
+        "issue": 54,
+        "comment_id": 5740914479,
+        "workflow_run_id": 35436094424,
+        "run_id": "20260919T100019Z-512ab007"
+      },
+      "configured_actor": {
+        "harness": "codex",
+        "harness_version": "0.154.0",
+        "model": "qwen3:1.7b",
+        "runtime": "ollama-0.34.1",
+        "substrate": "github-hosted-ubuntu-cpu"
+      },
+      "task": "text-repair-v0 lineage",
+      "outcome": "timeout-boundary",
+      "wall_seconds": 120.153353,
+      "mechanism_evidence": "~6.8k prompt tokens presented; ~4.1k processed by ~95 s",
+      "claim_ceiling": "task/config/substrate boundary only; no reliability or bare-model conclusion"
+    },
+    {
+      "id": "codex-qwen06-model-size-control",
+      "source": {
+        "issue": 54,
+        "comment_id": 5741220261,
+        "workflow_run_id": 35436302165,
+        "run_id": "20260919T100441Z-ece6fd59"
+      },
+      "configured_actor": {
+        "harness": "codex",
+        "harness_version": "0.154.0",
+        "model": "qwen3:0.6b",
+        "runtime": "ollama-0.34.1",
+        "substrate": "github-hosted-ubuntu-cpu"
+      },
+      "task": "same frozen crossover task/verifier",
+      "outcome": "timeout-boundary",
+      "wall_seconds": 120.151298,
+      "claim_ceiling": "paired model-size screen; does not establish model-size irrelevance"
+    },
+    {
+      "id": "codex-qwen17-model-size-control",
+      "source": {
+        "issue": 54,
+        "comment_id": 5741220261,
+        "workflow_run_id": 35436302165,
+        "run_id": "20260919T100439Z-e1d7ef7d"
+      },
+      "configured_actor": {
+        "harness": "codex",
+        "harness_version": "0.154.0",
+        "model": "qwen3:1.7b",
+        "runtime": "ollama-0.34.1",
+        "substrate": "github-hosted-ubuntu-cpu"
+      },
+      "task": "same frozen crossover task/verifier",
+      "outcome": "timeout-boundary",
+      "wall_seconds": 120.154347,
+      "claim_ceiling": "paired model-size screen; does not establish model-size irrelevance"
+    },
+    {
+      "id": "projected-openworker-qwen17-controlled-crossover",
+      "source": {
+        "issue": 54,
+        "comment_id": 5741707374,
+        "run_id": "20260919T120323Z-00bfc3d3"
+      },
+      "configured_actor": {
+        "harness": "openworker-projected",
+        "model": "qwen3:1.7b",
+        "model_artifact": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+        "runtime": "ollama-0.34.1",
+        "substrate": "github-hosted-ubuntu-24.04-cpu"
+      },
+      "task": "text-repair-v0",
+      "outcome": "semantic-pass",
+      "wall_seconds": 9.044919,
+      "claim_ceiling": "controlled configured-actor crossover point; one task/one observation, not reliability"
+    },
+    {
+      "id": "stock-codex-qwen17-controlled-crossover",
+      "source": {
+        "issue": 54,
+        "comment_id": 5741707374,
+        "run_id": "20260919T120445Z-0389e630"
+      },
+      "configured_actor": {
+        "harness": "codex-stock-oss",
+        "harness_version": "0.154.0",
+        "model": "qwen3:1.7b",
+        "model_artifact": "ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+        "runtime": "ollama-0.34.1",
+        "substrate": "github-hosted-ubuntu-24.04-cpu"
+      },
+      "task": "text-repair-v0",
+      "outcome": "timeout-boundary",
+      "wall_seconds": 120.154105,
+      "mechanism_evidence": "4096 prompt tokens processed by ~90.23 s, about 60% of prompt; fallback model metadata warning",
+      "claim_ceiling": "controlled configured-actor crossover point; harness/context effect candidate, not framework ranking"
+    },
+    {
+      "id": "codex-qwen17-minimal-instructions-explicit-metadata",
+      "source": {
+        "issue": 54,
+        "comment_id": 5741777605,
+        "workflow_run_id": 35442213601,
+        "run_id": "20260919T121516Z-ef7ff4fe"
+      },
+      "configured_actor": {
+        "harness": "codex",
+        "harness_version": "0.154.0",
+        "model": "qwen3:1.7b",
+        "runtime": "ollama-0.34.1",
+        "configuration": "minimal instructions + explicit Qwen metadata",
+        "substrate": "github-hosted-ubuntu-cpu"
+      },
+      "task": "same frozen text-repair crossover task",
+      "outcome": "timeout-boundary",
+      "wall_seconds": 120.154928,
+      "claim_ceiling": "configuration ablation; metadata correction alone did not enter the 120 s envelope"
+    }
+  ],
+  "ingestion_rule": "Use these points for experiment de-duplication and hypothesis selection only. Promote to canonical run-receipt evidence only from original immutable bytes; never synthesize missing receipt fields from issue prose."
+}
