@@ -238,7 +238,7 @@ def main() -> int:
                 for path in (root / "adjudication").rglob("*")
                 if path.is_file()
             )
-            assert adjudication_files == ["adjudication-events.jsonl"]
+            assert adjudication_files == [".lock", "adjudication-events.jsonl", "adjudication-session.json"]
 
             print(json.dumps({
                 "schema_version": "visual_gate14_adjudication_ui.v0.1",
