@@ -173,6 +173,8 @@ def main() -> int:
         if accel_code != 0:
             raise SystemExit(f"KVM acceleration unavailable: {(accel_out + accel_err)[-800:]}")
 
+        task_cfg = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+        locale = str(task_cfg.get("locale") or "").strip()
         cmd = [
             "sudo", "-n", "env",
             f"ANDROID_AVD_HOME={avd_home}",
@@ -182,6 +184,8 @@ def main() -> int:
             "-no-snapshot-load", "-no-snapshot-save", "-accel", "on",
             "-gpu", "swiftshader_indirect", "-no-metrics",
         ]
+        if locale:
+            cmd += ["-prop", f"persist.sys.locale={locale}"]
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, env=env)
         serial = None
         boot_start = time.monotonic()
@@ -221,8 +225,17 @@ def main() -> int:
                     "MODEL_SPELUNKER_ADB_BIN": str(adb),
                     "MODEL_SPELUNKER_ANDROID_SERIAL": serial,
                     "MODEL_SPELUNKER_ANDROID_USE_SUDO": "1",
+                    "MODEL_SPELUNKER_TASK_LOCALE": locale,
                 }
             )
+            if locale:
+                c, observed_locale, locale_err = adb_cmd(
+                    adb, serial, "shell", "getprop", "persist.sys.locale", env=env
+                )
+                if c != 0 or observed_locale.strip() != locale:
+                    raise RuntimeError(
+                        f"requested locale not established: requested={locale!r} observed={observed_locale!r} err={locale_err[-300:]!r}"
+                    )
 
             reset_task_state(adb, serial, env=env)
             reference_meta = root / "reference-candidate.json"
