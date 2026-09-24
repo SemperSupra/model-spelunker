@@ -383,7 +383,7 @@ async def run(instruction: str) -> int:
         permissions=permissions,
         model=engine_model,
         approver=approver,
-        max_iterations=4,
+        max_iterations=MAX_ITERATIONS,
         model_settings=MODEL_SETTINGS,
     )
 
@@ -411,7 +411,7 @@ async def run(instruction: str) -> int:
 
     summary = {
         "model": MODEL,
-        "model_settings": MODEL_SETTINGS,
+        "model_settings": MODEL_SETTINGS,\n        "max_iterations": MAX_ITERATIONS,
         "projection": registry.names(),
         "tool_calls": tool_names(engine.messages),
         "approval_count": len(approvals),
