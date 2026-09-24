@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "id": "contract-test-portable-v2",
+  "harness": {
+    "name": "contract-test",
+    "version": "1",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "none",
+    "id": "none",
+    "realization": "local-artifact",
+    "artifact_ref": null,
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "qualification-contract",
+    "inference_route": "local:deterministic"
+  },
+  "deployment_topology": {
+    "harness_placement": "local-process",
+    "runtime_placement": "local-subprocess",
+    "transport": "stdio",
+    "compute_class": "deterministic",
+    "data_boundary": "public-safe"
+  },
+  "toolset": [
+    "filesystem"
+  ],
+  "configuration": {
+    "harness_delivery": "contract-fixture"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
