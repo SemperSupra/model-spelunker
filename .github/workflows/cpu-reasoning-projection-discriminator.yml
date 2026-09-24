@@ -19,3 +19,13 @@ jobs:
       task: api-boundary-classification-v1
       experiment: cpu-qwen17-api-boundary-reasoning-projection-v1.json
       reasoning_effort: omit
+
+  explicit-none-control:
+    if: contains(github.event.head_commit.message, '[cpu-reasoning-control]')
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83
+      admission_ref: github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json
+      task: api-boundary-classification-v1
+      experiment: cpu-qwen17-api-boundary-reasoning-projection-v1.json
+      reasoning_effort: none
