@@ -11,6 +11,10 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: unified-macos-method-ir-v2-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   method-ir-operational:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-iter8]')
