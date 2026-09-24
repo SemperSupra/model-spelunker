@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import signal
 import subprocess
@@ -36,6 +37,18 @@ def observed_resources() -> dict[str, object]:
         for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
             if line.lower().startswith("model name") and ":" in line:
                 cpu_model = line.split(":", 1)[1].strip()
+                break
+    elif platform.system() == "Darwin":
+        for key in ("machdep.cpu.brand_string", "hw.model"):
+            probe = subprocess.run(
+                ["sysctl", "-n", key],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            value = probe.stdout.strip()
+            if probe.returncode == 0 and value:
+                cpu_model = value
                 break
 
     memory_total_bytes = None
@@ -67,6 +80,8 @@ def observed_resources() -> dict[str, object]:
         "memory_total_bytes": memory_total_bytes,
         "cpu_quota_cores": cpu_quota_cores,
         "cpuset_cpus_effective": cpuset,
+        "platform_system": platform.system() or None,
+        "platform_machine": platform.machine() or None,
     }
 
 
@@ -774,6 +789,11 @@ def main() -> int:
                 "task_class": task.get("task_class"),
                 "source_commit": args.task_commit,
                 "package_digest": tree_digest(args.task_dir),
+                **(
+                    {"ksa_requirements": task["ksa_requirements"]}
+                    if task.get("ksa_requirements")
+                    else {}
+                ),
             },
             "candidate": {
                 "harness": candidate["harness"],
@@ -781,6 +801,11 @@ def main() -> int:
                 "configuration_digest": canonical_json_digest(candidate),
                 "toolset": candidate["toolset"],
                 **({"build": candidate["build"]} if "build" in candidate else {}),
+                **(
+                    {"deployment_topology": candidate["deployment_topology"]}
+                    if "deployment_topology" in candidate
+                    else {}
+                ),
             },
             "substrate": {
                 "profile_id": args.substrate_profile_id,
