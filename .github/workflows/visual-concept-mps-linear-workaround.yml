@@ -1,12 +1,6 @@
 name: Visual Concept MPS Linear Workaround
 
 on:
-  pull_request:
-    branches:
-      - exp/visual-concept-macos-mps
-    paths:
-      - 'scripts/visual_concept_mps_linear_workaround.py'
-      - '.github/workflows/visual-concept-mps-linear-workaround.yml'
   workflow_dispatch:
 
 permissions:
