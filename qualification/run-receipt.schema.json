@@ -52,6 +52,42 @@
             "null"
           ],
           "minLength": 1
+        },
+        "ksa_requirements": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "family",
+              "name",
+              "evidence_role"
+            ],
+            "properties": {
+              "family": {
+                "type": "string",
+                "enum": [
+                  "knowledge",
+                  "skills",
+                  "abilities"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence_role": {
+                "type": "string",
+                "enum": [
+                  "isolating",
+                  "composite",
+                  "supporting"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -173,6 +209,34 @@
             "artifact_digest": {
               "type": "string",
               "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        "deployment_topology": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "harness_placement",
+            "runtime_placement",
+            "transport",
+            "compute_class",
+            "data_boundary"
+          ],
+          "properties": {
+            "harness_placement": {
+              "type": "string"
+            },
+            "runtime_placement": {
+              "type": "string"
+            },
+            "transport": {
+              "type": "string"
+            },
+            "compute_class": {
+              "type": "string"
+            },
+            "data_boundary": {
+              "type": "string"
             }
           }
         }
@@ -637,6 +701,54 @@
             "string",
             "null"
           ]
+        },
+        "platform_system": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_machine": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      }
+    },
+    "extensions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "schema_version",
+          "digest"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "schema_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
         }
       }
     }
