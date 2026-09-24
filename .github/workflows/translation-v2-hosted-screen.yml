@@ -1,14 +1,6 @@
 name: Translation v3 Hosted Screen
 
 on:
-  push:
-    branches:
-      - exp/translation-v2-screen
-    paths:
-      - ".github/workflows/translation-v2-hosted-screen.yml"
-      - "qualification/actors/openworker-deepseek-flash-gha-direct-v2.json"
-      - "qualification/experiments/openworker-deepseek-translation-en-de-v3-screen.json"
-      - "qualification/tasks/translation-controlled-en-de-v3/**"
   workflow_dispatch:
 
 permissions:
@@ -110,7 +102,7 @@ jobs:
           print("DEEPSEEK_ADMISSION="+json.dumps({"authenticated":True,"available":True},sort_keys=True))
           PY
 
-      - name: Execute prospective v2 translation screen
+      - name: Execute prospective v3 translation screen
         id: qualify
         env:
           SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
