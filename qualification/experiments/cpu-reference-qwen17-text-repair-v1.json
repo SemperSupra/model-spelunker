@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "id": "cpu-reference-qwen17-text-repair-v1",
+  "decision_question": "Under the admitted public Ubuntu CPU realization, what does the known Qwen3 1.7B harness reference point show when measured with v2 scientific receipt semantics rather than legacy PASS/FAIL alone?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-1.7b-gha-ollama",
+    "codex-exec-prebuilt-qwen3-1.7b-gha-ollama",
+    "goose-prebuilt-qwen3-1.7b-gha-ollama"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "qwen3-1.7b-model-artifact",
+    "ollama-0.34.1",
+    "text-repair-v0-task-package",
+    "github-hosted-ubuntu-24.04-x64"
+  ],
+  "variable_under_test": "configured-harness-realization-and-resource-observation",
+  "claim_type": "factor-effect",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "wall-seconds",
+    "model-rounds",
+    "observed-cpu-resource-envelope"
+  ],
+  "design_block": "cpu-qwen17-reference-2026-09",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "model-artifact-drift",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "zero-model-round-ingress-failure",
+    "validator-error",
+    "uncontrolled-model-or-harness-drift"
+  ]
+}
