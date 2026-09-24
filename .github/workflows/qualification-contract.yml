@@ -200,6 +200,7 @@ jobs:
           assert receipt["resources"]["platform_system"] == "Linux"
           assert receipt["resources"]["platform_machine"]
           assert receipt["experiment"]["id"] == "unified-reference-contract-v1"
+          assert receipt["execution_limits"] == {"wall_seconds": 30, "wall_seconds_source": "task"}
           print(json.dumps(receipt,sort_keys=True))
           PY
 
