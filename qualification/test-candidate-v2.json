@@ -1,0 +1,28 @@
+{
+  "harness": {
+    "name": "contract-test",
+    "version": "1"
+  },
+  "model": {
+    "provider": "none",
+    "id": "none"
+  },
+  "toolset": [
+    "filesystem"
+  ],
+  "build": {
+    "kind": "contract-fixture",
+    "profile": "fixture",
+    "source_revision": "contract",
+    "toolchain": "python",
+    "default_features": false,
+    "features": []
+  },
+  "deployment_topology": {
+    "harness_placement": "local-process",
+    "runtime_placement": "local-subprocess",
+    "transport": "stdio",
+    "compute_class": "deterministic",
+    "data_boundary": "public-safe"
+  }
+}
