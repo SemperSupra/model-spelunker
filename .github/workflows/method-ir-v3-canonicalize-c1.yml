@@ -1,9 +1,6 @@
 name: Method-IR v3 deterministic C1 canonicalization
 
 on:
-  push:
-    branches:
-      - exp/method-ir-v3-deepseek-replay
   workflow_dispatch:
 
 permissions:
@@ -12,7 +9,6 @@ permissions:
 
 jobs:
   canonicalize:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-v3-canonicalize]')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
