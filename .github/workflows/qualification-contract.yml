@@ -45,6 +45,7 @@ jobs:
           method_ir_task = json.loads(Path("qualification/tasks/method-ir-siglip2-b16-256-v0/task.json").read_text())
           api_boundary_task_v1 = json.loads(Path("qualification/tasks/api-boundary-classification-v1/task.json").read_text())
           method_ir_task_v1 = json.loads(Path("qualification/tasks/method-ir-siglip2-b16-256-v1/task.json").read_text())
+          method_ir_task_v2 = json.loads(Path("qualification/tasks/method-ir-siglip2-b16-256-v2/task.json").read_text())
           json.loads(Path("qualification/test-candidate.json").read_text())
           hosted = json.loads(Path("qualification/models/hosted-api.json").read_text())
           schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
@@ -124,6 +125,7 @@ jobs:
           jsonschema.validate(method_ir_task, task_schema)
           jsonschema.validate(api_boundary_task_v1, task_schema)
           jsonschema.validate(method_ir_task_v1, task_schema)
+          jsonschema.validate(method_ir_task_v2, task_schema)
           actor_ids = set()
           for path in sorted(Path("qualification/actors").glob("*.json")):
               actor = json.loads(path.read_text())
@@ -141,6 +143,7 @@ jobs:
               method_ir_task["id"]: method_ir_task["task_class"],
               api_boundary_task_v1["id"]: api_boundary_task_v1["task_class"],
               method_ir_task_v1["id"]: method_ir_task_v1["task_class"],
+              method_ir_task_v2["id"]: method_ir_task_v2["task_class"],
           }
           for path in sorted(Path("qualification/experiments").glob("*.json")):
               experiment = json.loads(path.read_text())
