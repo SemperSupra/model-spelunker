@@ -465,6 +465,29 @@ def openworker_turn_end_status(stdout: str) -> str | None:
     return status
 
 
+def classify_run_outcome(
+    *,
+    success: bool,
+    validator_error: bool,
+    timed_out: bool,
+    candidate_exit: int,
+    engine_error: bool,
+    iteration_censored: bool,
+) -> tuple[str | None, str]:
+    """Separate terminal semantic outcome from resource/budget boundary observations."""
+    if success:
+        return None, "semantic-success"
+    if validator_error:
+        return "validator-error", "validator-invalid"
+    if timed_out:
+        return "timeout", "timeout-censored"
+    if candidate_exit != 0 or engine_error:
+        return ("candidate-error-event" if engine_error else "candidate-error"), "execution-error"
+    if iteration_censored:
+        return "iteration-limit", "iteration-censored"
+    return "false-completion", "semantic-failure"
+
+
 def provider_observations(stdout: str) -> list[dict[str, object]]:
     raw = last_marker(stdout, "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=")
     if not raw:
@@ -838,33 +861,14 @@ def main() -> int:
         engine_error = has_engine_error_event(stdout)
         turn_end_status = openworker_turn_end_status(stdout)
         iteration_censored = turn_end_status == "max_iterations_exceeded"
-        if validator_error:
-            failure_class = "validator-error"
-        elif timed_out:
-            failure_class = "timeout"
-        elif candidate_exit != 0:
-            failure_class = "candidate-error"
-        elif verifier.returncode != 0 and engine_error:
-            failure_class = "candidate-error-event"
-        elif iteration_censored:
-            failure_class = "iteration-limit"
-        elif verifier.returncode != 0:
-            failure_class = "false-completion"
-        else:
-            failure_class = None
-
-        if success:
-            termination_class = "semantic-success"
-        elif validator_error:
-            termination_class = "validator-invalid"
-        elif timed_out:
-            termination_class = "timeout-censored"
-        elif candidate_exit != 0 or engine_error:
-            termination_class = "execution-error"
-        elif iteration_censored:
-            termination_class = "iteration-censored"
-        else:
-            termination_class = "semantic-failure"
+        failure_class, termination_class = classify_run_outcome(
+            success=success,
+            validator_error=validator_error,
+            timed_out=timed_out,
+            candidate_exit=candidate_exit,
+            engine_error=engine_error,
+            iteration_censored=iteration_censored,
+        )
 
         failure_signals = detect_failure_signals(
             stdout,
@@ -876,7 +880,7 @@ def main() -> int:
         )
         if validator_error and "validator-error" not in failure_signals:
             failure_signals.append("validator-error")
-        if iteration_censored and "iteration-limit" not in failure_signals:
+        if iteration_censored and not success and "iteration-limit" not in failure_signals:
             failure_signals.append("iteration-limit")
         metrics = harness_metrics(stdout)
         progress = openworker_progress_summary(stdout)
@@ -897,6 +901,7 @@ def main() -> int:
         workload = workload_summary(provider_rounds)
         workload.update(model_call_start_summary(stdout))
         workload.update(progress)
+        workload["iteration_limit_reached"] = iteration_censored
 
         evidence = {
             "candidate_exit_code": candidate_exit,
