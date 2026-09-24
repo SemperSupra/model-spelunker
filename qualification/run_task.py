@@ -260,12 +260,11 @@ def _signal_candidate_group_or_process(
 
 
 def _terminate_candidate_group(proc: subprocess.Popen[str]) -> None:
-    if proc.poll() is not None:
-        return
+    # Always attempt process-group cleanup even when the group leader has already
+    # exited: descendants may still be alive in that session/process group.
     _signal_candidate_group_or_process(proc, signal.SIGTERM)
     time.sleep(0.05)
-    if proc.poll() is None:
-        _signal_candidate_group_or_process(proc, signal.SIGKILL)
+    _signal_candidate_group_or_process(proc, signal.SIGKILL)
 
 
 def run_candidate_process(
