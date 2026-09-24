@@ -160,7 +160,6 @@ def self_test() -> int:
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        (root / "fixture").mkdir(parents=True)
         (root / "evidence.json").write_text(fixture_text, encoding="utf-8")
 
         (root / "triage.json").write_text(
