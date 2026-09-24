@@ -184,8 +184,6 @@ def main() -> int:
             "-no-snapshot-load", "-no-snapshot-save", "-accel", "on",
             "-gpu", "swiftshader_indirect", "-no-metrics",
         ]
-        if locale:
-            cmd += ["-prop", f"persist.sys.locale={locale}"]
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, env=env)
         serial = None
         boot_start = time.monotonic()
@@ -229,6 +227,27 @@ def main() -> int:
                 }
             )
             if locale:
+                c, root_out, root_err = adb_cmd(adb, serial, "root", env=env, timeout=20)
+                if c != 0:
+                    raise RuntimeError(f"adb root required for locale treatment failed: {root_err[-300:]!r}")
+                time.sleep(1.0)
+                c, _, locale_err = adb_cmd(
+                    adb, serial, "shell",
+                    f"setprop persist.sys.locale {locale}; stop; sleep 5; start",
+                    env=env, timeout=20,
+                )
+                if c != 0:
+                    raise RuntimeError(f"locale restart command failed: {locale_err[-300:]!r}")
+                locale_deadline = time.monotonic() + 90
+                while time.monotonic() < locale_deadline:
+                    c, booted, _ = adb_cmd(
+                        adb, serial, "shell", "getprop", "sys.boot_completed", env=env
+                    )
+                    if c == 0 and booted.strip() == "1":
+                        break
+                    time.sleep(2)
+                else:
+                    raise RuntimeError("locale restart did not return to boot-complete")
                 c, observed_locale, locale_err = adb_cmd(
                     adb, serial, "shell", "getprop", "persist.sys.locale", env=env
                 )
@@ -236,6 +255,11 @@ def main() -> int:
                     raise RuntimeError(
                         f"requested locale not established: requested={locale!r} observed={observed_locale!r} err={locale_err[-300:]!r}"
                     )
+                print(
+                    "ANDROID_LOCALE="
+                    + json.dumps({"requested": locale, "observed": observed_locale.strip()}, sort_keys=True),
+                    flush=True,
+                )
 
             reset_task_state(adb, serial, env=env)
             reference_meta = root / "reference-candidate.json"
