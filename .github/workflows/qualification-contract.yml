@@ -204,6 +204,31 @@ jobs:
           print(json.dumps(receipt,sort_keys=True))
           PY
 
+      - name: Exercise explicit wall-clock treatment override
+        env:
+          RECEIPT_WALL: ${{ runner.temp }}/qualification-wall-override.json
+        run: |
+          set +e
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id contract-wall-override \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --wall-seconds 1 \
+            qualification/tasks/text-repair-v1 \
+            qualification/test-candidate-v2.json \
+            "$RECEIPT_WALL" \
+            -- python -c 'import time; time.sleep(2)'
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+          python - "$RECEIPT_WALL" <<'PY'
+          import json,sys
+          receipt=json.load(open(sys.argv[1]))
+          assert receipt["observation"]["timed_out"] is True
+          assert receipt["execution_limits"] == {"wall_seconds":1,"wall_seconds_source":"override"}
+          print("PASS explicit wall-clock treatment override")
+          PY
+
       - name: Census canonical local-CPU evidence
         run: |
           PYTHONPATH=. python qualification/census_cpu_evidence.py qualification/evidence --output "$RUNNER_TEMP/cpu-census.json"
