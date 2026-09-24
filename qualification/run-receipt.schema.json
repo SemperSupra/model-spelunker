@@ -616,6 +616,7 @@
             "semantic-success",
             "semantic-failure",
             "timeout-censored",
+            "iteration-censored",
             "execution-error",
             "validator-invalid"
           ]
