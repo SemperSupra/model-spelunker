@@ -52,3 +52,12 @@ assert progress == {
     "completed_tool_statuses": ["success"],
 }
 print("PASS timeout-surviving model/tool progress attribution")
+
+
+# Tool-projection treatment contract is intentionally explicit and opt-in.
+from pathlib import Path as _Path
+_run_task_source = _Path("qualification/run_task.py").read_text(encoding="utf-8")
+assert '--projected-tools-source' in _run_task_source
+assert 'choices=["task", "candidate"]' in _run_task_source
+assert 'projected_tools = candidate.get("toolset") or []' in _run_task_source
+print("PASS opt-in configured-actor tool projection contract")
