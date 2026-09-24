@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-from android_mobile_tools import mobile_launch_settings, mobile_observe_ui, mobile_swipe, mobile_tap
+from android_mobile_tools import mobile_launch_settings, mobile_observe_ui, mobile_open_section, mobile_swipe, mobile_tap
 
 
 def nodes() -> list[dict]:
@@ -84,12 +84,18 @@ def tap_label(*labels: str) -> dict:
 
 def main() -> int:
     _ = sys.stdin.read()
-    mobile_launch_settings()
-    time.sleep(1.0)
-    _reset_to_top()
-    tap_label("System", "System & updates")
-    tap_label("Date & time")
-    target = find_text(("Use 24-hour format",))
+    locale = __import__("os").environ.get("MODEL_SPELUNKER_TASK_LOCALE", "").strip()
+    if locale == "de-DE":
+        mobile_open_section("date_time")
+        time.sleep(1.0)
+        target = find_text(("24-Stunden-Format verwenden", "24-Stunden-Format"))
+    else:
+        mobile_launch_settings()
+        time.sleep(1.0)
+        _reset_to_top()
+        tap_label("System", "System & updates")
+        tap_label("Date & time")
+        target = find_text(("Use 24-hour format",))
     if not bool(target.get("checked")):
         x, y = center(target)
         mobile_tap(x, y)
