@@ -158,6 +158,20 @@
                 "model",
                 "router"
               ]
+            },
+            "realization": {
+              "type": "string",
+              "enum": [
+                "local-artifact",
+                "hosted-service",
+                "router"
+              ]
+            },
+            "foundry_ref": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         },
