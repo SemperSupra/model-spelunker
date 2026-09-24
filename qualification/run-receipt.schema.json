@@ -367,7 +367,8 @@
               "unexpected-external-network",
               "repeated-tool-failure",
               "engine-error-event",
-              "validator-error"
+              "validator-error",
+              "iteration-limit"
             ]
           }
         },
@@ -517,6 +518,9 @@
                 "type": "string",
                 "minLength": 1
               }
+            },
+            "iteration_limit_reached": {
+              "type": "boolean"
             }
           }
         },
