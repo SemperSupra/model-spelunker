@@ -162,6 +162,17 @@ jobs:
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
 
+      - name: Census canonical local-CPU evidence
+        run: |
+          PYTHONPATH=. python qualification/census_cpu_evidence.py qualification/evidence --output "$RUNNER_TEMP/cpu-census.json"
+          python - "$RUNNER_TEMP/cpu-census.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          assert data["local_cpu_receipts"] >= 1
+          assert all(row["model_provider"] == "ollama" for row in data["rows"])
+          print(json.dumps(data,sort_keys=True))
+          PY
+
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
 
