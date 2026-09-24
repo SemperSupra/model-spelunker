@@ -467,6 +467,31 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
     return summary
 
 
+def validate_task_workspace_layout(task_dir: Path, task: dict[str, object]) -> None:
+    """Reject package-only fixture paths before a candidate can consume quota."""
+    fixture = task.get("fixture")
+    if not isinstance(fixture, str) or not fixture or "/" in fixture or "\\" in fixture:
+        raise ValueError("task.fixture must be one package-local directory name")
+    if not (task_dir / fixture).is_dir():
+        raise ValueError(f"task fixture directory not found: {fixture}")
+
+    instruction = task.get("instruction")
+    if not isinstance(instruction, str) or not instruction.strip():
+        raise ValueError("task.instruction must be a non-empty string")
+    forbidden = fixture.rstrip("/") + "/"
+    if forbidden in instruction:
+        raise ValueError(
+            f"task instruction addresses non-existent workspace path {forbidden!r}; "
+            "fixture contents are materialized at workspace root"
+        )
+
+    allowed = task.get("allowed_write_paths") or []
+    if not isinstance(allowed, list) or not all(isinstance(x, str) and x for x in allowed):
+        raise ValueError("task.allowed_write_paths must be a list of non-empty strings")
+    if any(x == fixture or x.startswith(forbidden) for x in allowed):
+        raise ValueError("task allowed_write_paths may not target the package fixture directory")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("task_dir", type=Path)
@@ -516,6 +541,7 @@ def main() -> int:
         parser.error("--launch-id and --launch-packet-digest must be supplied together")
 
     task = json.loads((args.task_dir / "task.json").read_text(encoding="utf-8"))
+    validate_task_workspace_layout(args.task_dir, task)
     candidate = json.loads(args.candidate_metadata.read_text(encoding="utf-8"))
     timeout = int(task["limits"]["wall_seconds"])
 
