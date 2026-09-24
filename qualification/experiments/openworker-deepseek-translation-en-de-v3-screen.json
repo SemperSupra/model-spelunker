@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-translation-en-de-v3-screen",
+  "decision_question": "Can the exact OpenWorker plus direct DeepSeek hosted configured actor translate a held-out controlled English-to-German status sample while preserving protected tokens and critical semantic slot relations under a calibrated deterministic verifier?",
+  "task": {
+    "id": "translation-controlled-en-de-v3",
+    "task_class": "language.translation-controlled"
+  },
+  "actors": [
+    "openworker-deepseek-flash-gha-direct-v2"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-direct-provider-route",
+    "reasoning-effort-none",
+    "max-tokens-2048",
+    "max-iterations-4",
+    "read-write-tool-projection",
+    "translation-controlled-en-de-v3-task-and-verifier",
+    "character-fscore-threshold-0.72",
+    "github-hosted-ubuntu-24.04-x64"
+  ],
+  "variable_under_test": "corrected-screening-task-family:language.translation-controlled",
+  "claim_type": "feasibility",
+  "experimental_role": "screening",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "protected-token-preservation",
+    "semantic-slot-preservation",
+    "character-fscore",
+    "termination-class",
+    "wall-seconds",
+    "model-calls-started",
+    "model-rounds",
+    "tool-calls"
+  ],
+  "design_block": "hosted-generative-language-screen-2026-09",
+  "stop_conditions": [
+    "validator-integrity-failure",
+    "task-package-invalidated",
+    "unexpected-authority-expansion",
+    "uncontrolled-actor-or-provider-drift"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "zero-attempt-ingress-failure",
+    "provider-admission-failure",
+    "uncontrolled-model-harness-tool-budget-or-substrate-drift"
+  ]
+}
