@@ -60,6 +60,7 @@ class CapabilityEnforcingProvider(ProviderClient):
         self.delegate = delegate
         self.suppressed_batches: list[dict[str, Any]] = []
         self.provider_observations: list[dict[str, Any]] = []
+        self.model_calls_started = 0
 
     @staticmethod
     def _mapping(value: Any) -> dict[str, Any]:
@@ -85,6 +86,25 @@ class CapabilityEnforcingProvider(ProviderClient):
                 separators=(",", ":"),
                 default=str,
             ).encode("utf-8")
+        )
+
+    def _mark_model_call_started(
+        self,
+        *,
+        requested_model: str,
+        messages: list[dict[str, Any]],
+        tools: Optional[list[dict[str, Any]]],
+    ) -> None:
+        self.model_calls_started += 1
+        marker = {
+            "index": self.model_calls_started,
+            "requested_model": requested_model,
+            "request_message_bytes": self._bytes(messages),
+            "request_tool_schema_bytes": self._bytes(tools or []),
+        }
+        print(
+            "MODEL_SPELUNKER_MODEL_CALL_STARTED=" + json.dumps(marker, sort_keys=True),
+            flush=True,
         )
 
     def _observe(
@@ -235,6 +255,11 @@ class CapabilityEnforcingProvider(ProviderClient):
         **settings: Any,
     ) -> AssistantTurn:
         started = time.monotonic()
+        self._mark_model_call_started(
+            requested_model=model,
+            messages=messages,
+            tools=tools,
+        )
         turn = self.delegate.complete(
             model=model,
             messages=messages,
@@ -262,6 +287,11 @@ class CapabilityEnforcingProvider(ProviderClient):
     ):
         started = time.monotonic()
         first_event_at: float | None = None
+        self._mark_model_call_started(
+            requested_model=model,
+            messages=messages,
+            tools=tools,
+        )
         for chunk in self.delegate.stream(
             model=model,
             messages=messages,
