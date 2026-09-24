@@ -326,6 +326,27 @@ jobs:
           print(json.dumps(data,sort_keys=True))
           PY
 
+      - name: Reduce CPU reasoning-projection treatment evidence
+        run: |
+          PYTHONPATH=. python qualification/reduce_evidence.py \
+            qualification/evidence/cpu-operational-openworker-qwen-api-boundary-v1-2026-09-24.json \
+            qualification/evidence/cpu-qwen17-api-boundary-reasoning-omitted-censored-2026-09-24.json \
+            --output "$RUNNER_TEMP/cpu-reasoning-envelopes.json"
+          python - "$RUNNER_TEMP/cpu-reasoning-envelopes.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          assert len(data["envelopes"]) == 2
+          rows=sorted(data["envelopes"], key=lambda e:e["evidence"]["censored"])
+          semantic, censored = rows
+          assert semantic["evidence"]["validated_fail"] == 1
+          assert semantic["evidence"]["semantic_trials"] == 1
+          assert censored["evidence"]["validated_fail"] == 0
+          assert censored["evidence"]["semantic_trials"] == 0
+          assert censored["evidence"]["censored"] == 1
+          assert censored["evidence"]["incomplete"] == 0
+          print(json.dumps(data,sort_keys=True))
+          PY
+
       - name: Exercise positive, repeat, and negative receipts
         env:
           RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
