@@ -46,8 +46,8 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: "5bc10d928e0b64aae74313349a3b17bd19643ae2"
       HOSTED_CATALOG: "qualification/models/hosted-api.json"
-      HOSTED_CANDIDATE_ID: "openrouter-free-router"
-      HOSTED_KEY_FILE: "/tmp/model-spelunker-openrouter.key"
+      HOSTED_CANDIDATE_ID: "google-gemini-3.7-flash"
+      HOSTED_KEY_FILE: "/tmp/model-spelunker-google.key"
       CANDIDATE_META: "/tmp/model-spelunker-android-candidate.json"
       RECEIPT: "/tmp/model-spelunker-android-receipt.json"
       REFERENCE_RECEIPT: "/tmp/model-spelunker-android-reference-receipt.json"
@@ -60,7 +60,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve fixed free-router treatment
+      - name: Resolve fixed Gemini treatment
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -68,9 +68,9 @@ jobs:
           from pathlib import Path
           catalog=json.loads(Path(os.environ["HOSTED_CATALOG"]).read_text(encoding="utf-8"))
           c=catalog["candidates"][os.environ["HOSTED_CANDIDATE_ID"]]
-          assert c["provider"] == "openrouter"
-          assert c["model"] == "openrouter/free"
-          assert c["cost_class"] == "zero-token-price"
+          assert c["provider"] == "google"
+          assert c["model"] == "gemini-3.7-flash"
+          assert c["cost_class"] == "free-tier-account"
           values={
               "MODEL_SPELUNKER_MODEL": f'{c["provider"]}:{c["model"]}',
               "MODEL_SPELUNKER_REASONING_EFFORT": c["reasoning_effort"],
@@ -101,28 +101,33 @@ jobs:
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
 
-      - name: Stage OpenRouter credential and perform zero-inference admission
+      - name: Stage Google credential and perform zero-inference admission
         env:
-          SELECTED_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SELECTED_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           set -euo pipefail
-          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-OPENROUTER_API_KEY"; exit 78; }
+          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-GOOGLE_API_KEY"; exit 78; }
           umask 077
           printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
           python3 - <<'PY'
           import json, os, urllib.request
           from pathlib import Path
           key=Path(os.environ["HOSTED_KEY_FILE"]).read_text(encoding="utf-8")
+          base=os.environ["HOSTED_API_BASE"].rstrip("/")
           req=urllib.request.Request(
-              "https://openrouter.ai/api/v1/key",
+              base+"/models",
               headers={"Accept":"application/json","Authorization":"Bearer "+key},
           )
           with urllib.request.urlopen(req,timeout=20) as response:
               data=json.load(response)
-          info=data.get("data") or {}
-          print("OPENROUTER_ADMISSION="+json.dumps({
+          rows=data.get("data",[]) if isinstance(data,dict) else []
+          ids={str(row.get("id") or "").removeprefix("models/") for row in rows if isinstance(row,dict)}
+          model=os.environ["HOSTED_MODEL"]
+          if model not in ids:
+              raise SystemExit(f"Google model is not active for this key: {model}")
+          print("GOOGLE_ADMISSION="+json.dumps({
               "authenticated": True,
-              "is_free_tier": info.get("is_free_tier"),
+              "model_active": True,
               "treatment_kind": os.environ["HOSTED_TREATMENT_KIND"],
           },sort_keys=True))
           PY
@@ -133,7 +138,7 @@ jobs:
           python3 - <<'PY'
           import json, os
           from pathlib import Path
-          task=json.loads(Path("qualification/tasks/android-settings-24h-hybrid-v0/task.json").read_text())
+          task=json.loads(Path("qualification/tasks/android-settings-24h-struct-v0/task.json").read_text())
           candidate={
               "harness":{"name":"openworker","version":os.environ["OPENWORKER_UPSTREAM_SHA"]},
               "model":{
@@ -151,7 +156,7 @@ jobs:
                   "max_iterations":4,
                   "api_base":os.environ["HOSTED_API_BASE"],
                   "cost_class":os.environ["HOSTED_COST_CLASS"],
-                  "provider_alias_semantics":"hosted mutable router service",
+                  "provider_alias_semantics":"hosted mutable service",
               },
           }
           Path(os.environ["CANDIDATE_META"]).write_text(
@@ -162,12 +167,12 @@ jobs:
       - name: Calibrate then execute one embodied actor rep
         id: embodied
         env:
-          SELECTED_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SELECTED_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           set -euo pipefail
-          export OPENROUTER_API_KEY="$SELECTED_API_KEY"
+          export GOOGLE_API_KEY="$SELECTED_API_KEY"
           set +e
-          python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-hybrid-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-struct-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
           rc=$?
           set -e
           rm -f "$HOSTED_KEY_FILE"
