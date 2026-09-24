@@ -63,6 +63,8 @@ def census(root: Path) -> dict:
     rows = []
     scanned = 0
     receipts = 0
+    historical_design_points = 0
+    historical_index_files: list[str] = []
     skipped_invalid_json = []
     for path in sorted(root.glob("*.json")):
         scanned += 1
@@ -72,6 +74,9 @@ def census(root: Path) -> dict:
             skipped_invalid_json.append(path.as_posix())
             continue
         if not is_run_receipt(value):
+            if isinstance(value, dict) and isinstance(value.get("observations"), list) and "historical design points" in str(value.get("purpose") or "").lower():
+                historical_design_points += len(value["observations"])
+                historical_index_files.append(path.as_posix())
             continue
         receipts += 1
         if is_local_cpu_receipt(value):
@@ -82,8 +87,10 @@ def census(root: Path) -> dict:
         "files_scanned": scanned,
         "run_receipts_found": receipts,
         "local_cpu_receipts": len(rows),
+        "historical_design_points_indexed": historical_design_points,
+        "historical_index_files": historical_index_files,
         "rows": rows,
-        "known_gap": "issue comments and workflow artifacts not yet promoted into canonical repository receipts are not included",
+        "known_gap": "issue comments and workflow artifacts not represented by canonical receipts or the bounded historical design-point index remain outside the census",
         "skipped_invalid_json": skipped_invalid_json,
     }
 
