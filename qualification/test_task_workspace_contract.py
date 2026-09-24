@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -84,6 +86,29 @@ def check_catalog() -> None:
     assert not missing, f"frozen invalid task packages disappeared: {sorted(missing)}"
 
 
+
+def calibrate_api_boundary_v1() -> None:
+    task_dir = TASKS / "api-boundary-classification-v1"
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location(
+        "api_boundary_v1_verify", task_dir / task["verifier"]
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    with tempfile.TemporaryDirectory(prefix="api-boundary-v1-cal-") as tmp:
+        work = Path(tmp) / "work"
+        shutil.copytree(task_dir / task["fixture"], work)
+        assert (work / "evidence.json").is_file()
+        assert not (work / "fixture").exists()
+        (work / "classification.json").write_text(
+            json.dumps(module.good_output(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        assert module.check(work), "API boundary v1 failed canonical flattened-layout calibration"
+
+
 def self_test() -> None:
     with tempfile.TemporaryDirectory(prefix="task-layout-contract-") as tmp:
         root = Path(tmp)
@@ -131,4 +156,5 @@ def self_test() -> None:
 if __name__ == "__main__":
     self_test()
     check_catalog()
+    calibrate_api_boundary_v1()
     print("PASS qualification task workspace-layout contract")
