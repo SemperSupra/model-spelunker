@@ -640,7 +640,8 @@
       },
       "then": {
         "required": [
-          "experiment"
+          "experiment",
+          "resources"
         ]
       }
     }
