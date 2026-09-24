@@ -243,11 +243,14 @@ def main() -> int:
                     c, booted, _ = adb_cmd(
                         adb, serial, "shell", "getprop", "sys.boot_completed", env=env
                     )
-                    if c == 0 and booted.strip() == "1":
+                    settings_c, _, _ = adb_cmd(
+                        adb, serial, "shell", "settings", "get", "system", "time_12_24", env=env
+                    )
+                    if c == 0 and booted.strip() == "1" and settings_c == 0:
                         break
                     time.sleep(2)
                 else:
-                    raise RuntimeError("locale restart did not return to boot-complete")
+                    raise RuntimeError("locale restart did not return to boot-complete with settings service ready")
                 c, observed_locale, locale_err = adb_cmd(
                     adb, serial, "shell", "getprop", "persist.sys.locale", env=env
                 )
