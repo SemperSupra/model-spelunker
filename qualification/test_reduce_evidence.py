@@ -240,3 +240,21 @@ assert env["evidence"]["censored"] == 1
 assert env["evidence"]["incomplete"] == 0
 assert env["evidence"]["semantic_trials"] == 0
 print("PASS in-flight timeout censoring")
+
+
+iteration_censored = receipt(
+    "run-iteration-censored",
+    False,
+    model_rounds=4,
+    candidate_exit_code=0,
+)
+iteration_censored["observation"]["termination_class"] = "iteration-censored"
+iteration_censored["observation"]["failure_signals"] = ["iteration-limit", "state-unchanged"]
+iteration_censored["observation"]["workload"]["model_calls_started"] = 4
+env = reduce_receipts([iteration_censored])[0]
+assert env["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+assert env["evidence"]["validated_fail"] == 0
+assert env["evidence"]["censored"] == 1
+assert env["evidence"]["semantic_trials"] == 0
+assert env["ksa_evidence"] == {}
+print("PASS iteration-limit censoring")
