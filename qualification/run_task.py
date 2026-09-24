@@ -692,6 +692,16 @@ def main() -> int:
         default=[],
         help="Environment variable name to pass explicitly in minimal mode; may be repeated.",
     )
+    parser.add_argument(
+        "--projected-tools-source",
+        choices=["task", "candidate"],
+        default="task",
+        help=(
+            "Select the effective tool projection from the task profile (default) or the "
+            "configured actor toolset. Candidate mode is for prospective tool-surface "
+            "factor experiments; it does not alter write-path validation."
+        ),
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -752,7 +762,14 @@ def main() -> int:
         allowed = task.get("allowed_write_paths") or []
         if len(allowed) == 1:
             candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
-        projected_tools = task.get("projected_tools") or []
+        if args.projected_tools_source == "candidate":
+            projected_tools = candidate.get("toolset") or []
+            if not isinstance(projected_tools, list) or not all(
+                isinstance(x, str) and x for x in projected_tools
+            ):
+                raise ValueError("candidate toolset must be a list of non-empty strings")
+        else:
+            projected_tools = task.get("projected_tools") or []
         if projected_tools:
             candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
         candidate_exit, stdout, stderr, timed_out = run_candidate_process(
