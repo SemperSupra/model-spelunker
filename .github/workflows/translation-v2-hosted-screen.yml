@@ -1,4 +1,4 @@
-name: Translation v2 Hosted Screen
+name: Translation v3 Hosted Screen
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     paths:
       - ".github/workflows/translation-v2-hosted-screen.yml"
       - "qualification/actors/openworker-deepseek-flash-gha-direct-v2.json"
-      - "qualification/experiments/openworker-deepseek-translation-en-de-v2-screen.json"
-      - "qualification/tasks/translation-controlled-en-de-v2/**"
+      - "qualification/experiments/openworker-deepseek-translation-en-de-v3-screen.json"
+      - "qualification/tasks/translation-controlled-en-de-v3/**"
   workflow_dispatch:
 
 permissions:
@@ -29,14 +29,14 @@ jobs:
       - name: Validate task and experiment fixtures
         run: |
           set -euo pipefail
-          python3 -m py_compile qualification/tasks/translation-controlled-en-de-v2/verify.py
-          python3 qualification/tasks/translation-controlled-en-de-v2/verify.py --self-test
+          python3 -m py_compile qualification/tasks/translation-controlled-en-de-v3/verify.py
+          python3 qualification/tasks/translation-controlled-en-de-v3/verify.py --self-test
           python3 - <<'PY'
           import json
           from pathlib import Path
-          task=json.loads(Path("qualification/tasks/translation-controlled-en-de-v2/task.json").read_text())
+          task=json.loads(Path("qualification/tasks/translation-controlled-en-de-v3/task.json").read_text())
           actor=json.loads(Path("qualification/actors/openworker-deepseek-flash-gha-direct-v2.json").read_text())
-          exp=json.loads(Path("qualification/experiments/openworker-deepseek-translation-en-de-v2-screen.json").read_text())
+          exp=json.loads(Path("qualification/experiments/openworker-deepseek-translation-en-de-v3-screen.json").read_text())
           assert task["schema_version"] == 2
           assert actor["schema_version"] == 2
           assert exp["schema_version"] == 2
@@ -54,8 +54,8 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: "5bc10d928e0b64aae74313349a3b17bd19643ae2"
       ACTOR_PROFILE: "qualification/actors/openworker-deepseek-flash-gha-direct-v2.json"
-      EXPERIMENT_PROFILE: "qualification/experiments/openworker-deepseek-translation-en-de-v2-screen.json"
-      TASK_DIR: "qualification/tasks/translation-controlled-en-de-v2"
+      EXPERIMENT_PROFILE: "qualification/experiments/openworker-deepseek-translation-en-de-v3-screen.json"
+      TASK_DIR: "qualification/tasks/translation-controlled-en-de-v3"
       RECEIPT: "/tmp/model-spelunker-translation-v2-receipt.json"
       SNAPSHOT_DIR: "/tmp/model-spelunker-translation-v2-snapshot"
       HOSTED_KEY_FILE: "/tmp/model-spelunker-deepseek.key"
@@ -139,7 +139,7 @@ jobs:
           from pathlib import Path
           r=json.loads(Path(os.environ["RECEIPT"]).read_text())
           assert r["schema_version"] == 2
-          assert r["experiment"]["id"] == "openworker-deepseek-translation-en-de-v2-screen"
+          assert r["experiment"]["id"] == "openworker-deepseek-translation-en-de-v3-screen"
           assert r["candidate"]["deployment_topology"]["transport"] == "provider-api"
           print(json.dumps({
               "run_id":r["run_id"],
