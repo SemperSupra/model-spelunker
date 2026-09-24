@@ -1,4 +1,4 @@
-# execution-trigger: v3 contract repair wired; actor execution not yet triggered
+# execution-trigger: v3 contract repair validated; feasibility launch
 name: Unified Method-IR v3 DeepSeek Feasibility
 
 on:
