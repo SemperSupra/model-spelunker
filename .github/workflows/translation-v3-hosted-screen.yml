@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: translation-v2-hosted-screen-${{ github.ref }}
+  group: translation-v3-hosted-screen-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -48,8 +48,8 @@ jobs:
       ACTOR_PROFILE: "qualification/actors/openworker-deepseek-flash-gha-direct-v2.json"
       EXPERIMENT_PROFILE: "qualification/experiments/openworker-deepseek-translation-en-de-v3-screen.json"
       TASK_DIR: "qualification/tasks/translation-controlled-en-de-v3"
-      RECEIPT: "/tmp/model-spelunker-translation-v2-receipt.json"
-      SNAPSHOT_DIR: "/tmp/model-spelunker-translation-v2-snapshot"
+      RECEIPT: "/tmp/model-spelunker-translation-v3-receipt.json"
+      SNAPSHOT_DIR: "/tmp/model-spelunker-translation-v3-snapshot"
       HOSTED_KEY_FILE: "/tmp/model-spelunker-deepseek.key"
       MODEL_SPELUNKER_MODEL: "deepseek:deepseek-flash"
       MODEL_SPELUNKER_REASONING_EFFORT: "none"
@@ -148,10 +148,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: translation-v2-${{ github.run_attempt }}
+          name: translation-v3-${{ github.run_attempt }}
           path: |
-            /tmp/model-spelunker-translation-v2-receipt.json
-            /tmp/model-spelunker-translation-v2-snapshot/**
+            /tmp/model-spelunker-translation-v3-receipt.json
+            /tmp/model-spelunker-translation-v3-snapshot/**
           if-no-files-found: warn
           retention-days: 7
 
