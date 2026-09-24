@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: unified-macos-method-ir-v2-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   method-ir-operational:
