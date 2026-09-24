@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "openworker-macos-mlx-execution-failure-triage-v0",
+  "decision_question": "Can the qualified OpenWorker + Qwen3-4B MLX local actor correctly triage real sanitized Agent Dispatch/GHA failure boundaries on each standard ARM macOS runner image?",
+  "task": {
+    "id": "execution-failure-triage-v0",
+    "task_class": "execution.failure-boundary-triage"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-4b-macos26-mlx-triage",
+    "openworker-prebuilt-qwen3-4b-xcode27-mlx-triage"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-admitted-artifact",
+    "model-artifact",
+    "mlx-lm-version",
+    "task-profile-and-verifier",
+    "list-read-write-tool-projection",
+    "memory-hygiene-control"
+  ],
+  "variable_under_test": "github-hosted-arm-macos-runner-image",
+  "predecessor_evidence": "text-repair-v0 PASS on both environments; toolset change mints distinct actor identities",
+  "stop_conditions": [
+    "artifact-integrity-failure",
+    "unexpected-authority-expansion",
+    "model-artifact-drift",
+    "validator-error",
+    "environment-resource-failure"
+  ]
+}
