@@ -71,17 +71,19 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     if bool(obs.get("success")):
         return "pass"
     termination = obs.get("termination_class")
-    if termination == "timeout-censored" or obs.get("timed_out") or "timeout" in set(obs.get("failure_signals") or []):
-        return "censored"
     workload = obs.get("workload") or {}
     signals = set(obs.get("failure_signals") or [])
-    engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
-    validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
     zero_round_nonterminal = (
         not obs.get("success", False)
         and workload.get("model_rounds") == 0
     )
-    return "incomplete" if engine_error or validator_error or zero_round_nonterminal else "fail"
+    if zero_round_nonterminal:
+        return "incomplete"
+    if termination == "timeout-censored" or obs.get("timed_out") or "timeout" in signals:
+        return "censored"
+    engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
+    validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
+    return "incomplete" if engine_error or validator_error else "fail"
 
 
 def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -> dict[str, float] | None:
