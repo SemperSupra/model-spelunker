@@ -19,12 +19,18 @@ def center(node: dict) -> tuple[int, int]:
     return (x1 + x2) // 2, (y1 + y2) // 2
 
 
-def _matches(node: dict, wanted: tuple[str, ...]) -> bool:
+def _match_rank(node: dict, wanted: tuple[str, ...]) -> int:
+    """Prefer exact UI labels over broader substring matches."""
+    best = 0
     for field in ("text", "content_desc"):
         value = str(node.get(field) or "").strip().casefold()
-        if value and any(value == target or target in value for target in wanted):
-            return True
-    return False
+        if not value:
+            continue
+        if any(value == target for target in wanted):
+            best = max(best, 2)
+        elif any(target in value for target in wanted):
+            best = max(best, 1)
+    return best
 
 
 def _reset_to_top() -> None:
@@ -40,13 +46,24 @@ def find_text(candidates: tuple[str, ...], *, max_scrolls: int = 10) -> dict:
     seen: list[str] = []
     for attempt in range(max_scrolls + 1):
         current = nodes()
+        exact = None
+        substring = None
         for node in current:
             for field in ("text", "content_desc"):
                 value = str(node.get(field) or "").strip()
                 if value and value not in seen:
                     seen.append(value)
-            if _matches(node, wanted) and "bounds" in node:
-                return node
+            if "bounds" not in node:
+                continue
+            rank = _match_rank(node, wanted)
+            if rank == 2 and exact is None:
+                exact = node
+            elif rank == 1 and substring is None:
+                substring = node
+        if exact is not None:
+            return exact
+        if substring is not None:
+            return substring
         if attempt != max_scrolls:
             mobile_swipe(540, 1850, 540, 450, 350)
     print(
