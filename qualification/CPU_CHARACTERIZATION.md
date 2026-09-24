@@ -123,4 +123,10 @@ evidence returned by these cells.
 
 ## Execution ledger
 
-- 2026-09-24: initial v2 bootstrap authorized: one reference `text-repair-v0` cell and one operational `api-boundary-classification-v1` cell, both using the same admitted OpenWorker/Qwen3 1.7B public-CPU realization. The cells are intentionally N=1 screens; they must not be interpreted as reliability estimates.
+
+- **2026-09-24 — bootstrap attempt 1:** invalid for actor science. The two reusable workflow calls shared a branch-only concurrency key, so the operational cell was cancelled by the reference cell. This was an execution-method confound, not actor evidence. The key was corrected to include task and experiment identity before replay.
+- **2026-09-24 — bootstrap replay, Actions run 36019670706:** both cells executed independently with the same admitted OpenWorker `5bc10d9` + exact Qwen3 1.7B/Ollama realization.
+  - Reference `text-repair-v0`: semantic PASS; 9.419455 s wall; 2 model rounds; 1 tool call; 257 input / 44 output tokens; 4 visible CPUs; ~16.77 GB RAM; AMD EPYC 7763 runner. This is one control observation, not a reliability estimate.
+  - Operational `api-boundary-classification-v1`: semantic FAIL (`false-completion`, `state-unchanged`); 15.076346 s wall; 2 model rounds; 1 tool call; 584 input / 126 output tokens; no timeout, engine error, or validator error; 4 visible CPUs; ~16.77 GB RAM; AMD EPYC 9V74 runner.
+- **Interpretation:** the operational negative is inside the observed wall-time/resource envelope and terminated voluntarily after real inference. More CPU or a larger timeout is therefore not the earned next treatment. The next discriminator must distinguish configured-actor reasoning/body effects (model, harness/tool realization, or task-facing representation) while keeping the corrected v1 verifier immutable.
+- Both v2 receipts are preserved under `qualification/evidence/` and the reducer contract asserts their task-conditioned semantics and Wilson interval behavior.
