@@ -16,7 +16,8 @@
     "schema_version": {
       "type": "integer",
       "enum": [
-        1
+        1,
+        2
       ]
     },
     "id": {
@@ -127,6 +128,95 @@
         "string",
         "null"
       ]
+    },
+    "deployment_topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "harness_placement",
+        "runtime_placement",
+        "transport",
+        "compute_class",
+        "data_boundary"
+      ],
+      "properties": {
+        "harness_placement": {
+          "type": "string",
+          "enum": [
+            "in-process",
+            "local-process",
+            "local-workcell",
+            "remote-workcell",
+            "hosted-service",
+            "unknown"
+          ]
+        },
+        "runtime_placement": {
+          "type": "string",
+          "enum": [
+            "same-process",
+            "local-subprocess",
+            "local-service",
+            "remote-service",
+            "hosted-service",
+            "router",
+            "unknown"
+          ]
+        },
+        "transport": {
+          "type": "string",
+          "enum": [
+            "in-process",
+            "stdio",
+            "unix-socket",
+            "loopback-http",
+            "lan-http",
+            "wan-api",
+            "provider-api",
+            "other",
+            "unknown"
+          ]
+        },
+        "compute_class": {
+          "type": "string",
+          "enum": [
+            "cpu",
+            "gpu",
+            "accelerator",
+            "mixed",
+            "provider-opaque",
+            "deterministic",
+            "unknown"
+          ]
+        },
+        "data_boundary": {
+          "type": "string",
+          "enum": [
+            "local-sovereign",
+            "private-hosted",
+            "public-safe",
+            "external-provider",
+            "mixed",
+            "unknown"
+          ]
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "deployment_topology"
+        ]
+      }
+    }
+  ]
 }
