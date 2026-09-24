@@ -411,6 +411,87 @@
             "minLength": 1,
             "maxLength": 128
           }
+        },
+        "mobile_action_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mobile_actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "tool"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "tool": {
+                "type": "string",
+                "enum": [
+                  "mobile_observe_ui",
+                  "mobile_tap",
+                  "mobile_swipe",
+                  "mobile_back",
+                  "mobile_launch_settings",
+                  "mobile_open_section"
+                ]
+              },
+              "visible_nodes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "attempt": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "x": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "y": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "start_x": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "start_y": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "end_x": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "end_y": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5000
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 1500
+              },
+              "section": {
+                "type": "string",
+                "enum": [
+                  "date_time"
+                ]
+              }
+            }
+          }
         }
       }
     },
