@@ -74,7 +74,8 @@ def census(root: Path) -> dict:
             skipped_invalid_json.append(path.as_posix())
             continue
         if not is_run_receipt(value):
-            if isinstance(value, dict) and isinstance(value.get("observations"), list) and "historical design points" in str(value.get("purpose") or "").lower():
+            purpose = str(value.get("purpose") or "").lower() if isinstance(value, dict) else ""
+            if isinstance(value, dict) and isinstance(value.get("observations"), list) and "historical" in purpose and "design points" in purpose:
                 historical_design_points += len(value["observations"])
                 historical_index_files.append(path.as_posix())
             continue
