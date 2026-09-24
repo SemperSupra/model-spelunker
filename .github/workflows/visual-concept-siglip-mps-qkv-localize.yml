@@ -1,4 +1,4 @@
-name: SigLIP MPS Block0 Attention Linear Localization
+name: SigLIP MPS Block0 All-Linear Localization
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
           python -m pip install --disable-pip-version-check --no-input \
             torch==2.14.0 transformers==5.17.0 pillow==12.3.0 requests==2.34.2 \
             sentencepiece==0.2.2 protobuf==7.36.1
-      - name: Localize after q/k/v/out_proj patch
+      - name: Localize after all block-0 Linear patch
         env:
           HF_HUB_DISABLE_TELEMETRY: '1'
           TRANSFORMERS_VERBOSITY: error
@@ -50,13 +50,13 @@ jobs:
           r=json.loads((Path(os.environ["RUNNER_TEMP"])/"visual-concept-siglip-mps-qkv-localize.json").read_text())
           assert r["runtime"]["mps_fallback_env"]=="0"
           assert r["model"]["family"]=="siglip"
-          assert r["treatment"]["patched_linear_count"]==8
+          assert r["treatment"]["patched_linear_count"]==12
           assert r["treatment"]["all_other_linears_native"] is True
-          assert r["first_material_divergence"]["vision"] is not None
-          assert r["first_material_divergence"]["text"] is not None
+          assert set(r["block0_aligned"])=={"vision","text"}
           print(json.dumps({
             "rankings":r["rankings"],
             "first_material_divergence":r["first_material_divergence"],
+            "block0_aligned":r["block0_aligned"],
           },sort_keys=True))
           PY
       - name: Upload localization receipt

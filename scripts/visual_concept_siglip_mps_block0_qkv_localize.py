@@ -76,8 +76,15 @@ def patch_block0_attention_linears(model: torch.nn.Module, prefixes: dict[str, s
     modules = dict(model.named_modules())
     patched: list[str] = []
     for tower, prefix in prefixes.items():
-        for kind in ("q_proj", "k_proj", "v_proj", "out_proj"):
-            name = prefix + ".self_attn." + kind
+        for suffix in (
+            "self_attn.q_proj",
+            "self_attn.k_proj",
+            "self_attn.v_proj",
+            "self_attn.out_proj",
+            "mlp.fc1",
+            "mlp.fc2",
+        ):
+            name = prefix + "." + suffix
             module = modules.get(name)
             if not isinstance(module, torch.nn.Linear):
                 raise RuntimeError(f"missing linear {name}")
@@ -248,7 +255,7 @@ def main()->int:
 
     cpu_logits=cpu["logits"][0];mps_logits=mps["logits"][0]
     receipt={
-        "schema":"visual-concept-siglip-mps-block0-attn-linears-localize/v1",
+        "schema":"visual-concept-siglip-mps-block0-all-linears-localize/v1",
         "model":{"family":cfg["backend_family"],"id":cfg["model_id"],"revision":cfg.get("model_revision")},
         "fixture":{"image_sha256":sha256_bytes(raw),"labels":labels},
         "runtime":{
@@ -258,7 +265,7 @@ def main()->int:
         },
         "placement":{"cpu":cpu["placement"],"patched_mps":mps["placement"]},
         "treatment":{
-            "name":"siglip-block0-qkvo-mps-matmul-bias-v0",
+            "name":"siglip-block0-all-linears-mps-matmul-bias-v0",
             "patched_modules":mps["patched_names"],
             "patched_linear_count":len(mps["patched_names"]),
             "all_other_linears_native":True,
@@ -268,6 +275,7 @@ def main()->int:
             "patched_mps":[labels[i] for i in torch.argsort(mps_logits,descending=True).tolist()],
         },
         "first_material_divergence":first_by_tower,
+        "block0_aligned":{tower:(first_by_tower[tower] is None) for tower in ("vision","text")},
         "attention_out_proj_input":out_proj_input_metrics,
         "events":event_results,
         "threshold":{"cosine_lt":0.999,"relative_l2_gt":0.01,"role":"diagnostic only"},
@@ -280,6 +288,7 @@ def main()->int:
         "rankings":receipt["rankings"],
         "first_material_divergence":first_by_tower,
         "out_proj_input":out_proj_input_metrics,
+        "block0_aligned":receipt["block0_aligned"],
         "event_count":len(event_results),
     },sort_keys=True))
     return 0
