@@ -1,4 +1,4 @@
-# execution-trigger: treatment semantics unchanged
+# execution-trigger: treatment semantics unchanged; 4096/12 boundary launch
 name: Unified Method-IR DeepSeek 4096/12 Boundary
 
 on:
