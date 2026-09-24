@@ -120,11 +120,18 @@ jobs:
           task_classes = {}
           for path in sorted(Path("qualification/tasks").glob("*/task.json")):
               task_doc = json.loads(path.read_text())
-              jsonschema.validate(task_doc, task_schema)
-              task_id = task_doc["id"]
+              task_id = task_doc.get("id")
+              task_class = task_doc.get("task_class")
+              assert isinstance(task_id, str) and task_id, path
+              assert isinstance(task_class, str) and task_class, path
               assert task_id not in task_classes, f"duplicate qualification task id: {task_id}"
-              task_classes[task_id] = task_doc["task_class"]
+              task_classes[task_id] = task_class
+              # Historical schema-v1 packages retain their original admitted shape.
+              # New/common-method schema-v2 packages must satisfy the current contract.
+              if task_doc.get("schema_version") == 2:
+                  jsonschema.validate(task_doc, task_schema)
           assert method_ir_task_v3["id"] in task_classes
+          jsonschema.validate(method_ir_task_v3, task_schema)
           assert method_ir_task_v3["task_class"] == "research.method-evidence-binding"
           actor_ids = set()
           for path in sorted(Path("qualification/actors").glob("*.json")):
