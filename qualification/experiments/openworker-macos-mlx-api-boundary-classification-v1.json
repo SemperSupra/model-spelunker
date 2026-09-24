@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "id": "openworker-macos-mlx-api-boundary-classification-v1",
+  "decision_question": "Can the admitted OpenWorker + Qwen3-4B MLX local actor classify sanitized real mobile-app API trust boundaries without overclaiming anonymous access on each standard ARM macOS runner image?",
+  "task": {
+    "id": "api-boundary-classification-v1",
+    "task_class": "reverse-engineering.api-boundary-classification"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-4b-macos26-mlx-api-boundary-v1",
+    "openworker-prebuilt-qwen3-4b-xcode27-mlx-api-boundary-v1"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-admitted-artifact",
+    "qwen3-4b-model-artifact",
+    "mlx-lm-version",
+    "api-boundary-classification-v1-task-and-verifier",
+    "list-read-write-tool-projection",
+    "max-tokens-2048",
+    "max-iterations-4",
+    "memory-hygiene-control"
+  ],
+  "variable_under_test": "github-hosted-arm-macos-runner-image",
+  "predecessor_task": {
+    "id": "api-boundary-classification-v0",
+    "disposition": "invalid-for-execution",
+    "do_not_pool": true
+  },
+  "stop_conditions": [
+    "validated-pass",
+    "validated-fail",
+    "task-integration-calibration-failure",
+    "artifact-integrity-failure",
+    "unexpected-authority-expansion",
+    "validator-error",
+    "environment-resource-failure"
+  ]
+}

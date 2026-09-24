@@ -1,0 +1,222 @@
+{
+  "schema_version": 1,
+  "source_class": "sanitized-derived-mobile-app-evidence",
+  "notes": [
+    "Endpoint names and structures are genericized from a real mobile-app recovery task.",
+    "Static absence of an endpoint-specific auth annotation does not prove anonymous server access.",
+    "A live anonymous probe is stronger evidence than static reachability.",
+    "Pre-authentication bootstrap is distinct from anonymous read-only access."
+  ],
+  "endpoints": {
+    "e01": {
+      "label": "catalog-load",
+      "http_method": "POST",
+      "path": "/cfg/items",
+      "call_context": "startup",
+      "reachable_before_session": true,
+      "session_guard_observed": false,
+      "request_fields": [
+        "deviceId"
+      ],
+      "remote_mutation": false,
+      "local_effect": "cache_write",
+      "live_probe": {
+        "attempted": true,
+        "no_token": true,
+        "no_cookie": true,
+        "no_user_id": true,
+        "http_status": 200,
+        "application_success": true
+      }
+    },
+    "e02": {
+      "label": "application-config",
+      "http_method": "POST",
+      "path": "/cfg/app",
+      "call_context": "bootstrap",
+      "reachable_before_session": true,
+      "session_guard_observed": false,
+      "request_fields": [
+        "deviceId",
+        "locale"
+      ],
+      "remote_mutation": false,
+      "local_effect": "cache_write",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e03": {
+      "label": "theme-config",
+      "http_method": "GET",
+      "path": "/config/theme",
+      "call_context": "bootstrap",
+      "reachable_before_session": true,
+      "session_guard_observed": false,
+      "request_fields": [
+        "locale"
+      ],
+      "remote_mutation": false,
+      "local_effect": "cache_write",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e04": {
+      "label": "register-login",
+      "http_method": "POST",
+      "path": "/auth/register_login",
+      "call_context": "login",
+      "reachable_before_session": true,
+      "session_guard_observed": false,
+      "request_fields": [
+        "identifier",
+        "verificationCode",
+        "country"
+      ],
+      "remote_mutation": true,
+      "local_effect": "session_write",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e05": {
+      "label": "program-list",
+      "http_method": "POST",
+      "path": "/content/program/list",
+      "call_context": "content-browser",
+      "reachable_before_session": "not-proven",
+      "session_guard_observed": false,
+      "request_fields": [
+        "deviceModel",
+        "locale"
+      ],
+      "remote_mutation": false,
+      "local_effect": "none-observed",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e06": {
+      "label": "program-download",
+      "http_method": "POST",
+      "path": "/content/program/download",
+      "call_context": "content-browser",
+      "reachable_before_session": "not-proven",
+      "session_guard_observed": false,
+      "request_fields": [
+        "programId",
+        "deviceModel"
+      ],
+      "remote_mutation": false,
+      "local_effect": "local-file-write",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e07": {
+      "label": "video-list",
+      "http_method": "POST",
+      "path": "/content/video/list",
+      "call_context": "content-browser",
+      "reachable_before_session": "not-proven",
+      "session_guard_observed": false,
+      "request_fields": [
+        "page",
+        "locale"
+      ],
+      "remote_mutation": false,
+      "local_effect": "none-observed",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e08": {
+      "label": "user-profile",
+      "http_method": "POST",
+      "path": "/user/profile",
+      "call_context": "account",
+      "reachable_before_session": false,
+      "session_guard_observed": true,
+      "request_fields": [
+        "userId"
+      ],
+      "remote_mutation": false,
+      "local_effect": "none-observed",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e09": {
+      "label": "bind-device",
+      "http_method": "POST",
+      "path": "/device/bind",
+      "call_context": "account-device",
+      "reachable_before_session": false,
+      "session_guard_observed": true,
+      "request_fields": [
+        "userId",
+        "deviceId"
+      ],
+      "remote_mutation": true,
+      "local_effect": "binding_state_write",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e10": {
+      "label": "create-post",
+      "http_method": "POST",
+      "path": "/community/post/create",
+      "call_context": "community",
+      "reachable_before_session": false,
+      "session_guard_observed": true,
+      "request_fields": [
+        "userId",
+        "body"
+      ],
+      "remote_mutation": true,
+      "local_effect": "none-observed",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e11": {
+      "label": "im-user-signature",
+      "http_method": "POST",
+      "path": "/im/userSig",
+      "call_context": "chat-bootstrap",
+      "reachable_before_session": false,
+      "session_guard_observed": true,
+      "request_fields": [
+        "userId"
+      ],
+      "remote_mutation": false,
+      "local_effect": "session_artifact_write",
+      "live_probe": {
+        "attempted": false
+      }
+    },
+    "e12": {
+      "label": "search",
+      "http_method": "POST",
+      "path": "/search/query",
+      "call_context": "shared-search",
+      "reachable_before_session": "unknown",
+      "session_guard_observed": false,
+      "request_fields": [
+        "query",
+        "optionalUserId"
+      ],
+      "remote_mutation": false,
+      "local_effect": "none-observed",
+      "live_probe": {
+        "attempted": false
+      },
+      "conflicting_evidence": [
+        "one caller is reachable from a public landing surface",
+        "another caller enriches results when a user session exists"
+      ]
+    }
+  }
+}

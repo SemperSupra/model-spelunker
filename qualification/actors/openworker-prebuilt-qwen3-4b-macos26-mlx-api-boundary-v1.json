@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "openworker-prebuilt-qwen3-4b-macos26-mlx-api-boundary-v1",
+  "harness": {
+    "name": "openworker",
+    "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236",
+    "admission_ref": "github:SemperSupra/model-spelunker:qualification/harness-artifacts/openworker-5bc10d928e0b-macos-arm64.admission-v1.json"
+  },
+  "model": {
+    "provider": "mlx-lm",
+    "id": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "realization": "local-artifact",
+    "artifact_ref": "hf://mlx-community/Qwen3-4B-Instruct-2507-4bit@50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b#model.safetensors=sha256:2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/macos-26-arm64",
+    "inference_route": "local:mlx-lm-0.31.3-openai-loopback",
+    "substrate_profile": "gha-macos26-arm64-mlx-openworker"
+  },
+  "toolset": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "configuration": {
+    "reasoning_effort": "omit",
+    "max_tokens": 2048,
+    "max_iterations": 4,
+    "parallel_tool_calls": false,
+    "memory_hygiene": "control",
+    "harness_delivery": "prebuilt-admitted-artifact",
+    "task_projection": "api-boundary-classification-v1"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
