@@ -120,6 +120,7 @@ def run(model_id:str, revision:str|None, inputs_cpu:dict[str,Any], device:str, e
 
     events=[]
     captures=defaultdict(list)
+    out_proj_inputs={}
     handles=[]
     for tower in ("vision","text"):
         for name in selected[tower]:
@@ -133,6 +134,18 @@ def run(model_id:str, revision:str|None, inputs_cpu:dict[str,Any], device:str, e
                 captures[probe].append(cpu)
                 events.append({"tower":which,"name":probe,"occurrence":occurrence,"shape":list(cpu.shape)})
             handles.append(module.register_forward_hook(hook))
+
+    for tower, prefix in prefixes.items():
+        out_name = prefix + ".self_attn.out_proj"
+        out_module = modules.get(out_name)
+        if out_module is None:
+            raise RuntimeError(f"missing {tower} out_proj")
+        def pre_hook(_module, hook_inputs, *, which=tower):
+            tensor = first_tensor(hook_inputs)
+            if tensor is None:
+                raise RuntimeError(f"{which} out_proj emitted no input tensor")
+            out_proj_inputs[which] = tensor.detach().float().cpu()
+        handles.append(out_module.register_forward_pre_hook(pre_hook))
 
     model.to(device)
     model.eval()
@@ -160,6 +173,7 @@ def run(model_id:str, revision:str|None, inputs_cpu:dict[str,Any], device:str, e
         "logits":logits,
         "placement":placement,
         "patched_names":patched_names,
+        "out_proj_inputs":out_proj_inputs,
     }
 
 
@@ -227,6 +241,11 @@ def main()->int:
                     "max_abs":result.get("max_abs"),
                 }
 
+    out_proj_input_metrics={
+        tower:metrics(cpu["out_proj_inputs"][tower],mps["out_proj_inputs"][tower])
+        for tower in ("vision","text")
+    }
+
     cpu_logits=cpu["logits"][0];mps_logits=mps["logits"][0]
     receipt={
         "schema":"visual-concept-siglip-mps-block0-qkv-localize/v1",
@@ -249,6 +268,7 @@ def main()->int:
             "patched_mps":[labels[i] for i in torch.argsort(mps_logits,descending=True).tolist()],
         },
         "first_material_divergence":first_by_tower,
+        "attention_out_proj_input":out_proj_input_metrics,
         "events":event_results,
         "threshold":{"cosine_lt":0.999,"relative_l2_gt":0.01,"role":"diagnostic only"},
     }
@@ -259,6 +279,7 @@ def main()->int:
     print(json.dumps({
         "rankings":receipt["rankings"],
         "first_material_divergence":first_by_tower,
+        "out_proj_input":out_proj_input_metrics,
         "event_count":len(event_results),
     },sort_keys=True))
     return 0
