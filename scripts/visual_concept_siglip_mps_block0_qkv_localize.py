@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import types
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
