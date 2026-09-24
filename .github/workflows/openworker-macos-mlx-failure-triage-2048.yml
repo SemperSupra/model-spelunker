@@ -1,0 +1,287 @@
+name: OpenWorker macOS MLX Failure Triage v1 2048
+
+on:
+  pull_request:
+    branches:
+      - exp/openworker-macos-mlx-failure-triage-v1
+    paths:
+      - qualification/tasks/execution-failure-triage-v1/**
+      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-triage-2048.json
+      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-triage-2048.json
+      - qualification/experiments/openworker-macos-mlx-execution-failure-triage-v1-2048.json
+      - .github/workflows/openworker-macos-mlx-failure-triage-2048.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - runner: macos-26
+            actor: openworker-prebuilt-qwen3-4b-macos26-mlx-triage-2048
+            substrate: gha-macos26-arm64-mlx-openworker
+          - runner: xcode-27
+            actor: openworker-prebuilt-qwen3-4b-xcode27-mlx-triage-2048
+            substrate: gha-xcode27-arm64-mlx-openworker
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      HARNESS_ARTIFACT_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236'
+      HARNESS_BUILD_RECEIPT_SHA256: '054c5dcca5a619e18c725858f476e60ab399af110907738495cd9fdf7f95b7f9'
+      CRANE_VERSION: 'v0.22.1'
+      CRANE_DARWIN_ARM64_SHA256: '2231fc8df8806d20d680ff1225db44e095a55dd6ac1ae8eced4faf4b278b78fb'
+      MLX_LM_VERSION: '0.31.3'
+      MODEL_REPO: 'mlx-community/Qwen3-4B-Instruct-2507-4bit'
+      MODEL_REVISION: '50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b'
+      MODEL_SAFETENSORS_SHA256: '2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f'
+      MODEL_SAFETENSORS_BYTES: '2263022417'
+      MLX_PORT: '8080'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Verify frozen task and actor contracts
+        shell: bash
+        env:
+          ACTOR_ID: ${{ matrix.actor }}
+        run: |
+          set -euo pipefail
+          echo "RECEIPT=$RUNNER_TEMP/openworker-macos-mlx/receipt.json" >> "$GITHUB_ENV"
+          echo "DIAGNOSTICS=$RUNNER_TEMP/openworker-macos-mlx/diagnostics.json" >> "$GITHUB_ENV"
+          python3 qualification/tasks/execution-failure-triage-v1/verify.py --self-test
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          actor=Path("qualification/actors")/(os.environ["ACTOR_ID"]+".json")
+          data=json.loads(actor.read_text())
+          assert data["id"]==os.environ["ACTOR_ID"]
+          assert data["harness"]["version"]==os.environ["OPENWORKER_SHA"]
+          assert data["harness"]["artifact_ref"]==os.environ["HARNESS_ARTIFACT_REF"]
+          assert data["model"]["id"]==os.environ["MODEL_REPO"]
+          assert data["configuration"]["memory_hygiene"]=="control"
+          print("PASS frozen actor/task contracts")
+          PY
+
+      - name: Calibrate v1 package against run-task workspace layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          import json
+          import shutil
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          task_dir=Path("qualification/tasks/execution-failure-triage-v1")
+          spec=importlib.util.spec_from_file_location("triage_v1_verify", task_dir/"verify.py")
+          module=importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(module)
+
+          with tempfile.TemporaryDirectory(prefix="triage-v1-cal-") as tmp:
+              work=Path(tmp)/"work"
+              shutil.copytree(task_dir/"fixture", work)
+              assert (work/"evidence.json").is_file()
+              assert not (work/"fixture").exists()
+              (work/"triage.json").write_text(
+                  json.dumps(module.good_output(),indent=2,sort_keys=True)+"\n",
+                  encoding="utf-8",
+              )
+              cp=subprocess.run(
+                  [sys.executable,str(task_dir/"verify.py"),str(work)],
+                  text=True,
+                  capture_output=True,
+                  check=False,
+              )
+              assert cp.returncode==0, (cp.returncode,cp.stdout,cp.stderr)
+          print("PASS run-task-compatible triage v1 integration calibration")
+          PY
+
+      - name: Hydrate admitted OpenWorker artifact without Docker
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/crane-bin"
+          mkdir -p "$bin"
+          crane_archive="$RUNNER_TEMP/go-containerregistry_Darwin_arm64.tar.gz"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/google/go-containerregistry/releases/download/$CRANE_VERSION/go-containerregistry_Darwin_arm64.tar.gz" \
+            --output "$crane_archive"
+          echo "$CRANE_DARWIN_ARM64_SHA256  $crane_archive" | shasum -a 256 -c -
+          tar -xzf "$crane_archive" -C "$bin" crane
+          "$bin/crane" version
+          "$bin/crane" auth login ghcr.io -u "$GITHUB_ACTOR" -p "$GHCR_TOKEN"
+
+          tarball="$RUNNER_TEMP/openworker-macos-arm64.tar"
+          root="$RUNNER_TEMP/openworker-macos-root"
+          mkdir -p "$root"
+          "$bin/crane" export "$HARNESS_ARTIFACT_REF" "$tarball"
+          tar -xf "$tarball" -C "$root"
+
+          artifact="$root/artifact"
+          test -s "$artifact/build-receipt.json"
+          actual_receipt="$(shasum -a 256 "$artifact/build-receipt.json" | awk '{print $1}')"
+          test "$actual_receipt" = "$HARNESS_BUILD_RECEIPT_SHA256"
+
+          ARTIFACT="$artifact" python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ["ARTIFACT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+          assert receipt["source"]["revision"]==os.environ["OPENWORKER_SHA"]
+          for row in receipt["payload"]["files"]:
+              path=root/"wheelhouse"/row["path"]
+              data=path.read_bytes()
+              assert len(data)==row["bytes"], path
+              assert hashlib.sha256(data).hexdigest()==row["sha256"], path
+          print("PASS admitted OpenWorker payload")
+          PY
+
+          venv="$RUNNER_TEMP/openworker-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$artifact/wheelhouse"/*.whl
+          "$venv/bin/python" -c 'import coworker; import coworker.engine'
+          "$venv/bin/openworker" --help >/dev/null
+          echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
+
+      - name: Prepare pinned MLX model and server
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/mlx-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-cache-dir "mlx-lm==$MLX_LM_VERSION"
+
+          resolve="$RUNNER_TEMP/resolve_model.py"
+          cat >"$resolve" <<'PY'
+          from huggingface_hub import snapshot_download
+          import os
+          print(snapshot_download(repo_id=os.environ["MODEL_REPO"], revision=os.environ["MODEL_REVISION"]))
+          PY
+          snapshot="$("$venv/bin/python" "$resolve" | tail -1)"
+          test -d "$snapshot"
+          model="$snapshot/model.safetensors"
+          test -e "$model"
+          MODEL_FILE="$model" "$venv/bin/python" - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          path=Path(os.environ["MODEL_FILE"])
+          resolved=path.resolve()
+          h=hashlib.sha256()
+          with resolved.open("rb") as stream:
+              for chunk in iter(lambda: stream.read(1024*1024), b""):
+                  h.update(chunk)
+          actual_bytes=resolved.stat().st_size
+          actual_sha=h.hexdigest()
+          assert actual_bytes==int(os.environ["MODEL_SAFETENSORS_BYTES"]), (actual_bytes, os.environ["MODEL_SAFETENSORS_BYTES"])
+          assert actual_sha==os.environ["MODEL_SAFETENSORS_SHA256"], actual_sha
+          print("PASS pinned model artifact", actual_bytes, actual_sha)
+          PY
+
+          "$venv/bin/python" - <<'PY'
+          import mlx.core as mx
+          mx.set_default_device(mx.gpu)
+          assert "gpu" in str(mx.default_device()).lower()
+          x=mx.array([1.0,2.0,3.0])
+          y=x+1
+          mx.eval(y)
+          assert y.tolist()==[2.0,3.0,4.0]
+          print("PASS MLX GPU preflight", mx.default_device())
+          PY
+
+          log="$RUNNER_TEMP/mlx-server.log"
+          nohup "$venv/bin/python" -m mlx_lm.server --model "$snapshot" --port "$MLX_PORT" >"$log" 2>&1 &
+          echo "MLX_SERVER_PID=$!" >> "$GITHUB_ENV"
+          echo "MLX_SERVER_LOG=$log" >> "$GITHUB_ENV"
+
+          ready=0
+          for _ in $(seq 1 180); do
+            if curl --fail --silent "http://127.0.0.1:$MLX_PORT/v1/models" >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 1
+
+          echo "MODEL_SPELUNKER_MODEL=mlx:$snapshot" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MLX_API_KEY=not-needed" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MLX_BASE_URL=http://127.0.0.1:$MLX_PORT/v1" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_REASONING_EFFORT=omit" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MAX_TOKENS=2048" >> "$GITHUB_ENV"
+          echo "MODEL_SNAPSHOT=$snapshot" >> "$GITHUB_ENV"
+
+      - name: Run configured actor interview
+        shell: bash
+        env:
+          ACTOR_ID: ${{ matrix.actor }}
+          SUBSTRATE_ID: ${{ matrix.substrate }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$RECEIPT")"
+          actor="qualification/actors/$ACTOR_ID.json"
+
+          set +e
+          python3 qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id "$SUBSTRATE_ID" \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --diagnostics "$DIAGNOSTICS" \
+            --candidate-env-mode minimal \
+            --pass-env MODEL_SPELUNKER_MODEL \
+            --pass-env MODEL_SPELUNKER_MLX_API_KEY \
+            --pass-env MODEL_SPELUNKER_MLX_BASE_URL \
+            --pass-env MODEL_SPELUNKER_REASONING_EFFORT \
+            --pass-env MODEL_SPELUNKER_MAX_TOKENS \
+            qualification/tasks/execution-failure-triage-v1 \
+            "$actor" \
+            "$RECEIPT" \
+            -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+
+          test -s "$RECEIPT"
+          RC="$rc" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          rc=int(os.environ["RC"])
+          assert rc==(0 if receipt["observation"]["success"] else 1)
+          print("OPENWORKER_MACOS_MLX_RECEIPT="+json.dumps(receipt,sort_keys=True))
+          print("QUALIFICATION_RESULT="+("PASS" if receipt["observation"]["success"] else "FAIL_VALID_OBSERVATION"))
+          PY
+
+      - name: Capture bounded server tail
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${MLX_SERVER_LOG:-}" ] && [ -f "$MLX_SERVER_LOG" ]; then
+            mkdir -p "$RUNNER_TEMP/openworker-macos-mlx"
+            tail -c 8000 "$MLX_SERVER_LOG" >"$RUNNER_TEMP/openworker-macos-mlx/mlx-server-tail.log" || true
+          fi
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: openworker-macos-mlx-triage-2048-${{ matrix.runner }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/openworker-macos-mlx/receipt.json
+            ${{ runner.temp }}/openworker-macos-mlx/diagnostics.json
+            ${{ runner.temp }}/openworker-macos-mlx/mlx-server-tail.log
+          if-no-files-found: warn
+          retention-days: 30
