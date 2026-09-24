@@ -1,5 +1,5 @@
 # execution-trigger: compact-source replay after admission and concurrency repair; treatment semantics unchanged
-name: Unified macOS MLX Method-IR v2 Source Projection
+name: Unified macOS MLX Method-IR v2 Wall Boundary
 
 on:
   push:
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   method-ir-operational:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-compact]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-wall360]')
     runs-on: macos-26
     timeout-minutes: 35
     env:
@@ -34,7 +34,7 @@ jobs:
       MLX_PORT: '8080'
       TASK_ID: 'method-ir-siglip2-b16-256-v2'
       ACTOR_ID: 'openworker-qwen3-4b-macos26-mlx-method-ir-v2-compact-source'
-      EXPERIMENT_ID: 'openworker-macos26-mlx-method-ir-v2-compact-source'
+      EXPERIMENT_ID: 'openworker-macos26-mlx-method-ir-v2-compact-source-wall360'
       PYTHONDONTWRITEBYTECODE: '1'
 
     steps:
@@ -70,10 +70,8 @@ jobs:
           assert exp["schema_version"] == 2
           assert exp["task"]["id"] == task["id"]
           assert actor["id"] in exp["actors"]
-          assert set(exp["actors"]) == {
-              "openworker-qwen3-4b-macos26-mlx-method-ir-v2-iter8",
-              "openworker-qwen3-4b-macos26-mlx-method-ir-v2-compact-source",
-          }
+          assert exp["actors"] == ["openworker-qwen3-4b-macos26-mlx-method-ir-v2-compact-source"]
+          assert exp["variable_under_test"] == "effective execution wall_seconds: 240 -> 360"
           print("PASS frozen v2 Method-IR actor/task/experiment contracts")
           PY
 
@@ -197,7 +195,7 @@ jobs:
           experiment="qualification/experiments/$EXPERIMENT_ID.json"
 
           set +e
-          python3 qualification/run_task.py             --task-commit "$GITHUB_SHA"             --substrate-profile-id gha-macos26-arm64-mlx-openworker             --substrate-profile-commit "$GITHUB_SHA"             --experiment "$experiment"             --diagnostics "$diagnostics"             --snapshot-dir "$snapshot"             --candidate-env-mode minimal             --projected-tools-source candidate             --pass-env MODEL_SPELUNKER_MODEL             --pass-env MODEL_SPELUNKER_MLX_API_KEY             --pass-env MODEL_SPELUNKER_MLX_BASE_URL             --pass-env MODEL_SPELUNKER_REASONING_EFFORT             --pass-env MODEL_SPELUNKER_MAX_TOKENS             --pass-env MODEL_SPELUNKER_MAX_ITERATIONS             "qualification/tasks/$TASK_ID"             "$actor"             "$receipt"             -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          python3 qualification/run_task.py             --task-commit "$GITHUB_SHA"             --substrate-profile-id gha-macos26-arm64-mlx-openworker             --substrate-profile-commit "$GITHUB_SHA"             --experiment "$experiment"             --diagnostics "$diagnostics"             --snapshot-dir "$snapshot"             --candidate-env-mode minimal             --wall-seconds 360             --projected-tools-source candidate             --pass-env MODEL_SPELUNKER_MODEL             --pass-env MODEL_SPELUNKER_MLX_API_KEY             --pass-env MODEL_SPELUNKER_MLX_BASE_URL             --pass-env MODEL_SPELUNKER_REASONING_EFFORT             --pass-env MODEL_SPELUNKER_MAX_TOKENS             --pass-env MODEL_SPELUNKER_MAX_ITERATIONS             "qualification/tasks/$TASK_ID"             "$actor"             "$receipt"             -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
           rc=$?
           set -e
 
@@ -215,11 +213,11 @@ jobs:
           assert receipt["candidate"]["deployment_topology"]["compute_class"] == "gpu"
           assert receipt["resources"]["platform_system"] == "Darwin"
           assert receipt["resources"]["platform_machine"] == "arm64"
-          print("METHOD_IR_V2_COMPACT_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
-          print("METHOD_IR_V2_COMPACT_TERMINATION="+str(obs.get("termination_class")))
-          print("METHOD_IR_V2_COMPACT_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
-          print("METHOD_IR_V2_COMPACT_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
-          print("METHOD_IR_V2_COMPACT_WALL_SECONDS="+str(obs.get("wall_seconds")))
+          print("METHOD_IR_V2_WALL360_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
+          print("METHOD_IR_V2_WALL360_TERMINATION="+str(obs.get("termination_class")))
+          print("METHOD_IR_V2_WALL360_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
+          print("METHOD_IR_V2_WALL360_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
+          print("METHOD_IR_V2_WALL360_WALL_SECONDS="+str(obs.get("wall_seconds")))
           print(json.dumps(receipt,sort_keys=True))
           PY
 
