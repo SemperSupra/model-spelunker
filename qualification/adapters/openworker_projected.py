@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections import Counter
 from dataclasses import replace
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -458,6 +459,33 @@ def main() -> int:
     if not instruction:
         print("missing task instruction on stdin", file=sys.stderr)
         return 2
+
+    transcript_path = os.environ.get("MODEL_SPELUNKER_SPEECH_TRANSCRIPT_FILE")
+    if transcript_path:
+        path = Path(transcript_path).resolve()
+        transcript = path.read_text(encoding="utf-8").strip()
+        if not transcript:
+            print("speech transcript is empty", file=sys.stderr)
+            return 2
+        if len(transcript) > 16000:
+            print("speech transcript exceeds bounded context limit", file=sys.stderr)
+            return 2
+        digest = "sha256:" + hashlib.sha256(transcript.encode("utf-8")).hexdigest()
+        expected = os.environ.get("MODEL_SPELUNKER_SPEECH_TRANSCRIPT_SHA256")
+        if expected and expected != digest:
+            print("speech transcript digest mismatch", file=sys.stderr)
+            return 2
+        instruction = (
+            instruction
+            + "\n\n<speech-transcript>\n"
+            + transcript
+            + "\n</speech-transcript>"
+        )
+        print(
+            "MODEL_SPELUNKER_SPEECH_CONTEXT="
+            + json.dumps({"sha256": digest, "chars": len(transcript)}, sort_keys=True),
+            flush=True,
+        )
 
     provider = MODEL.split(":", 1)[0] if ":" in MODEL else "openai"
     provider_key = {
