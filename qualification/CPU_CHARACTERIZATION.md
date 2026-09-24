@@ -120,3 +120,7 @@ The purpose is not to establish reliability from N=1. It is to prove that the v2
 contract produces interpretable scientific receipts while simultaneously exercising a
 current reverse-engineering task class. Follow-up treatments are selected only from the
 evidence returned by these cells.
+
+## Execution ledger
+
+- 2026-09-24: initial v2 bootstrap authorized: one reference `text-repair-v0` cell and one operational `api-boundary-classification-v1` cell, both using the same admitted OpenWorker/Qwen3 1.7B public-CPU realization. The cells are intentionally N=1 screens; they must not be interpreted as reliability estimates.
