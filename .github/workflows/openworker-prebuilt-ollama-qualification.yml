@@ -17,6 +17,10 @@ on:
         description: Optional v2 experiment declaration filename from qualification/experiments
         required: false
         default: ''
+      reasoning_effort:
+        description: OpenWorker reasoning_effort projection; use omit to leave the provider/model default unforced
+        required: false
+        default: 'none'
   workflow_call:
     inputs:
       artifact_ref:
@@ -32,6 +36,10 @@ on:
         required: false
         type: string
         default: ''
+      reasoning_effort:
+        required: false
+        type: string
+        default: 'none'
 
 permissions:
   contents: read
@@ -61,6 +69,7 @@ jobs:
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
+      MODEL_SPELUNKER_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       QUALIFICATION_TASK: ${{ inputs.task }}
       QUALIFICATION_EXPERIMENT: ${{ inputs.experiment }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-prebuilt-candidate.json'
@@ -177,7 +186,7 @@ jobs:
                   "projection":projected_tools,
                   "parallel_tool_calls":False,
                   "max_tokens":2048,
-                  "reasoning_effort":"none",
+                  "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
                   "max_iterations":4,
                   "ollama_context_length":int(os.environ["OLLAMA_CONTEXT_LENGTH"]),
                   "harness_delivery":"prebuilt-admitted-artifact",
