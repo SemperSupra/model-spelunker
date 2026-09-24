@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "openworker-macos-mlx-execution-failure-triage-v1",
+  "decision_question": "Can the qualified OpenWorker + Qwen3-4B MLX local actor correctly triage sanitized real Agent Dispatch/GHA failure boundaries using the corrected run-task-compatible v1 package?",
+  "task": {
+    "id": "execution-failure-triage-v1",
+    "task_class": "execution.failure-boundary-triage"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-4b-macos26-mlx-triage-v1",
+    "openworker-prebuilt-qwen3-4b-xcode27-mlx-triage-v1"
+  ],
+  "predecessor": {
+    "task_id": "execution-failure-triage-v0",
+    "disposition": "invalid-for-execution",
+    "reason": "fixture path contract did not match run_task workspace layout",
+    "do_not_pool": true
+  },
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-admitted-artifact",
+    "model-artifact",
+    "mlx-lm-version",
+    "corrected-v1-task-profile-and-verifier",
+    "list-read-write-tool-projection",
+    "memory-hygiene-control"
+  ],
+  "variable_under_test": "github-hosted-arm-macos-runner-image",
+  "stop_conditions": [
+    "task-integration-calibration-failure",
+    "artifact-integrity-failure",
+    "unexpected-authority-expansion",
+    "model-artifact-drift",
+    "validator-error",
+    "environment-resource-failure"
+  ]
+}
