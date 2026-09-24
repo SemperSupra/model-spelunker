@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "id": "openworker-macos26-mlx-method-ir-v2-iter8-boundary",
+  "decision_question": "Does increasing only the OpenWorker iteration budget from 4 to 8 allow the exact Qwen3-4B + MLX macOS actor to progress from source inspection to a mechanically valid Method-IR candidate on the same frozen SigLIP2 task?",
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v2",
+    "task_class": "research.method-evidence-binding"
+  },
+  "actors": [
+    "openworker-qwen3-4b-macos26-mlx-method-ir-v2",
+    "openworker-qwen3-4b-macos26-mlx-method-ir-v2-iter8"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "siglip2-v1-frozen-source-bytes",
+    "method-ir-v1-structural-source-binding-verifier",
+    "openworker-5bc10d9-admitted-macos-arm64-artifact",
+    "qwen3-4b-instruct-2507-4bit-exact-artifact",
+    "mlx-lm-0.31.3",
+    "reasoning-effort-omitted",
+    "max-tokens-2048",
+    "list-read-write-tool-projection",
+    "memory-hygiene-control",
+    "task-scoped-authority",
+    "github-hosted-macos-26-arm64"
+  ],
+  "variable_under_test": "max-iterations:4-vs-8",
+  "claim_type": "boundary",
+  "experimental_role": "boundary",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "state-changed",
+    "method-ir-output-present",
+    "model-calls-started",
+    "model-rounds",
+    "tool-calls",
+    "wall-seconds"
+  ],
+  "design_block": "macos-qwen4b-method-ir-iteration-boundary-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "iteration-8-exhausted-without-write",
+    "semantic-failure-after-write",
+    "validator-integrity-failure",
+    "artifact-or-model-drift",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "execution-or-provider-ingress-failure",
+    "uncontrolled-model-harness-tool-token-substrate-drift"
+  ]
+}
