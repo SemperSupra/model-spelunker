@@ -1,0 +1,1 @@
+Counterfactual transcript is injected at runtime; no audio or transcript truth is stored in this static fixture.\n
