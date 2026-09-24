@@ -46,8 +46,8 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: "5bc10d928e0b64aae74313349a3b17bd19643ae2"
       HOSTED_CATALOG: "qualification/models/hosted-api.json"
-      HOSTED_CANDIDATE_ID: "deepseek-flash"
-      HOSTED_KEY_FILE: "/tmp/model-spelunker-deepseek.key"
+      HOSTED_CANDIDATE_ID: "groq-gpt-oss-20b"
+      HOSTED_KEY_FILE: "/tmp/model-spelunker-groq.key"
       CANDIDATE_META: "/tmp/model-spelunker-android-candidate.json"
       RECEIPT: "/tmp/model-spelunker-android-receipt.json"
       REFERENCE_RECEIPT: "/tmp/model-spelunker-android-reference-receipt.json"
@@ -60,7 +60,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve fixed DeepSeek treatment
+      - name: Resolve fixed Groq treatment
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -68,9 +68,9 @@ jobs:
           from pathlib import Path
           catalog=json.loads(Path(os.environ["HOSTED_CATALOG"]).read_text(encoding="utf-8"))
           c=catalog["candidates"][os.environ["HOSTED_CANDIDATE_ID"]]
-          assert c["provider"] == "deepseek"
-          assert c["model"] == "deepseek-flash"
-          assert c["cost_class"] == "metered-api"
+          assert c["provider"] == "groq"
+          assert c["model"] == "openai/gpt-oss-20b"
+          assert c["cost_class"] == "free-tier-account-unverified"
           values={
               "MODEL_SPELUNKER_MODEL": f'{c["provider"]}:{c["model"]}',
               "MODEL_SPELUNKER_REASONING_EFFORT": c["reasoning_effort"],
@@ -101,12 +101,12 @@ jobs:
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
 
-      - name: Stage DeepSeek credential and perform zero-inference admission
+      - name: Stage Groq credential and perform zero-inference admission
         env:
-          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SELECTED_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           set -euo pipefail
-          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-DEEPSEEK_API_KEY"; exit 78; }
+          test -n "${SELECTED_API_KEY:-}" || { echo "QUALIFICATION_BOUNDARY=missing-GROQ_API_KEY"; exit 78; }
           umask 077
           printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
           python3 - <<'PY'
@@ -115,16 +115,18 @@ jobs:
           key=Path(os.environ["HOSTED_KEY_FILE"]).read_text(encoding="utf-8")
           base=os.environ["HOSTED_API_BASE"].rstrip("/")
           req=urllib.request.Request(
-              base+"/user/balance",
+              base+"/models",
               headers={"Accept":"application/json","Authorization":"Bearer "+key},
           )
           with urllib.request.urlopen(req,timeout=20) as response:
               data=json.load(response)
-          if data.get("is_available") is not True:
-              raise SystemExit("DeepSeek authenticated but API balance is unavailable")
-          print("DEEPSEEK_ADMISSION="+json.dumps({
+          ids={row.get("id") for row in data.get("data",[]) if isinstance(row,dict)}
+          model=os.environ["HOSTED_MODEL"]
+          if model not in ids:
+              raise SystemExit(f"Groq model is not active for this key: {model}")
+          print("GROQ_ADMISSION="+json.dumps({
               "authenticated": True,
-              "available": True,
+              "model_active": True,
               "treatment_kind": os.environ["HOSTED_TREATMENT_KIND"],
           },sort_keys=True))
           PY
@@ -135,7 +137,7 @@ jobs:
           python3 - <<'PY'
           import json, os
           from pathlib import Path
-          task=json.loads(Path("qualification/tasks/android-settings-24h-hybrid-v0/task.json").read_text())
+          task=json.loads(Path("qualification/tasks/android-settings-24h-struct-v0/task.json").read_text())
           candidate={
               "harness":{"name":"openworker","version":os.environ["OPENWORKER_UPSTREAM_SHA"]},
               "model":{
@@ -164,12 +166,12 @@ jobs:
       - name: Calibrate then execute one embodied actor rep
         id: embodied
         env:
-          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SELECTED_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           set -euo pipefail
-          export DEEPSEEK_API_KEY="$SELECTED_API_KEY"
+          export GROQ_API_KEY="$SELECTED_API_KEY"
           set +e
-          python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-hybrid-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          python3 qualification/run_android_embodied.py             --task-dir qualification/tasks/android-settings-24h-struct-v0             --task-commit "$GITHUB_SHA"             --substrate-profile-id "gha-ubuntu-24.04-android-api35-kvm-openworker-hosted"             --substrate-profile-commit "3fb029af8302921f30f1658c8c80bec849ebb88f"             --candidate-meta "$CANDIDATE_META"             --receipt "$RECEIPT"             --reference-receipt "$REFERENCE_RECEIPT"             -- "$RUNNER_TEMP/openworker-venv/bin/python"               "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
           rc=$?
           set -e
           rm -f "$HOSTED_KEY_FILE"
