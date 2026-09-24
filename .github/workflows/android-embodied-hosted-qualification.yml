@@ -51,7 +51,8 @@ jobs:
       CANDIDATE_META: "/tmp/model-spelunker-android-candidate.json"
       RECEIPT: "/tmp/model-spelunker-android-receipt.json"
       REFERENCE_RECEIPT: "/tmp/model-spelunker-android-reference-receipt.json"
-      MODEL_SPELUNKER_MAX_TOKENS: "2048"\n      MODEL_SPELUNKER_MAX_ITERATIONS: "12"
+      MODEL_SPELUNKER_MAX_TOKENS: "2048"
+      MODEL_SPELUNKER_MAX_ITERATIONS: "12"
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PYTHONDONTWRITEBYTECODE: "1"
 
