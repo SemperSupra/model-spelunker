@@ -7,12 +7,6 @@ on:
     paths:
       - scripts/visual_concept_mps_localization.py
       - .github/workflows/visual-concept-mps-localization.yml
-  push:
-    branches:
-      - exp/visual-concept-mps-localization
-    paths:
-      - scripts/visual_concept_mps_localization.py
-      - .github/workflows/visual-concept-mps-localization.yml
   workflow_dispatch:
 
 permissions:
