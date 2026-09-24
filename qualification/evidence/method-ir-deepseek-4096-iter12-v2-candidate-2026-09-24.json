@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "claim": {
+    "claim_id": "CLAIM_SIGLIP2_B16_256_CORE",
+    "comparison": {
+      "siglip": {
+        "imagenet1k_val": 76.7,
+        "coco_text_to_image_recall_at_1": 47.4,
+        "coco_image_to_text_recall_at_1": 65.1,
+        "evidence_refs": [
+          "source:sources/tables/zeroshot_main.tex:L20"
+        ]
+      },
+      "siglip2": {
+        "imagenet1k_val": 79.1,
+        "coco_text_to_image_recall_at_1": 53.2,
+        "coco_image_to_text_recall_at_1": 69.7,
+        "evidence_refs": [
+          "source:sources/README_siglip2.md:L19",
+          "source:sources/tables/zeroshot_main.tex:L21"
+        ]
+      }
+    },
+    "evidence_refs": [
+      "source:sources/README_siglip2.md:L19",
+      "source:sources/tables/zeroshot_main.tex:L20",
+      "source:sources/tables/zeroshot_main.tex:L21"
+    ]
+  },
+  "protocol_fields": {
+    "checkpoint_identity": {
+      "status": "INFERABLE_WITH_EVIDENCE",
+      "value": "Fixed-resolution ViT-B/16 at 256px. For SigLIP 2 the README names the downloadable checkpoint siglip2_b16_256.npz for the B/16 @ 256 row, and the paper table identifies the model as SigLIP 2, ViT B/16, Res. 256, Seq. 256. For the original SigLIP there is a matching table row (SigLIP, B/16, 256, 256) but no checkpoint filename/link is given in the local sources.",
+      "evidence_refs": [
+        "source:sources/README_siglip2.md:L19",
+        "source:sources/tables/zeroshot_main.tex:L20",
+        "source:sources/tables/zeroshot_main.tex:L21"
+      ],
+      "absence_search": ""
+    },
+    "architecture_resolution": {
+      "status": "EXPLICIT_PAPER",
+      "value": "Standard fixed-resolution ViT architecture with learned positional embedding and MAP (attention pooling) head; patch size 16 and image resolution 256 (image representation sequence length 256).",
+      "evidence_refs": [
+        "source:sources/document.tex:L166",
+        "source:sources/document.tex:L179",
+        "source:sources/tables/zeroshot_main.tex:L21"
+      ],
+      "absence_search": ""
+    },
+    "text_tokenizer_normalization": {
+      "status": "INFERABLE_WITH_EVIDENCE",
+      "value": "Multilingual Gemma tokenizer, vocabulary size 256k, text length 64, text transformed to lower case before tokenization.",
+      "evidence_refs": [
+        "source:sources/README_siglip2.md:L13",
+        "source:sources/document.tex:L166"
+      ],
+      "absence_search": ""
+    },
+    "image_preprocessing": {
+      "status": "AMBIGUOUS",
+      "value": "Paper states default fixed-resolution variants use non-aspect preserving resize to 256px; exact evaluation resizing/cropping/interpolation/normalization is not specified.",
+      "evidence_refs": [
+        "source:sources/document.tex:L223",
+        "source:sources/document.tex:L227"
+      ],
+      "absence_search": ""
+    },
+    "imagenet1k_evaluation": {
+      "status": "INFERABLE_WITH_EVIDENCE",
+      "value": "Zero-shot classification accuracy on ImageNet-1k validation for fixed-resolution B/16 @ 256; exact prompt templates are not stated.",
+      "evidence_refs": [
+        "source:sources/document.tex:L201",
+        "source:sources/tables/zeroshot_main.tex:L5",
+        "source:sources/tables/zeroshot_main.tex:L20",
+        "source:sources/tables/zeroshot_main.tex:L21"
+      ],
+      "absence_search": ""
+    },
+    "coco_retrieval_evaluation": {
+      "status": "AMBIGUOUS",
+      "value": "Table reports COCO T->I and I->T recall@1; exact split, candidate pool, and retrieval/scoring procedure are not described.",
+      "evidence_refs": [
+        "source:sources/document.tex:L201",
+        "source:sources/tables/zeroshot_main.tex:L5",
+        "source:sources/tables/zeroshot_main.tex:L20",
+        "source:sources/tables/zeroshot_main.tex:L21"
+      ],
+      "absence_search": ""
+    },
+    "metric_definitions": {
+      "status": "INFERABLE_WITH_EVIDENCE",
+      "value": "ImageNet-1k uses top-1 zero-shot classification accuracy; COCO uses recall@1 in both directions.",
+      "evidence_refs": [
+        "source:sources/document.tex:L201",
+        "source:sources/tables/zeroshot_main.tex:L4",
+        "source:sources/tables/zeroshot_main.tex:L5"
+      ],
+      "absence_search": ""
+    },
+    "software_runtime": {
+      "status": "MISSING",
+      "value": null,
+      "evidence_refs": [],
+      "absence_search": "Checked document.tex, tables/zeroshot_main.tex, and README_siglip2.md for evaluation software/runtime details; none were found."
+    },
+    "randomness_repetition": {
+      "status": "MISSING",
+      "value": null,
+      "evidence_refs": [],
+      "absence_search": "Checked document.tex, tables/zeroshot_main.tex, and README_siglip2.md for seeds/repetitions/variance; none were found."
+    }
+  },
+  "execution_readiness": {
+    "status": "PARTIAL",
+    "blocking_fields": [
+      "coco_retrieval_evaluation",
+      "image_preprocessing",
+      "randomness_repetition",
+      "software_runtime"
+    ],
+    "notes": "Publication-visible results are recoverable, but exact reproduction remains blocked by missing/ambiguous evaluation details."
+  }
+}
