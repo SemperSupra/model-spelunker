@@ -57,6 +57,5 @@
     "credential-absence",
     "provider-admission-failure",
     "uncontrolled-task-tool-token-wall-authority-or-provider-route-drift"
-  ],
-  "execution_note": "2026-09-24 replay authorized solely to fix pre-inference workflow syntax; configured-actor treatment remains exactly max_tokens=4096, max_iterations=12."
+  ]
 }
