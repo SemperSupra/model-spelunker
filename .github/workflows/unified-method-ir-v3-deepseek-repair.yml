@@ -2,9 +2,6 @@
 name: Unified Method-IR v3 DeepSeek Package Repair
 
 on:
-  push:
-    branches:
-      - exp/method-ir-v3-deepseek-replay
   workflow_dispatch:
 
 permissions:
@@ -16,7 +13,6 @@ concurrency:
 
 jobs:
   method-ir-deepseek:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-v3-repair]')
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 15
