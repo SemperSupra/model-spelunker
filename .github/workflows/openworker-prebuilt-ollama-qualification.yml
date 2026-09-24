@@ -38,7 +38,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: openworker-prebuilt-ollama-qualification-${{ github.ref }}
+  group: openworker-prebuilt-ollama-qualification-${{ github.ref }}-${{ inputs.task }}-${{ inputs.experiment }}
   cancel-in-progress: true
 
 jobs:
