@@ -329,7 +329,7 @@ jobs:
       - name: Reduce CPU reasoning-projection treatment evidence
         run: |
           PYTHONPATH=. python qualification/reduce_evidence.py \
-            qualification/evidence/cpu-operational-openworker-qwen-api-boundary-v1-2026-09-24.json \
+            qualification/evidence/cpu-qwen17-api-boundary-reasoning-none-control-2026-09-24.json \
             qualification/evidence/cpu-qwen17-api-boundary-reasoning-omitted-censored-2026-09-24.json \
             --output "$RUNNER_TEMP/cpu-reasoning-envelopes.json"
           python - "$RUNNER_TEMP/cpu-reasoning-envelopes.json" <<'PY'
