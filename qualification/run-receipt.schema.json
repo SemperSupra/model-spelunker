@@ -491,6 +491,32 @@
             "started_request_tool_schema_bytes_total": {
               "type": "number",
               "minimum": 0
+            },
+            "model_calls_completed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tool_calls_started": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tool_calls_completed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "completed_tool_names": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "completed_tool_statuses": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
