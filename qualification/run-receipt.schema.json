@@ -791,6 +791,27 @@
           }
         }
       }
+    },
+    "execution_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wall_seconds",
+        "wall_seconds_source"
+      ],
+      "properties": {
+        "wall_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "wall_seconds_source": {
+          "type": "string",
+          "enum": [
+            "task",
+            "override"
+          ]
+        }
+      }
     }
   },
   "allOf": [
