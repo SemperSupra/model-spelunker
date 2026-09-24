@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "source_locale": "en-US",
+  "target_locale": "de-DE",
+  "protected_tokens": [
+    "R4",
+    "UNKNOWN",
+    "ZX-19",
+    "RUN-5",
+    "17:45 UTC",
+    "Release",
+    "2026.09.25",
+    "8",
+    "12",
+    "4",
+    "6"
+  ],
+  "segments": [
+    {
+      "id": "t1",
+      "text": "Service R4 accepted 8 of 12 requests."
+    },
+    {
+      "id": "t2",
+      "text": "State stays UNKNOWN after checksum ZX-19 failed."
+    },
+    {
+      "id": "t3",
+      "text": "Do not restart RUN-5 before 17:45 UTC."
+    },
+    {
+      "id": "t4",
+      "text": "Release 2026.09.25 passed 4 of 6 tests."
+    }
+  ]
+}
