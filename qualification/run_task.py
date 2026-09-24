@@ -693,6 +693,11 @@ def main() -> int:
         help="Environment variable name to pass explicitly in minimal mode; may be repeated.",
     )
     parser.add_argument(
+        "--wall-seconds",
+        type=int,
+        help="Optional prospective wall-clock treatment override; default is task limits.wall_seconds.",
+    )
+    parser.add_argument(
         "--projected-tools-source",
         choices=["task", "candidate"],
         default="task",
@@ -732,7 +737,10 @@ def main() -> int:
             "design_block": experiment_doc.get("design_block"),
             "primary_responses": experiment_doc["primary_responses"],
         }
-    timeout = int(task["limits"]["wall_seconds"])
+    task_wall_seconds = int(task["limits"]["wall_seconds"])
+    timeout = int(args.wall_seconds) if args.wall_seconds is not None else task_wall_seconds
+    if timeout < 1:
+        parser.error("--wall-seconds must be >= 1")
 
     with tempfile.TemporaryDirectory(prefix="model-spelunker-qual-") as temp:
         workdir = Path(temp) / "work"
@@ -919,6 +927,10 @@ def main() -> int:
                 ),
             },
             "resources": observed_resources(),
+            "execution_limits": {
+                "wall_seconds": timeout,
+                "wall_seconds_source": "override" if args.wall_seconds is not None else "task",
+            },
             **({"experiment": experiment_meta} if experiment_meta is not None else {}),
             **(
                 {
