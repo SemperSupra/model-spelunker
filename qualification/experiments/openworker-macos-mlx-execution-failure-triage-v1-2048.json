@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "openworker-macos-mlx-execution-failure-triage-v1-2048",
+  "decision_question": "Does increasing only the configured actor output budget from 512 to 2048 tokens recover the corrected execution-failure-triage-v1 task after both 512-token actors terminated by finish_reason=length?",
+  "task": {
+    "id": "execution-failure-triage-v1",
+    "task_class": "execution.failure-boundary-triage"
+  },
+  "actors": [
+    "openworker-prebuilt-qwen3-4b-macos26-mlx-triage-2048",
+    "openworker-prebuilt-qwen3-4b-xcode27-mlx-triage-2048"
+  ],
+  "predecessor": {
+    "experiment_id": "openworker-macos-mlx-execution-failure-triage-v1",
+    "observed_boundary": "third model round finish_reason=length at exactly 512 output tokens; no write_file",
+    "do_not_pool": true
+  },
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-admitted-artifact",
+    "model-artifact",
+    "mlx-lm-version",
+    "execution-failure-triage-v1-task-and-verifier",
+    "list-read-write-tool-projection",
+    "memory-hygiene-control",
+    "max-iterations-4"
+  ],
+  "variable_under_test": "max_tokens:512->2048",
+  "stop_conditions": [
+    "validated-pass",
+    "validated-fail-without-truncation",
+    "artifact-integrity-failure",
+    "unexpected-authority-expansion",
+    "validator-error",
+    "environment-resource-failure"
+  ]
+}
