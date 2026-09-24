@@ -150,3 +150,14 @@ assert interval["estimate"] == 1.0
 assert 0.0 < interval["lower_95"] < 1.0
 assert interval["upper_95"] == 1.0
 print("PASS characterization censoring and uncertainty controls")
+
+
+inflight_timeout = receipt("run-inflight-timeout", False, model_rounds=0, timed_out=True, candidate_exit_code=124)
+inflight_timeout["observation"]["workload"]["model_calls_started"] = 1
+env = reduce_receipts([inflight_timeout])[0]
+assert env["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+assert env["evidence"]["validated_fail"] == 0
+assert env["evidence"]["censored"] == 1
+assert env["evidence"]["incomplete"] == 0
+assert env["evidence"]["semantic_trials"] == 0
+print("PASS in-flight timeout censoring")
