@@ -838,7 +838,9 @@ def main() -> int:
         engine_error = has_engine_error_event(stdout)
         turn_end_status = openworker_turn_end_status(stdout)
         iteration_censored = turn_end_status == "max_iterations_exceeded"
-        if validator_error:
+        if success:
+            failure_class = None
+        elif validator_error:
             failure_class = "validator-error"
         elif timed_out:
             failure_class = "timeout"
@@ -876,7 +878,11 @@ def main() -> int:
         )
         if validator_error and "validator-error" not in failure_signals:
             failure_signals.append("validator-error")
-        if iteration_censored and "iteration-limit" not in failure_signals:
+        if (
+            not success
+            and iteration_censored
+            and "iteration-limit" not in failure_signals
+        ):
             failure_signals.append("iteration-limit")
         metrics = harness_metrics(stdout)
         progress = openworker_progress_summary(stdout)
