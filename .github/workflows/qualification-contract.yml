@@ -37,6 +37,7 @@ jobs:
           from pathlib import Path
           import jsonschema
           text_task = json.loads(Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          text_task_v1 = json.loads(Path("qualification/tasks/text-repair-v1/task.json").read_text())
           discovery_task = json.loads(Path("qualification/tasks/validation-discovery-v0/task.json").read_text())
           debugging_task = json.loads(Path("qualification/tasks/boundary-bugfix-v0/task.json").read_text())
           reconciliation_task = json.loads(Path("qualification/tasks/repository-reconciliation-v0/task.json").read_text())
@@ -82,6 +83,9 @@ jobs:
               assert "secret" not in candidate, candidate_id
               assert "admission" not in candidate, candidate_id
           assert text_task["task_class"] == "software.bounded-repair"
+          assert text_task_v1["task_class"] == "software.bounded-repair"
+          assert text_task_v1["schema_version"] == 2
+          assert {row["evidence_role"] for row in text_task_v1["ksa_requirements"]} == {"composite", "supporting"}
           assert discovery_task["task_class"] == "repository.capability-discovery"
           assert debugging_task["task_class"] == "software.bounded-debugging"
           assert reconciliation_task["task_class"] == "repository.state-reconciliation"
@@ -112,6 +116,7 @@ jobs:
               jsonschema.validate(admission, harness_admission_schema)
               assert admission["admission"]["state"] == "BUILD_ADMITTED"
           jsonschema.validate(text_task, task_schema)
+          jsonschema.validate(text_task_v1, task_schema)
           jsonschema.validate(discovery_task, task_schema)
           jsonschema.validate(debugging_task, task_schema)
           jsonschema.validate(reconciliation_task, task_schema)
@@ -128,6 +133,7 @@ jobs:
 
           task_classes = {
               text_task["id"]: text_task["task_class"],
+              text_task_v1["id"]: text_task_v1["task_class"],
               discovery_task["id"]: discovery_task["task_class"],
               debugging_task["id"]: debugging_task["task_class"],
               reconciliation_task["id"]: reconciliation_task["task_class"],
@@ -148,6 +154,7 @@ jobs:
       - name: Self-test deterministic verifiers
         run: |
           python qualification/tasks/text-repair-v0/verify.py --self-test
+          python qualification/tasks/text-repair-v1/verify.py --self-test
           python qualification/tasks/validation-discovery-v0/verify.py --self-test
           python qualification/tasks/boundary-bugfix-v0/verify.py --self-test
           python qualification/tasks/repository-reconciliation-v0/verify.py --self-test
@@ -161,6 +168,40 @@ jobs:
 
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
+
+      - name: Exercise unified v2 reference contract
+        env:
+          RECEIPT_V2: ${{ runner.temp }}/qualification-v2-reference.json
+        run: |
+          set -euo pipefail
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id contract-v2-reference \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --experiment qualification/experiments/unified-reference-contract-v1.json \
+            qualification/tasks/text-repair-v1 \
+            qualification/test-candidate-v2.json \
+            "$RECEIPT_V2" \
+            -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
+          python - "$RECEIPT_V2" <<'PY'
+          import json,sys
+          from pathlib import Path
+          import jsonschema
+
+          receipt=json.loads(Path(sys.argv[1]).read_text())
+          schema=json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          jsonschema.validate(receipt,schema)
+          assert receipt["schema_version"] == 2
+          assert receipt["observation"]["success"] is True
+          assert receipt["task"]["id"] == "text-repair-v1"
+          assert len(receipt["task"]["ksa_requirements"]) == 3
+          assert receipt["candidate"]["deployment_topology"]["compute_class"] == "deterministic"
+          assert receipt["candidate"]["deployment_topology"]["transport"] == "stdio"
+          assert receipt["resources"]["platform_system"] == "Linux"
+          assert receipt["resources"]["platform_machine"]
+          assert receipt["experiment"]["id"] == "unified-reference-contract-v1"
+          print(json.dumps(receipt,sort_keys=True))
+          PY
 
       - name: Census canonical local-CPU evidence
         run: |
