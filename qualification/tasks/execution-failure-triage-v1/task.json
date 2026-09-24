@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "execution-failure-triage-v1",
+  "task_class": "execution.failure-boundary-triage",
+  "instruction": "Inspect evidence.json and write triage.json. The output must contain exactly schema_version and cases. schema_version must be 1. cases must be an object keyed by every exact case id c01 through c08. Each case value must contain exactly class, evidence_refs, and next_probe. class must be one of HARNESS_FAILURE, PROVIDER_FAILURE, ENVIRONMENT_FAILURE, AUTHORITY_REQUIRED, ACTOR_FAILURE, VALIDATOR_FAILURE, RECONCILIATION_FAILURE, INCONCLUSIVE. evidence_refs must be a non-empty sorted array of RFC 6901 JSON pointers into evidence.json, written as evidence.json#<pointer>. next_probe must be one of FIX_HARNESS_AND_RETRY, ADJUST_RESOURCE_AND_RETRY, REQUEST_NARROW_AUTHORITY, DEFER_OR_RETRY_PROVIDER, PRESERVE_AND_TRY_DISTINCT_ACTOR, REPAIR_VALIDATOR_NEW_TASK_VERSION, RECONCILE_STALE_STATE, COLLECT_BOUNDARY_EVIDENCE. Classify the boundary supported by the observable evidence only. Do not treat workflow/job status alone as the verdict. Do not turn provider/engine failures, validator defects, environment/resource exhaustion, or missing authority into actor failure. Preserve INCONCLUSIVE when evidence does not localize causality. Do not modify fixture files.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-hidden-failure-boundary-triage"
+  },
+  "allowed_write_paths": [
+    "triage.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "hidden-failure-boundary-ground-truth"
+  }
+}
