@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "kind": "independent-scientific-reconciliation",
+  "specimen": "siglip2-2502.14786v1-b16-256-core",
+  "task_id": "method-ir-siglip2-b16-256-v3",
+  "candidate": {
+    "kind": "deterministically-canonicalized-actor-c1",
+    "sha256": "4e016bfbf9a23adb8a5bb7369e0183ad2c55286c3d2b14749c3dda5151809d6c",
+    "source_actor_run_id": "20260924T204642Z-785b81a2",
+    "source_actions_run_id": 36057034170,
+    "structural_verifier_run_id": 36057727710,
+    "structural_verifier_result": "PASS"
+  },
+  "qualification_separation": {
+    "raw_actor_c1_disposition": "VALID_TASK_ENVELOPE_NEGATIVE",
+    "derivative_changes_actor_qualification": false,
+    "note": "The accepted project derivative is a deterministic post-processing artifact. The original configured actor failed the exact task because it emitted unsorted evidence-ref arrays."
+  },
+  "actor_visible_sources": [
+    {
+      "ref": "arXiv:2502.14786v1-source",
+      "sha256": "4f523801d9c71bc8bc676cd940d825f539dbf91fe797d571ed4196112c88de85",
+      "bytes": 172083
+    },
+    {
+      "ref": "google-research/big_vision@0127fb6b337ee2a27bf4e54dea79cff176527356:big_vision/configs/proj/image_text/README_siglip2.md",
+      "git_blob": "1c1af0a38209b7cbeb87c34c420c3c4455bdaa48",
+      "sha256": "3c1862c16c6c75a97278fe9556482618db1d0419997eaefd4006ec9149994eef",
+      "bytes": 7763
+    }
+  ],
+  "held_out_post_c1_sources": [
+    {
+      "path": "big_vision/configs/proj/image_text/common.py",
+      "revision": "0127fb6b337ee2a27bf4e54dea79cff176527356",
+      "git_blob": "96e5235c557a19aaf8500f03759c0655ea28956d",
+      "relevant_observations": [
+        "ImageNet override uses CLIP class names and validation split.",
+        "discriminative-classifier config uses square resize/central-crop preprocessing helper.",
+        "COCO retrieval config uses coco_captions and the image-text retrieval evaluator."
+      ]
+    },
+    {
+      "path": "big_vision/evaluators/proj/image_text/discriminative_classifier.py",
+      "revision": "0127fb6b337ee2a27bf4e54dea79cff176527356",
+      "git_blob": "e233564404c17ef9e8d898d13a57a96148f6c9ae",
+      "relevant_observations": [
+        "Default ImageNet evaluation uses validation split and CLIP class names.",
+        "Default prompt template family is clip_paper.",
+        "Text embeddings are averaged per class before top-1 classification."
+      ]
+    },
+    {
+      "path": "big_vision/evaluators/proj/image_text/prompt_engineering.py",
+      "revision": "0127fb6b337ee2a27bf4e54dea79cff176527356",
+      "git_blob": "52450f6a7640d9865dbf19e11945281c9464657d",
+      "relevant_observations": [
+        "Provides CLIP ImageNet class names.",
+        "Provides class_name_only, clip_paper, and clip_best prompt families.",
+        "Canonicalization lowercases text and removes punctuation."
+      ]
+    },
+    {
+      "path": "big_vision/evaluators/proj/image_text/retrieval.py",
+      "revision": "0127fb6b337ee2a27bf4e54dea79cff176527356",
+      "git_blob": "daf43927f3273dca1232567578614aa6f783f613",
+      "relevant_observations": [
+        "Retrieval evaluator has a test split default.",
+        "Computes image and text embeddings, dot-product similarities, then both image-to-text and text-to-image retrieval metrics."
+      ]
+    }
+  ],
+  "field_reconciliation": {
+    "claim_comparison": {
+      "disposition": "CONFIRMED",
+      "note": "All six headline values match the pinned publication-visible sources: SigLIP 76.7/47.4/65.1 and SigLIP2 79.1/53.2/69.7."
+    },
+    "checkpoint_identity": {
+      "disposition": "CONFIRMED",
+      "note": "Pinned README exposes SigLIP2 B/16 256 checkpoint identity and matching headline values."
+    },
+    "architecture_resolution": {
+      "disposition": "CONFIRMED",
+      "note": "Publication-visible material supports fixed B/16 at 256 and sequence-length/patch-size characterization."
+    },
+    "text_tokenizer_normalization": {
+      "disposition": "CONFIRMED",
+      "note": "Publication-visible material supports text length 64, multilingual Gemma tokenizer, 256k vocabulary, and lowercasing."
+    },
+    "image_preprocessing": {
+      "disposition": "ACCEPT_AMBIGUOUS",
+      "note": "Held-out code exposes concrete preprocessing helpers, but the actor-visible publication packet does not uniquely bind the exact evaluation-time pipeline for the reported table row. The candidate correctly avoided upgrading an implementation default into a publication claim."
+    },
+    "imagenet1k_evaluation": {
+      "disposition": "ACCEPT_AMBIGUOUS",
+      "note": "Held-out code supports validation split, CLIP class names, and a clip_paper prompt default, but the publication-visible packet does not uniquely establish the exact prompt configuration used for the reported row. Ambiguity is correctly preserved."
+    },
+    "coco_retrieval_evaluation": {
+      "disposition": "ACCEPT_AMBIGUOUS",
+      "note": "Held-out code identifies coco_captions and retrieval machinery, but the publication-visible packet does not uniquely bind the exact reported-table split/configuration. Ambiguity is correctly preserved."
+    },
+    "metric_definitions": {
+      "disposition": "CONFIRMED",
+      "note": "ImageNet zero-shot accuracy and COCO text-to-image/image-to-text recall@1 are source-bound."
+    },
+    "software_runtime": {
+      "disposition": "ACCEPT_AMBIGUOUS",
+      "note": "Pinned implementation is JAX/TFDS-based, but publication-visible sources do not pin the evaluation-time software versions/runtime sufficiently for exact reproduction."
+    },
+    "randomness_repetition": {
+      "disposition": "ACCEPT_MISSING",
+      "note": "No seed/repetition/variance protocol was found in the frozen publication-visible sources. MISSING is preferable to inference."
+    },
+    "execution_readiness": {
+      "disposition": "CONFIRMED_PARTIAL",
+      "note": "The published numeric comparison is recoverable, but exact reproduction remains blocked by protocol/runtime details not uniquely specified in the publication-visible packet."
+    }
+  },
+  "overall_disposition": "PASS_WITH_PRESERVED_GAPS",
+  "accepted_use": "Source-bound Method-IR for the bounded published B/16-256 comparison and planning the next replication step.",
+  "not_claimed": [
+    "full exact replication readiness",
+    "that held-out implementation defaults were explicitly specified by the paper",
+    "that deterministic post-processing changes the original actor qualification result"
+  ],
+  "next_project_action": "Use the accepted partial Method-IR to define the next implementation/source-reveal step under issue #12/#72, explicitly importing held-out implementation details only as post-C1 reconciliation evidence."
+}
