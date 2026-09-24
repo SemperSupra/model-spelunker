@@ -152,7 +152,6 @@ def self_test() -> int:
     evidence_text = source_fixture.read_text(encoding="utf-8")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        (root / "fixture").mkdir(parents=True)
         (root / "evidence.json").write_text(evidence_text, encoding="utf-8")
 
         (root / "classification.json").write_text(
