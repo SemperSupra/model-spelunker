@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "source_locale": "en-US",
+  "target_locale": "de-DE",
+  "required_glossary": {
+    "node_singular": "Knoten",
+    "records_plural": "Datensätzen",
+    "status_noun": "Status",
+    "checksum_noun": "Prüfsumme",
+    "retry_phrase": "erneut versuchen",
+    "checks_plural": "Prüfungen",
+    "processed_participle": "verarbeitet",
+    "completed_participle": "abgeschlossen"
+  },
+  "protected_tokens": [
+    "AX7",
+    "UNKNOWN",
+    "QZ-42",
+    "JOB-7",
+    "08:30 UTC",
+    "Build",
+    "2026.09.24",
+    "14",
+    "21",
+    "3",
+    "5"
+  ],
+  "segments": [
+    {
+      "id": "s1",
+      "text": "Node AX7 processed 14 of 21 records."
+    },
+    {
+      "id": "s2",
+      "text": "Status remains UNKNOWN because checksum QZ-42 did not match."
+    },
+    {
+      "id": "s3",
+      "text": "Do not retry JOB-7 before 08:30 UTC."
+    },
+    {
+      "id": "s4",
+      "text": "Build 2026.09.24 completed 3 of 5 checks."
+    }
+  ]
+}
