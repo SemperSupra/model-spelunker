@@ -446,6 +446,25 @@ def openworker_progress_summary(stdout: str) -> dict[str, object]:
     return summary
 
 
+def openworker_turn_end_status(stdout: str) -> str | None:
+    """Return the final OpenWorker TURN_END status, when emitted."""
+    status: str | None = None
+    prefix = "OPENWORKER_EVENT="
+    for line in stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, dict) or value.get("type") != "EventType.TURN_END":
+            continue
+        observed = value.get("status")
+        if isinstance(observed, str) and observed:
+            status = observed
+    return status
+
+
 def provider_observations(stdout: str) -> list[dict[str, object]]:
     raw = last_marker(stdout, "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=")
     if not raw:
@@ -817,6 +836,8 @@ def main() -> int:
         if not provider_rounds and (candidate.get("harness") or {}).get("name") == "goose":
             provider_rounds = goose_stream_provider_observations(stdout)
         engine_error = has_engine_error_event(stdout)
+        turn_end_status = openworker_turn_end_status(stdout)
+        iteration_censored = turn_end_status == "max_iterations_exceeded"
         if validator_error:
             failure_class = "validator-error"
         elif timed_out:
@@ -825,6 +846,8 @@ def main() -> int:
             failure_class = "candidate-error"
         elif verifier.returncode != 0 and engine_error:
             failure_class = "candidate-error-event"
+        elif iteration_censored:
+            failure_class = "iteration-limit"
         elif verifier.returncode != 0:
             failure_class = "false-completion"
         else:
@@ -838,6 +861,8 @@ def main() -> int:
             termination_class = "timeout-censored"
         elif candidate_exit != 0 or engine_error:
             termination_class = "execution-error"
+        elif iteration_censored:
+            termination_class = "iteration-censored"
         else:
             termination_class = "semantic-failure"
 
@@ -851,6 +876,8 @@ def main() -> int:
         )
         if validator_error and "validator-error" not in failure_signals:
             failure_signals.append("validator-error")
+        if iteration_censored and "iteration-limit" not in failure_signals:
+            failure_signals.append("iteration-limit")
         metrics = harness_metrics(stdout)
         progress = openworker_progress_summary(stdout)
         if metrics["tool_calls"] is None and int(progress.get("tool_calls_completed", 0)) > 0:
