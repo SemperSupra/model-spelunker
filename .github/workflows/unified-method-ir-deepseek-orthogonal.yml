@@ -4,7 +4,7 @@ name: Unified Method-IR DeepSeek Output Boundary
 on:
   push:
     branches:
-      - exp/unified-method-ir-deepseek-output4096
+      - exp/unified-method-ir-deepseek-orthogonal
   workflow_dispatch:
 
 permissions:
@@ -67,7 +67,8 @@ jobs:
           assert actor["configuration"]["max_iterations"] == 8
           assert exp["experimental_role"] == "boundary"
           assert exp["task"]["id"] == task["id"]
-          assert actor["id"] in exp["actors"]\n          assert exp["variable_under_test"] == "max_tokens:2048->4096"
+          assert actor["id"] in exp["actors"]
+          assert exp["variable_under_test"] == "max_tokens:2048->4096"
           print("PASS frozen DeepSeek output4096 actor/task/experiment contracts")
           PY
 
