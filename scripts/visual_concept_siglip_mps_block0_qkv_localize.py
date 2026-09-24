@@ -72,11 +72,11 @@ def first_layer_prefix(model: torch.nn.Module, tower: str) -> str:
     return matches[0]
 
 
-def patch_block0_qkv(model: torch.nn.Module, prefixes: dict[str, str]) -> list[str]:
+def patch_block0_attention_linears(model: torch.nn.Module, prefixes: dict[str, str]) -> list[str]:
     modules = dict(model.named_modules())
     patched: list[str] = []
     for tower, prefix in prefixes.items():
-        for kind in ("q_proj", "k_proj", "v_proj"):
+        for kind in ("q_proj", "k_proj", "v_proj", "out_proj"):
             name = prefix + ".self_attn." + kind
             module = modules.get(name)
             if not isinstance(module, torch.nn.Linear):
@@ -107,7 +107,7 @@ def interesting(name: str, module: torch.nn.Module, prefix: str) -> bool:
 def run(model_id:str, revision:str|None, inputs_cpu:dict[str,Any], device:str, expected_names:dict[str,list[str]]|None=None, patch_qkv:bool=False)->dict[str,Any]:
     model=AutoModelForZeroShotImageClassification.from_pretrained(model_id,revision=revision)
     prefixes={tower:first_layer_prefix(model,tower) for tower in ("vision","text")}
-    patched_names=patch_block0_qkv(model,prefixes) if patch_qkv else []
+    patched_names=patch_block0_attention_linears(model,prefixes) if patch_qkv else []
 
     modules=dict(model.named_modules())
     selected={}
@@ -248,7 +248,7 @@ def main()->int:
 
     cpu_logits=cpu["logits"][0];mps_logits=mps["logits"][0]
     receipt={
-        "schema":"visual-concept-siglip-mps-block0-qkv-localize/v1",
+        "schema":"visual-concept-siglip-mps-block0-attn-linears-localize/v1",
         "model":{"family":cfg["backend_family"],"id":cfg["model_id"],"revision":cfg.get("model_revision")},
         "fixture":{"image_sha256":sha256_bytes(raw),"labels":labels},
         "runtime":{
@@ -258,7 +258,7 @@ def main()->int:
         },
         "placement":{"cpu":cpu["placement"],"patched_mps":mps["placement"]},
         "treatment":{
-            "name":"siglip-block0-qkv-mps-matmul-bias-v0",
+            "name":"siglip-block0-qkvo-mps-matmul-bias-v0",
             "patched_modules":mps["patched_names"],
             "patched_linear_count":len(mps["patched_names"]),
             "all_other_linears_native":True,
