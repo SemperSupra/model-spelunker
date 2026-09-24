@@ -1,0 +1,45 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:ca163c57bef3f8f0036352e61181c0641e1137849cfcce3c0f74ad8e4d6692a6",
+    "deployment_topology": {"compute_class":"provider-opaque","data_boundary":"external-provider","harness_placement":"local-process","runtime_placement":"hosted-service","transport":"provider-api"},
+    "harness": {"admission_ref":null,"artifact_ref":null,"name":"openworker","version":"5bc10d928e0b64aae74313349a3b17bd19643ae2"},
+    "model": {"artifact_ref":null,"foundry_ref":null,"id":"deepseek-flash","provider":"deepseek","realization":"hosted-service"},
+    "toolset": ["list_files","search_files","read_file_lines","write_file"]
+  },
+  "evidence_digest": "sha256:61176abb9302e5eb8d7ce4e6d0bf48527f21bcd4b597ab1da69b88135f306f23",
+  "execution_limits": {"wall_seconds":360,"wall_seconds_source":"override"},
+  "experiment": {
+    "claim_type":"feasibility",
+    "design_block":"method-ir-v2-orthogonal-actor-screen-2026-09",
+    "digest":"sha256:4befccd7b7439fe5980c1e32aa76c5a09f3594cf9d3c81f6e80af27155596df1",
+    "experimental_role":"screening",
+    "id":"openworker-deepseek-flash-method-ir-v2-orthogonal-screen",
+    "primary_responses":["semantic-verifier-result","termination-class","state-changed","model-calls-started","model-calls-completed","tool-calls-completed","request-message-bytes-by-call","provider-native-usage","wall-seconds","source-bound-output-snapshot"]
+  },
+  "observation": {
+    "cache_read_tokens":117504,"cache_write_tokens":0,"candidate_exit_code":0,"cost":null,"engine_error_types":[],
+    "failure_class":"iteration-limit","failure_signals":["false-completion","state-unchanged","iteration-limit"],
+    "human_interventions":0,"input_tokens":37812,"mobile_action_count":0,"mobile_actions":[],"output_tokens":3690,
+    "state_changed":false,"success":false,"termination_class":"iteration-censored","timed_out":false,"tool_calls":21,
+    "verifier_exit_code":1,"wall_seconds":21.206511,
+    "workload":{
+      "client_wall_seconds_total":20.153196,
+      "completed_tool_names":["list_files","read_file_lines","read_file_lines","read_file_lines","search_files","search_files","search_files","search_files","search_files","search_files","read_file_lines","read_file_lines","search_files","search_files","search_files","search_files","search_files","search_files","read_file_lines","read_file_lines","write_file"],
+      "completed_tool_statuses":["ok","ok","ok","ok","error","error","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","error"],
+      "first_event_seconds_first":0.9551,"first_event_seconds_max":1.667624,"first_event_seconds_min":0.497402,
+      "model_calls_completed":8,"model_calls_started":8,"model_rounds":8,"output_text_bytes_total":5242.0,"reasoning_bytes_total":0.0,
+      "request_message_bytes_total":550153.0,"request_tool_schema_bytes_total":12200.0,"started_request_message_bytes_total":550153.0,
+      "started_request_tool_schema_bytes_total":12200.0,"tool_argument_bytes_total":4916.0,"tool_calls_completed":21,"tool_calls_started":20
+    }
+  },
+  "resources":{"cpu_model":"AMD EPYC 7763 64-Core Processor","cpu_quota_cores":null,"cpuset_cpus_effective":"0-3","logical_cpus_visible":4,"memory_total_bytes":16770748416,"platform_machine":"x86_64","platform_system":"Linux"},
+  "run_id":"20260924T201734Z-9d1110ca","schema_version":2,
+  "substrate":{"profile_commit":"57a9f5e9e47bf846cb3b57af455f92f73a030b24","profile_id":"gha-linux-x64-openworker-hosted-api"},
+  "task":{"id":"method-ir-siglip2-b16-256-v2","ksa_requirements":[
+    {"evidence_role":"composite","family":"skills","name":"source_bound_research_synthesis"},
+    {"evidence_role":"composite","family":"skills","name":"evidence_span_binding"},
+    {"evidence_role":"composite","family":"abilities","name":"ambiguity_preservation"},
+    {"evidence_role":"supporting","family":"abilities","name":"unknown_preservation"}],
+    "package_digest":"sha256:87a5e05709ac3631b8029d3de8aa79dc9b0421c3e4c071435350ad6ee259a147",
+    "source_commit":"57a9f5e9e47bf846cb3b57af455f92f73a030b24","task_class":"research.method-evidence-binding"}
+}
