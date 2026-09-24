@@ -15,6 +15,14 @@ from visual_adjudication import AdjudicationStore
 from visual_concept_worker_core import canonical_digest
 
 
+
+def sha256_path(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def snapshot_immutable_inputs(*paths: Path) -> dict[str, str]:
+    return {str(path): sha256_path(path) for path in paths}
+
 def write_json(path: Path, value) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -120,6 +128,15 @@ def main() -> int:
     with TemporaryDirectory(prefix="visual-gate14-") as tmp:
         root = Path(tmp)
         benchmark, images, session, ledger, queue = build_fixture(root)
+        immutable_before = snapshot_immutable_inputs(
+            benchmark,
+            session,
+            ledger,
+            queue,
+            images / "a.jpg",
+            images / "b.jpg",
+        )
+
         store = AdjudicationStore(
             blind_session=session,
             blind_ledger=ledger,
@@ -207,6 +224,22 @@ def main() -> int:
             assert len(final_state["events"]) == 2
             assert [e["operation"] for e in final_state["events"]] == ["source_identity_revealed", "adjudicate"]
 
+            immutable_after = snapshot_immutable_inputs(
+                benchmark,
+                session,
+                ledger,
+                queue,
+                images / "a.jpg",
+                images / "b.jpg",
+            )
+            assert immutable_after == immutable_before
+            adjudication_files = sorted(
+                str(path.relative_to(root / "adjudication"))
+                for path in (root / "adjudication").rglob("*")
+                if path.is_file()
+            )
+            assert adjudication_files == ["adjudication-events.jsonl"]
+
             print(json.dumps({
                 "schema_version": "visual_gate14_adjudication_ui.v0.1",
                 "status": "pass",
@@ -215,6 +248,8 @@ def main() -> int:
                 "source_identity_default": "pseudonymous",
                 "gold_promotion_available": False,
                 "private_content_present": False,
+                "immutable_inputs_preserved": True,
+                "adjudication_output_files": adjudication_files,
             }, sort_keys=True))
         finally:
             server.shutdown()
