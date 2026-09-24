@@ -232,20 +232,40 @@ def detect_failure_signals(
     return signals
 
 
+def _signal_candidate_group_or_process(
+    proc: subprocess.Popen[str], sig: signal.Signals
+) -> bool:
+    """Best-effort signal without letting cleanup errors erase run evidence.
+
+    POSIX process-group signaling is preferred because candidates may spawn
+    descendants. Some hosted macOS process groups can reject killpg even though
+    the runner still owns and can signal the candidate process itself. Fall back
+    to the direct process signal so timeout evidence can still be captured.
+    """
+    if os.name == "posix":
+        try:
+            os.killpg(proc.pid, sig)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            pass
+    if proc.poll() is not None:
+        return False
+    try:
+        proc.send_signal(sig)
+        return True
+    except ProcessLookupError:
+        return False
+
+
 def _terminate_candidate_group(proc: subprocess.Popen[str]) -> None:
-    if os.name != "posix":
-        if proc.poll() is None:
-            proc.terminate()
+    if proc.poll() is not None:
         return
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
+    _signal_candidate_group_or_process(proc, signal.SIGTERM)
     time.sleep(0.05)
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    if proc.poll() is None:
+        _signal_candidate_group_or_process(proc, signal.SIGKILL)
 
 
 def run_candidate_process(
