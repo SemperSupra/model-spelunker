@@ -1,22 +1,17 @@
 name: OpenWorker Hosted API Qualification
 
 on:
-  workflow_dispatch:
-    inputs:
-      candidate:
-        description: Candidate id from qualification/models/hosted-api.json
-        required: true
-        default: groq-gpt-oss-20b
-      task:
-        description: Task id from qualification/tasks
-        required: true
-        default: text-repair-v0
+  push:
+    branches:
+      - exp/gemini-native-provider-crossover
+    paths:
+      - ".github/workflows/openworker-hosted-api-qualification.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: openworker-hosted-api-${{ github.ref }}-${{ inputs.candidate }}
+  group: openworker-hosted-api-${{ github.ref }}-gemini-native-3.7-flash
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +22,7 @@ jobs:
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
-      QUALIFICATION_TASK: ${{ inputs.task }}
+      QUALIFICATION_TASK: 'validation-discovery-v0'
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
@@ -46,7 +41,7 @@ jobs:
         id: treatment
         shell: bash
         env:
-          REQUESTED_CANDIDATE: ${{ inputs.candidate }}
+          REQUESTED_CANDIDATE: gemini-native-3.7-flash
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -125,6 +120,17 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-GROQ_API_KEY'; exit 78; }
+          umask 077
+          printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
+
+      - name: Stage native Gemini credential
+        if: steps.treatment.outputs.provider == 'gemini'
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-GOOGLE_API_KEY'; exit 78; }
           umask 077
           printf '%s' "$SELECTED_API_KEY" > "$HOSTED_KEY_FILE"
 
@@ -221,6 +227,24 @@ jobs:
                   raise SystemExit(f"{provider} model is not active for this key: {model}; visible={sample}")
               evidence={"authenticated":True,"model_active":True}
 
+          elif provider=="gemini":
+              request=urllib.request.Request(
+                  base+"/models",
+                  headers={"Accept":"application/json","x-goog-api-key":key,"User-Agent":"Model-Spelunker/1.0 (+https://github.com/SemperSupra/model-spelunker)"},
+                  method="GET",
+              )
+              try:
+                  with urllib.request.urlopen(request,timeout=20) as response:
+                      data=json.load(response)
+              except urllib.error.HTTPError as exc:
+                  body=exc.read(512).decode("utf-8",errors="replace")
+                  raise SystemExit(f"gemini admission failed: HTTP {exc.code}: {body}") from exc
+              names={str(row.get("name") or "").removeprefix("models/") for row in data.get("models",[]) if isinstance(row,dict)}
+              if model not in names:
+                  sample=sorted(item for item in names if item)[:20]
+                  raise SystemExit(f"gemini model is not active for this key: {model}; visible={sample}")
+              evidence={"authenticated":True,"model_active":True,"native_provider":True}
+
           elif provider=="openrouter":
               data,_=get(base+"/key")
               info=data.get("data") or {}
@@ -296,14 +320,19 @@ jobs:
             deepseek) export DEEPSEEK_API_KEY="$provider_key" ;;
             groq) export GROQ_API_KEY="$provider_key" ;;
             google) export GOOGLE_API_KEY="$provider_key" ;;
+            gemini) export GEMINI_API_KEY="$provider_key" ;;
             nvidia) export NVIDIA_API_KEY="$provider_key" ;;
             openrouter) export OPENROUTER_API_KEY="$provider_key" ;;
             *) echo "unsupported provider: $HOSTED_PROVIDER" >&2; exit 2 ;;
           esac
           unset provider_key
-          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY OLLAMA_API_KEY; do
+          for key in OPENAI_API_KEY ANTHROPIC_API_KEY OLLAMA_API_KEY; do
             unset "$key" || true
           done
+          case "$HOSTED_PROVIDER" in
+            gemini) ;;
+            *) unset GEMINI_API_KEY || true ;;
+          esac
           case "$HOSTED_PROVIDER" in
             google) ;;
             *) unset GOOGLE_API_KEY || true ;;
@@ -350,7 +379,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: hosted-qualification-${{ inputs.candidate }}-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
+          name: hosted-qualification-gemini-native-3.7-flash-${{ env.QUALIFICATION_TASK }}-${{ github.run_id }}
           path: ${{ env.RECEIPT }}
           if-no-files-found: ignore
           retention-days: 30
