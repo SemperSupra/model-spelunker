@@ -374,6 +374,13 @@ async def run(instruction: str) -> int:
         "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1"),
         "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
         "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
+        "mlx": (
+            "MODEL_SPELUNKER_MLX_API_KEY",
+            os.environ.get(
+                "MODEL_SPELUNKER_MLX_BASE_URL",
+                "http://127.0.0.1:8080/v1",
+            ),
+        ),
     }
     if _PROVIDER in compatible:
         from coworker.providers.openai_provider import OpenAIProvider
@@ -524,6 +531,7 @@ def main() -> int:
         "google": "GOOGLE_API_KEY",
         "nvidia": "NVIDIA_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
+        "mlx": "MODEL_SPELUNKER_MLX_API_KEY",
     }.get(provider)
     known_keys = (
         "OPENAI_API_KEY",
@@ -535,6 +543,7 @@ def main() -> int:
         "GROQ_API_KEY",
         "NVIDIA_API_KEY",
         "OPENROUTER_API_KEY",
+        "MODEL_SPELUNKER_MLX_API_KEY",
     )
     present = [name for name in known_keys if os.environ.get(name)]
     disallowed = [name for name in present if name != provider_key]
