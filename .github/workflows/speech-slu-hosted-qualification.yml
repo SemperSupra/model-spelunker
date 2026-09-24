@@ -1,6 +1,16 @@
 name: Speech SLU Hosted Qualification
 
 on:
+  push:
+    branches:
+      - exp/speech-slu-qualification
+    paths:
+      - ".github/workflows/speech-slu-hosted-qualification.yml"
+      - "qualification/prepare_speech_slu.py"
+      - "qualification/adapters/openworker_projected.py"
+      - "qualification/run_task.py"
+      - "qualification/tasks/speech-slu-jfk-v0/**"
+      - "qualification/tasks/speech-slu-counterfactual-v0/**"
   workflow_dispatch:
 
 permissions:
