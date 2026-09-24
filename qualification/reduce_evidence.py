@@ -69,16 +69,17 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
         and workload.get("model_rounds") == 0
     )
     started_calls = workload.get("model_calls_started")
-    timeout_observed = (
-        termination == "timeout-censored"
+    censor_observed = (
+        termination in {"timeout-censored", "iteration-censored"}
         or obs.get("timed_out")
         or "timeout" in signals
+        or "iteration-limit" in signals
     )
-    if timeout_observed and isinstance(started_calls, int) and started_calls > 0:
+    if censor_observed and isinstance(started_calls, int) and started_calls > 0:
         return "censored"
     if no_completed_rounds:
         return "incomplete"
-    if timeout_observed:
+    if censor_observed:
         return "censored"
     engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
     validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
