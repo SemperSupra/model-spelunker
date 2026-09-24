@@ -1,15 +1,6 @@
 name: Android Embodied Hosted Qualification
 
 on:
-  push:
-    branches:
-      - exp/android-embodied-qualification
-    paths:
-      - 'qualification/run_android_embodied.py'
-      - 'qualification/adapters/android_reference_actor.py'
-      - 'qualification/test_android_embodied.py'
-      - 'qualification/tasks/android-settings-24h-hybrid-de-DE-v0/**'
-      - '.github/workflows/android-embodied-hosted-qualification.yml'
   workflow_dispatch:
 
 permissions:
