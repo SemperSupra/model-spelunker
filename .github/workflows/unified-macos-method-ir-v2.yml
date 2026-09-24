@@ -1,0 +1,244 @@
+name: Unified macOS MLX Method-IR v2 Operational
+
+on:
+  push:
+    branches:
+      - exp/unified-macos-method-ir-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  method-ir-operational:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-operational-v2]')
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      HARNESS_ARTIFACT_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236'
+      HARNESS_BUILD_RECEIPT_SHA256: '054c5dcca5a619e18c725858f476e60ab399af110907738495cd9fdf7f95b7f9'
+      CRANE_VERSION: 'v0.22.1'
+      CRANE_DARWIN_ARM64_SHA256: '2231fc8df8806d20d680ff1225db44e095a55dd6ac1ae8eced4faf4b278b78fb'
+      MLX_LM_VERSION: '0.31.3'
+      MODEL_REPO: 'mlx-community/Qwen3-4B-Instruct-2507-4bit'
+      MODEL_REVISION: '50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b'
+      MODEL_SAFETENSORS_SHA256: '2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f'
+      MODEL_SAFETENSORS_BYTES: '2263022417'
+      MLX_PORT: '8080'
+      TASK_ID: 'method-ir-siglip2-b16-256-v2'
+      ACTOR_ID: 'openworker-qwen3-4b-macos26-mlx-method-ir-v2'
+      EXPERIMENT_ID: 'openworker-macos26-mlx-method-ir-v2-operational'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Prepare frozen Method-IR sources and contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          task="qualification/tasks/$TASK_ID"
+          python3 "$task/prepare_fixture.py"
+          python3 "$task/verify.py" --self-test
+          test -s "$task/fixture/prepared_sources.json"
+          test -s "$task/fixture/sources/document.tex"
+          test -s "$task/fixture/sources/tables/zeroshot_main.tex"
+          test -s "$task/fixture/sources/README_siglip2.md"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          task=json.loads((Path("qualification/tasks")/os.environ["TASK_ID"]/"task.json").read_text())
+          actor=json.loads((Path("qualification/actors")/(os.environ["ACTOR_ID"]+".json")).read_text())
+          exp=json.loads((Path("qualification/experiments")/(os.environ["EXPERIMENT_ID"]+".json")).read_text())
+          assert task["schema_version"] == 2
+          assert task["id"] == os.environ["TASK_ID"]
+          assert actor["schema_version"] == 2
+          assert actor["deployment_topology"]["compute_class"] == "gpu"
+          assert actor["configuration"]["max_tokens"] == 2048
+          assert actor["configuration"]["max_iterations"] == 4
+          assert exp["schema_version"] == 2
+          assert exp["task"]["id"] == task["id"]
+          assert exp["actors"] == [actor["id"]]
+          print("PASS frozen v2 Method-IR actor/task/experiment contracts")
+          PY
+
+      - name: Hydrate admitted OpenWorker artifact without Docker
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/crane-bin"
+          mkdir -p "$bin"
+          crane_archive="$RUNNER_TEMP/go-containerregistry_Darwin_arm64.tar.gz"
+          curl --fail --location --silent --show-error --retry 3             "https://github.com/google/go-containerregistry/releases/download/$CRANE_VERSION/go-containerregistry_Darwin_arm64.tar.gz"             --output "$crane_archive"
+          echo "$CRANE_DARWIN_ARM64_SHA256  $crane_archive" | shasum -a 256 -c -
+          tar -xzf "$crane_archive" -C "$bin" crane
+          "$bin/crane" auth login ghcr.io -u "$GITHUB_ACTOR" -p "$GHCR_TOKEN"
+
+          tarball="$RUNNER_TEMP/openworker-macos-arm64.tar"
+          root="$RUNNER_TEMP/openworker-macos-root"
+          mkdir -p "$root"
+          "$bin/crane" export "$HARNESS_ARTIFACT_REF" "$tarball"
+          tar -xf "$tarball" -C "$root"
+
+          artifact="$root/artifact"
+          test -s "$artifact/build-receipt.json"
+          actual_receipt="$(shasum -a 256 "$artifact/build-receipt.json" | awk '{print $1}')"
+          test "$actual_receipt" = "$HARNESS_BUILD_RECEIPT_SHA256"
+
+          ARTIFACT="$artifact" python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ["ARTIFACT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+          assert receipt["source"]["revision"]==os.environ["OPENWORKER_SHA"]
+          for row in receipt["payload"]["files"]:
+              path=root/"wheelhouse"/row["path"]
+              data=path.read_bytes()
+              assert len(data)==row["bytes"], path
+              assert hashlib.sha256(data).hexdigest()==row["sha256"], path
+          print("PASS admitted OpenWorker payload")
+          PY
+
+          venv="$RUNNER_TEMP/openworker-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$artifact/wheelhouse"/*.whl
+          "$venv/bin/python" -c 'import coworker; import coworker.engine'
+          echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
+
+      - name: Prepare pinned MLX model and server
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/mlx-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-cache-dir "mlx-lm==$MLX_LM_VERSION"
+
+          resolve="$RUNNER_TEMP/resolve_model.py"
+          cat >"$resolve" <<'PY'
+          from huggingface_hub import snapshot_download
+          import os
+          print(snapshot_download(repo_id=os.environ["MODEL_REPO"], revision=os.environ["MODEL_REVISION"]))
+          PY
+          snapshot="$("$venv/bin/python" "$resolve" | tail -1)"
+          test -d "$snapshot"
+          model="$snapshot/model.safetensors"
+          test -e "$model"
+          MODEL_FILE="$model" "$venv/bin/python" - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          path=Path(os.environ["MODEL_FILE"]).resolve()
+          h=hashlib.sha256()
+          with path.open("rb") as stream:
+              for chunk in iter(lambda: stream.read(1024*1024), b""):
+                  h.update(chunk)
+          assert path.stat().st_size==int(os.environ["MODEL_SAFETENSORS_BYTES"])
+          assert h.hexdigest()==os.environ["MODEL_SAFETENSORS_SHA256"]
+          print("PASS pinned model artifact", path.stat().st_size, h.hexdigest())
+          PY
+
+          "$venv/bin/python" - <<'PY'
+          import mlx.core as mx
+          mx.set_default_device(mx.gpu)
+          assert "gpu" in str(mx.default_device()).lower()
+          x=mx.array([1.0,2.0,3.0]); y=x+1; mx.eval(y)
+          assert y.tolist()==[2.0,3.0,4.0]
+          print("PASS MLX GPU preflight", mx.default_device())
+          PY
+
+          log="$RUNNER_TEMP/mlx-server.log"
+          nohup "$venv/bin/python" -m mlx_lm.server --model "$snapshot" --port "$MLX_PORT" >"$log" 2>&1 &
+          echo "MLX_SERVER_PID=$!" >> "$GITHUB_ENV"
+          echo "MLX_SERVER_LOG=$log" >> "$GITHUB_ENV"
+
+          ready=0
+          for _ in $(seq 1 180); do
+            if curl --fail --silent "http://127.0.0.1:$MLX_PORT/v1/models" >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 1
+
+          echo "MODEL_SPELUNKER_MODEL=mlx:$snapshot" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MLX_API_KEY=not-needed" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MLX_BASE_URL=http://127.0.0.1:$MLX_PORT/v1" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_REASONING_EFFORT=omit" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MAX_TOKENS=2048" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MAX_ITERATIONS=4" >> "$GITHUB_ENV"
+
+      - name: Run real SigLIP2 Method-IR v2 work sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/openworker-macos-method-ir-v2"
+          mkdir -p "$out"
+          receipt="$out/receipt.json"
+          diagnostics="$out/diagnostics.json"
+          snapshot="$out/output-snapshot"
+          actor="qualification/actors/$ACTOR_ID.json"
+          experiment="qualification/experiments/$EXPERIMENT_ID.json"
+
+          set +e
+          python3 qualification/run_task.py             --task-commit "$GITHUB_SHA"             --substrate-profile-id gha-macos26-arm64-mlx-openworker             --substrate-profile-commit "$GITHUB_SHA"             --experiment "$experiment"             --diagnostics "$diagnostics"             --snapshot-dir "$snapshot"             --candidate-env-mode minimal             --pass-env MODEL_SPELUNKER_MODEL             --pass-env MODEL_SPELUNKER_MLX_API_KEY             --pass-env MODEL_SPELUNKER_MLX_BASE_URL             --pass-env MODEL_SPELUNKER_REASONING_EFFORT             --pass-env MODEL_SPELUNKER_MAX_TOKENS             --pass-env MODEL_SPELUNKER_MAX_ITERATIONS             "qualification/tasks/$TASK_ID"             "$actor"             "$receipt"             -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+
+          test -s "$receipt"
+          RC="$rc" RECEIPT="$receipt" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          obs=receipt["observation"]
+          rc=int(os.environ["RC"])
+          assert rc==(0 if obs["success"] else 1)
+          assert receipt["schema_version"] == 2
+          assert receipt["experiment"]["id"] == os.environ["EXPERIMENT_ID"]
+          assert receipt["task"]["id"] == os.environ["TASK_ID"]
+          assert receipt["candidate"]["deployment_topology"]["compute_class"] == "gpu"
+          assert receipt["resources"]["platform_system"] == "Darwin"
+          assert receipt["resources"]["platform_machine"] == "arm64"
+          print("METHOD_IR_V2_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
+          print("METHOD_IR_V2_TERMINATION="+str(obs.get("termination_class")))
+          print("METHOD_IR_V2_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
+          print("METHOD_IR_V2_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
+          print("METHOD_IR_V2_WALL_SECONDS="+str(obs.get("wall_seconds")))
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+
+          # A valid semantic negative or censored result is still experiment evidence.
+          exit 0
+
+      - name: Capture bounded server tail
+        if: always()
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/openworker-macos-method-ir-v2"
+          if [ -n "${MLX_SERVER_LOG:-}" ] && [ -f "$MLX_SERVER_LOG" ]; then
+            mkdir -p "$out"
+            tail -c 8000 "$MLX_SERVER_LOG" >"$out/mlx-server-tail.log" || true
+          fi
+
+      - name: Upload immutable operational evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: unified-macos-method-ir-v2-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/openworker-macos-method-ir-v2/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Stop local model service
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${MLX_SERVER_PID:-}" ]; then
+            kill "$MLX_SERVER_PID" 2>/dev/null || true
+          fi
