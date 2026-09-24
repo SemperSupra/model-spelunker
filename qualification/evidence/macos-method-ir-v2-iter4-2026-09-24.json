@@ -1,0 +1,130 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:ac2ca941c8eaebe432667e83842b24aa9cd0cb9ed884b63385b8e9f6179e95e2",
+    "deployment_topology": {
+      "compute_class": "gpu",
+      "data_boundary": "public-safe",
+      "harness_placement": "local-process",
+      "runtime_placement": "local-service",
+      "transport": "loopback-http"
+    },
+    "harness": {
+      "admission_ref": "qualification/harness-artifacts/openworker-5bc10d928e0b-macos-arm64.admission-v1.json",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236",
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "artifact_ref": "hf://mlx-community/Qwen3-4B-Instruct-2507-4bit@50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b#model.safetensors=sha256:2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+      "foundry_ref": null,
+      "id": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "provider": "mlx-lm",
+      "realization": "local-artifact"
+    },
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:413f89a6ba6ca71cffa49fad0659c1eeef9183f6e83c6d14346c5f7311e77b66",
+  "experiment": {
+    "claim_type": "feasibility",
+    "design_block": "macos-qwen4b-operational-task-family-screen-2026-09",
+    "digest": "sha256:8b23042c19915c73f0cd0463027a3e162afaed59107f6cbd19baed96dd61c000",
+    "experimental_role": "operational",
+    "id": "openworker-macos26-mlx-method-ir-v2-operational",
+    "primary_responses": [
+      "semantic-verifier-result",
+      "termination-class",
+      "wall-seconds",
+      "model-calls-started",
+      "model-rounds",
+      "tool-calls",
+      "observed-resource-envelope",
+      "source-bound-output-snapshot"
+    ]
+  },
+  "observation": {
+    "cache_read_tokens": 5316,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "false-completion",
+    "failure_signals": [
+      "false-completion",
+      "state-unchanged"
+    ],
+    "human_interventions": 0,
+    "input_tokens": 9162,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": 115,
+    "state_changed": false,
+    "success": false,
+    "termination_class": "semantic-failure",
+    "timed_out": false,
+    "tool_calls": 4,
+    "verifier_exit_code": 1,
+    "wall_seconds": 109.752697,
+    "workload": {
+      "client_wall_seconds_total": 108.32159,
+      "first_event_seconds_first": 10.216542,
+      "first_event_seconds_max": 74.887305,
+      "first_event_seconds_min": 2.52102,
+      "model_calls_started": 4,
+      "model_rounds": 4,
+      "output_text_bytes_total": 0,
+      "reasoning_bytes_total": 0,
+      "request_message_bytes_total": 38711,
+      "request_tool_schema_bytes_total": 3872,
+      "started_request_message_bytes_total": 38711,
+      "started_request_tool_schema_bytes_total": 3872,
+      "tool_argument_bytes_total": 160
+    }
+  },
+  "resources": {
+    "cpu_model": "Apple M1 (Virtual)",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 3,
+    "memory_total_bytes": 7516192768,
+    "platform_machine": "arm64",
+    "platform_system": "Darwin"
+  },
+  "run_id": "20260924T164941Z-d0e3f4c3",
+  "schema_version": 2,
+  "substrate": {
+    "profile_commit": "76960c5b258503e1f0d14118d0b0d53a80907b7e",
+    "profile_id": "gha-macos26-arm64-mlx-openworker"
+  },
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v2",
+    "ksa_requirements": [
+      {
+        "evidence_role": "composite",
+        "family": "skills",
+        "name": "source_bound_research_synthesis"
+      },
+      {
+        "evidence_role": "composite",
+        "family": "skills",
+        "name": "evidence_span_binding"
+      },
+      {
+        "evidence_role": "composite",
+        "family": "abilities",
+        "name": "ambiguity_preservation"
+      },
+      {
+        "evidence_role": "supporting",
+        "family": "abilities",
+        "name": "unknown_preservation"
+      }
+    ],
+    "package_digest": "sha256:87a5e05709ac3631b8029d3de8aa79dc9b0421c3e4c071435350ad6ee259a147",
+    "source_commit": "76960c5b258503e1f0d14118d0b0d53a80907b7e",
+    "task_class": "research.method-evidence-binding"
+  }
+}
