@@ -210,6 +210,7 @@ jobs:
           import json,sys
           data=json.load(open(sys.argv[1]))
           assert data["local_cpu_receipts"] >= 1
+          assert data["historical_design_points_indexed"] >= 6
           assert all(row["model_provider"] == "ollama" for row in data["rows"])
           print(json.dumps(data,sort_keys=True))
           PY
