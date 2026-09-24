@@ -302,6 +302,30 @@ jobs:
           print(json.dumps(data,sort_keys=True))
           PY
 
+      - name: Reduce initial CPU v2 characterization evidence
+        run: |
+          PYTHONPATH=. python qualification/reduce_evidence.py \
+            qualification/evidence/cpu-reference-openworker-qwen-text-repair-2026-09-24.json \
+            qualification/evidence/cpu-operational-openworker-qwen-api-boundary-v1-2026-09-24.json \
+            --output "$RUNNER_TEMP/cpu-v2-envelopes.json"
+          python - "$RUNNER_TEMP/cpu-v2-envelopes.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          assert len(data["envelopes"]) == 2
+          by_task={env["task_class"]:env for env in data["envelopes"]}
+          repair=by_task["software.bounded-repair"]
+          api=by_task["reverse-engineering.api-boundary-classification"]
+          assert repair["evidence_pattern"] == "PASS_ONLY"
+          assert repair["evidence"]["semantic_trials"] == 1
+          assert repair["evidence"]["success_interval_wilson_95"]["estimate"] == 1.0
+          assert repair["evidence"]["success_interval_wilson_95"]["lower_95"] < 0.5
+          assert api["evidence_pattern"] == "FAIL_ONLY"
+          assert api["evidence"]["semantic_trials"] == 1
+          assert api["evidence"]["censored"] == 0
+          assert api["evidence"]["unique_task_instances"] == 1
+          print(json.dumps(data,sort_keys=True))
+          PY
+
       - name: Exercise positive, repeat, and negative receipts
         env:
           RECEIPT_GOOD_1: ${{ runner.temp }}/qualification-good-1.json
