@@ -11,15 +11,6 @@ on:
       - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-triage.json
       - qualification/experiments/openworker-macos-mlx-execution-failure-triage-v0.json
       - .github/workflows/openworker-macos-mlx-failure-triage.yml
-  push:
-    branches:
-      - exp/openworker-macos-mlx-failure-triage
-    paths:
-      - qualification/tasks/execution-failure-triage-v0/**
-      - qualification/actors/openworker-prebuilt-qwen3-4b-macos26-mlx-triage.json
-      - qualification/actors/openworker-prebuilt-qwen3-4b-xcode27-mlx-triage.json
-      - qualification/experiments/openworker-macos-mlx-execution-failure-triage-v0.json
-      - .github/workflows/openworker-macos-mlx-failure-triage.yml
   workflow_dispatch:
 permissions:
   contents: read
