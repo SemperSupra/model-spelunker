@@ -389,6 +389,63 @@ def model_call_start_summary(stdout: str) -> dict[str, object]:
     return summary
 
 
+def incremental_provider_observations(stdout: str) -> list[dict[str, object]]:
+    """Recover completed model-call observations emitted before an interrupted exit."""
+    rows: list[dict[str, object]] = []
+    prefix = "MODEL_SPELUNKER_MODEL_CALL_COMPLETED="
+    for line in stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, dict):
+            continue
+        row = dict(value)
+        row.pop("index", None)
+        rows.append(row)
+    return rows
+
+
+def openworker_progress_summary(stdout: str) -> dict[str, object]:
+    """Reduce flush-on-event OpenWorker progress that survives timeout termination."""
+    started = 0
+    finished = 0
+    finished_names: list[str] = []
+    finished_statuses: list[str] = []
+    prefix = "OPENWORKER_EVENT="
+    for line in stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, dict):
+            continue
+        event_type = value.get("type")
+        if event_type == "EventType.TOOL_STARTED":
+            started += 1
+        elif event_type == "EventType.TOOL_FINISHED":
+            finished += 1
+            name = value.get("name")
+            status = value.get("status")
+            if isinstance(name, str) and name:
+                finished_names.append(name)
+            if isinstance(status, str) and status:
+                finished_statuses.append(status)
+    summary: dict[str, object] = {
+        "tool_calls_started": started,
+        "tool_calls_completed": finished,
+    }
+    if finished_names:
+        summary["completed_tool_names"] = finished_names
+    if finished_statuses:
+        summary["completed_tool_statuses"] = finished_statuses
+    return summary
+
+
 def provider_observations(stdout: str) -> list[dict[str, object]]:
     raw = last_marker(stdout, "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=")
     if not raw:
@@ -452,7 +509,10 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         "tool_argument_bytes",
         "client_wall_seconds",
     )
-    summary: dict[str, object] = {"model_rounds": len(observations)}
+    summary: dict[str, object] = {
+        "model_rounds": len(observations),
+        "model_calls_completed": len(observations),
+    }
     for field in numeric_fields:
         values = [
             item.get(field)
@@ -727,6 +787,8 @@ def main() -> int:
         validator_error = verifier.returncode not in {0, 1}
         success = verifier.returncode == 0 and not timed_out
         provider_rounds = provider_observations(stdout)
+        if not provider_rounds:
+            provider_rounds = incremental_provider_observations(stdout)
         if not provider_rounds and (candidate.get("harness") or {}).get("name") == "goose":
             provider_rounds = goose_stream_provider_observations(stdout)
         engine_error = has_engine_error_event(stdout)
@@ -765,6 +827,9 @@ def main() -> int:
         if validator_error and "validator-error" not in failure_signals:
             failure_signals.append("validator-error")
         metrics = harness_metrics(stdout)
+        progress = openworker_progress_summary(stdout)
+        if metrics["tool_calls"] is None and int(progress.get("tool_calls_completed", 0)) > 0:
+            metrics["tool_calls"] = int(progress["tool_calls_completed"])
         mobile_actions: list[dict[str, object]] = []
         mobile_raw = last_marker(stdout, "MODEL_SPELUNKER_MOBILE_ACTIONS=")
         if mobile_raw:
@@ -779,6 +844,7 @@ def main() -> int:
         error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
         workload.update(model_call_start_summary(stdout))
+        workload.update(progress)
 
         evidence = {
             "candidate_exit_code": candidate_exit,
