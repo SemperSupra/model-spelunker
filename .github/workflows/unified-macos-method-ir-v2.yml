@@ -1,5 +1,5 @@
 # execution-trigger: operational treatment semantics unchanged
-name: Unified macOS MLX Method-IR v2 Operational
+name: Unified macOS MLX Method-IR v2 Iteration Boundary
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   method-ir-operational:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-operational-v2]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-iter8]')
     runs-on: macos-26
     timeout-minutes: 35
     env:
@@ -29,8 +29,8 @@ jobs:
       MODEL_SAFETENSORS_BYTES: '2263022417'
       MLX_PORT: '8080'
       TASK_ID: 'method-ir-siglip2-b16-256-v2'
-      ACTOR_ID: 'openworker-qwen3-4b-macos26-mlx-method-ir-v2'
-      EXPERIMENT_ID: 'openworker-macos26-mlx-method-ir-v2-operational'
+      ACTOR_ID: 'openworker-qwen3-4b-macos26-mlx-method-ir-v2-iter8'
+      EXPERIMENT_ID: 'openworker-macos26-mlx-method-ir-v2-iter8-boundary'
       PYTHONDONTWRITEBYTECODE: '1'
 
     steps:
@@ -60,7 +60,7 @@ jobs:
           assert actor["schema_version"] == 2
           assert actor["deployment_topology"]["compute_class"] == "gpu"
           assert actor["configuration"]["max_tokens"] == 2048
-          assert actor["configuration"]["max_iterations"] == 4
+          assert actor["configuration"]["max_iterations"] == 8
           assert exp["schema_version"] == 2
           assert exp["task"]["id"] == task["id"]
           assert exp["actors"] == [actor["id"]]
@@ -172,7 +172,7 @@ jobs:
           echo "MODEL_SPELUNKER_MLX_BASE_URL=http://127.0.0.1:$MLX_PORT/v1" >> "$GITHUB_ENV"
           echo "MODEL_SPELUNKER_REASONING_EFFORT=omit" >> "$GITHUB_ENV"
           echo "MODEL_SPELUNKER_MAX_TOKENS=2048" >> "$GITHUB_ENV"
-          echo "MODEL_SPELUNKER_MAX_ITERATIONS=4" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MAX_ITERATIONS=8" >> "$GITHUB_ENV"
 
       - name: Run real SigLIP2 Method-IR v2 work sample
         shell: bash
@@ -205,11 +205,11 @@ jobs:
           assert receipt["candidate"]["deployment_topology"]["compute_class"] == "gpu"
           assert receipt["resources"]["platform_system"] == "Darwin"
           assert receipt["resources"]["platform_machine"] == "arm64"
-          print("METHOD_IR_V2_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
-          print("METHOD_IR_V2_TERMINATION="+str(obs.get("termination_class")))
-          print("METHOD_IR_V2_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
-          print("METHOD_IR_V2_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
-          print("METHOD_IR_V2_WALL_SECONDS="+str(obs.get("wall_seconds")))
+          print("METHOD_IR_V2_ITER8_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
+          print("METHOD_IR_V2_ITER8_TERMINATION="+str(obs.get("termination_class")))
+          print("METHOD_IR_V2_ITER8_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
+          print("METHOD_IR_V2_ITER8_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
+          print("METHOD_IR_V2_ITER8_WALL_SECONDS="+str(obs.get("wall_seconds")))
           print(json.dumps(receipt,sort_keys=True))
           PY
 
