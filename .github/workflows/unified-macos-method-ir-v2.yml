@@ -1,4 +1,4 @@
-# execution-trigger: operational treatment semantics unchanged
+# execution-trigger: compact-source replay after admission and concurrency repair; treatment semantics unchanged
 name: Unified macOS MLX Method-IR v2 Source Projection
 
 on:
