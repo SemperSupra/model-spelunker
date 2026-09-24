@@ -401,6 +401,18 @@
             "provider_reported_cost_total": {
               "type": "number",
               "minimum": 0
+            },
+            "model_calls_started": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "started_request_message_bytes_total": {
+              "type": "number",
+              "minimum": 0
+            },
+            "started_request_tool_schema_bytes_total": {
+              "type": "number",
+              "minimum": 0
             }
           }
         },
