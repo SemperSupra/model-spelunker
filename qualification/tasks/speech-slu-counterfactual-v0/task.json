@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "speech-slu-counterfactual-v0",
+  "task_class": "speech.semantic-understanding",
+  "instruction": "A verified transcript-control string will be appended to this instruction inside <speech-transcript> tags. Based only on that transcript, classify the rhetorical relationship. RECIPROCAL_DUTY means the speaker contrasts what listeners receive from their country with what they contribute to it. SIMPLE_REQUEST means the speaker only asks listeners for assistance without that reciprocal contrast. OTHER means neither. Apply this task-local opaque mapping exactly: RECIPROCAL_DUTY -> Q7-MERIDIAN; SIMPLE_REQUEST -> T3-CASCADE; OTHER -> N9-ORBIT. Write result.json as one JSON object with exactly two string fields, classification and code. Do not use outside knowledge and do not write any other file.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-hidden-semantic-label"
+  },
+  "allowed_write_paths": [
+    "result.json"
+  ],
+  "projected_tools": [
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "exact-hidden-label"
+  }
+}
