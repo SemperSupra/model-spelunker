@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "id": "openworker-macos26-mlx-method-ir-v2-compact-source-wall360",
+  "decision_question": "With compact exact source retrieval held fixed, does expanding only the effective task wall from 240 to 360 seconds allow the exact Qwen3-4B + OpenWorker + MLX actor to complete the current in-flight synthesis boundary and produce a mechanically valid Method-IR candidate?",
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v2",
+    "task_class": "research.method-evidence-binding"
+  },
+  "actors": [
+    "openworker-qwen3-4b-macos26-mlx-method-ir-v2-compact-source"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "exact-method-ir-siglip2-b16-256-v2-task-package-and-verifier",
+    "same-frozen-source-bytes",
+    "openworker-5bc10d9-admitted-macos-arm64-artifact",
+    "qwen3-4b-instruct-2507-4bit-exact-artifact",
+    "mlx-lm-0.31.3",
+    "reasoning-effort-omitted",
+    "max-tokens-2048",
+    "max-iterations-8",
+    "compact-source-tool-projection:list_files+search_files+read_file_lines+write_file",
+    "task-scoped-write-authority-method_ir.json",
+    "github-hosted-macos-26-arm64"
+  ],
+  "variable_under_test": "effective execution wall_seconds: 240 -> 360",
+  "claim_type": "boundary",
+  "experimental_role": "boundary",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "effective-wall-seconds",
+    "state-changed",
+    "model-calls-started",
+    "model-calls-completed",
+    "tool-calls-completed",
+    "wall-seconds"
+  ],
+  "design_block": "macos-qwen4b-method-ir-wall-boundary-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "semantic-failure-after-write",
+    "timeout-censored-at-360",
+    "max-iterations-exhausted-without-write",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "task-package-or-frozen-source-drift",
+    "validator-error",
+    "execution-or-provider-ingress-failure",
+    "uncontrolled-model-harness-runtime-token-iteration-tool-substrate-drift"
+  ]
+}

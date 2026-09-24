@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "id": "openworker-macos26-mlx-method-ir-v2-compact-source",
+  "decision_question": "Does changing only the task-facing source representation from whole-file reads to bounded search + line-span reads reduce context growth enough for the exact Qwen3-4B + OpenWorker + MLX actor to reach a mechanically valid Method-IR candidate inside the same 240-second envelope?",
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v2",
+    "task_class": "research.method-evidence-binding"
+  },
+  "actors": [
+    "openworker-qwen3-4b-macos26-mlx-method-ir-v2-iter8",
+    "openworker-qwen3-4b-macos26-mlx-method-ir-v2-compact-source"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "exact-method-ir-siglip2-b16-256-v2-task-package-and-verifier",
+    "same-frozen-source-bytes",
+    "openworker-5bc10d9-admitted-macos-arm64-artifact",
+    "qwen3-4b-instruct-2507-4bit-exact-artifact",
+    "mlx-lm-0.31.3",
+    "reasoning-effort-omitted",
+    "max-tokens-2048",
+    "max-iterations-8",
+    "task-scoped-write-authority-method_ir.json",
+    "github-hosted-macos-26-arm64",
+    "wall-seconds-240"
+  ],
+  "variable_under_test": "task-facing-source-tool-projection: list/read-whole/write -> list/search/read-lines/write",
+  "claim_type": "factor-effect",
+  "experimental_role": "boundary",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "state-changed",
+    "model-calls-started",
+    "model-calls-completed",
+    "tool-calls-completed",
+    "request-message-bytes-by-call",
+    "model-call-wall-seconds",
+    "wall-seconds"
+  ],
+  "design_block": "macos-qwen4b-method-ir-source-representation-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "semantic-failure-after-write",
+    "compact-source-treatment-timeout-censored",
+    "max-iterations-exhausted-without-write",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "task-package-or-frozen-source-drift",
+    "validator-error",
+    "execution-or-provider-ingress-failure",
+    "uncontrolled-model-harness-runtime-token-iteration-wall-substrate-drift"
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:302972d3b45139606ca5459ee4e513204992ae57f47fa39b5feddd13219a25bf",
+    "deployment_topology": {
+      "compute_class": "gpu",
+      "data_boundary": "public-safe",
+      "harness_placement": "local-process",
+      "runtime_placement": "local-service",
+      "transport": "loopback-http"
+    },
+    "harness": {
+      "admission_ref": "qualification/harness-artifacts/openworker-5bc10d928e0b-macos-arm64.admission-v1.json",
+      "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236",
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "artifact_ref": "hf://mlx-community/Qwen3-4B-Instruct-2507-4bit@50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b#model.safetensors=sha256:2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f",
+      "foundry_ref": null,
+      "id": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "provider": "mlx-lm",
+      "realization": "local-artifact"
+    },
+    "toolset": ["list_files", "search_files", "read_file_lines", "write_file"]
+  },
+  "evidence_digest": "sha256:8bae1c7cd6533b558302ac867b439a8385cf9fd955ba27683419a30c0437804f",
+  "execution_limits": {"wall_seconds": 360, "wall_seconds_source": "override"},
+  "experiment": {
+    "claim_type": "boundary",
+    "design_block": "macos-qwen4b-method-ir-wall-boundary-2026-09",
+    "digest": "sha256:350ac777e3391c34634f44e4d0727f7b45e2babd30f53ba038361258f5a19ab3",
+    "experimental_role": "boundary",
+    "id": "openworker-macos26-mlx-method-ir-v2-compact-source-wall360",
+    "primary_responses": ["semantic-verifier-result", "termination-class", "effective-wall-seconds", "state-changed", "model-calls-started", "model-calls-completed", "tool-calls-completed", "wall-seconds"]
+  },
+  "observation": {
+    "cache_read_tokens": 12692,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "false-completion",
+    "failure_signals": ["false-completion", "state-unchanged"],
+    "human_interventions": 0,
+    "input_tokens": 10693,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": 1466,
+    "state_changed": false,
+    "success": false,
+    "termination_class": "semantic-failure",
+    "timed_out": false,
+    "tool_calls": 5,
+    "verifier_exit_code": 1,
+    "wall_seconds": 300.992897,
+    "workload": {
+      "client_wall_seconds_total": 298.801182,
+      "completed_tool_names": ["list_files", "search_files", "read_file_lines", "read_file_lines", "read_file_lines"],
+      "completed_tool_statuses": ["ok", "ok", "ok", "ok", "ok"],
+      "first_event_seconds_first": 11.821559,
+      "first_event_seconds_max": 95.956949,
+      "first_event_seconds_min": 3.242815,
+      "model_calls_completed": 6,
+      "model_calls_started": 6,
+      "model_rounds": 6,
+      "output_text_bytes_total": 4185.0,
+      "reasoning_bytes_total": 0.0,
+      "request_message_bytes_total": 64491.0,
+      "request_tool_schema_bytes_total": 9150.0,
+      "started_request_message_bytes_total": 64491.0,
+      "started_request_tool_schema_bytes_total": 9150.0,
+      "tool_argument_bytes_total": 292.0,
+      "tool_calls_completed": 5,
+      "tool_calls_started": 5
+    }
+  },
+  "resources": {
+    "cpu_model": "Apple M1 (Virtual)",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 3,
+    "memory_total_bytes": 7516192768,
+    "platform_machine": "arm64",
+    "platform_system": "Darwin"
+  },
+  "run_id": "20260924T185950Z-de9d8747",
+  "schema_version": 2,
+  "substrate": {"profile_commit": "01e6207d7ff00bef75f7059d2b582462ede3915f", "profile_id": "gha-macos26-arm64-mlx-openworker"},
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v2",
+    "ksa_requirements": [
+      {"evidence_role": "composite", "family": "skills", "name": "source_bound_research_synthesis"},
+      {"evidence_role": "composite", "family": "skills", "name": "evidence_span_binding"},
+      {"evidence_role": "composite", "family": "abilities", "name": "ambiguity_preservation"},
+      {"evidence_role": "supporting", "family": "abilities", "name": "unknown_preservation"}
+    ],
+    "package_digest": "sha256:87a5e05709ac3631b8029d3de8aa79dc9b0421c3e4c071435350ad6ee259a147",
+    "source_commit": "01e6207d7ff00bef75f7059d2b582462ede3915f",
+    "task_class": "research.method-evidence-binding"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "id": "openworker-macos26-mlx-method-ir-v2-operational",
+  "decision_question": "Can the exact admitted OpenWorker + Qwen3-4B + MLX macOS realization produce a mechanically source-bound first candidate for the real SigLIP2 Method-IR workload within the current 2048-token, 4-iteration, 240-second operational envelope?",
+  "task": {
+    "id": "method-ir-siglip2-b16-256-v2",
+    "task_class": "research.method-evidence-binding"
+  },
+  "actors": [
+    "openworker-qwen3-4b-macos26-mlx-method-ir-v2"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "siglip2-v1-frozen-source-bytes",
+    "method-ir-v1-structural-source-binding-verifier",
+    "openworker-5bc10d9-admitted-macos-arm64-artifact",
+    "qwen3-4b-instruct-2507-4bit-exact-artifact",
+    "mlx-lm-0.31.3",
+    "reasoning-effort-omitted",
+    "max-tokens-2048",
+    "max-iterations-4",
+    "list-read-write-tool-projection",
+    "memory-hygiene-control",
+    "task-scoped-authority",
+    "github-hosted-macos-26-arm64"
+  ],
+  "variable_under_test": "operational-task-family-screen:research.method-evidence-binding",
+  "claim_type": "feasibility",
+  "experimental_role": "operational",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "wall-seconds",
+    "model-calls-started",
+    "model-rounds",
+    "tool-calls",
+    "observed-resource-envelope",
+    "source-bound-output-snapshot"
+  ],
+  "design_block": "macos-qwen4b-operational-task-family-screen-2026-09",
+  "stop_conditions": [
+    "source-hydration-integrity-failure",
+    "harness-artifact-integrity-failure",
+    "model-artifact-drift",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "zero-attempt-ingress-failure",
+    "uncontrolled-model-harness-tool-budget-or-substrate-drift"
+  ]
+}
