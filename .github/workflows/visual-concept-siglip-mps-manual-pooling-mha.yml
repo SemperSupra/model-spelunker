@@ -1,13 +1,6 @@
-# xcode-27 confirmation of the already-qualified manual-pooling treatment; no contract change.
 name: SigLIP MPS Manual Vision Pooling MHA
 
 on:
-  push:
-    branches:
-      - exp/visual-concept-macos-mps-diagnostic
-    paths:
-      - 'scripts/visual_concept_siglip_mps_manual_pooling_mha.py'
-      - '.github/workflows/visual-concept-siglip-mps-manual-pooling-mha.yml'
   workflow_dispatch:
 
 permissions:
