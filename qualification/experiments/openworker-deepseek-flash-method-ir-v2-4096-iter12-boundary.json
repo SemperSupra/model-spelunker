@@ -58,5 +58,5 @@
     "provider-admission-failure",
     "uncontrolled-task-tool-token-wall-authority-or-provider-route-drift"
   ],
-  "execution_note": "2026-09-24 exact 4096-token / 12-iteration treatment launched after 4096-token / 8-iteration observation remained iteration-censored; no other factor changed."
+  "execution_note": "2026-09-24 replay authorized solely to fix pre-inference workflow syntax; configured-actor treatment remains exactly max_tokens=4096, max_iterations=12."
 }
