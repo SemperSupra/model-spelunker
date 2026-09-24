@@ -10,9 +10,22 @@ TOOLS = ROOT / "qualification" / "adapters" / "android_mobile_tools.py"
 TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-struct-v0"
 HYBRID_TASK = ROOT / "qualification" / "tasks" / "android-settings-24h-hybrid-v0"
 
+REFERENCE = ROOT / "qualification" / "adapters" / "android_reference_actor.py"
+
 
 def load_tools():
     spec = importlib.util.spec_from_file_location("android_mobile_tools_test", TOOLS)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_reference():
+    adapters = str(REFERENCE.parent)
+    if adapters not in sys.path:
+        sys.path.insert(0, adapters)
+    spec = importlib.util.spec_from_file_location("android_reference_actor_test", REFERENCE)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -48,6 +61,14 @@ class AndroidEmbodiedContractTests(unittest.TestCase):
         )
         self.assertEqual(structural["success"], hybrid["success"])
         self.assertEqual(structural["allowed_write_paths"], hybrid["allowed_write_paths"])
+
+
+    def test_reference_prefers_exact_label_over_substring(self):
+        module = load_reference()
+        wanted = ("system",)
+        self.assertEqual(module._match_rank({"text": "System update"}, wanted), 1)
+        self.assertEqual(module._match_rank({"text": "System"}, wanted), 2)
+        self.assertEqual(module._match_rank({"text": "Security"}, wanted), 0)
 
     def test_verifier_self_test(self):
         cp = subprocess.run([sys.executable, str(TASK / "verify.py"), "--self-test"], capture_output=True, text=True)
