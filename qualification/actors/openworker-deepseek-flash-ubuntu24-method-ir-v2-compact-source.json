@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-flash-ubuntu24-method-ir-v2-compact-source",
+  "harness": {
+    "name": "openworker",
+    "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "deepseek",
+    "id": "deepseek-flash",
+    "realization": "hosted-service",
+    "artifact_ref": null,
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/ubuntu-24.04-x64",
+    "inference_route": "direct:deepseek",
+    "substrate_profile": "gha-linux-x64-openworker-hosted-api"
+  },
+  "deployment_topology": {
+    "harness_placement": "local-process",
+    "runtime_placement": "hosted-service",
+    "transport": "provider-api",
+    "compute_class": "provider-opaque",
+    "data_boundary": "external-provider"
+  },
+  "toolset": [
+    "list_files",
+    "search_files",
+    "read_file_lines",
+    "write_file"
+  ],
+  "configuration": {
+    "reasoning_effort": "none",
+    "max_tokens": 2048,
+    "max_iterations": 8,
+    "parallel_tool_calls": false,
+    "harness_delivery": "source-built-pinned-upstream",
+    "task_projection": "method-ir-siglip2-b16-256-v2-compact-source-v1",
+    "provider_alias_semantics": "hosted mutable service"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
