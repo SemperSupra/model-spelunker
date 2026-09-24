@@ -8,9 +8,7 @@
   "model": {
     "provider": "deepseek",
     "id": "deepseek-flash",
-    "realization": "hosted-service",
-    "artifact_ref": null,
-    "foundry_ref": null
+    "realization": "hosted-service"
   },
   "execution_environment": {
     "venue": "github-hosted-actions/ubuntu-24.04-x64",
