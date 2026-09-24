@@ -34,7 +34,12 @@ jobs:
       - name: Validate mobile task and harness contract
         run: |
           set -euo pipefail
-          python3 -m py_compile             qualification/adapters/android_mobile_tools.py             qualification/adapters/android_reference_actor.py             qualification/run_android_embodied.py             qualification/run_task.py
+          python3 -m py_compile \
+            qualification/adapters/android_mobile_tools.py \
+            qualification/adapters/android_reference_actor.py \
+            qualification/adapters/openworker_projected.py \
+            qualification/run_android_embodied.py \
+            qualification/run_task.py
           python3 qualification/tasks/android-settings-24h-hybrid-v0/verify.py --self-test
           python3 -m unittest -v qualification/test_android_embodied.py
 
