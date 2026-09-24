@@ -38,6 +38,9 @@ MODEL_SETTINGS = {
     "parallel_tool_calls": False,
     "max_tokens": int(os.environ.get("MODEL_SPELUNKER_MAX_TOKENS", "2048")),
 }
+MAX_ITERATIONS = int(os.environ.get("MODEL_SPELUNKER_MAX_ITERATIONS", "4"))
+if not 1 <= MAX_ITERATIONS <= 24:
+    raise RuntimeError("MODEL_SPELUNKER_MAX_ITERATIONS must be between 1 and 24")
 if _reasoning_effort != "omit":
     MODEL_SETTINGS["reasoning_effort"] = _reasoning_effort
 
@@ -411,7 +414,8 @@ async def run(instruction: str) -> int:
 
     summary = {
         "model": MODEL,
-        "model_settings": MODEL_SETTINGS,\n        "max_iterations": MAX_ITERATIONS,
+        "model_settings": MODEL_SETTINGS,
+        "max_iterations": MAX_ITERATIONS,
         "projection": registry.names(),
         "tool_calls": tool_names(engine.messages),
         "approval_count": len(approvals),
