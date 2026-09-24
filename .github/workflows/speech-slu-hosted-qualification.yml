@@ -10,6 +10,7 @@ on:
       - "qualification/adapters/openworker_projected.py"
       - "qualification/run_task.py"
       - "qualification/tasks/speech-slu-jfk-v0/**"
+      - "qualification/tasks/speech-slu-counterfactual-v0/**"
   workflow_dispatch:
 
 permissions:
@@ -35,8 +36,10 @@ jobs:
             qualification/prepare_speech_slu.py \
             qualification/adapters/openworker_projected.py \
             qualification/run_task.py \
-            qualification/tasks/speech-slu-jfk-v0/verify.py
+            qualification/tasks/speech-slu-jfk-v0/verify.py \
+            qualification/tasks/speech-slu-counterfactual-v0/verify.py
           python3 qualification/tasks/speech-slu-jfk-v0/verify.py --self-test
+          python3 qualification/tasks/speech-slu-counterfactual-v0/verify.py --self-test
 
   qualify:
     needs: contract
@@ -54,6 +57,9 @@ jobs:
       CANDIDATE_META: "/tmp/model-spelunker-speech-candidate.json"
       RECEIPT: "/tmp/model-spelunker-speech-receipt.json"
       SNAPSHOT_DIR: "/tmp/model-spelunker-speech-snapshot"
+      CONTROL_META: "/tmp/model-spelunker-speech-control-candidate.json"
+      CONTROL_RECEIPT: "/tmp/model-spelunker-speech-control-receipt.json"
+      CONTROL_SNAPSHOT_DIR: "/tmp/model-spelunker-speech-control-snapshot"
       MODEL_SPELUNKER_MAX_TOKENS: "2048"
       MODEL_SPELUNKER_MAX_ITERATIONS: "4"
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
@@ -285,6 +291,54 @@ jobs:
           )
           PY
 
+      - name: Prepare counterfactual transcript control
+        id: control
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/speech"
+          printf '%s\n' 'Please help me carry this box to the door.' > "$root/counterfactual.txt"
+          CONTROL_SHA="$(python3 - <<'PY'
+          import hashlib, os
+          from pathlib import Path
+          p=Path(os.environ["RUNNER_TEMP"])/"speech"/"counterfactual.txt"
+          text=p.read_text(encoding="utf-8").strip()
+          print("sha256:"+hashlib.sha256(text.encode("utf-8")).hexdigest())
+          PY
+          )"
+          echo "transcript_sha=$CONTROL_SHA" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])/"speech"
+          text=(root/"counterfactual.txt").read_text(encoding="utf-8").strip()
+          task=json.loads(Path("qualification/tasks/speech-slu-counterfactual-v0/task.json").read_text(encoding="utf-8"))
+          digest="sha256:"+hashlib.sha256(text.encode("utf-8")).hexdigest()
+          candidate={
+              "harness":{"name":"openworker","version":os.environ["OPENWORKER_UPSTREAM_SHA"]},
+              "model":{
+                  "provider":os.environ["HOSTED_PROVIDER"],
+                  "id":os.environ["HOSTED_MODEL"],
+                  "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
+              },
+              "toolset":task["projected_tools"],
+              "configuration":{
+                  "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
+                  "projection":task["projected_tools"],
+                  "parallel_tool_calls":False,
+                  "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
+                  "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
+                  "max_iterations":int(os.environ["MODEL_SPELUNKER_MAX_ITERATIONS"]),
+                  "api_base":os.environ["HOSTED_API_BASE"],
+                  "cost_class":os.environ["HOSTED_COST_CLASS"],
+                  "observation_channel":"counterfactual-transcript-control",
+                  "transcript_sha256":digest,
+              },
+          }
+          Path(os.environ["CONTROL_META"]).write_text(
+              json.dumps(candidate,indent=2,sort_keys=True)+"\n",encoding="utf-8"
+          )
+          PY
+
       - name: Execute one speech-mediated reasoning rep
         id: qualify
         env:
@@ -312,6 +366,35 @@ jobs:
           test -f "$RECEIPT"
           if [ "$rc" -ne 0 ]; then
             echo "SPEECH_SLU_RESULT=nonzero-$rc"
+          fi
+
+      - name: Execute counterfactual transcript control
+        id: control_qualify
+        env:
+          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_SPELUNKER_SPEECH_TRANSCRIPT_FILE: ${{ runner.temp }}/speech/counterfactual.txt
+          MODEL_SPELUNKER_SPEECH_TRANSCRIPT_SHA256: ${{ steps.control.outputs.transcript_sha }}
+        run: |
+          set -euo pipefail
+          export DEEPSEEK_API_KEY="$SELECTED_API_KEY"
+          set +e
+          python3 qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id "gha-ubuntu-24.04-x64-openworker-hosted-transcript-control" \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --snapshot-dir "$CONTROL_SNAPSHOT_DIR" \
+            qualification/tasks/speech-slu-counterfactual-v0 \
+            "$CONTROL_META" \
+            "$CONTROL_RECEIPT" \
+            -- "$RUNNER_TEMP/openworker-venv/bin/python" \
+              "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          unset DEEPSEEK_API_KEY
+          echo "qualification_rc=$rc" >> "$GITHUB_OUTPUT"
+          test -f "$CONTROL_RECEIPT"
+          if [ "$rc" -ne 0 ]; then
+            echo "SPEECH_SLU_CONTROL_RESULT=nonzero-$rc"
           fi
 
       - name: Inspect bounded speech receipt
@@ -343,6 +426,8 @@ jobs:
           path: |
             /tmp/model-spelunker-speech-receipt.json
             /tmp/model-spelunker-speech-snapshot/**
+            /tmp/model-spelunker-speech-control-receipt.json
+            /tmp/model-spelunker-speech-control-snapshot/**
             ${{ runner.temp }}/speech/asr-evidence.json
             ${{ runner.temp }}/speech/fixture.json
           if-no-files-found: warn
