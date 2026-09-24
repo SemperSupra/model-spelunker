@@ -1,0 +1,101 @@
+name: Visual Concept CPU-vs-MPS Layerwise
+
+on:
+  pull_request:
+    branches:
+      - exp/visual-concept-macos-mps
+    paths:
+      - 'scripts/visual_concept_mps_layerwise.py'
+      - '.github/workflows/visual-concept-mps-layerwise.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  layerwise:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - analyzer: clip
+            config: config/visual-concept-worker-public-safe.json
+          - analyzer: siglip
+            config: config/visual-concept-worker-public-safe-siglip.json
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned inference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --no-input \
+            torch==2.14.0 \
+            transformers==5.17.0 \
+            pillow==12.3.0 \
+            requests==2.34.2 \
+            sentencepiece==0.2.2 \
+            protobuf==7.36.1
+
+      - name: Run layerwise CPU-vs-MPS localization
+        shell: bash
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          TRANSFORMERS_VERBOSITY: error
+          TOKENIZERS_PARALLELISM: 'false'
+          PYTORCH_ENABLE_MPS_FALLBACK: '0'
+          CANDIDATE_CONFIG: ${{ matrix.config }}
+        run: |
+          set -euo pipefail
+          python scripts/visual_concept_mps_layerwise.py \
+            --config "$CANDIDATE_CONFIG" \
+            --out "$RUNNER_TEMP/visual-concept-mps-layerwise.json"
+
+      - name: Validate localization contract
+        shell: bash
+        env:
+          CANDIDATE_CONFIG: ${{ matrix.config }}
+          ANALYZER: ${{ matrix.analyzer }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          cfg=json.loads(Path(os.environ["CANDIDATE_CONFIG"]).read_text())
+          r=json.loads((Path(os.environ["RUNNER_TEMP"])/"visual-concept-mps-layerwise.json").read_text())
+          assert r["runtime"]["mps_available"] is True
+          assert r["runtime"]["mps_fallback_env"]=="0"
+          assert r["placement"]["mps"]["model_device"].startswith("mps")
+          assert r["placement"]["mps"]["logits_device"].startswith("mps")
+          assert r["rankings"]["cpu"][0] in cfg["expected_top_labels"], r["rankings"]
+          assert r["towers"]["vision"]["stages"]
+          assert r["towers"]["text"]["stages"]
+          print(json.dumps({
+              "analyzer":os.environ["ANALYZER"],
+              "rankings":r["rankings"],
+              "vision_first":r["towers"]["vision"]["first_material_divergence"],
+              "text_first":r["towers"]["text"]["first_material_divergence"],
+              "vision_stages":r["towers"]["vision"]["stages"],
+              "text_stages":r["towers"]["text"]["stages"],
+          },sort_keys=True))
+          PY
+
+      - name: Upload localization receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: visual-concept-mps-layerwise-${{ matrix.analyzer }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/visual-concept-mps-layerwise.json
+          if-no-files-found: error
+          retention-days: 7
