@@ -131,17 +131,13 @@ jobs:
               actor_ids.add(actor["id"])
           assert len(actor_ids) >= 6
 
-          task_classes = {
-              text_task["id"]: text_task["task_class"],
-              text_task_v1["id"]: text_task_v1["task_class"],
-              discovery_task["id"]: discovery_task["task_class"],
-              debugging_task["id"]: debugging_task["task_class"],
-              reconciliation_task["id"]: reconciliation_task["task_class"],
-              api_boundary_task["id"]: api_boundary_task["task_class"],
-              method_ir_task["id"]: method_ir_task["task_class"],
-              api_boundary_task_v1["id"]: api_boundary_task_v1["task_class"],
-              method_ir_task_v1["id"]: method_ir_task_v1["task_class"],
-          }
+          task_classes = {}
+          for path in sorted(Path("qualification/tasks").glob("*/task.json")):
+              task_doc = json.loads(path.read_text())
+              jsonschema.validate(task_doc, task_schema)
+              task_id = task_doc["id"]
+              assert task_id not in task_classes, task_id
+              task_classes[task_id] = task_doc["task_class"]
           for path in sorted(Path("qualification/experiments").glob("*.json")):
               experiment = json.loads(path.read_text())
               jsonschema.validate(experiment, experiment_schema)
@@ -162,6 +158,7 @@ jobs:
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v1/verify.py --self-test
+          python qualification/tasks/translation-controlled-en-de-v3/verify.py --self-test
 
       - name: Enforce task workspace layout contract
         run: python qualification/test_task_workspace_layout.py
