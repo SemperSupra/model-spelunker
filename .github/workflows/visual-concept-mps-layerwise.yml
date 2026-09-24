@@ -1,12 +1,6 @@
 name: Visual Concept CPU-vs-MPS Layerwise
 
 on:
-  pull_request:
-    branches:
-      - exp/visual-concept-macos-mps
-    paths:
-      - 'scripts/visual_concept_mps_layerwise.py'
-      - '.github/workflows/visual-concept-mps-layerwise.yml'
   workflow_dispatch:
 
 permissions:
