@@ -27,8 +27,24 @@ jobs:
           qualification/rdte/retrospective/reduce_trace.py
           qualification/rdte/retrospective/run_batch.py
           qualification/rdte/retrospective/test_bench.py
+          qualification/rdte/retrospective/verify_github_sources.py
+          qualification/rdte/retrospective/test_source_verifier.py
       - name: Run deterministic tests
-        run: python -m unittest -v qualification.rdte.retrospective.test_bench
+        run: >-
+          python -m unittest -v
+          qualification.rdte.retrospective.test_bench
+          qualification.rdte.retrospective.test_source_verifier
+      - name: Verify live public GitHub source facts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .rdte/source-verification
+          for manifest in             jules-q4o-same-session-noop.json             jules-q4o-feedback-unknown.json             jules-provider-reject.json
+          do
+            python qualification/rdte/retrospective/verify_github_sources.py               "qualification/rdte/retrospective/manifests/$manifest"               --output ".rdte/source-verification/$manifest"
+          done
       - name: Run initial five-rep batch
         run: >-
           python qualification/rdte/retrospective/run_batch.py
@@ -38,6 +54,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: retrospective-trajectory-rdte
-          path: .rdte/retrospective
+          path: |
+            .rdte/retrospective
+            .rdte/source-verification
           if-no-files-found: error
           retention-days: 14
