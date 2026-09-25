@@ -45,7 +45,7 @@ class ProcessVariantTests(unittest.TestCase):
             result = analyze(goose, ow, [codex])
             self.assertEqual(result["family_count"], 3)
             self.assertFalse(result["interpretation"]["universal_event_ontology_claimed"])
-            self.assertIn("TOOL_REQUEST", result["common_anchor_vocabulary"])
+            self.assertIn("TOOL_REQUEST", result["anchor_vocabulary"])
             self.assertIn("TOOL_RESULT", result["common_anchor_vocabulary"])
             self.assertEqual(result["families"][0]["family"], "goose")
             self.assertEqual(result["families"][1]["family"], "openworker")
