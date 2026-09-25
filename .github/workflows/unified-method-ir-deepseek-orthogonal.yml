@@ -1,4 +1,4 @@
-# execution-trigger: RICE held-out declared; no launch token in this commit
+# execution-trigger: one RICE held-out work sample authorized
 name: Unified Method-IR RICE DeepSeek Heldout
 
 on:
