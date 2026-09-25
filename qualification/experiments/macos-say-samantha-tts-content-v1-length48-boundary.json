@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "id": "macos-say-samantha-tts-content-v1-length48-boundary",
+  "decision_question": "Does the exact macOS-26 /usr/bin/say Samantha configured actor preserve spoken content fidelity when the frozen English utterance length increases from 12 to 48 words, with the generator runtime, voice, output format, substrate, and independent Faster-Whisper Tiny validator otherwise unchanged?",
+  "task": {
+    "id": "tts-content-fidelity-v1-length48",
+    "task_class": "audio.tts-content-generation"
+  },
+  "actors": [
+    "macos-say-samantha-macos26-arm64-v0"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "macos-26-arm64-github-hosted-runner",
+    "system-/usr/bin/say",
+    "requested-voice:Samantha",
+    "aiff-output",
+    "asr/faster-whisper/tiny-approved-digest:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42",
+    "faster-whisper-1.2.1",
+    "ctranslate2-4.6.0",
+    "wer-threshold:0.10",
+    "content-token-set:blue+lantern+red+bridge+count+seven"
+  ],
+  "variable_under_test": "utterance_words:12->48",
+  "claim_type": "boundary",
+  "experimental_role": "boundary",
+  "primary_responses": [
+    "audio-artifact-validity",
+    "generation-wall-seconds",
+    "audio-bytes",
+    "audio-sha256",
+    "voice-admission",
+    "asr-language",
+    "asr-word-error-rate",
+    "asr-transcript-sha256",
+    "final-content-fidelity"
+  ],
+  "design_block": "non-llm-generator-tts-length-envelope-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-content-failure",
+    "voice-admission-failure",
+    "generator-execution-failure",
+    "asr-validator-failure"
+  ],
+  "exclusion_conditions": [
+    "task-source-drift",
+    "validator-artifact-drift",
+    "missing-requested-voice",
+    "audio-transfer-corruption",
+    "asr-runtime-integrity-failure"
+  ]
+}

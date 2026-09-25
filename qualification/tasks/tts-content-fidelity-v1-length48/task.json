@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "id": "tts-content-fidelity-v1-length48",
+  "task_class": "audio.tts-content-generation",
+  "instruction": "Generate speech.aiff containing exactly the text in source.txt using the configured TTS voice. Do not add or omit spoken content.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 60
+  },
+  "success": {
+    "kind": "independent-asr-content-fidelity"
+  },
+  "allowed_write_paths": [
+    "speech.aiff"
+  ],
+  "projected_tools": [],
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "none",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "independent-asr-plus-audio-contract"
+  },
+  "demand_factors": {
+    "language": "en-US",
+    "words": 48,
+    "required_content_tokens": 6,
+    "output_files": 1
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "text_to_speech_generation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "spoken_content_fidelity",
+      "evidence_role": "isolating"
+    },
+    {
+      "family": "abilities",
+      "name": "audio_artifact_production",
+      "evidence_role": "supporting"
+    }
+  ],
+  "locale": "en-US"
+}
