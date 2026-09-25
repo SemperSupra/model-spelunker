@@ -18,8 +18,25 @@ def sha256_bytes(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+_DIGIT_WORDS = {
+    "0": "zero",
+    "1": "one",
+    "2": "two",
+    "3": "three",
+    "4": "four",
+    "5": "five",
+    "6": "six",
+    "7": "seven",
+    "8": "eight",
+    "9": "nine",
+}
+
+
 def words(value: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+",value.lower())
+    return [
+        _DIGIT_WORDS.get(token, token)
+        for token in re.findall(r"[a-z0-9]+", value.lower())
+    ]
 
 
 def word_error_count(expected: list[str], actual: list[str]) -> int:
@@ -39,7 +56,7 @@ def word_error_count(expected: list[str], actual: list[str]) -> int:
 def audio_duration(path: Path) -> float | None:
     with av.open(str(path)) as container:
         if container.duration is not None:
-            return float(container.duration * av.time_base)
+            return float(container.duration) / float(av.time_base)
         for stream in container.streams.audio:
             if stream.duration is not None and stream.time_base is not None:
                 return float(stream.duration * stream.time_base)
