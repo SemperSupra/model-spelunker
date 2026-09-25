@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "id": "boundary-bugfix-v1",
+  "task_class": "software.bounded-debugging",
+  "instruction": "Repair src/retry.py so backoff_seconds follows the repository retry policy exactly. Preserve the public function signature and return type. Do not modify policy documentation. The verifier includes boundary cases not shown in the repository.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-hidden-tests"
+  },
+  "allowed_write_paths": [
+    "src/retry.py"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "medium",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-boundary-tests"
+  },
+  "demand_factors": {
+    "files_touched": 1,
+    "hidden_boundary_cases": 11,
+    "allowed_write_paths": 1
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "fault_localization",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "bounded_code_repair",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "boundary_condition_handling",
+      "evidence_role": "isolating"
+    },
+    {
+      "family": "abilities",
+      "name": "scope_discipline",
+      "evidence_role": "supporting"
+    }
+  ]
+}
