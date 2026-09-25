@@ -1,10 +1,7 @@
-# execution-trigger: treatment semantics unchanged
+# FROZEN: manual-only after accepted PASS on run 36173789295.
 name: Bounded Multi-file Replace Control
 
 on:
-  push:
-    branches:
-      - exp/bounded-file-edit-projection-v1
   workflow_dispatch:
 
 permissions:
@@ -12,7 +9,6 @@ permissions:
 
 jobs:
   bounded-replace:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[bounded-replace-control]')
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 10
