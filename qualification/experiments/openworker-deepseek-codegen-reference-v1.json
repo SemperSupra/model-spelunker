@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-codegen-reference-v1",
+  "decision_question": "Does the exact OpenWorker + direct DeepSeek configured actor still complete the known bounded-debugging reference sentinel under the shared software-generation configuration before the prospective repository implementation sample?",
+  "task": {
+    "id": "boundary-bugfix-v1",
+    "task_class": "software.bounded-debugging"
+  },
+  "actors": [
+    "openworker-deepseek-flash-ubuntu24-codegen-v2"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-hosted-service",
+    "reasoning-effort-none",
+    "max-tokens-2048",
+    "max-iterations-8",
+    "list-read-write-tool-projection",
+    "task-scoped-authority",
+    "github-hosted-ubuntu-24.04-x64"
+  ],
+  "variable_under_test": null,
+  "claim_type": "feasibility",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "wall-seconds",
+    "model-calls-started",
+    "model-calls-completed",
+    "tool-calls-completed"
+  ],
+  "design_block": "software-generation-reference-operational-pair-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-semantic-failure",
+    "timeout-censored",
+    "iteration-censored",
+    "provider-or-harness-ingress-failure",
+    "validator-integrity-failure"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "credential-absence",
+    "provider-admission-failure",
+    "uncontrolled-actor-or-substrate-drift"
+  ]
+}
