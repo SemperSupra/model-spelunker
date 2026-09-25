@@ -273,3 +273,40 @@ assert config_env["actor_local_native_metrics"]["output_tokens"]["values"] == [4
 assert config_env["measurement_semantics"]["actor_local_native"]["cross_actor_equivalence"] is False
 assert "output_tokens" in config_env["measurement_semantics"]["actor_local_native"]["fields"]
 print("PASS actor-local configuration and native-token measurement semantics")
+
+
+# Historical v2 receipts may carry only configuration_digest while newer receipts
+# also carry exact configuration coordinates. They are the same actor identity when
+# the digest and all other identity material are unchanged.
+legacy_shape = receipt("run-config-legacy", True, model_rounds=2)
+legacy_shape["candidate"].pop("configuration", None)
+explicit_shape = receipt("run-config-explicit", False, model_rounds=2)
+coalesced = reduce_receipts([legacy_shape, explicit_shape])
+assert len(coalesced) == 1
+coalesced_env = coalesced[0]
+assert coalesced_env["evidence"]["reps"] == 2
+assert coalesced_env["evidence"]["validated_pass"] == 1
+assert coalesced_env["evidence"]["validated_fail"] == 1
+assert coalesced_env["evidence_pattern"] == "MIXED"
+assert coalesced_env["configuration_coordinates"] == {
+    "max_tokens": 2048,
+    "max_iterations": 8,
+}
+print("PASS digest-only and explicit configuration receipts coalesce")
+
+
+# A different source commit for the same admitted substrate profile is provenance,
+# not by itself a new execution-environment realization.
+substrate_a = receipt("run-substrate-a", True, model_rounds=2)
+substrate_b = receipt("run-substrate-b", False, model_rounds=2)
+substrate_b["substrate"]["profile_commit"] = "1" * 40
+substrate_envs = reduce_receipts([substrate_a, substrate_b])
+assert len(substrate_envs) == 1
+substrate_env = substrate_envs[0]
+assert substrate_env["evidence_pattern"] == "MIXED"
+assert substrate_env["substrate_provenance"]["identity_precision"] == "profile-id-only"
+assert substrate_env["substrate_provenance"]["profile_commits_observed"] == [
+    "0" * 40,
+    "1" * 40,
+]
+print("PASS substrate commit provenance does not split semantic identity")
