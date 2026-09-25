@@ -165,6 +165,9 @@ jobs:
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
 
+      - name: Self-test telemetry coverage product projection
+        run: PYTHONPATH=. python qualification/test_telemetry_coverage.py
+
       - name: Exercise unified v2 reference contract
         env:
           RECEIPT_V2: ${{ runner.temp }}/qualification-v2-reference.json
