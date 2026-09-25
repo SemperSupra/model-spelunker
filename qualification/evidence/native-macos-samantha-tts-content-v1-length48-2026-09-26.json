@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "record_type": "tts-qualification-result",
+  "experiment_id": "macos-say-samantha-tts-content-v1-length48-boundary",
+  "task_id": "tts-content-fidelity-v1-length48",
+  "actor_id": "macos-say-samantha-macos26-arm64-v0",
+  "run_id": 36202898828,
+  "generator_artifact": {
+    "id": 10892528423,
+    "digest": "sha256:09328c320401097886afcde138f1cbb0d4b1670583e84ccfe9db8ac7251eb577"
+  },
+  "validator_artifact": {
+    "id": 10893220563,
+    "digest": "sha256:53581d7373ed8c693edff7c67756de7ba40918d063d0cb6693322f655abfa509"
+  },
+  "variable_under_test": "utterance_words:12->48",
+  "generation": {
+    "source_words": 48,
+    "source_chars": 279,
+    "source_sha256": "sha256:af503ef68b17649d1e847395178315ecd496116c1958fa374090844ced238a65",
+    "generation_wall_seconds": 2.044687,
+    "output_sha256": "sha256:e22869a62d4b9c0f1b049d3ed683ac0035073964fcef4f386b00dc167b932bf8",
+    "output_size_bytes": 706580
+  },
+  "validation": {
+    "success": true,
+    "language": "en",
+    "language_probability": 1,
+    "expected_word_count": 48,
+    "recovered_word_count": 48,
+    "word_errors": 0,
+    "word_error_rate": 0,
+    "missing_required_tokens": [],
+    "duration_seconds": 15.929342,
+    "validator_logical_id": "asr/faster-whisper/tiny",
+    "validator_digest": "sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42"
+  },
+  "success": true,
+  "termination_class": "semantic-success",
+  "interpretation": {
+    "claim": "feasibility-within-observed-length-region",
+    "observed_region_words": [
+      12,
+      48
+    ],
+    "reliability_claim": false,
+    "broader_language_or_voice_claim": false
+  }
+}
