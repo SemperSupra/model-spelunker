@@ -1,0 +1,28 @@
+name: RDT&E Goose Science Telemetry
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/rdte/goose_stream_trace.py'
+      - 'qualification/rdte/test_goose_stream_trace.py'
+      - '.github/workflows/rdte-goose-science-telemetry.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-reducer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile reducer
+        run: python -m py_compile qualification/rdte/goose_stream_trace.py qualification/rdte/test_goose_stream_trace.py
+      - name: Run privacy and trajectory reducer tests
+        run: python -m unittest -v qualification.rdte.test_goose_stream_trace
