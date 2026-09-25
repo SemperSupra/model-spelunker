@@ -1,10 +1,7 @@
-# execution-trigger: treatment semantics unchanged
+# FROZEN: manual-only after accepted reference + operational PASS on run 36171910685.
 name: Unified Telemetry Usage Operational Interview
 
 on:
-  push:
-    branches:
-      - exp/telemetry-usage-operational-v1
   workflow_dispatch:
 
 permissions:
@@ -16,7 +13,6 @@ concurrency:
 
 jobs:
   reference-and-operational:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[telemetry-usage-operational]')
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 15
