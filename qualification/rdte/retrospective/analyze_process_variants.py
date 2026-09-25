@@ -164,7 +164,7 @@ def _codex(path: Path) -> dict[str, Any]:
         if isinstance(name, str):
             tool_names.add(name)
 
-        if kind in {"tool_call", "function_call_output"}:
+        if kind == "tool_call":
             anchors.append("TOOL_REQUEST")
         elif kind in {"tool_call_completed"}:
             anchors.append("TOOL_RESULT")
@@ -215,6 +215,13 @@ def analyze(
         for family in families
         for anchor in family.get("anchor_variant", [])
     })
+    anchor_family_counts: Counter[str] = Counter()
+    for family in families:
+        for anchor in set(family.get("anchor_variant", [])):
+            anchor_family_counts[anchor] += 1
+    shared_anchors = sorted(
+        anchor for anchor, count in anchor_family_counts.items() if count >= 2
+    )
     family_anchor_sets = {
         family["family"] + (
             f":{index}" if family["family"] == "codex" else ""
@@ -227,7 +234,9 @@ def analyze(
         "schema_version": 1,
         "family_count": len(families),
         "families": families,
-        "common_anchor_vocabulary": anchor_vocabulary,
+        "anchor_vocabulary": anchor_vocabulary,
+        "anchors_observed_in_multiple_families": shared_anchors,
+        "anchor_family_counts": dict(sorted(anchor_family_counts.items())),
         "family_anchor_sets": family_anchor_sets,
         "interpretation": {
             "native_vocabularies_preserved": True,
@@ -252,7 +261,8 @@ def main() -> int:
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
         "family_count": result["family_count"],
-        "common_anchor_vocabulary": result["common_anchor_vocabulary"],
+        "anchor_vocabulary": result["anchor_vocabulary"],
+        "anchors_observed_in_multiple_families": result["anchors_observed_in_multiple_families"],
         "families": [
             {
                 "family": row["family"],
