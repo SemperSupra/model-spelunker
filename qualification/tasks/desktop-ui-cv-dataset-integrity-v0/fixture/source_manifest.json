@@ -1,0 +1,27 @@
+{
+  "source_repository": "SemperSupra/desktop-ui-cv",
+  "source_commit": "6c35202f84584e68957d053cb888b50a5e3353b6",
+  "issue": "SemperSupra/desktop-ui-cv#22",
+  "files": [
+    {
+      "path": "src/desktop_ui_cv/dataset/generator.py",
+      "git_blob_sha": "e60c3bcf70f8818a3cdd2d9c4b29040ddc39b278",
+      "role": "writable-target"
+    },
+    {
+      "path": "scripts/retrain_yolo26s.py",
+      "git_blob_sha": "da99867e8d7b68abb0c2cf1f50f109b8dbb875e3",
+      "role": "read-only-context"
+    },
+    {
+      "path": "scripts/train_fold.py",
+      "git_blob_sha": "6005473cb69f9607c66c9aca02d2d34fe695e83b",
+      "role": "read-only-context"
+    },
+    {
+      "path": "pyproject.toml",
+      "git_blob_sha": "98c32077998986fc8dad6b7331e61c6d0ffcca11",
+      "role": "read-only-context"
+    }
+  ]
+}
