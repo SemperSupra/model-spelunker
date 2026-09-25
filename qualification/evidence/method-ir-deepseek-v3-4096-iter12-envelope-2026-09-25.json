@@ -1,0 +1,213 @@
+{
+  "schema_version": 2,
+  "derived_from": [
+    "qualification/evidence/method-ir-deepseek-v3-feasibility-pass-receipt-2026-09-24.json",
+    "qualification/evidence/method-ir-deepseek-v3-replicate1-receipt-2026-09-25.json"
+  ],
+  "envelopes": [
+    {
+      "schema_version": 2,
+      "actor_realization_id": "sha256:54a544c3ca2cdb01f09dd5b46f6092a9e6b8e840ab780c43ee41a609b81d1561",
+      "actor": {
+        "candidate": {
+          "configuration_digest": "sha256:137330a991751611901005fa9f6136ce5b5d7a734cff4729ab93ca704136c801",
+          "deployment_topology": {
+            "compute_class": "provider-opaque",
+            "data_boundary": "external-provider",
+            "harness_placement": "local-process",
+            "runtime_placement": "hosted-service",
+            "transport": "provider-api"
+          },
+          "harness": {
+            "admission_ref": null,
+            "artifact_ref": null,
+            "name": "openworker",
+            "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+          },
+          "model": {
+            "artifact_ref": null,
+            "foundry_ref": null,
+            "id": "deepseek-flash",
+            "provider": "deepseek",
+            "realization": "hosted-service"
+          },
+          "toolset": [
+            "list_files",
+            "search_files",
+            "read_file_lines",
+            "write_file"
+          ]
+        },
+        "substrate": {
+          "profile_id": "gha-linux-x64-openworker-hosted-api"
+        }
+      },
+      "task_class": "research.method-evidence-binding",
+      "configuration_coordinates": {
+        "harness_delivery": "source-built-pinned-upstream",
+        "max_iterations": 12,
+        "max_tokens": 4096,
+        "parallel_tool_calls": false,
+        "provider_alias_semantics": "hosted mutable service",
+        "reasoning_effort": "none",
+        "task_projection": "method-ir-siglip2-b16-256-v3-compact-source-v1"
+      },
+      "substrate_provenance": {
+        "identity_precision": "profile-id-only",
+        "profile_commits_observed": [
+          "7255e32059b9c4098ac2866fb6056d84fd5d699b",
+          "a40c2948d38229228d7c51678a3f2d5119c207d1"
+        ],
+        "profile_digests_observed": []
+      },
+      "measurement_semantics": {
+        "actor_local_native": {
+          "cross_actor_equivalence": false,
+          "fields": [
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "native_prompt_tokens_total",
+            "native_completion_tokens_total",
+            "native_reasoning_tokens_total",
+            "native_cached_tokens_total"
+          ],
+          "purpose": "actor-local utilization, ceilings, truncation and cost/accounting"
+        },
+        "cross_actor_observations": {
+          "fields": [
+            "validated outcome",
+            "wall_seconds",
+            "request/output/tool bytes",
+            "model/tool calls",
+            "resource observations",
+            "monetary cost when comparable"
+          ],
+          "note": "These are observational comparison planes, not a universal semantic-work scalar."
+        }
+      },
+      "actor_local_native_metrics": {
+        "input_tokens": {
+          "observations": 2,
+          "min": 23784,
+          "max": 28329,
+          "values": [
+            23784,
+            28329
+          ]
+        },
+        "output_tokens": {
+          "observations": 2,
+          "min": 4607,
+          "max": 5927,
+          "values": [
+            4607,
+            5927
+          ]
+        },
+        "cache_read_tokens": {
+          "observations": 2,
+          "min": 151808,
+          "max": 201088,
+          "values": [
+            151808,
+            201088
+          ]
+        },
+        "cache_write_tokens": {
+          "observations": 2,
+          "min": 0,
+          "max": 0,
+          "values": [
+            0,
+            0
+          ]
+        }
+      },
+      "evidence_pattern": "MIXED",
+      "evidence": {
+        "reps": 2,
+        "validated_pass": 1,
+        "validated_fail": 1,
+        "incomplete": 0,
+        "censored": 0,
+        "semantic_trials": 2,
+        "success_interval_wilson_95": {
+          "estimate": 0.5,
+          "lower_95": 0.094531,
+          "upper_95": 0.905469
+        },
+        "unique_task_instances": 1,
+        "task_ids": [
+          "method-ir-siglip2-b16-256-v3"
+        ],
+        "run_ids": [
+          "20260924T203756Z-584243b2",
+          "20260925T061916Z-86f89c49"
+        ]
+      },
+      "ksa_evidence": {
+        "abilities": {
+          "ambiguity_preservation": "OBSERVED",
+          "unknown_preservation": "SUPPORTING_EVIDENCE"
+        },
+        "skills": {
+          "evidence_span_binding": "OBSERVED",
+          "source_bound_research_synthesis": "OBSERVED"
+        }
+      },
+      "ksa_evidence_detail": {
+        "abilities": {
+          "ambiguity_preservation": {
+            "state": "OBSERVED",
+            "strong_positive_trials": 1,
+            "supporting_positive_trials": 0,
+            "isolating_negative_trials": 0,
+            "nonisolating_task_negative_trials": 1,
+            "roles_observed": [
+              "composite"
+            ]
+          },
+          "unknown_preservation": {
+            "state": "SUPPORTING_EVIDENCE",
+            "strong_positive_trials": 0,
+            "supporting_positive_trials": 1,
+            "isolating_negative_trials": 0,
+            "nonisolating_task_negative_trials": 1,
+            "roles_observed": [
+              "supporting"
+            ]
+          }
+        },
+        "skills": {
+          "evidence_span_binding": {
+            "state": "OBSERVED",
+            "strong_positive_trials": 1,
+            "supporting_positive_trials": 0,
+            "isolating_negative_trials": 0,
+            "nonisolating_task_negative_trials": 1,
+            "roles_observed": [
+              "composite"
+            ]
+          },
+          "source_bound_research_synthesis": {
+            "state": "OBSERVED",
+            "strong_positive_trials": 1,
+            "supporting_positive_trials": 0,
+            "isolating_negative_trials": 0,
+            "nonisolating_task_negative_trials": 1,
+            "roles_observed": [
+              "composite"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "interpretation": {
+    "point_status": "feasible-but-mixed-same-instance-evidence",
+    "localized_failure_ref": "qualification/evidence/method-ir-deepseek-v3-replicate1-disposition-2026-09-25.json",
+    "note": "The valid negative is a task/output-contract failure caused by one unsorted evidence_refs array. It is not a resource censor and does not localize a negative to any composite/supporting KSA. Native token measurements remain actor-local."
+  }
+}
