@@ -1,0 +1,66 @@
+{
+  "schema_version": 2,
+  "id": "telemetry-usage-normalization-v0",
+  "task_class": "software.telemetry-normalization",
+  "instruction": "Implement project_usage(receipt) in telemetry_usage.py.\n\nThe function must return a list of Agent Dispatch-compatible usage records. Every returned item must contain exactly: kind, value, unit, source.\n\nProject only these fields, in this exact order when present and valid:\n1. observation.wall_seconds -> elapsed-time / seconds / observed\n2. observation.workload.model_calls_started -> model-calls-started / calls / observed\n3. observation.workload.model_calls_completed -> model-calls-completed / calls / observed\n4. observation.workload.tool_calls_started -> tool-calls-started / calls / observed\n5. observation.workload.tool_calls_completed -> tool-calls-completed / calls / observed\n6. observation.input_tokens -> input-tokens / tokens / authoritative\n7. observation.output_tokens -> output-tokens / tokens / authoritative\n8. observation.cache_read_tokens -> cache-read-tokens / tokens / authoritative\n9. observation.cache_write_tokens -> cache-write-tokens / tokens / authoritative\n10. observation.cost -> cost / usd / authoritative\n11. observation.human_interventions -> human-interventions / count / observed\n12. observation.workload.client_wall_seconds_total -> model-client-wall-time / seconds / observed\n13. observation.workload.request_message_bytes_total -> request-message-bytes / bytes / derived\n14. observation.workload.request_tool_schema_bytes_total -> request-tool-schema-bytes / bytes / derived\n15. observation.workload.output_text_bytes_total -> output-text-bytes / bytes / derived\n16. observation.workload.reasoning_bytes_total -> reasoning-bytes / bytes / derived\n17. observation.workload.tool_argument_bytes_total -> tool-argument-bytes / bytes / derived\n\nRules:\n- missing or null means omit the record; missing is never zero;\n- explicit numeric zero is valid and must be retained;\n- booleans, negative numbers, strings, NaN, and infinities are invalid and must be omitted;\n- ignore unrelated receipt fields;\n- do not normalize, compare, or combine token counts across models;\n- do not mutate the input receipt;\n- use only the Python standard library.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-hidden-tests"
+  },
+  "allowed_write_paths": [
+    "telemetry_usage.py"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "medium",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-contract-tests"
+  },
+  "demand_factors": {
+    "files_touched": 1,
+    "mapping_rules": 17,
+    "nested_source_objects": 2,
+    "invalid_value_classes": 5,
+    "output_schema_fields": 4
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "bounded_change_execution",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "schema_contract_implementation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "telemetry_semantics_preservation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "unknown_preservation",
+      "evidence_role": "supporting"
+    },
+    {
+      "family": "abilities",
+      "name": "scope_discipline",
+      "evidence_role": "supporting"
+    }
+  ]
+}
