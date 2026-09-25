@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "specimen_id": "rice-frontier-evals-51052c-agent-refining",
+  "upstream_repository": "openai/frontier-evals",
+  "upstream_revision": "51052cede8cc608f95bb00346635e03759013e5a",
+  "paper_id": "rice",
+  "paper_title": "RICE: Breaking Through the Training Bottlenecks of Reinforcement Learning with Explanation",
+  "official_directory": "project/paperbench/data/papers/rice/",
+  "sources": {
+    "paper.md": {
+      "sha256": "e69c502c0c16f860160da8368e5b4fc5ee3da36275fe0571350bdd03b3477e03",
+      "size_bytes": 106169
+    },
+    "addendum.md": {
+      "sha256": "d62c727e9aaac69165d0bbeb2b1c4df7f1c8a183c5906d9b0e44cf9401153b43",
+      "size_bytes": 5102
+    },
+    "config.yaml": {
+      "sha256": "d1c4d2e713877c647f97a6bb323814175ffc8bd604b9b136afc2a328282732e1",
+      "size_bytes": 109
+    }
+  },
+  "provenance": {
+    "source_binding_branch": "fix/rice-rep0-source-binding-4702949551085618895",
+    "source_binding_commit": "cef616042d2802eb700e67e948f276f7a9227ca5",
+    "note": "Actor-visible fixture contains only frozen publication inputs plus claim selection; historical Method-IR/completeness outputs are intentionally excluded."
+  }
+}
