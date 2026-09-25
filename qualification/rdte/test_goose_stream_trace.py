@@ -105,7 +105,7 @@ class GooseStreamTraceTests(unittest.TestCase):
         projected = project_stream(stdout)
         summary = projected["summary"]
 
-        self.assertEqual(summary["assistant_model_rounds"], 2)
+        self.assertEqual(summary["assistant_message_groups"], 2)\n        self.assertIsNone(summary["model_call_count"])
         self.assertEqual(summary["tool_request_count"], 2)
         self.assertEqual(summary["tool_response_count"], 1)
         self.assertEqual(summary["repeated_identical_tool_call_count"], 1)
@@ -114,7 +114,7 @@ class GooseStreamTraceTests(unittest.TestCase):
 
         rendered = json.dumps(projected, sort_keys=True)
         self.assertNotIn("cat value.txt", rendered)
-        self.assertNotIn("BROKEN", rendered)
+        self.assertNotIn("BROKEN", rendered)\n        self.assertNotIn("sha256", rendered.lower())
         self.assertNotIn("private reasoning must not be retained", rendered)
 
     def test_preserves_tool_error_without_error_body(self):
