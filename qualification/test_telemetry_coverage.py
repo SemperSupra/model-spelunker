@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+from pathlib import Path
 
 from qualification.telemetry_coverage import project_coverage
 
@@ -49,6 +51,9 @@ def fixture(*, sparse=False, zero=False):
         "resources": resources,
     }
 
+
+module_path = Path("qualification/telemetry_coverage.py")
+assert hashlib.sha256(module_path.read_bytes()).hexdigest() == "07d243638bf9ee7f91ae33a12cffff320d271b13d94f07427c80eec65e14d0c1"
 
 source = fixture()
 original = copy.deepcopy(source)
