@@ -1,0 +1,1 @@
+"""Optional privacy-safe science projectors for qualification candidate stdout.\n\nProjectors are explicitly selected by path; importing this package has no runner side effects.\n"""\n
