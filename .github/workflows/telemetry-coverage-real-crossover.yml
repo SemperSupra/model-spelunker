@@ -1,0 +1,137 @@
+# FROZEN after PASS run 36113492543; no further crossover rep is earned.
+name: Telemetry Coverage Real Deployment Crossover
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-receipts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      HOSTED_SOURCE_SHA: '7366ffedd07ff317817e8a5c4d444ae2c0be6966'
+      HOSTED_RECEIPT: 'qualification/evidence/deepseek-telemetry-coverage-operational-2026-09-25.json'
+      LOCAL_SOURCE_SHA: '40b08a5acd5166b1769d244dcce0ae65d8911586'
+      LOCAL_RECEIPT: 'qualification/evidence/macos-method-ir-v2-compact-source-wall360-semantic-fail-2026-09-24.json'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Materialize exact historical receipt sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$HOSTED_SOURCE_SHA"
+          git show "$HOSTED_SOURCE_SHA:$HOSTED_RECEIPT" > "$RUNNER_TEMP/hosted.json"
+          git fetch --no-tags --depth=1 origin "$LOCAL_SOURCE_SHA"
+          git show "$LOCAL_SOURCE_SHA:$LOCAL_RECEIPT" > "$RUNNER_TEMP/local.json"
+          python - "$RUNNER_TEMP/hosted.json" "$RUNNER_TEMP/local.json" <<'PY'
+          import json,sys
+          hosted=json.load(open(sys.argv[1]))
+          local=json.load(open(sys.argv[2]))
+          assert hosted["schema_version"] == 2
+          assert hosted["run_id"] == "20260925T082312Z-bfba5abc"
+          assert hosted["candidate"]["configuration_digest"] == "sha256:44c922cc047b4d1278ab40c06cd7b88bafb17de31efab620f96d21d99e4dd07a"
+          assert local["schema_version"] == 2
+          assert local["run_id"] == "20260924T185950Z-de9d8747"
+          assert local["candidate"]["configuration_digest"] == "sha256:302972d3b45139606ca5459ee4e513204992ae57f47fa39b5feddd13219a25bf"
+          print("PASS exact receipt source bindings")
+          PY
+
+      - name: Project hosted and local telemetry coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/telemetry-crossover"
+          PYTHONPATH=. python - "$RUNNER_TEMP/hosted.json" "$RUNNER_TEMP/local.json" "$RUNNER_TEMP/telemetry-crossover" <<'PY'
+          import json,sys
+          from pathlib import Path
+          from qualification.telemetry_coverage import project_coverage
+
+          hosted=json.load(open(sys.argv[1]))
+          local=json.load(open(sys.argv[2]))
+          out=Path(sys.argv[3])
+
+          projections={
+              "hosted-api": project_coverage(hosted),
+              "local-accelerated": project_coverage(local),
+          }
+
+          hp=projections["hosted-api"]
+          lp=projections["local-accelerated"]
+
+          assert hp["source"]["run_id"] == "20260925T082312Z-bfba5abc"
+          assert hp["source"]["model_provider"] == "deepseek"
+          assert hp["source"]["runtime_placement"] == "hosted-service"
+          assert hp["source"]["transport"] == "provider-api"
+          assert hp["source"]["compute_class"] == "provider-opaque"
+
+          assert lp["source"]["run_id"] == "20260924T185950Z-de9d8747"
+          assert lp["source"]["model_provider"] == "mlx-lm"
+          assert lp["source"]["runtime_placement"] == "local-service"
+          assert lp["source"]["transport"] == "loopback-http"
+          assert lp["source"]["compute_class"] == "gpu"
+
+          def rows(p):
+              return {row["signal"]: row for row in p["signals"]}
+
+          h=rows(hp)
+          l=rows(lp)
+
+          # Mechanically observed zero remains observed/available.
+          assert h["cache_write_tokens"]["value"] == 0
+          assert h["cache_write_tokens"]["availability"] == "available"
+          assert h["cache_write_tokens"]["evidence_class"] == "observed"
+
+          # Platform/resource observations preserve their actual execution venue.
+          assert h["platform_system"]["value"] == "Linux"
+          assert h["platform_machine"]["value"] == "x86_64"
+          assert h["memory_total_bytes"]["value"] == 16765374464
+          assert l["platform_system"]["value"] == "Darwin"
+          assert l["platform_machine"]["value"] == "arm64"
+          assert l["memory_total_bytes"]["value"] == 7516192768
+          assert l["logical_cpus_visible"]["value"] == 3
+
+          # Projection does not invent accelerator/provider-internal resource signals.
+          names={row["signal"] for p in projections.values() for row in p["signals"]}
+          assert not any(name in names for name in ("gpu_model","vram_bytes","provider_gpu","normalized_work"))
+
+          for name,p in projections.items():
+              (out/f"{name}.json").write_text(
+                  json.dumps(p,indent=2,sort_keys=True)+"\n", encoding="utf-8"
+              )
+
+          summary={
+              "schema_version":1,
+              "product_module_sha256":"07d243638bf9ee7f91ae33a12cffff320d271b13d94f07427c80eec65e14d0c1",
+              "sources":{
+                  "hosted-api":{
+                      "commit":"7366ffedd07ff317817e8a5c4d444ae2c0be6966",
+                      "run_id":hp["source"]["run_id"],
+                  },
+                  "local-accelerated":{
+                      "commit":"40b08a5acd5166b1769d244dcce0ae65d8911586",
+                      "run_id":lp["source"]["run_id"],
+                  },
+              },
+              "result":"PASS",
+          }
+          (out/"summary.json").write_text(
+              json.dumps(summary,indent=2,sort_keys=True)+"\n",encoding="utf-8"
+          )
+          print(json.dumps(summary,sort_keys=True))
+          PY
+
+      - name: Upload disposable crossover projection
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: telemetry-coverage-real-crossover-${{ github.run_id }}
+          path: ${{ runner.temp }}/telemetry-crossover/**
+          if-no-files-found: error
+          retention-days: 30
