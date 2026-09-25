@@ -253,6 +253,11 @@
               "type": "string"
             }
           }
+        },
+        "configuration": {
+          "type": "object",
+          "description": "Exact actor-local configuration coordinates used for this run. Native scales such as token ceilings are not cross-actor equivalence units.",
+          "additionalProperties": true
         }
       }
     },
