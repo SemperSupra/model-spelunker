@@ -6,11 +6,13 @@
   "sources": [
     {
       "ref": "https://github.com/SemperSupra/mcp-projection-dev/commit/179a1586193b568cd8904c0a15a0bc71908d0efe",
-      "kind": "git-commit"
+      "kind": "git-commit",
+      "access_class": "connector-authenticated"
     },
     {
       "ref": "https://github.com/SemperSupra/mcp-projection-dev/pull/138#issuecomment-5584763409",
-      "kind": "github-comment"
+      "kind": "github-comment",
+      "access_class": "connector-authenticated"
     }
   ],
   "events": [
