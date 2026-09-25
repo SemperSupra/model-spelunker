@@ -1,10 +1,6 @@
 name: RDT&E Retrospective Trajectory Bench
 
 on:
-  pull_request:
-    paths:
-      - 'qualification/rdte/retrospective/**'
-      - '.github/workflows/rdte-retro-trajectory-bench.yml'
   workflow_dispatch:
 
 permissions:
