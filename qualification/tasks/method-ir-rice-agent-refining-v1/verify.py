@@ -215,7 +215,7 @@ def self_test() -> int:
         root = Path(tmp)
         src = root / "sources"
         src.mkdir(parents=True)
-        paper = [f"paper line {i}" for i in range(1, 221)]
+        paper = [f"paper line {i}" for i in range(1, 701)]
         addendum = [f"addendum line {i}" for i in range(1, 111)]
         config = ["id: rice", "title: RICE"]
         for line, value in {
