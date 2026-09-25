@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "id": "macos-say-samantha-macos26-arm64-v0",
+  "harness": {
+    "name": "macos-say",
+    "version": "system-/usr/bin/say",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "apple-system-tts",
+    "id": "voice:Samantha",
+    "realization": "local-artifact",
+    "artifact_ref": null,
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "github-hosted-actions/macos-26-arm64",
+    "inference_route": "local:/usr/bin/say",
+    "substrate_profile": "gha-macos26-arm64-system-tts"
+  },
+  "deployment_topology": {
+    "harness_placement": "local-process",
+    "runtime_placement": "local-service",
+    "transport": "other",
+    "compute_class": "unknown",
+    "data_boundary": "public-safe"
+  },
+  "toolset": [],
+  "configuration": {
+    "voice": "Samantha",
+    "output_container": "AIFF",
+    "input_locale": "en-US"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
