@@ -1,4 +1,4 @@
-# execution-trigger: one RICE held-out work sample authorized
+# execution-trigger: exact RICE held-out replay after invalid self-test preflight
 name: Unified Method-IR RICE DeepSeek Heldout
 
 on:
