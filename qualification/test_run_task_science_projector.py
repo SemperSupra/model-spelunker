@@ -84,6 +84,48 @@ def test_output_inside_workspace_is_rejected_without_raw_file() -> None:
         assert not (work/"projection.json").exists()
 
 
+def test_existing_projection_output_is_never_deleted_or_overwritten() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp)
+        projector=root/"projector.py"
+        projector.write_text("raise SystemExit(0)\n",encoding="utf-8")
+        output=root/"projection.json"
+        output.write_text("KEEP-ME\n",encoding="utf-8")
+        status=run_science_projector(
+            "sensitive\n",
+            projector=projector,
+            output=output,
+            source_ref="ephemeral:test/existing-output",
+        )
+        assert status["success"] is False
+        assert status["failure_class"] == "projection-output-exists"
+        assert status["output_present"] is True
+        assert status["source_deleted"] is True
+        assert output.read_text(encoding="utf-8") == "KEEP-ME\n"
+
+
+def test_projector_inside_candidate_workspace_is_rejected() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root=Path(tmp)
+        work=root/"work"
+        work.mkdir()
+        projector=work/"candidate_controlled.py"
+        projector.write_text("raise SystemExit(0)\n",encoding="utf-8")
+        output=root/"projection.json"
+        status=run_science_projector(
+            "sensitive\n",
+            projector=projector,
+            output=output,
+            source_ref="ephemeral:test/candidate-projector",
+            forbidden_root=work,
+        )
+        assert status["success"] is False
+        assert status["failure_class"] == "projector-inside-candidate-workspace"
+        assert status["source_deleted"] is True
+        assert not output.exists()
+
+
+
 def test_run_task_projector_failure_does_not_change_actor_result() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root=Path(tmp)
@@ -178,6 +220,8 @@ raise SystemExit(0 if value=="READY\\n" else 1)
 test_helper_success_and_ephemeral_source()
 test_helper_failure_is_status_not_exception()
 test_output_inside_workspace_is_rejected_without_raw_file()
+test_existing_projection_output_is_never_deleted_or_overwritten()
+test_projector_inside_candidate_workspace_is_rejected()
 test_run_task_projector_failure_does_not_change_actor_result()
 
 print("PASS optional science projector hook")
