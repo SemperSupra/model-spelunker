@@ -1,0 +1,28 @@
+name: RDT&E Runner Science Projector Hook
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile runner
+        run: python -m py_compile qualification/run_task.py qualification/test_run_task_science_projector.py
+      - name: Run science-hook and runner regressions
+        run: |
+          python -m qualification.test_run_task_science_projector
+          python -m qualification.test_run_task_failure_attribution
+          python -m qualification.test_run_task_output_snapshot
+          python -m qualification.test_run_task_validator_error
+          python qualification/test_task_workspace_layout.py

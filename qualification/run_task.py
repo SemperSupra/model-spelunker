@@ -286,6 +286,116 @@ def run_candidate_process(
         stderr=stderr_file.read()
         return return_code, stdout, stderr, timed_out
 
+def run_science_projector(
+    stdout: str,
+    *,
+    projector: Path,
+    output: Path,
+    source_ref: str,
+    forbidden_root: Path | None = None,
+    timeout_seconds: int = 30,
+) -> dict[str, object]:
+    """Run an explicitly selected privacy projector over ephemeral stdout.
+
+    This hook is telemetry-only. It returns projection/O&M status and never
+    changes the candidate or verifier result. The raw temporary source is
+    deleted in a finally block and is never returned in the status record.
+    """
+    status: dict[str, object] = {
+        "configured": True,
+        "success": False,
+        "projector_returncode": None,
+        "projector_timed_out": False,
+        "output_present": False,
+        "source_deleted": False,
+    }
+
+    projector = projector.resolve()
+    output = output.resolve()
+
+    if forbidden_root is not None:
+        root = forbidden_root.resolve()
+        try:
+            projector.relative_to(root)
+        except ValueError:
+            pass
+        else:
+            status["failure_class"] = "projector-inside-candidate-workspace"
+            status["source_deleted"] = True
+            return status
+
+        try:
+            output.relative_to(root)
+        except ValueError:
+            pass
+        else:
+            status["failure_class"] = "output-inside-candidate-workspace"
+            status["source_deleted"] = True
+            return status
+
+    if not projector.is_file():
+        status["failure_class"] = "projector-not-found"
+        status["source_deleted"] = True
+        return status
+
+    if output.exists():
+        status["failure_class"] = "projection-output-exists"
+        status["output_present"] = True
+        status["source_deleted"] = True
+        return status
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    source_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix="model-spelunker-science-source-",
+            suffix=".log",
+            delete=False,
+        ) as source_file:
+            source_file.write(stdout)
+            source_path = Path(source_file.name)
+
+        try:
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(projector),
+                    str(source_path),
+                    "--source-ref",
+                    source_ref,
+                    "--output",
+                    str(output),
+                ],
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired:
+            status["projector_timed_out"] = True
+            status["failure_class"] = "projector-timeout"
+        else:
+            status["projector_returncode"] = completed.returncode
+            status["output_present"] = output.is_file()
+            status["success"] = completed.returncode == 0 and output.is_file()
+            if not status["success"]:
+                status["failure_class"] = (
+                    "projector-nonzero"
+                    if completed.returncode != 0
+                    else "projection-output-missing"
+                )
+    finally:
+        if source_path is not None:
+            source_path.unlink(missing_ok=True)
+            status["source_deleted"] = not source_path.exists()
+
+    return status
+
+
 def new_run_id() -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return f"{stamp}-{uuid.uuid4().hex[:8]}"
@@ -598,8 +708,26 @@ def main() -> int:
         default=[],
         help="Environment variable name to pass explicitly in minimal mode; may be repeated.",
     )
+    parser.add_argument(
+        "--science-projector",
+        type=Path,
+        help=(
+            "Optional trusted Python projector. Receives an ephemeral candidate "
+            "stdout file plus --source-ref and --output arguments."
+        ),
+    )
+    parser.add_argument(
+        "--science-projection-output",
+        type=Path,
+        help="Durable output path for the optional privacy-safe science projection.",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+
+    if bool(args.science_projector) != bool(args.science_projection_output):
+        parser.error(
+            "--science-projector and --science-projection-output must be supplied together"
+        )
 
     command = list(args.command)
     if command and command[0] == "--":
@@ -629,6 +757,7 @@ def main() -> int:
             "primary_responses": experiment_doc["primary_responses"],
         }
     timeout = int(task["limits"]["wall_seconds"])
+    run_id = new_run_id()
 
     with tempfile.TemporaryDirectory(prefix="model-spelunker-qual-") as temp:
         workdir = Path(temp) / "work"
@@ -768,7 +897,7 @@ def main() -> int:
 
         receipt = {
             "schema_version": 2 if experiment_meta is not None else 1,
-            "run_id": new_run_id(),
+            "run_id": run_id,
             "task": {
                 "id": task["id"],
                 "task_class": task.get("task_class"),
@@ -833,6 +962,23 @@ def main() -> int:
             json.dumps(receipt, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+
+        if args.science_projector is not None:
+            projection_status = run_science_projector(
+                stdout,
+                projector=args.science_projector,
+                output=args.science_projection_output,
+                source_ref=(
+                    f"ephemeral:qualification-run/{run_id}/candidate-stdout"
+                ),
+                forbidden_root=workdir,
+            )
+            print(
+                "MODEL_SPELUNKER_SCIENCE_PROJECTION="
+                + json.dumps(projection_status, sort_keys=True),
+                flush=True,
+            )
+
         if args.diagnostics is not None:
             args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
             args.diagnostics.write_text(
