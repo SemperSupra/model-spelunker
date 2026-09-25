@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "id": "method-ir-rice-agent-refining-v1",
+  "task_class": "research.method-evidence-binding",
+  "instruction": "Inspect only source_manifest.json, claim_selection.json, and the local files under sources/. Write method_ir.json. Do not use model prior, external sources, the author repository, a historical Method-IR, a rubric, or a judge artifact. Reconstruct the bounded publication-visible method needed to evaluate CLAIM_1_AGENT_REFINING_PERFORMANCE / EXP_II_AGENT_REFINING_EFFECTIVENESS and decide whether the frozen publication inputs are sufficient for an independent reimplementation of that claim. Output exactly schema_version, claim, method_fields, and execution_readiness. schema_version must be 1. claim must contain exactly claim_id, experiment_id, statement, and evidence_refs. Use the claim/experiment IDs from claim_selection.json. statement must be a concise source-bound restatement of the selected claim. evidence_refs must be sorted and unique. method_fields must contain exactly: baseline_refining_methods, treatment_factors, environments_eval_set, mixed_initial_state_distribution_parameter_p, exploration_bonus_parameter_lambda, pre_trained_agent_weights_and_checkpoint_states, refining_training_steps_and_optimizer, evaluation_trials_and_random_seeds, evaluation_metric. Each method field must contain exactly status, value, evidence_refs, and absence_search. status must be one of EXPLICIT_PAPER, EXPLICIT_ADDENDUM, INFERABLE_WITH_EVIDENCE, AMBIGUOUS, MISSING, NOT_APPLICABLE. For MISSING: value must be null, evidence_refs must be [], and absence_search must be a non-empty string naming the local source material checked. For NOT_APPLICABLE: value must be a non-empty explanatory string, evidence_refs must be [], and absence_search must be null. For every other status: value must be a non-empty string, evidence_refs must contain at least one valid reference, and absence_search must be null. For AMBIGUOUS, preserve the ambiguity rather than resolving it; cite at least two distinct source artifacts when the ambiguity is visible across paper/addendum material. Evidence refs are relative to sources/ and must be exactly source:paper.md:L<start>[-L<end>], source:addendum.md:L<start>[-L<end>], or source:config.yaml:L<start>[-L<end>]. All evidence_refs arrays must be sorted and unique. execution_readiness must contain exactly status, blocking_fields, and notes. status must be RUNNABLE, PARTIAL, or BLOCKED. blocking_fields must be a sorted unique array containing only method_fields keys and must identify the fields that prevent publication-input-only reimplementation. notes must be a string. Preserve missing information and contradictions/ambiguities. Do not modify source files.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 360
+  },
+  "success": {
+    "kind": "structural-source-binding-heldout; scientific acceptance requires independent project reconciliation"
+  },
+  "allowed_write_paths": [
+    "method_ir.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "search_files",
+    "read_file_lines",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "high",
+    "ambiguity": "high",
+    "planning_horizon": "medium",
+    "tool_discovery": "low",
+    "recovery_requirement": "medium",
+    "context_volume": "high",
+    "environment_uncertainty": "low",
+    "verification_strength": "mechanical-source-binding-plus-hidden-status-and-anchor-oracle"
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "source_bound_research_synthesis",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "evidence_span_binding",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "ambiguity_preservation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "unknown_preservation",
+      "evidence_role": "supporting"
+    }
+  ],
+  "demand_factors": {
+    "source_files": 3,
+    "source_bytes": 111380,
+    "method_fields": 9,
+    "ambiguous_fields": 2,
+    "missing_fields": 2,
+    "compared_refining_methods": 4,
+    "allowed_output_files": 1
+  }
+}
