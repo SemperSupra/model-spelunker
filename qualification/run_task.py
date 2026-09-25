@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import signal
 import subprocess
@@ -36,6 +37,18 @@ def observed_resources() -> dict[str, object]:
         for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
             if line.lower().startswith("model name") and ":" in line:
                 cpu_model = line.split(":", 1)[1].strip()
+                break
+    elif platform.system() == "Darwin":
+        for key in ("machdep.cpu.brand_string", "hw.model"):
+            probe = subprocess.run(
+                ["sysctl", "-n", key],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            value = probe.stdout.strip()
+            if probe.returncode == 0 and value:
+                cpu_model = value
                 break
 
     memory_total_bytes = None
@@ -67,6 +80,8 @@ def observed_resources() -> dict[str, object]:
         "memory_total_bytes": memory_total_bytes,
         "cpu_quota_cores": cpu_quota_cores,
         "cpuset_cpus_effective": cpuset,
+        "platform_system": platform.system() or None,
+        "platform_machine": platform.machine() or None,
     }
 
 
@@ -217,20 +232,39 @@ def detect_failure_signals(
     return signals
 
 
+def _signal_candidate_group_or_process(
+    proc: subprocess.Popen[str], sig: signal.Signals
+) -> bool:
+    """Best-effort signal without letting cleanup errors erase run evidence.
+
+    POSIX process-group signaling is preferred because candidates may spawn
+    descendants. Some hosted macOS process groups can reject killpg even though
+    the runner still owns and can signal the candidate process itself. Fall back
+    to the direct process signal so timeout evidence can still be captured.
+    """
+    if os.name == "posix":
+        try:
+            os.killpg(proc.pid, sig)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            pass
+    if proc.poll() is not None:
+        return False
+    try:
+        proc.send_signal(sig)
+        return True
+    except ProcessLookupError:
+        return False
+
+
 def _terminate_candidate_group(proc: subprocess.Popen[str]) -> None:
-    if os.name != "posix":
-        if proc.poll() is None:
-            proc.terminate()
-        return
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
+    # Always attempt process-group cleanup even when the group leader has already
+    # exited: descendants may still be alive in that session/process group.
+    _signal_candidate_group_or_process(proc, signal.SIGTERM)
     time.sleep(0.05)
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    _signal_candidate_group_or_process(proc, signal.SIGKILL)
 
 
 def run_candidate_process(
@@ -355,6 +389,82 @@ def model_call_start_summary(stdout: str) -> dict[str, object]:
     return summary
 
 
+def incremental_provider_observations(stdout: str) -> list[dict[str, object]]:
+    """Recover completed model-call observations emitted before an interrupted exit."""
+    rows: list[dict[str, object]] = []
+    prefix = "MODEL_SPELUNKER_MODEL_CALL_COMPLETED="
+    for line in stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, dict):
+            continue
+        row = dict(value)
+        row.pop("index", None)
+        rows.append(row)
+    return rows
+
+
+def openworker_progress_summary(stdout: str) -> dict[str, object]:
+    """Reduce flush-on-event OpenWorker progress that survives timeout termination."""
+    started = 0
+    finished = 0
+    finished_names: list[str] = []
+    finished_statuses: list[str] = []
+    prefix = "OPENWORKER_EVENT="
+    for line in stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, dict):
+            continue
+        event_type = value.get("type")
+        if event_type == "EventType.TOOL_STARTED":
+            started += 1
+        elif event_type == "EventType.TOOL_FINISHED":
+            finished += 1
+            name = value.get("name")
+            status = value.get("status")
+            if isinstance(name, str) and name:
+                finished_names.append(name)
+            if isinstance(status, str) and status:
+                finished_statuses.append(status)
+    summary: dict[str, object] = {
+        "tool_calls_started": started,
+        "tool_calls_completed": finished,
+    }
+    if finished_names:
+        summary["completed_tool_names"] = finished_names
+    if finished_statuses:
+        summary["completed_tool_statuses"] = finished_statuses
+    return summary
+
+
+def openworker_turn_end_status(stdout: str) -> str | None:
+    """Return the final OpenWorker TURN_END status, when emitted."""
+    status: str | None = None
+    prefix = "OPENWORKER_EVENT="
+    for line in stdout.splitlines():
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, dict) or value.get("type") != "EventType.TURN_END":
+            continue
+        observed = value.get("status")
+        if isinstance(observed, str) and observed:
+            status = observed
+    return status
+
+
 def provider_observations(stdout: str) -> list[dict[str, object]]:
     raw = last_marker(stdout, "MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=")
     if not raw:
@@ -418,7 +528,10 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         "tool_argument_bytes",
         "client_wall_seconds",
     )
-    summary: dict[str, object] = {"model_rounds": len(observations)}
+    summary: dict[str, object] = {
+        "model_rounds": len(observations),
+        "model_calls_completed": len(observations),
+    }
     for field in numeric_fields:
         values = [
             item.get(field)
@@ -598,6 +711,21 @@ def main() -> int:
         default=[],
         help="Environment variable name to pass explicitly in minimal mode; may be repeated.",
     )
+    parser.add_argument(
+        "--wall-seconds",
+        type=int,
+        help="Optional prospective wall-clock treatment override; default is task limits.wall_seconds.",
+    )
+    parser.add_argument(
+        "--projected-tools-source",
+        choices=["task", "candidate"],
+        default="task",
+        help=(
+            "Select the effective tool projection from the task profile (default) or the "
+            "configured actor toolset. Candidate mode is for prospective tool-surface "
+            "factor experiments; it does not alter write-path validation."
+        ),
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -628,7 +756,10 @@ def main() -> int:
             "design_block": experiment_doc.get("design_block"),
             "primary_responses": experiment_doc["primary_responses"],
         }
-    timeout = int(task["limits"]["wall_seconds"])
+    task_wall_seconds = int(task["limits"]["wall_seconds"])
+    timeout = int(args.wall_seconds) if args.wall_seconds is not None else task_wall_seconds
+    if timeout < 1:
+        parser.error("--wall-seconds must be >= 1")
 
     with tempfile.TemporaryDirectory(prefix="model-spelunker-qual-") as temp:
         workdir = Path(temp) / "work"
@@ -658,7 +789,14 @@ def main() -> int:
         allowed = task.get("allowed_write_paths") or []
         if len(allowed) == 1:
             candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
-        projected_tools = task.get("projected_tools") or []
+        if args.projected_tools_source == "candidate":
+            projected_tools = candidate.get("toolset") or []
+            if not isinstance(projected_tools, list) or not all(
+                isinstance(x, str) and x for x in projected_tools
+            ):
+                raise ValueError("candidate toolset must be a list of non-empty strings")
+        else:
+            projected_tools = task.get("projected_tools") or []
         if projected_tools:
             candidate_env["MODEL_SPELUNKER_PROJECTED_TOOLS"] = ",".join(projected_tools)
         candidate_exit, stdout, stderr, timed_out = run_candidate_process(
@@ -693,10 +831,16 @@ def main() -> int:
         validator_error = verifier.returncode not in {0, 1}
         success = verifier.returncode == 0 and not timed_out
         provider_rounds = provider_observations(stdout)
+        if not provider_rounds:
+            provider_rounds = incremental_provider_observations(stdout)
         if not provider_rounds and (candidate.get("harness") or {}).get("name") == "goose":
             provider_rounds = goose_stream_provider_observations(stdout)
         engine_error = has_engine_error_event(stdout)
-        if validator_error:
+        turn_end_status = openworker_turn_end_status(stdout)
+        iteration_censored = turn_end_status == "max_iterations_exceeded"
+        if success:
+            failure_class = None
+        elif validator_error:
             failure_class = "validator-error"
         elif timed_out:
             failure_class = "timeout"
@@ -704,6 +848,8 @@ def main() -> int:
             failure_class = "candidate-error"
         elif verifier.returncode != 0 and engine_error:
             failure_class = "candidate-error-event"
+        elif iteration_censored:
+            failure_class = "iteration-limit"
         elif verifier.returncode != 0:
             failure_class = "false-completion"
         else:
@@ -717,6 +863,8 @@ def main() -> int:
             termination_class = "timeout-censored"
         elif candidate_exit != 0 or engine_error:
             termination_class = "execution-error"
+        elif iteration_censored:
+            termination_class = "iteration-censored"
         else:
             termination_class = "semantic-failure"
 
@@ -730,7 +878,16 @@ def main() -> int:
         )
         if validator_error and "validator-error" not in failure_signals:
             failure_signals.append("validator-error")
+        if (
+            not success
+            and iteration_censored
+            and "iteration-limit" not in failure_signals
+        ):
+            failure_signals.append("iteration-limit")
         metrics = harness_metrics(stdout)
+        progress = openworker_progress_summary(stdout)
+        if metrics["tool_calls"] is None and int(progress.get("tool_calls_completed", 0)) > 0:
+            metrics["tool_calls"] = int(progress["tool_calls_completed"])
         mobile_actions: list[dict[str, object]] = []
         mobile_raw = last_marker(stdout, "MODEL_SPELUNKER_MOBILE_ACTIONS=")
         if mobile_raw:
@@ -745,6 +902,7 @@ def main() -> int:
         error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
         workload.update(model_call_start_summary(stdout))
+        workload.update(progress)
 
         evidence = {
             "candidate_exit_code": candidate_exit,
@@ -774,13 +932,28 @@ def main() -> int:
                 "task_class": task.get("task_class"),
                 "source_commit": args.task_commit,
                 "package_digest": tree_digest(args.task_dir),
+                **(
+                    {"ksa_requirements": task["ksa_requirements"]}
+                    if task.get("ksa_requirements")
+                    else {}
+                ),
             },
             "candidate": {
                 "harness": candidate["harness"],
                 "model": candidate["model"],
                 "configuration_digest": canonical_json_digest(candidate),
                 "toolset": candidate["toolset"],
+                **(
+                    {"configuration": candidate["configuration"]}
+                    if experiment_meta is not None and "configuration" in candidate
+                    else {}
+                ),
                 **({"build": candidate["build"]} if "build" in candidate else {}),
+                **(
+                    {"deployment_topology": candidate["deployment_topology"]}
+                    if "deployment_topology" in candidate
+                    else {}
+                ),
             },
             "substrate": {
                 "profile_id": args.substrate_profile_id,
@@ -792,6 +965,10 @@ def main() -> int:
                 ),
             },
             "resources": observed_resources(),
+            "execution_limits": {
+                "wall_seconds": timeout,
+                "wall_seconds_source": "override" if args.wall_seconds is not None else "task",
+            },
             **({"experiment": experiment_meta} if experiment_meta is not None else {}),
             **(
                 {

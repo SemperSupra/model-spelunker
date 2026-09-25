@@ -94,7 +94,7 @@ class CapabilityEnforcingProvider(ProviderClient):
         requested_model: str,
         messages: list[dict[str, Any]],
         tools: Optional[list[dict[str, Any]]],
-    ) -> None:
+    ) -> int:
         self.model_calls_started += 1
         marker = {
             "index": self.model_calls_started,
@@ -106,6 +106,7 @@ class CapabilityEnforcingProvider(ProviderClient):
             "MODEL_SPELUNKER_MODEL_CALL_STARTED=" + json.dumps(marker, sort_keys=True),
             flush=True,
         )
+        return self.model_calls_started
 
     def _observe(
         self,
@@ -116,6 +117,7 @@ class CapabilityEnforcingProvider(ProviderClient):
         turn: AssistantTurn,
         started: float,
         first_event_at: float | None,
+        call_index: int,
     ) -> None:
         raw = self._mapping(turn.raw)
         usage = self._mapping(raw.get("usage"))
@@ -154,8 +156,18 @@ class CapabilityEnforcingProvider(ProviderClient):
             "provider_total_time": usage.get("total_time"),
             "provider_cost": usage.get("cost"),
         }
+        public_observation = {
+            key: value
+            for key, value in observation.items()
+            if value is not None and not key.startswith("_")
+        }
         self.provider_observations.append(
             {key: value for key, value in observation.items() if value is not None}
+        )
+        print(
+            "MODEL_SPELUNKER_MODEL_CALL_COMPLETED="
+            + json.dumps({"index": call_index, **public_observation}, sort_keys=True),
+            flush=True,
         )
 
     def enrich_openrouter_generations(self) -> None:
@@ -255,7 +267,7 @@ class CapabilityEnforcingProvider(ProviderClient):
         **settings: Any,
     ) -> AssistantTurn:
         started = time.monotonic()
-        self._mark_model_call_started(
+        call_index = self._mark_model_call_started(
             requested_model=model,
             messages=messages,
             tools=tools,
@@ -274,6 +286,7 @@ class CapabilityEnforcingProvider(ProviderClient):
             turn=turn,
             started=started,
             first_event_at=None,
+            call_index=call_index,
         )
         return turn
 
@@ -287,7 +300,7 @@ class CapabilityEnforcingProvider(ProviderClient):
     ):
         started = time.monotonic()
         first_event_at: float | None = None
-        self._mark_model_call_started(
+        call_index = self._mark_model_call_started(
             requested_model=model,
             messages=messages,
             tools=tools,
@@ -315,6 +328,7 @@ class CapabilityEnforcingProvider(ProviderClient):
                     turn=turn,
                     started=started,
                     first_event_at=first_event_at,
+                    call_index=call_index,
                 )
                 yield replace(chunk, turn=turn)
 
@@ -374,6 +388,13 @@ async def run(instruction: str) -> int:
         "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1"),
         "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
         "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
+        "mlx": (
+            "MODEL_SPELUNKER_MLX_API_KEY",
+            os.environ.get(
+                "MODEL_SPELUNKER_MLX_BASE_URL",
+                "http://127.0.0.1:8080/v1",
+            ),
+        ),
     }
     if _PROVIDER in compatible:
         from coworker.providers.openai_provider import OpenAIProvider
@@ -432,7 +453,7 @@ async def run(instruction: str) -> int:
         }:
             payload = dict(event.data or {})
             compact = {"type": event_type}
-            for key in ("tool_calls", "status", "error", "error_type", "iterations", "usage"):
+            for key in ("name", "tool_calls", "status", "reason", "error", "error_type", "iterations", "usage"):
                 if key in payload:
                     compact[key] = payload[key]
             usage = payload.get("usage")
@@ -524,6 +545,7 @@ def main() -> int:
         "google": "GOOGLE_API_KEY",
         "nvidia": "NVIDIA_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
+        "mlx": "MODEL_SPELUNKER_MLX_API_KEY",
     }.get(provider)
     known_keys = (
         "OPENAI_API_KEY",
@@ -535,6 +557,7 @@ def main() -> int:
         "GROQ_API_KEY",
         "NVIDIA_API_KEY",
         "OPENROUTER_API_KEY",
+        "MODEL_SPELUNKER_MLX_API_KEY",
     )
     present = [name for name in known_keys if os.environ.get(name)]
     disallowed = [name for name in present if name != provider_key]

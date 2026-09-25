@@ -52,6 +52,42 @@
             "null"
           ],
           "minLength": 1
+        },
+        "ksa_requirements": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "family",
+              "name",
+              "evidence_role"
+            ],
+            "properties": {
+              "family": {
+                "type": "string",
+                "enum": [
+                  "knowledge",
+                  "skills",
+                  "abilities"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence_role": {
+                "type": "string",
+                "enum": [
+                  "isolating",
+                  "composite",
+                  "supporting"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -122,6 +158,20 @@
                 "model",
                 "router"
               ]
+            },
+            "realization": {
+              "type": "string",
+              "enum": [
+                "local-artifact",
+                "hosted-service",
+                "router"
+              ]
+            },
+            "foundry_ref": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         },
@@ -175,6 +225,39 @@
               "pattern": "^sha256:[0-9a-f]{64}$"
             }
           }
+        },
+        "deployment_topology": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "harness_placement",
+            "runtime_placement",
+            "transport",
+            "compute_class",
+            "data_boundary"
+          ],
+          "properties": {
+            "harness_placement": {
+              "type": "string"
+            },
+            "runtime_placement": {
+              "type": "string"
+            },
+            "transport": {
+              "type": "string"
+            },
+            "compute_class": {
+              "type": "string"
+            },
+            "data_boundary": {
+              "type": "string"
+            }
+          }
+        },
+        "configuration": {
+          "type": "object",
+          "description": "Exact actor-local configuration coordinates used for this run. Native scales such as token ceilings are not cross-actor equivalence units.",
+          "additionalProperties": true
         }
       }
     },
@@ -413,6 +496,32 @@
             "started_request_tool_schema_bytes_total": {
               "type": "number",
               "minimum": 0
+            },
+            "model_calls_completed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tool_calls_started": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tool_calls_completed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "completed_tool_names": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "completed_tool_statuses": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
@@ -512,6 +621,7 @@
             "semantic-success",
             "semantic-failure",
             "timeout-censored",
+            "iteration-censored",
             "execution-error",
             "validator-invalid"
           ]
@@ -636,6 +746,75 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "platform_system": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "platform_machine": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      }
+    },
+    "extensions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "schema_version",
+          "digest"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "schema_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "execution_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wall_seconds",
+        "wall_seconds_source"
+      ],
+      "properties": {
+        "wall_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "wall_seconds_source": {
+          "type": "string",
+          "enum": [
+            "task",
+            "override"
           ]
         }
       }

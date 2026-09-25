@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "id": "text-repair-v1",
+  "task_class": "software.bounded-repair",
+  "instruction": "Replace the entire contents of value.txt with READY followed by a newline.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  },
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low"
+  },
+  "demand_factors": {
+    "files_touched": 1,
+    "required_write_paths": 1
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "bounded_change_execution",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "governed_file_tool_use",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "scope_discipline",
+      "evidence_role": "supporting"
+    }
+  ],
+  "allowed_write_paths": [
+    "value.txt"
+  ],
+  "projected_tools": [
+    "read_file",
+    "write_file"
+  ]
+}

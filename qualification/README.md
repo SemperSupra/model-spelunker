@@ -19,7 +19,7 @@ Substrate construction is external. Receipts reference the exact worker profile 
 infrastructure revision used for the rep. Model Artifact Foundry identity is used
 when a model artifact is under portfolio control.
 
-CPU reasoning/generative characterization follows [`CPU_CHARACTERIZATION.md`](CPU_CHARACTERIZATION.md). Scientific v2 experiments bind a prospective claim, role, primary responses, stopping/exclusion rules, and cheap observed resource facts while preserving all legacy v1 receipts at their original claim boundary.
+Unified configured-actor characterization follows [`CHARACTERIZATION.md`](CHARACTERIZATION.md). Scientific v2 experiments bind a prospective claim, role, primary responses, stopping/exclusion rules, deployment/resource identity, and cheap observed resource facts while preserving all legacy evidence at its original claim boundary. [`CPU_CHARACTERIZATION.md`](CPU_CHARACTERIZATION.md) remains the first execution ledger and worked example of the common method.
 
 ## Minimal task package
 

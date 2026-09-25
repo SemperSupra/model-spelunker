@@ -1,5 +1,10 @@
 # CPU performance-envelope characterization v1
 
+This document is the first execution ledger / worked example of the common
+[configured-actor characterization method](CHARACTERIZATION.md). The common
+scientific rules live there; CPU-specific observations and experiment history stay
+here so the general method does not erase its empirical lineage.
+
 This work extends issue #54 under the configured-actor methodology owned by
 `SemperSupra/agent-dispatch-private#104`. It does not create a second benchmark
 platform, scheduler, registry, or qualification authority.

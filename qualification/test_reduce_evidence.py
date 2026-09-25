@@ -11,6 +11,7 @@ def receipt(
     timed_out: bool = False,
     candidate_exit_code: int = 0,
     task_class: str = "software.bounded-repair",
+    ksa_requirements: list[dict[str, str]] | None = None,
 ):
     observation = {"success": success}
     if model_rounds is not None:
@@ -22,13 +23,17 @@ def receipt(
     if engine_error is not None:
         observation["engine_error_types"] = [engine_error]
         observation["failure_signals"] = ["engine-error-event"]
+    task = {"id": "fixture-task", "task_class": task_class}
+    if ksa_requirements:
+        task["ksa_requirements"] = ksa_requirements
     return {
         "run_id": run_id,
-        "task": {"id": "fixture-task", "task_class": task_class},
+        "task": task,
         "candidate": {
             "harness": {"name": "fixture", "version": "1"},
             "model": {"provider": "none", "id": "none"},
             "configuration_digest": "sha256:" + "0" * 64,
+            "configuration": {"max_tokens": 2048, "max_iterations": 8},
             "toolset": ["filesystem"],
         },
         "substrate": {
@@ -43,28 +48,92 @@ rows = [receipt("run-a", True), receipt("run-b", True)]
 envelopes = reduce_receipts(rows)
 assert len(envelopes) == 1
 env = envelopes[0]
+assert env["schema_version"] == 2
 assert env["task_class"] == "software.bounded-repair"
 assert env["evidence_pattern"] == "PASS_ONLY"
 assert env["evidence"]["validated_pass"] == 2
 assert env["ksa_evidence"]["skills"]["bounded_change_execution"] == "REPEATED_EVIDENCE"
 
+# Legacy task mappings are composite. A task failure does not localize a KSA negative
+# or cancel already-observed positive KSA evidence.
 rows.append(receipt("run-c", False))
 env = reduce_receipts(rows)[0]
 assert env["evidence_pattern"] == "MIXED"
-assert env["ksa_evidence"]["abilities"]["scope_discipline"] == "MIXED_EVIDENCE"
+assert env["ksa_evidence"]["abilities"]["scope_discipline"] == "REPEATED_EVIDENCE"
+assert (
+    env["ksa_evidence_detail"]["abilities"]["scope_discipline"][
+        "nonisolating_task_negative_trials"
+    ]
+    == 1
+)
 
 negative = reduce_receipts([receipt("run-d", False)])[0]
 assert negative["evidence_pattern"] == "FAIL_ONLY"
-assert negative["ksa_evidence"]["skills"]["bounded_change_execution"] == "NEGATIVE_BOUNDARY_OBSERVED"
+assert (
+    negative["ksa_evidence"]["skills"]["bounded_change_execution"]
+    == "INSUFFICIENT_EVIDENCE"
+)
+assert (
+    negative["ksa_evidence_detail"]["skills"]["bounded_change_execution"][
+        "nonisolating_task_negative_trials"
+    ]
+    == 1
+)
 
-print("PASS evidence reducer")
+print("PASS conservative legacy/composite KSA reduction")
+
+
+isolating = [
+    {
+        "family": "skills",
+        "name": "fault_localization",
+        "evidence_role": "isolating",
+    }
+]
+isolating_negative = reduce_receipts(
+    [receipt("run-isolating-neg", False, model_rounds=2, ksa_requirements=isolating)]
+)[0]
+assert (
+    isolating_negative["ksa_evidence"]["skills"]["fault_localization"]
+    == "NEGATIVE_BOUNDARY_OBSERVED"
+)
+assert (
+    isolating_negative["ksa_evidence_detail"]["skills"]["fault_localization"][
+        "isolating_negative_trials"
+    ]
+    == 1
+)
+
+isolating_mixed = reduce_receipts(
+    [
+        receipt("run-isolating-pass", True, ksa_requirements=isolating),
+        receipt("run-isolating-fail", False, model_rounds=2, ksa_requirements=isolating),
+    ]
+)[0]
+assert isolating_mixed["ksa_evidence"]["skills"]["fault_localization"] == "MIXED_EVIDENCE"
+
+supporting = [
+    {
+        "family": "abilities",
+        "name": "scope_discipline",
+        "evidence_role": "supporting",
+    }
+]
+supporting_pass = reduce_receipts(
+    [receipt("run-supporting-pass", True, ksa_requirements=supporting)]
+)[0]
+assert (
+    supporting_pass["ksa_evidence"]["abilities"]["scope_discipline"]
+    == "SUPPORTING_EVIDENCE"
+)
+print("PASS explicit isolating/composite/supporting KSA roles")
 
 
 incomplete = reduce_receipts([receipt("run-e", False, model_rounds=0)])[0]
 assert incomplete["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
 assert incomplete["evidence"]["validated_fail"] == 0
 assert incomplete["evidence"]["incomplete"] == 1
-assert incomplete["ksa_evidence"]["skills"]["bounded_change_execution"] == "INSUFFICIENT_EVIDENCE"
+assert incomplete["ksa_evidence"] == {}
 
 attempted_failure = reduce_receipts([receipt("run-f", False, model_rounds=2)])[0]
 assert attempted_failure["evidence_pattern"] == "FAIL_ONLY"
@@ -77,10 +146,7 @@ partial_engine_failure = reduce_receipts(
 assert partial_engine_failure["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
 assert partial_engine_failure["evidence"]["validated_fail"] == 0
 assert partial_engine_failure["evidence"]["incomplete"] == 1
-assert (
-    partial_engine_failure["ksa_evidence"]["skills"]["bounded_change_execution"]
-    == "INSUFFICIENT_EVIDENCE"
-)
+assert partial_engine_failure["ksa_evidence"] == {}
 
 
 zero_round_timeout = reduce_receipts(
@@ -96,11 +162,17 @@ reconciliation_failure = reduce_receipts(
 assert reconciliation_failure["evidence_pattern"] == "FAIL_ONLY"
 assert (
     reconciliation_failure["ksa_evidence"]["skills"]["repository_state_reconciliation"]
-    == "NEGATIVE_BOUNDARY_OBSERVED"
+    == "INSUFFICIENT_EVIDENCE"
 )
 assert (
     reconciliation_failure["ksa_evidence"]["abilities"]["unknown_preservation"]
-    == "NEGATIVE_BOUNDARY_OBSERVED"
+    == "INSUFFICIENT_EVIDENCE"
+)
+assert (
+    reconciliation_failure["ksa_evidence_detail"]["abilities"]["unknown_preservation"][
+        "nonisolating_task_negative_trials"
+    ]
+    == 1
 )
 
 
@@ -129,7 +201,9 @@ print("PASS duplicate and validator-error reducer controls")
 
 
 # Scientific characterization controls: timeout is performance censoring, not semantic failure.
-censored = reduce_receipts([receipt("run-timeout", False, model_rounds=2, timed_out=True, candidate_exit_code=124)])[0]
+censored = reduce_receipts(
+    [receipt("run-timeout", False, model_rounds=2, timed_out=True, candidate_exit_code=124)]
+)[0]
 assert censored["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
 assert censored["evidence"]["validated_fail"] == 0
 assert censored["evidence"]["censored"] == 1
@@ -152,7 +226,13 @@ assert interval["upper_95"] == 1.0
 print("PASS characterization censoring and uncertainty controls")
 
 
-inflight_timeout = receipt("run-inflight-timeout", False, model_rounds=0, timed_out=True, candidate_exit_code=124)
+inflight_timeout = receipt(
+    "run-inflight-timeout",
+    False,
+    model_rounds=0,
+    timed_out=True,
+    candidate_exit_code=124,
+)
 inflight_timeout["observation"]["workload"]["model_calls_started"] = 1
 env = reduce_receipts([inflight_timeout])[0]
 assert env["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
@@ -161,3 +241,72 @@ assert env["evidence"]["censored"] == 1
 assert env["evidence"]["incomplete"] == 0
 assert env["evidence"]["semantic_trials"] == 0
 print("PASS in-flight timeout censoring")
+
+
+iteration_censored = receipt(
+    "run-iteration-censored",
+    False,
+    model_rounds=4,
+    candidate_exit_code=0,
+)
+iteration_censored["observation"]["termination_class"] = "iteration-censored"
+iteration_censored["observation"]["failure_signals"] = ["iteration-limit", "state-unchanged"]
+iteration_censored["observation"]["workload"]["model_calls_started"] = 4
+env = reduce_receipts([iteration_censored])[0]
+assert env["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
+assert env["evidence"]["validated_fail"] == 0
+assert env["evidence"]["censored"] == 1
+assert env["evidence"]["semantic_trials"] == 0
+assert env["ksa_evidence"] == {}
+print("PASS iteration-limit censoring")
+
+
+# Configuration coordinates are preserved as tested points; provider-native token
+# utilization remains actor-local and must never imply cross-actor equivalence.
+config_row = receipt("run-config-local", True, model_rounds=2)
+config_row["observation"]["input_tokens"] = 1200
+config_row["observation"]["output_tokens"] = 4096
+config_row["observation"]["cache_read_tokens"] = 800
+config_env = reduce_receipts([config_row])[0]
+assert config_env["configuration_coordinates"] == {"max_tokens": 2048, "max_iterations": 8}
+assert config_env["actor_local_native_metrics"]["output_tokens"]["values"] == [4096.0]
+assert config_env["measurement_semantics"]["actor_local_native"]["cross_actor_equivalence"] is False
+assert "output_tokens" in config_env["measurement_semantics"]["actor_local_native"]["fields"]
+print("PASS actor-local configuration and native-token measurement semantics")
+
+
+# Historical v2 receipts may carry only configuration_digest while newer receipts
+# also carry exact configuration coordinates. They are the same actor identity when
+# the digest and all other identity material are unchanged.
+legacy_shape = receipt("run-config-legacy", True, model_rounds=2)
+legacy_shape["candidate"].pop("configuration", None)
+explicit_shape = receipt("run-config-explicit", False, model_rounds=2)
+coalesced = reduce_receipts([legacy_shape, explicit_shape])
+assert len(coalesced) == 1
+coalesced_env = coalesced[0]
+assert coalesced_env["evidence"]["reps"] == 2
+assert coalesced_env["evidence"]["validated_pass"] == 1
+assert coalesced_env["evidence"]["validated_fail"] == 1
+assert coalesced_env["evidence_pattern"] == "MIXED"
+assert coalesced_env["configuration_coordinates"] == {
+    "max_tokens": 2048,
+    "max_iterations": 8,
+}
+print("PASS digest-only and explicit configuration receipts coalesce")
+
+
+# A different source commit for the same admitted substrate profile is provenance,
+# not by itself a new execution-environment realization.
+substrate_a = receipt("run-substrate-a", True, model_rounds=2)
+substrate_b = receipt("run-substrate-b", False, model_rounds=2)
+substrate_b["substrate"]["profile_commit"] = "1" * 40
+substrate_envs = reduce_receipts([substrate_a, substrate_b])
+assert len(substrate_envs) == 1
+substrate_env = substrate_envs[0]
+assert substrate_env["evidence_pattern"] == "MIXED"
+assert substrate_env["substrate_provenance"]["identity_precision"] == "profile-id-only"
+assert substrate_env["substrate_provenance"]["profile_commits_observed"] == [
+    "0" * 40,
+    "1" * 40,
+]
+print("PASS substrate commit provenance does not split semantic identity")

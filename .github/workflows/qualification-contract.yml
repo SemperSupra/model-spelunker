@@ -37,6 +37,7 @@ jobs:
           from pathlib import Path
           import jsonschema
           text_task = json.loads(Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          text_task_v1 = json.loads(Path("qualification/tasks/text-repair-v1/task.json").read_text())
           discovery_task = json.loads(Path("qualification/tasks/validation-discovery-v0/task.json").read_text())
           debugging_task = json.loads(Path("qualification/tasks/boundary-bugfix-v0/task.json").read_text())
           reconciliation_task = json.loads(Path("qualification/tasks/repository-reconciliation-v0/task.json").read_text())
@@ -82,6 +83,9 @@ jobs:
               assert "secret" not in candidate, candidate_id
               assert "admission" not in candidate, candidate_id
           assert text_task["task_class"] == "software.bounded-repair"
+          assert text_task_v1["task_class"] == "software.bounded-repair"
+          assert text_task_v1["schema_version"] == 2
+          assert {row["evidence_role"] for row in text_task_v1["ksa_requirements"]} == {"composite", "supporting"}
           assert discovery_task["task_class"] == "repository.capability-discovery"
           assert debugging_task["task_class"] == "software.bounded-debugging"
           assert reconciliation_task["task_class"] == "repository.state-reconciliation"
@@ -112,6 +116,7 @@ jobs:
               jsonschema.validate(admission, harness_admission_schema)
               assert admission["admission"]["state"] == "BUILD_ADMITTED"
           jsonschema.validate(text_task, task_schema)
+          jsonschema.validate(text_task_v1, task_schema)
           jsonschema.validate(discovery_task, task_schema)
           jsonschema.validate(debugging_task, task_schema)
           jsonschema.validate(reconciliation_task, task_schema)
@@ -126,16 +131,13 @@ jobs:
               actor_ids.add(actor["id"])
           assert len(actor_ids) >= 6
 
-          task_classes = {
-              text_task["id"]: text_task["task_class"],
-              discovery_task["id"]: discovery_task["task_class"],
-              debugging_task["id"]: debugging_task["task_class"],
-              reconciliation_task["id"]: reconciliation_task["task_class"],
-              api_boundary_task["id"]: api_boundary_task["task_class"],
-              method_ir_task["id"]: method_ir_task["task_class"],
-              api_boundary_task_v1["id"]: api_boundary_task_v1["task_class"],
-              method_ir_task_v1["id"]: method_ir_task_v1["task_class"],
-          }
+          task_classes = {}
+          for task_path in sorted(Path("qualification/tasks").glob("*/task.json")):
+              task_profile = json.loads(task_path.read_text())
+              jsonschema.validate(task_profile, task_schema)
+              assert task_profile["id"] not in task_classes, task_profile["id"]
+              task_classes[task_profile["id"]] = task_profile["task_class"]
+          assert task_classes
           for path in sorted(Path("qualification/experiments").glob("*.json")):
               experiment = json.loads(path.read_text())
               jsonschema.validate(experiment, experiment_schema)
@@ -148,6 +150,7 @@ jobs:
       - name: Self-test deterministic verifiers
         run: |
           python qualification/tasks/text-repair-v0/verify.py --self-test
+          python qualification/tasks/text-repair-v1/verify.py --self-test
           python qualification/tasks/validation-discovery-v0/verify.py --self-test
           python qualification/tasks/boundary-bugfix-v0/verify.py --self-test
           python qualification/tasks/repository-reconciliation-v0/verify.py --self-test
@@ -162,6 +165,91 @@ jobs:
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
 
+      - name: Exercise unified v2 reference contract
+        env:
+          RECEIPT_V2: ${{ runner.temp }}/qualification-v2-reference.json
+        run: |
+          set -euo pipefail
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id contract-v2-reference \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --experiment qualification/experiments/unified-reference-contract-v1.json \
+            qualification/tasks/text-repair-v1 \
+            qualification/test-candidate-v2.json \
+            "$RECEIPT_V2" \
+            -- python "$GITHUB_WORKSPACE/qualification/test_candidate.py"
+          python - "$RECEIPT_V2" <<'PY'
+          import json,sys
+          from pathlib import Path
+          import jsonschema
+
+          receipt=json.loads(Path(sys.argv[1]).read_text())
+          schema=json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          jsonschema.validate(receipt,schema)
+          assert receipt["schema_version"] == 2
+          assert receipt["observation"]["success"] is True
+          assert receipt["task"]["id"] == "text-repair-v1"
+          assert len(receipt["task"]["ksa_requirements"]) == 3
+          assert receipt["candidate"]["deployment_topology"]["compute_class"] == "deterministic"
+          assert receipt["candidate"]["deployment_topology"]["transport"] == "stdio"
+          assert receipt["resources"]["platform_system"] == "Linux"
+          assert receipt["resources"]["platform_machine"]
+          assert receipt["experiment"]["id"] == "unified-reference-contract-v1"
+          assert receipt["execution_limits"] == {"wall_seconds": 120, "wall_seconds_source": "task"}
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+
+      - name: Verifier success clears stale iteration-limit metadata
+        env:
+          RECEIPT_SUCCESS_ITER: ${{ runner.temp }}/qualification-success-with-iteration-marker.json
+        run: |
+          set -euo pipefail
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id contract-v2-success-iteration-marker \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --experiment qualification/experiments/unified-reference-contract-v1.json \
+            qualification/tasks/text-repair-v1 \
+            qualification/test-candidate-v2.json \
+            "$RECEIPT_SUCCESS_ITER" \
+            -- python -c 'from pathlib import Path; import json; Path("value.txt").write_text("READY\n", encoding="utf-8"); print("OPENWORKER_EVENT="+json.dumps({"type":"EventType.TURN_END","status":"max_iterations_exceeded","iterations":1},sort_keys=True))'
+          python - "$RECEIPT_SUCCESS_ITER" <<'PY'
+          import json,sys
+          receipt=json.load(open(sys.argv[1]))
+          obs=receipt["observation"]
+          assert obs["success"] is True
+          assert obs["termination_class"] == "semantic-success"
+          assert obs.get("failure_class") is None
+          assert "iteration-limit" not in set(obs.get("failure_signals") or [])
+          print("PASS semantic success overrides stale iteration marker")
+          PY
+
+      - name: Exercise explicit wall-clock treatment override
+        env:
+          RECEIPT_WALL: ${{ runner.temp }}/qualification-wall-override.json
+        run: |
+          set +e
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id contract-wall-override \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --wall-seconds 1 \
+            qualification/tasks/text-repair-v1 \
+            qualification/test-candidate-v2.json \
+            "$RECEIPT_WALL" \
+            -- python -c 'import time; time.sleep(2)'
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+          python - "$RECEIPT_WALL" <<'PY'
+          import json,sys
+          receipt=json.load(open(sys.argv[1]))
+          assert receipt["observation"]["timed_out"] is True
+          assert receipt["execution_limits"] == {"wall_seconds":1,"wall_seconds_source":"override"}
+          print("PASS explicit wall-clock treatment override")
+          PY
+
       - name: Census canonical local-CPU evidence
         run: |
           PYTHONPATH=. python qualification/census_cpu_evidence.py qualification/evidence --output "$RUNNER_TEMP/cpu-census.json"
@@ -169,12 +257,16 @@ jobs:
           import json,sys
           data=json.load(open(sys.argv[1]))
           assert data["local_cpu_receipts"] >= 1
+          assert data["historical_design_points_indexed"] >= 6
           assert all(row["model_provider"] == "ollama" for row in data["rows"])
           print(json.dumps(data,sort_keys=True))
           PY
 
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
+
+      - name: Self-test candidate timeout cleanup
+        run: PYTHONPATH=. python qualification/test_candidate_process_cleanup.py
 
       - name: Self-test OpenRouter generation provenance projection
         run: PYTHONPATH=. python qualification/test_run_task_openrouter_metadata.py
@@ -283,8 +375,10 @@ jobs:
           groq_reconciliation=by_route[("groq","openai/gpt-oss-20b",reconciliation)]
           assert groq_reconciliation["evidence_pattern"] == "FAIL_ONLY"
           assert groq_reconciliation["evidence"]["validated_fail"] == 1
-          assert groq_reconciliation["ksa_evidence"]["skills"]["repository_state_reconciliation"] == "NEGATIVE_BOUNDARY_OBSERVED"
-          assert groq_reconciliation["ksa_evidence"]["abilities"]["unknown_preservation"] == "NEGATIVE_BOUNDARY_OBSERVED"
+          assert groq_reconciliation["ksa_evidence"]["skills"]["repository_state_reconciliation"] == "INSUFFICIENT_EVIDENCE"
+          assert groq_reconciliation["ksa_evidence"]["abilities"]["unknown_preservation"] == "INSUFFICIENT_EVIDENCE"
+          assert groq_reconciliation["ksa_evidence_detail"]["skills"]["repository_state_reconciliation"]["nonisolating_task_negative_trials"] == 1
+          assert groq_reconciliation["ksa_evidence_detail"]["abilities"]["unknown_preservation"]["nonisolating_task_negative_trials"] == 1
 
           google=by_route[("google","gemini-3.7-flash",discovery)]
           assert google["evidence_pattern"] == "NO_TERMINAL_EVIDENCE"
