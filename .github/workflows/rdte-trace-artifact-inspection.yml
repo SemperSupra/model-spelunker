@@ -1,0 +1,82 @@
+name: RDT&E Trace Artifact Inspection
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/rdte-trace-artifact-inspection.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download privacy-safe artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/inspect"
+          mkdir -p "$root/owt" "$root/d3"
+
+          fetch_artifact() {
+            id="$1"
+            dest="$2"
+            zip="$RUNNER_TEMP/artifact-$id.zip"
+            curl -fsSL               -H "Authorization: Bearer $GITHUB_TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/SemperSupra/model-spelunker/actions/artifacts/$id/zip"               -o "$zip"
+            unzip -q "$zip" -d "$dest"
+            rm -f "$zip"
+          }
+
+          fetch_artifact 10853133120 "$root/owt"
+          fetch_artifact 10854030808 "$root/d3"
+
+          echo "OWT_ROOT=$root/owt" >> "$GITHUB_ENV"
+          echo "D3_ROOT=$root/d3" >> "$GITHUB_ENV"
+
+      - name: Print safe native-event summaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          owt_root=Path(os.environ["OWT_ROOT"])
+          d3_root=Path(os.environ["D3_ROOT"])
+
+          owt_trace=next(owt_root.rglob("trace.json"))
+          d3_result=next(d3_root.rglob("variant-analysis.json"))
+
+          owt=json.loads(owt_trace.read_text())
+          d3=json.loads(d3_result.read_text())
+
+          print("OWT_EVENT_TYPE_COUNTS="+json.dumps(
+              owt.get("summary",{}).get("event_type_counts",{}),
+              sort_keys=True,
+          ))
+          print("OWT_EVENTS="+json.dumps([
+              {
+                  "sequence":e.get("sequence"),
+                  "type":e.get("type"),
+                  "tool_names":e.get("tool_names",[]),
+                  "status":e.get("status"),
+                  "error_type":e.get("error_type"),
+              }
+              for e in owt.get("events",[])
+              if isinstance(e,dict)
+          ],sort_keys=True))
+
+          for family in d3.get("families",[]):
+              print("D3_FAMILY="+json.dumps({
+                  "family":family.get("family"),
+                  "native_variant_rle":family.get("native_variant_rle"),
+                  "anchor_variant":family.get("anchor_variant"),
+                  "anchor_coverage":family.get("anchor_coverage"),
+                  "native_directly_follows":family.get("native_directly_follows"),
+              },sort_keys=True))
+          PY
