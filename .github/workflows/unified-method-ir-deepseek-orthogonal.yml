@@ -120,7 +120,7 @@ jobs:
           PY
           echo "DEEPSEEK_KEY_FILE=$keyfile" >> "$GITHUB_ENV"
 
-      - name: Execute one orthogonal configured-actor screen
+      - name: Execute one RICE held-out work sample
         shell: bash
         run: |
           set -euo pipefail
@@ -189,7 +189,7 @@ jobs:
         with:
           name: method-ir-rice-heldout-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/method-ir-deepseek-orthogonal/**
+            ${{ runner.temp }}/method-ir-rice-heldout/**
           if-no-files-found: warn
           retention-days: 30
 
