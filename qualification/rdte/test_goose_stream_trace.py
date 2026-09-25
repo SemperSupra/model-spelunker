@@ -105,7 +105,8 @@ class GooseStreamTraceTests(unittest.TestCase):
         projected = project_stream(stdout)
         summary = projected["summary"]
 
-        self.assertEqual(summary["assistant_message_groups"], 2)\n        self.assertIsNone(summary["model_call_count"])
+        self.assertEqual(summary["assistant_message_groups"], 2)
+        self.assertIsNone(summary["model_call_count"])
         self.assertEqual(summary["tool_request_count"], 2)
         self.assertEqual(summary["tool_response_count"], 1)
         self.assertEqual(summary["repeated_identical_tool_call_count"], 1)
@@ -113,8 +114,10 @@ class GooseStreamTraceTests(unittest.TestCase):
         self.assertFalse(summary["hidden_reasoning_inferred"])
 
         rendered = json.dumps(projected, sort_keys=True)
+        self.assertIn("call_equivalence_class", rendered)
         self.assertNotIn("cat value.txt", rendered)
-        self.assertNotIn("BROKEN", rendered)\n        self.assertNotIn("sha256", rendered.lower())
+        self.assertNotIn("BROKEN", rendered)
+        self.assertNotIn("sha256", rendered.lower())
         self.assertNotIn("private reasoning must not be retained", rendered)
 
     def test_preserves_tool_error_without_error_body(self):
@@ -147,6 +150,17 @@ class GooseStreamTraceTests(unittest.TestCase):
         projected = project_stream(stdout)
         self.assertEqual(projected["source"]["ignored_non_json_lines"], 1)
         self.assertEqual(projected["summary"]["complete_usage"]["total_tokens"], 5)
+
+    def test_source_ref_is_opaque_and_raw_digest_not_retained(self):
+        projected = project_stream(
+            line({"type": "complete", "total_tokens": 1}),
+            source_ref="restricted:run-123/stdout",
+        )
+        self.assertEqual(
+            projected["source"]["restricted_source_ref"],
+            "restricted:run-123/stdout",
+        )
+        self.assertFalse(projected["source"]["raw_content_digest_retained"])
 
 
 if __name__ == "__main__":
