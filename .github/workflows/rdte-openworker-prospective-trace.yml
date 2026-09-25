@@ -1,9 +1,7 @@
 name: RDT&E OpenWorker Prospective Trace
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/rdte-openworker-prospective-trace.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
