@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-desktop-ui-cv-b1-operational",
+  "decision_question": "Can the exact repository-edit configured actor implement the real desktop-ui-cv#22 B1 dataset-integrity corrective increment from the frozen public baseline, including regression tests, under bounded exact-file authority?",
+  "task": {
+    "id": "desktop-ui-cv-dataset-integrity-v0",
+    "task_class": "software.dataset-integrity-repair"
+  },
+  "actors": [
+    "openworker-deepseek-flash-ubuntu24-repo-edit-v1"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "desktop-ui-cv-main@6c35202f84584e68957d053cb888b50a5e3353b6",
+    "issue-22-F09+F10-only",
+    "independent-hidden-behavior-verifier",
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-direct-hosted",
+    "reasoning-effort-none",
+    "max-tokens-4096",
+    "max-iterations-12",
+    "list+search+line-read+exact-replace+write-tool-surface",
+    "two-exact-write-targets:generator+regression-test",
+    "ubuntu-24.04-x64-public-gha"
+  ],
+  "variable_under_test": "operational-task-family-screen:software.dataset-integrity-repair",
+  "claim_type": "feasibility",
+  "experimental_role": "operational",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "state-changed",
+    "model-calls-started",
+    "model-rounds",
+    "tool-calls",
+    "wall-seconds",
+    "candidate-output-snapshot"
+  ],
+  "design_block": "desktop-ui-cv-b1-reference-operational-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-semantic-failure",
+    "execution-error",
+    "timeout-censored",
+    "iteration-censored",
+    "validator-integrity-failure"
+  ],
+  "exclusion_conditions": [
+    "source-hydration-drift",
+    "task-package-invalidated",
+    "validator-error",
+    "credential-absence",
+    "provider-admission-failure",
+    "uncontrolled-config-drift"
+  ]
+}
