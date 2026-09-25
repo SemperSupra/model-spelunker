@@ -1,0 +1,32 @@
+name: RDT&E Runner Science Projector Hook
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/run_task.py'
+      - 'qualification/test_run_task_science_projector.py'
+      - '.github/workflows/rdte-runner-science-projector.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile runner
+        run: python -m py_compile qualification/run_task.py qualification/test_run_task_science_projector.py
+      - name: Run science-hook and runner regressions
+        run: |
+          python qualification/test_run_task_science_projector.py
+          python qualification/test_run_task_failure_attribution.py
+          python qualification/test_run_task_output_snapshot.py
+          python qualification/test_run_task_validator_error.py
+          python qualification/test_task_workspace_layout.py
