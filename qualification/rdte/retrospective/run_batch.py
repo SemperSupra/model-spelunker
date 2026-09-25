@@ -8,7 +8,10 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from reduce_trace import reduce_manifest
+try:
+    from .reduce_trace import reduce_manifest
+except ImportError:
+    from reduce_trace import reduce_manifest
 
 
 def run_batch(manifest_dir: Path) -> tuple[dict, str]:
