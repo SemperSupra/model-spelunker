@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "id": "bounded-multi-file-replace-v0",
+  "task_class": "software.bounded-editing",
+  "instruction": "Update alpha.txt so MODE=legacy becomes MODE=strict, and update beta.txt so SCALE=1 becomes SCALE=2. Preserve all other bytes. Use only the projected file tools.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  },
+  "allowed_write_paths": [
+    "alpha.txt",
+    "beta.txt"
+  ],
+  "projected_tools": [
+    "read_file",
+    "replace_in_file"
+  ],
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "exact-bytes"
+  },
+  "demand_factors": {
+    "files_touched": 2,
+    "exact_replacements": 2,
+    "write_targets": 2
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "bounded_change_execution",
+      "evidence_role": "isolating"
+    },
+    {
+      "family": "skills",
+      "name": "governed_file_tool_use",
+      "evidence_role": "isolating"
+    },
+    {
+      "family": "abilities",
+      "name": "scope_discipline",
+      "evidence_role": "supporting"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+# FROZEN: manual-only after accepted PASS on run 36173789295.
+name: Bounded Multi-file Replace Control
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-replace:
+    environment: hosted-qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      MODEL_SPELUNKER_MODEL: 'deepseek:deepseek-flash'
+      MODEL_SPELUNKER_REASONING_EFFORT: 'none'
+      MODEL_SPELUNKER_MAX_TOKENS: '1024'
+      MODEL_SPELUNKER_MAX_ITERATIONS: '4'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate frozen task
+        run: |
+          python3 qualification/tasks/bounded-multi-file-replace-v0/verify.py --self-test
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          task=json.loads(Path("qualification/tasks/bounded-multi-file-replace-v0/task.json").read_text())
+          actor=json.loads(Path("qualification/actors/openworker-deepseek-flash-ubuntu24-replace-v1.json").read_text())
+          exp=json.loads(Path("qualification/experiments/openworker-deepseek-bounded-multi-file-replace-v0-control.json").read_text())
+          assert task["allowed_write_paths"] == ["alpha.txt","beta.txt"]
+          assert actor["toolset"] == ["read_file","replace_in_file"]
+          assert exp["variable_under_test"] == "tool-projection:exact-target-multi-file-replace"
+          PY
+
+      - name: Clone and install pinned OpenWorker
+        run: |
+          set -euo pipefail
+          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$RUNNER_TEMP/openworker"
+          git -C "$RUNNER_TEMP/openworker" checkout --quiet --detach "$OPENWORKER_SHA"
+          test "$(git -C "$RUNNER_TEMP/openworker" rev-parse HEAD)" = "$OPENWORKER_SHA"
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          "$RUNNER_TEMP/openworker-venv/bin/python" -m pip install --quiet --upgrade pip
+          "$RUNNER_TEMP/openworker-venv/bin/python" -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+          "$RUNNER_TEMP/openworker-venv/bin/python" - <<'PY'
+          import aisuite as ai
+          names=[getattr(f,"__name__","") for f in ai.toolkits.files(root=".",allow_write=True)]
+          assert "replace_in_file" in names, names
+          print("PASS pinned aisuite exposes replace_in_file")
+          PY
+          echo "OPENWORKER_VENV=$RUNNER_TEMP/openworker-venv" >> "$GITHUB_ENV"
+
+      - name: Stage DeepSeek credential and admission
+        env:
+          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-DEEPSEEK_API_KEY'; exit 78; }
+          umask 077
+          keyfile="$RUNNER_TEMP/deepseek.key"
+          printf '%s' "$SELECTED_API_KEY" > "$keyfile"
+          KEYFILE="$keyfile" python3 - <<'PY'
+          import json,os,urllib.request
+          from pathlib import Path
+          key=Path(os.environ["KEYFILE"]).read_text()
+          req=urllib.request.Request("https://api.deepseek.com/user/balance",headers={"Accept":"application/json","Authorization":"Bearer "+key})
+          with urllib.request.urlopen(req,timeout=20) as response:
+              data=json.load(response)
+          assert data.get("is_available") is True
+          PY
+          echo "DEEPSEEK_KEY_FILE=$keyfile" >> "$GITHUB_ENV"
+
+      - name: Run exact-target replace control
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/bounded-replace"
+          mkdir -p "$out"
+          export DEEPSEEK_API_KEY="$(cat "$DEEPSEEK_KEY_FILE")"
+          set +e
+          python3 qualification/run_task.py             --task-commit "$GITHUB_SHA"             --substrate-profile-id gha-linux-x64-openworker-hosted-api             --substrate-profile-commit "$GITHUB_SHA"             --experiment qualification/experiments/openworker-deepseek-bounded-multi-file-replace-v0-control.json             --diagnostics "$out/diagnostics.json"             --snapshot-dir "$out/output"             --candidate-env-mode minimal             --projected-tools-source candidate             --pass-env DEEPSEEK_API_KEY             --pass-env MODEL_SPELUNKER_MODEL             --pass-env MODEL_SPELUNKER_REASONING_EFFORT             --pass-env MODEL_SPELUNKER_MAX_TOKENS             --pass-env MODEL_SPELUNKER_MAX_ITERATIONS             qualification/tasks/bounded-multi-file-replace-v0             qualification/actors/openworker-deepseek-flash-ubuntu24-replace-v1.json             "$out/receipt.json"             -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          unset DEEPSEEK_API_KEY
+          test -s "$out/receipt.json"
+          RC="$rc" RECEIPT="$out/receipt.json" python3 - <<'PY'
+          import json,os
+          r=json.load(open(os.environ["RECEIPT"]))
+          o=r["observation"]
+          assert int(os.environ["RC"]) == (0 if o["success"] else 1)
+          print("BOUNDED_REPLACE_RESULT="+("PASS" if o["success"] else "FAIL_VALID_OBSERVATION"))
+          print("BOUNDED_REPLACE_TERMINATION="+str(o.get("termination_class")))
+          print("BOUNDED_REPLACE_FAILURE_CLASS="+str(o.get("failure_class")))
+          print("BOUNDED_REPLACE_MODEL_ROUNDS="+str((o.get("workload") or {}).get("model_rounds")))
+          print("BOUNDED_REPLACE_TOOL_CALLS="+str(o.get("tool_calls")))
+          print("BOUNDED_REPLACE_WALL_SECONDS="+str(o.get("wall_seconds")))
+          PY
+          exit 0
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bounded-replace-control-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/bounded-replace/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Remove credential
+        if: always()
+        run: rm -f "${DEEPSEEK_KEY_FILE:-}" || true

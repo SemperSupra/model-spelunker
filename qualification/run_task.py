@@ -787,6 +787,11 @@ def main() -> int:
             }
         candidate_env["MODEL_SPELUNKER_TASK_ID"] = task["id"]
         allowed = task.get("allowed_write_paths") or []
+        if allowed:
+            candidate_env["MODEL_SPELUNKER_WRITE_TARGETS"] = json.dumps(
+                [str(path) for path in allowed],
+                separators=(",", ":"),
+            )
         if len(allowed) == 1:
             candidate_env["MODEL_SPELUNKER_WRITE_TARGET"] = str(allowed[0])
         if args.projected_tools_source == "candidate":

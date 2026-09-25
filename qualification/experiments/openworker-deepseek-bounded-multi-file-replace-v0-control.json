@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-bounded-multi-file-replace-v0-control",
+  "decision_question": "Can the projected OpenWorker file toolkit safely execute exact in-place replacements across two explicitly declared writable targets without whole-file rewrites or broader mutation authority?",
+  "task": {
+    "id": "bounded-multi-file-replace-v0",
+    "task_class": "software.bounded-editing"
+  },
+  "actors": [
+    "openworker-deepseek-flash-ubuntu24-replace-v1"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-direct-hosted",
+    "reasoning-effort-none",
+    "max-tokens-1024",
+    "max-iterations-4",
+    "read_file+replace_in_file-only",
+    "two-exact-write-targets",
+    "ubuntu-24.04-x64-public-gha"
+  ],
+  "variable_under_test": "tool-projection:exact-target-multi-file-replace",
+  "claim_type": "feasibility",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "tool-calls",
+    "approvals",
+    "state-changed",
+    "wall-seconds"
+  ],
+  "design_block": "bounded-edit-tool-surface-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-semantic-failure",
+    "execution-error",
+    "timeout-censored",
+    "iteration-censored",
+    "validator-integrity-failure"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "credential-absence",
+    "provider-admission-failure",
+    "uncontrolled-config-drift"
+  ]
+}

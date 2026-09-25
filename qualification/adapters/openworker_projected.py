@@ -374,8 +374,25 @@ def tool_names(messages: list[dict[str, Any]]) -> list[str]:
 
 async def run(instruction: str) -> int:
     workspace = Path.cwd().resolve()
-    write_target = os.environ.get("MODEL_SPELUNKER_WRITE_TARGET", "value.txt")
-    target = (workspace / write_target).resolve()
+    raw_targets = os.environ.get("MODEL_SPELUNKER_WRITE_TARGETS")
+    if raw_targets:
+        parsed_targets = json.loads(raw_targets)
+        if (
+            not isinstance(parsed_targets, list)
+            or not parsed_targets
+            or not all(isinstance(value, str) and value for value in parsed_targets)
+        ):
+            raise RuntimeError(
+                "MODEL_SPELUNKER_WRITE_TARGETS must decode to a non-empty string array"
+            )
+        write_targets = tuple(parsed_targets)
+    else:
+        write_targets = (
+            os.environ.get("MODEL_SPELUNKER_WRITE_TARGET", "value.txt"),
+        )
+    targets = tuple((workspace / value).resolve() for value in write_targets)
+    target_set = set(targets)
+    target = targets[0]
     registry = registry_for(workspace)
     permissions = PermissionEngine(
         workspace_root=workspace,
@@ -420,8 +437,8 @@ async def run(instruction: str) -> int:
         if not path.is_absolute():
             path = workspace / path
         allowed = (
-            request.tool_name == "write_file"
-            and path.resolve() == target
+            request.tool_name in {"write_file", "replace_in_file"}
+            and path.resolve() in target_set
         )
         approvals.append(
             {
@@ -475,6 +492,11 @@ async def run(instruction: str) -> int:
         "suppressed_speculative_batches": provider.suppressed_batches,
         "event_counts": dict(counts),
         "target_exists": target.is_file(),
+        "write_targets": list(write_targets),
+        "write_targets_exist": {
+            value: resolved.is_file()
+            for value, resolved in zip(write_targets, targets)
+        },
     }
     provider.enrich_openrouter_generations()
     usage_summary = {
