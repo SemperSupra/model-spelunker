@@ -1,9 +1,7 @@
+# FROZEN after PASS run 36113492543; no further crossover rep is earned.
 name: Telemetry Coverage Real Deployment Crossover
 
 on:
-  push:
-    branches:
-      - feat/telemetry-coverage-projection
   workflow_dispatch:
 
 permissions:
@@ -11,7 +9,6 @@ permissions:
 
 jobs:
   real-receipts:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[telemetry-real-crossover]')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
