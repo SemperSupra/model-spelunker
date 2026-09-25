@@ -33,6 +33,7 @@ def receipt(
             "harness": {"name": "fixture", "version": "1"},
             "model": {"provider": "none", "id": "none"},
             "configuration_digest": "sha256:" + "0" * 64,
+            "configuration": {"max_tokens": 2048, "max_iterations": 8},
             "toolset": ["filesystem"],
         },
         "substrate": {
@@ -258,3 +259,17 @@ assert env["evidence"]["censored"] == 1
 assert env["evidence"]["semantic_trials"] == 0
 assert env["ksa_evidence"] == {}
 print("PASS iteration-limit censoring")
+
+
+# Configuration coordinates are preserved as tested points; provider-native token
+# utilization remains actor-local and must never imply cross-actor equivalence.
+config_row = receipt("run-config-local", True, model_rounds=2)
+config_row["observation"]["input_tokens"] = 1200
+config_row["observation"]["output_tokens"] = 4096
+config_row["observation"]["cache_read_tokens"] = 800
+config_env = reduce_receipts([config_row])[0]
+assert config_env["configuration_coordinates"] == {"max_tokens": 2048, "max_iterations": 8}
+assert config_env["actor_local_native_metrics"]["output_tokens"]["values"] == [4096.0]
+assert config_env["measurement_semantics"]["actor_local_native"]["cross_actor_equivalence"] is False
+assert "output_tokens" in config_env["measurement_semantics"]["actor_local_native"]["fields"]
+print("PASS actor-local configuration and native-token measurement semantics")
