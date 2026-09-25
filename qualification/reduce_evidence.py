@@ -40,11 +40,68 @@ def digest(value: object) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
+def substrate_realization(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Return semantic substrate identity, keeping commit provenance out of hashing.
+
+    profile_commit identifies where a profile description was sourced, not necessarily
+    a change in execution semantics. When a semantic profile_digest is available it
+    participates in identity; otherwise profile_id is the admitted coarse identity and
+    observed resources remain envelope measurements.
+    """
+    substrate = receipt["substrate"]
+    out = {"profile_id": substrate["profile_id"]}
+    profile_digest = substrate.get("profile_digest")
+    if isinstance(profile_digest, str) and profile_digest:
+        out["profile_digest"] = profile_digest
+    return out
+
+
 def actor_realization(receipt: dict[str, Any]) -> dict[str, Any]:
+    # Structured configuration coordinates were added to v2 receipts after the
+    # configuration_digest identity field already existed. Exclude the redundant
+    # expanded coordinates from identity hashing so historical digest-only and
+    # newer explicit-coordinate receipts for the exact same configured actor do
+    # not split into artificial actor identities.
+    candidate = dict(receipt["candidate"])
+    candidate.pop("configuration", None)
     return {
-        "candidate": receipt["candidate"],
-        "substrate": receipt["substrate"],
+        "candidate": candidate,
+        "substrate": substrate_realization(receipt),
     }
+
+
+def substrate_provenance(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    profile_commits = sorted({
+        str(r.get("substrate", {}).get("profile_commit"))
+        for r in rows
+        if r.get("substrate", {}).get("profile_commit")
+    })
+    profile_digests = sorted({
+        str(r.get("substrate", {}).get("profile_digest"))
+        for r in rows
+        if r.get("substrate", {}).get("profile_digest")
+    })
+    return {
+        "identity_precision": "profile-digest" if profile_digests else "profile-id-only",
+        "profile_commits_observed": profile_commits,
+        "profile_digests_observed": profile_digests,
+    }
+
+
+def configuration_coordinates(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Recover one exact structured configuration for a digest-identified actor."""
+    observed: dict[str, dict[str, Any]] = {}
+    for receipt in rows:
+        config = receipt.get("candidate", {}).get("configuration")
+        if not isinstance(config, dict):
+            continue
+        key = json.dumps(config, sort_keys=True, separators=(",", ":"))
+        observed[key] = config
+    if len(observed) > 1:
+        raise ValueError("same actor realization carries divergent configuration coordinates")
+    if not observed:
+        return {}
+    return dict(next(iter(observed.values())))
 
 
 def evidence_pattern(successes: int, failures: int) -> str:
@@ -321,9 +378,8 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "actor_realization_id": actor_id,
                 "actor": actor_records[actor_id],
                 "task_class": task_class,
-                "configuration_coordinates": (
-                    actor_records[actor_id].get("candidate", {}).get("configuration") or {}
-                ),
+                "configuration_coordinates": configuration_coordinates(rows),
+                "substrate_provenance": substrate_provenance(rows),
                 "measurement_semantics": measurement_semantics(),
                 "actor_local_native_metrics": actor_local_native_metrics(rows),
                 "evidence_pattern": evidence_pattern(successes, failures),
