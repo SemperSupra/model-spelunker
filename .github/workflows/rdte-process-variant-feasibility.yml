@@ -1,0 +1,104 @@
+name: RDT&E Cross-Family Process Variant Feasibility
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/rdte-process-variant-feasibility.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  d3-feasibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test analyzer
+        run: |
+          python -m py_compile             qualification/rdte/retrospective/analyze_process_variants.py             qualification/rdte/retrospective/test_process_variants.py
+          python -m unittest -v qualification.rdte.retrospective.test_process_variants
+
+      - name: Download privacy-safe source projections
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/d3-inputs"
+          mkdir -p "$root/goose" "$root/openworker" "$root/codex"
+
+          fetch_artifact() {
+            id="$1"
+            dest="$2"
+            zip="$RUNNER_TEMP/artifact-$id.zip"
+            curl -fsSL               -H "Authorization: Bearer $GITHUB_TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/SemperSupra/model-spelunker/actions/artifacts/$id/zip"               -o "$zip"
+            unzip -q "$zip" -d "$dest"
+            rm -f "$zip"
+          }
+
+          fetch_artifact 10853547368 "$root/goose"
+          fetch_artifact 10853133120 "$root/openworker"
+          fetch_artifact 10853935990 "$root/codex"
+
+          goose_trace="$(find "$root/goose" -type f -name trace.json -print -quit)"
+          openworker_trace="$(find "$root/openworker" -type f -name trace.json -print -quit)"
+          test -n "$goose_trace"
+          test -n "$openworker_trace"
+
+          mapfile -t codex_traces < <(find "$root/codex" -type f -name 'qwen*.json' | sort)
+          test "${#codex_traces[@]}" -ge 1
+
+          {
+            echo "GOOSE_TRACE=$goose_trace"
+            echo "OPENWORKER_TRACE=$openworker_trace"
+            printf 'CODEX_TRACES<<EOF\n'
+            printf '%s\n' "${codex_traces[@]}"
+            printf 'EOF\n'
+          } >> "$GITHUB_ENV"
+
+      - name: Run D3 feasibility analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .rdte/d3
+          args=(
+            --goose "$GOOSE_TRACE"
+            --openworker "$OPENWORKER_TRACE"
+            --output .rdte/d3/variant-analysis.json
+          )
+          while IFS= read -r path
+          do
+            test -n "$path" || continue
+            args+=(--codex "$path")
+          done <<< "$CODEX_TRACES"
+
+          python qualification/rdte/retrospective/analyze_process_variants.py "${args[@]}"
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path(".rdte/d3/variant-analysis.json").read_text())
+          assert result["family_count"] >= 3
+          assert result["interpretation"]["native_vocabularies_preserved"] is True
+          assert result["interpretation"]["universal_event_ontology_claimed"] is False
+          assert result["interpretation"]["conformance_model_built"] is False
+          assert result["interpretation"]["qualification_state_changed"] is False
+          assert len(result["anchors_observed_in_multiple_families"]) >= 1
+          PY
+
+      - name: Upload D3 feasibility result
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-family-process-variant-feasibility
+          path: .rdte/d3
+          if-no-files-found: error
+          retention-days: 14
