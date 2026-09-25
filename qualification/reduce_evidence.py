@@ -41,10 +41,33 @@ def digest(value: object) -> str:
 
 
 def actor_realization(receipt: dict[str, Any]) -> dict[str, Any]:
+    # Structured configuration coordinates were added to v2 receipts after the
+    # configuration_digest identity field already existed. Exclude the redundant
+    # expanded coordinates from identity hashing so historical digest-only and
+    # newer explicit-coordinate receipts for the exact same configured actor do
+    # not split into artificial actor identities.
+    candidate = dict(receipt["candidate"])
+    candidate.pop("configuration", None)
     return {
-        "candidate": receipt["candidate"],
+        "candidate": candidate,
         "substrate": receipt["substrate"],
     }
+
+
+def configuration_coordinates(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Recover one exact structured configuration for a digest-identified actor."""
+    observed: dict[str, dict[str, Any]] = {}
+    for receipt in rows:
+        config = receipt.get("candidate", {}).get("configuration")
+        if not isinstance(config, dict):
+            continue
+        key = json.dumps(config, sort_keys=True, separators=(",", ":"))
+        observed[key] = config
+    if len(observed) > 1:
+        raise ValueError("same actor realization carries divergent configuration coordinates")
+    if not observed:
+        return {}
+    return dict(next(iter(observed.values())))
 
 
 def evidence_pattern(successes: int, failures: int) -> str:
@@ -321,9 +344,7 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "actor_realization_id": actor_id,
                 "actor": actor_records[actor_id],
                 "task_class": task_class,
-                "configuration_coordinates": (
-                    actor_records[actor_id].get("candidate", {}).get("configuration") or {}
-                ),
+                "configuration_coordinates": configuration_coordinates(rows),
                 "measurement_semantics": measurement_semantics(),
                 "actor_local_native_metrics": actor_local_native_metrics(rows),
                 "evidence_pattern": evidence_pattern(successes, failures),
