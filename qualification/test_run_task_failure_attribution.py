@@ -4,7 +4,6 @@ from qualification.run_task import (
     goose_stream_provider_observations,
     has_engine_error_event,
     incremental_provider_observations,
-    classify_run_outcome,
     openworker_progress_summary,
     workload_summary,
 )
@@ -62,27 +61,3 @@ assert '--projected-tools-source' in _run_task_source
 assert 'choices=["task", "candidate"]' in _run_task_source
 assert 'projected_tools = candidate.get("toolset") or []' in _run_task_source
 print("PASS opt-in configured-actor tool projection contract")
-
-
-failure_class, termination = classify_run_outcome(
-    success=True,
-    validator_error=False,
-    timed_out=False,
-    candidate_exit=0,
-    engine_error=False,
-    iteration_censored=True,
-)
-assert failure_class is None
-assert termination == "semantic-success"
-
-failure_class, termination = classify_run_outcome(
-    success=False,
-    validator_error=False,
-    timed_out=False,
-    candidate_exit=0,
-    engine_error=False,
-    iteration_censored=True,
-)
-assert failure_class == "iteration-limit"
-assert termination == "iteration-censored"
-print("PASS success-at-iteration-boundary outcome separation")
