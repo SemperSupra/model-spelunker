@@ -51,18 +51,57 @@ def _goose(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     native: list[str] = []
     anchors: list[str] = []
+    tool_names: set[str] = set()
+
+    # Goose stream-json emits repeated chunks for the same message id. Those
+    # are transport/streaming records, not independent process steps. Collapse
+    # contiguous chunks into one message group and preserve the first-seen
+    # content-kind set/order within that group.
+    current_key: tuple[str, str] | None = None
+    current_role: str | None = None
+    current_kinds: list[str] = []
+    current_kind_set: set[str] = set()
+
+    def flush_group() -> None:
+        nonlocal current_key, current_role, current_kinds, current_kind_set
+        if current_key is None:
+            return
+        kinds = "+".join(current_kinds) if current_kinds else "empty"
+        native.append(f"message_group:{current_role or 'unknown'}:{kinds}")
+        current_key = None
+        current_role = None
+        current_kinds = []
+        current_kind_set = set()
+
+    anonymous_index = 0
     for event in data.get("events", []):
         if not isinstance(event, dict):
             continue
         etype = str(event.get("type") or "unknown")
-        role = event.get("role")
-        token = f"message:{role}" if etype == "message" and isinstance(role, str) else etype
-        native.append(token)
+        if etype != "message":
+            flush_group()
+            native.append(etype)
+            if etype == "complete":
+                anchors.append("COMPLETE")
+            elif etype == "error":
+                anchors.append("ERROR")
+            continue
 
-        if etype == "complete":
-            anchors.append("COMPLETE")
-        elif etype == "error":
-            anchors.append("ERROR")
+        role = event.get("role")
+        role = role if isinstance(role, str) else "unknown"
+        message_id = event.get("message_id")
+        if isinstance(message_id, str) and message_id:
+            key = (role, message_id)
+        else:
+            # Anonymous chunks cannot safely be merged across records because
+            # there is no identity proving they belong to the same message.
+            anonymous_index += 1
+            key = (role, f"anonymous-{anonymous_index}")
+
+        if current_key != key:
+            flush_group()
+            current_key = key
+            current_role = role
 
         content = event.get("content")
         if not isinstance(content, list):
@@ -71,9 +110,15 @@ def _goose(path: Path) -> dict[str, Any]:
             if not isinstance(item, dict):
                 continue
             kind = str(item.get("kind") or "unknown")
-            native.append(f"content:{kind}")
+            if kind not in current_kind_set:
+                current_kind_set.add(kind)
+                current_kinds.append(kind)
+
             if kind == "tool_request":
                 anchors.append("TOOL_REQUEST")
+                name = item.get("tool_name")
+                if isinstance(name, str):
+                    tool_names.add(name)
             elif kind == "tool_response":
                 anchors.append("TOOL_RESULT")
                 if (
@@ -84,23 +129,20 @@ def _goose(path: Path) -> dict[str, Any]:
             elif kind == "error":
                 anchors.append("ERROR")
 
+    flush_group()
+
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     return {
         "family": "goose",
         "native_sequence": native,
         "anchor_sequence": anchors,
         "source_event_count": summary.get("event_count"),
+        "message_group_count": len([
+            token for token in native if token.startswith("message_group:")
+        ]),
         "native_token_count": len(native),
         "anchor_count": len(anchors),
-        "tool_names": sorted({
-            str(item.get("tool_name"))
-            for event in data.get("events", [])
-            if isinstance(event, dict)
-            for item in (event.get("content") or [])
-            if isinstance(item, dict)
-            and item.get("kind") == "tool_request"
-            and isinstance(item.get("tool_name"), str)
-        }),
+        "tool_names": sorted(tool_names),
     }
 
 
@@ -121,7 +163,9 @@ def _openworker(path: Path) -> dict[str, Any]:
         if isinstance(names, list):
             tool_names.update(str(name) for name in names if isinstance(name, str))
 
-        if "TOOL" in upper and ("CALL" in upper or "REQUEST" in upper):
+        if "TOOL" in upper and (
+            "PROPOSE" in upper or "CALL" in upper or "REQUEST" in upper
+        ):
             anchors.append("TOOL_REQUEST")
         if "TOOL" in upper and (
             "RESULT" in upper
