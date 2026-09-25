@@ -316,6 +316,15 @@ def run_science_projector(
     if forbidden_root is not None:
         root = forbidden_root.resolve()
         try:
+            projector.relative_to(root)
+        except ValueError:
+            pass
+        else:
+            status["failure_class"] = "projector-inside-candidate-workspace"
+            status["source_deleted"] = True
+            return status
+
+        try:
             output.relative_to(root)
         except ValueError:
             pass
@@ -329,8 +338,13 @@ def run_science_projector(
         status["source_deleted"] = True
         return status
 
+    if output.exists():
+        status["failure_class"] = "projection-output-exists"
+        status["output_present"] = True
+        status["source_deleted"] = True
+        return status
+
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.unlink(missing_ok=True)
 
     source_path: Path | None = None
     try:
