@@ -131,6 +131,42 @@ Examples:
 
 Stop an axis when another rep is unlikely to change a decision.
 
+## Configuration-space envelope
+
+Configuration is part of the characterized system, not setup trivia. Preserve the
+exact tested coordinates in each v2 receipt so an envelope can be reconstructed from
+immutable observations rather than branch history or prose.
+
+Treat configuration factors in three classes:
+
+- **identity-defining**: model/artifact/provider route, harness/runtime, tool/authority
+  surface, deployment topology, or another material change that mints a distinct actor
+  realization/treatment;
+- **envelope variables**: actor-local controls such as output/context ceilings,
+  iterations, reasoning mode, sampling, cache treatment, concurrency, or resource
+  allocation whose useful region should be discovered adaptively;
+- **nonmaterial in the tested region**: factors for which additional movement has not
+  changed behavior or a placement/resource decision; stop spending experiment budget
+  on them until new evidence reopens the question.
+
+Do not grid-search the Cartesian product. Start from a plausible point, observe the
+binding mechanism, move the smallest decision-relevant coordinate, and record both
+positive and negative/censored boundaries. Test interactions only when observations
+suggest they matter. A successful point such as `max_tokens=4096,max_iterations=12`
+does not independently prove monotonic thresholds for either coordinate; publish the
+observed point and UNKNOWN outside supported interpolation.
+
+Provider/model-native token counts remain first-class **actor-local** envelope
+measurements. Track prompt/input, output/completion, reasoning and cache tokens, native
+ceilings, finish/truncation behavior and provider-local cost when available. They are
+not cross-tokenizer equivalence units and must not be normalized into a portfolio-wide
+token-efficiency score without a separately validated mapping.
+
+For cross-actor analysis prefer validated outcome, elapsed time, serialized
+input/output/tool bytes, calls/actions, resources, comparable monetary cost,
+reliability/generalization and known failure mechanisms. These are still observations,
+not a universal scalar of semantic work.
+
 ## Sampling and uncertainty
 
 Keep these distinct:
