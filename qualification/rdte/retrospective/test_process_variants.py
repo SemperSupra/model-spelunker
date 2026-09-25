@@ -46,7 +46,15 @@ class ProcessVariantTests(unittest.TestCase):
             self.assertEqual(result["family_count"], 3)
             self.assertFalse(result["interpretation"]["universal_event_ontology_claimed"])
             self.assertIn("TOOL_REQUEST", result["anchor_vocabulary"])
-            self.assertIn("TOOL_RESULT", result["common_anchor_vocabulary"])
+            self.assertIn("TOOL_RESULT", result["anchor_vocabulary"])
+            self.assertIn(
+                "TOOL_REQUEST",
+                result["anchors_observed_in_multiple_families"],
+            )
+            self.assertIn(
+                "TOOL_RESULT",
+                result["anchors_observed_in_multiple_families"],
+            )
             self.assertEqual(result["families"][0]["family"], "goose")
             self.assertEqual(result["families"][1]["family"], "openworker")
             self.assertEqual(result["families"][2]["family"], "codex")
