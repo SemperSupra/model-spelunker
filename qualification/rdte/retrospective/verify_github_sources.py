@@ -72,6 +72,17 @@ def _source_api(ref: str) -> tuple[str, str] | None:
         owner, repo, number = issue.groups()
         return "issue", f"{API}/repos/{owner}/{repo}/issues/{number}"
 
+    blob = re.fullmatch(
+        r"https://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)",
+        ref,
+    )
+    if blob:
+        owner, repo, revision, file_path = blob.groups()
+        return (
+            "file",
+            f"{API}/repos/{owner}/{repo}/contents/{file_path}?ref={revision}",
+        )
+
     return None
 
 
@@ -96,6 +107,11 @@ def _observed_fact(kind: str, value: dict[str, Any]) -> dict[str, Any]:
             "at": value.get("created_at"),
             "material_id": None,
         }
+    if kind == "file":
+        return {
+            "at": None,
+            "material_id": None,
+        }
     raise VerifyError(f"unsupported GitHub source kind: {kind}")
 
 
@@ -113,6 +129,15 @@ def verify_manifest(
     if not isinstance(events, list):
         raise VerifyError("events must be an array")
 
+    source_defs = manifest.get("sources")
+    if not isinstance(source_defs, list):
+        raise VerifyError("sources must be an array")
+    source_meta = {
+        source.get("ref"): source
+        for source in source_defs
+        if isinstance(source, dict) and isinstance(source.get("ref"), str)
+    }
+
     cache: dict[str, tuple[str, dict[str, Any]]] = {}
     checks: list[dict[str, Any]] = []
 
@@ -122,6 +147,17 @@ def verify_manifest(
         ref = event.get("source_ref")
         if not isinstance(ref, str):
             raise VerifyError(f"events[{index}].source_ref is required")
+        source = source_meta.get(ref, {})
+        access_class = source.get("access_class", "public-github")
+        if access_class != "public-github":
+            checks.append({
+                "event_index": index,
+                "source_ref": ref,
+                "status": "SKIP_ACCESS_CLASS",
+                "access_class": access_class,
+            })
+            continue
+
         parsed = _source_api(ref)
         if parsed is None:
             checks.append({
@@ -161,6 +197,12 @@ def verify_manifest(
 
     mismatches = [check for check in checks if check["status"] == "MISMATCH"]
     verified = [check for check in checks if check["status"] == "PASS"]
+    skipped_access = [
+        check for check in checks if check["status"] == "SKIP_ACCESS_CLASS"
+    ]
+    skipped_unsupported = [
+        check for check in checks if check["status"] == "SKIP_UNSUPPORTED_SOURCE"
+    ]
 
     return {
         "record_type": "retrospective-github-source-verification",
@@ -168,6 +210,8 @@ def verify_manifest(
         "rep_id": rep_id,
         "verified_event_count": len(verified),
         "mismatch_count": len(mismatches),
+        "skipped_access_class_count": len(skipped_access),
+        "skipped_unsupported_count": len(skipped_unsupported),
         "checks": checks,
         "source_interpretation_performed": False,
         "qualification_state_changed": False,
