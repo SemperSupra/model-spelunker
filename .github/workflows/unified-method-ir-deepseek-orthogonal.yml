@@ -1,5 +1,5 @@
-# execution-trigger: one same-instance replicate authorized
-name: Unified Method-IR v3 DeepSeek Replicate
+# execution-trigger: RICE held-out declared; no launch token in this commit
+name: Unified Method-IR RICE DeepSeek Heldout
 
 on:
   push:
@@ -16,15 +16,15 @@ concurrency:
 
 jobs:
   method-ir-deepseek:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-deepseek-orthogonal]')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-rice-heldout]')
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
-      TASK_ID: 'method-ir-siglip2-b16-256-v3'
+      TASK_ID: 'method-ir-rice-agent-refining-v1'
       ACTOR_ID: 'openworker-deepseek-flash-ubuntu24-method-ir-v3-compact-source-4096-iter12'
-      EXPERIMENT_ID: 'openworker-deepseek-flash-method-ir-v3-same-instance-replicate-1'
+      EXPERIMENT_ID: 'openworker-deepseek-flash-method-ir-rice-heldout-v1'
       MODEL_SPELUNKER_MODEL: 'deepseek:deepseek-flash'
       MODEL_SPELUNKER_REASONING_EFFORT: 'none'
       MODEL_SPELUNKER_MAX_TOKENS: '4096'
@@ -43,10 +43,11 @@ jobs:
           task="qualification/tasks/$TASK_ID"
           python3 "$task/prepare_fixture.py"
           python3 "$task/verify.py" --self-test
-          test -s "$task/fixture/prepared_sources.json"
-          test -s "$task/fixture/sources/document.tex"
-          test -s "$task/fixture/sources/tables/zeroshot_main.tex"
-          test -s "$task/fixture/sources/README_siglip2.md"
+          test -s "$task/fixture/source_manifest.json"
+          test -s "$task/fixture/claim_selection.json"
+          test -s "$task/fixture/sources/paper.md"
+          test -s "$task/fixture/sources/addendum.md"
+          test -s "$task/fixture/sources/config.yaml"
           python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -65,11 +66,12 @@ jobs:
           assert actor["toolset"] == ["list_files","search_files","read_file_lines","write_file"]
           assert actor["configuration"]["max_tokens"] == 4096
           assert actor["configuration"]["max_iterations"] == 12
-          assert exp["experimental_role"] == "replicate"
+          assert exp["experimental_role"] == "holdout"
           assert exp["task"]["id"] == task["id"]
           assert actor["id"] in exp["actors"]
-          assert exp["variable_under_test"] == "same-instance-stochastic-repeatability-under-current-kernel"
-          print("PASS frozen Method-IR v3 DeepSeek replicate contracts")
+          assert exp["variable_under_test"] == "distinct-source-bound-task-instance:siglip2-v3->rice-agent-refining-v1"
+          assert actor["id"] == "openworker-deepseek-flash-ubuntu24-method-ir-v3-compact-source-4096-iter12"
+          print("PASS frozen RICE Method-IR held-out actor/task/experiment contracts")
           PY
 
       - name: Clone immutable OpenWorker source
@@ -122,7 +124,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          out="$RUNNER_TEMP/method-ir-deepseek-orthogonal"
+          out="$RUNNER_TEMP/method-ir-rice-heldout"
           mkdir -p "$out"
           receipt="$out/receipt.json"
           diagnostics="$out/diagnostics.json"
@@ -168,13 +170,13 @@ jobs:
           assert receipt["candidate"]["model"]["id"] == "deepseek-flash"
           assert receipt["candidate"]["deployment_topology"]["runtime_placement"] == "hosted-service"
           assert receipt["resources"]["platform_system"] == "Linux"
-          print("METHOD_IR_V3_DEEPSEEK_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
-          print("METHOD_IR_V3_DEEPSEEK_TERMINATION="+str(obs.get("termination_class")))
-          print("METHOD_IR_V3_DEEPSEEK_FAILURE_CLASS="+str(obs.get("failure_class")))
-          print("METHOD_IR_V3_DEEPSEEK_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
-          print("METHOD_IR_V3_DEEPSEEK_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
-          print("METHOD_IR_V3_DEEPSEEK_TOOL_CALLS="+str(obs.get("tool_calls")))
-          print("METHOD_IR_V3_DEEPSEEK_WALL_SECONDS="+str(obs.get("wall_seconds")))
+          print("METHOD_IR_RICE_DEEPSEEK_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
+          print("METHOD_IR_RICE_DEEPSEEK_TERMINATION="+str(obs.get("termination_class")))
+          print("METHOD_IR_RICE_DEEPSEEK_FAILURE_CLASS="+str(obs.get("failure_class")))
+          print("METHOD_IR_RICE_DEEPSEEK_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
+          print("METHOD_IR_RICE_DEEPSEEK_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
+          print("METHOD_IR_RICE_DEEPSEEK_TOOL_CALLS="+str(obs.get("tool_calls")))
+          print("METHOD_IR_RICE_DEEPSEEK_WALL_SECONDS="+str(obs.get("wall_seconds")))
           print(json.dumps(receipt,sort_keys=True))
           PY
 
@@ -185,7 +187,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: method-ir-deepseek-v3-replicate-${{ github.run_id }}
+          name: method-ir-rice-heldout-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/method-ir-deepseek-orthogonal/**
           if-no-files-found: warn
