@@ -1,9 +1,7 @@
+# FROZEN after run 36112513752; operational telemetry C1 must not be replayed.
 name: Software Generation Reference + Telemetry Operational
 
 on:
-  push:
-    branches:
-      - exp/telemetry-coverage-software-qualification
   workflow_dispatch:
 
 permissions:
@@ -15,7 +13,6 @@ concurrency:
 
 jobs:
   software-generation:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[telemetry-codegen]')
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 20
