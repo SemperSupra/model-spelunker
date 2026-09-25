@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "source_generator_run_id": "36114073053",
+  "invalid_validator_run_id": "36114283551",
+  "disposition": "VALIDATOR_DEFECT",
+  "include_in_tts_semantic_evidence": false,
+  "reason": [
+    "PyAV container.duration was multiplied by AV_TIME_BASE rather than divided, yielding impossible duration.",
+    "Required-token normalization treated digit numeral 7 as different from spoken word seven even though WER remained below the predeclared threshold."
+  ],
+  "generator_reexecuted": false,
+  "corrected_validator_run_id": "36114495478"
+}
