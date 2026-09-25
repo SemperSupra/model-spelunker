@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-repo-edit-bounded-replace-control",
+  "decision_question": "Does the exact repository-edit configured actor remain healthy on the accepted bounded multi-file replace control before receiving the larger desktop-ui-cv B1 operational task?",
+  "task": {
+    "id": "bounded-multi-file-replace-v0",
+    "task_class": "software.bounded-editing"
+  },
+  "actors": [
+    "openworker-deepseek-flash-ubuntu24-repo-edit-v1"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-direct-hosted",
+    "reasoning-effort-none",
+    "max-tokens-4096",
+    "max-iterations-12",
+    "list+search+line-read+exact-replace+write-tool-surface",
+    "task-scoped-exact-write-target-authority",
+    "ubuntu-24.04-x64-public-gha"
+  ],
+  "variable_under_test": null,
+  "claim_type": "feasibility",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "model-calls-started",
+    "model-rounds",
+    "tool-calls",
+    "wall-seconds"
+  ],
+  "design_block": "desktop-ui-cv-b1-reference-operational-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-semantic-failure",
+    "execution-error",
+    "timeout-censored",
+    "iteration-censored",
+    "validator-integrity-failure"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "credential-absence",
+    "provider-admission-failure",
+    "uncontrolled-config-drift"
+  ]
+}

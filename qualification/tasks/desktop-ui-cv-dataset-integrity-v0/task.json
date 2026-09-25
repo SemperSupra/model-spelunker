@@ -1,0 +1,75 @@
+{
+  "schema_version": 2,
+  "id": "desktop-ui-cv-dataset-integrity-v0",
+  "task_class": "software.dataset-integrity-repair",
+  "instruction": "You are working on the exact public desktop-ui-cv baseline recorded in source_manifest.json.\n\nRepair only the two dataset-integrity defects described below and add focused regression tests in tests/test_dataset_integrity.py.\n\nF-09 validation integrity:\n- src/desktop_ui_cv/dataset/generator.py must never silently use training images as validation data.\n- when split is \"train\" or \"all\" and an independent val/images directory is absent, generate_dataset must fail closed with ValueError and must not write a misleading data.yaml.\n- when val/images exists, data.yaml must use val: val/images and must not alias val to the train path.\n\nF-10 OCR coordinate integrity:\n- whenever render_w/render_h differ from the final 1280x720 training image, every bbox in page.ground_truth_texts must receive the same scale_x/scale_y transform as page.elements before OCR ground truth is emitted.\n- preserve integer bbox coordinates and existing text/metadata.\n\nAlso add tests/test_dataset_integrity.py covering both defects. Preserve deterministic seeded generation and existing in-bounds YOLO-label behavior. Inspect scripts/retrain_yolo26s.py and scripts/train_fold.py as read-only context; do not modify them. Do not redesign the generator, training architecture, or model code.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 300
+  },
+  "success": {
+    "kind": "deterministic-hidden-behavior-tests"
+  },
+  "allowed_write_paths": [
+    "src/desktop_ui_cv/dataset/generator.py",
+    "tests/test_dataset_integrity.py"
+  ],
+  "projected_tools": [
+    "list_files",
+    "search_files",
+    "read_file_lines",
+    "replace_in_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "low",
+    "planning_horizon": "medium",
+    "tool_discovery": "medium",
+    "recovery_requirement": "medium",
+    "context_volume": "large-file-bounded",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-behavior-tests"
+  },
+  "demand_factors": {
+    "authoritative_source_files": 4,
+    "writable_files": 2,
+    "generator_source_bytes_approx": 105000,
+    "independent_defects": 2,
+    "non_native_resolution_probes": 2,
+    "deterministic_repetition_probes": 2
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "repository_code_navigation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "bounded_code_repair",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "regression_test_authoring",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "coordinate_transform_integrity",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "scope_discipline",
+      "evidence_role": "supporting"
+    },
+    {
+      "family": "abilities",
+      "name": "unknown_preservation",
+      "evidence_role": "supporting"
+    }
+  ]
+}
