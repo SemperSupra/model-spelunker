@@ -1,9 +1,7 @@
 name: RDT&E Goose Prospective Trace
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/rdte-goose-prospective-trace.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
