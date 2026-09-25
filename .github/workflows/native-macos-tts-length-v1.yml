@@ -1,0 +1,184 @@
+name: Native macOS TTS Length Boundary
+
+on:
+  push:
+    branches:
+      - exp/native-macos-tts-length-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: native-macos-tts-length-v1-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[tts-length-v1]')
+    runs-on: macos-26
+    timeout-minutes: 8
+    outputs:
+      rc: ${{ steps.generate.outputs.rc }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate frozen TTS length contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/tasks/tts-content-fidelity-v1-length48/verify.py --self-test
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          task=json.loads(Path("qualification/tasks/tts-content-fidelity-v1-length48/task.json").read_text())
+          exp=json.loads(Path("qualification/experiments/macos-say-samantha-tts-content-v1-length48-boundary.json").read_text())
+          actor=json.loads(Path("qualification/actors/macos-say-samantha-macos26-arm64-v0.json").read_text())
+          source=Path("qualification/tasks/tts-content-fidelity-v1-length48/fixture/source.txt").read_text()
+          assert len(re.findall(r"[A-Za-z0-9]+",source)) == 48
+          assert task["demand_factors"]["words"] == 48
+          assert exp["variable_under_test"] == "utterance_words:12->48"
+          assert exp["actors"] == [actor["id"]]
+          assert actor["configuration"]["voice"] == "Samantha"
+          print("PASS frozen TTS length treatment")
+          PY
+
+      - name: Generate 48-word native speech
+        id: generate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/tts-generator"
+          mkdir -p "$out"
+          set +e
+          python3 qualification/run_macos_tts.py             --source qualification/tasks/tts-content-fidelity-v1-length48/fixture/source.txt             --output "$out/speech.aiff"             --evidence "$out/generation.json"             --voice Samantha
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          test -s "$out/generation.json"
+          python3 - "$out/generation.json" <<'PY'
+          import json,sys
+          e=json.load(open(sys.argv[1]))
+          print("TTS_LENGTH_GENERATOR_STATUS="+str(e.get("status")))
+          print("TTS_LENGTH_GENERATOR_WALL_SECONDS="+str(e.get("generation_wall_seconds")))
+          print("TTS_LENGTH_AUDIO_SHA256="+str((e.get("output") or {}).get("sha256")))
+          PY
+
+      - name: Upload generator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-tts-length-generator-${{ github.run_id }}
+          path: ${{ runner.temp }}/tts-generator/**
+          if-no-files-found: error
+          retention-days: 30
+
+  validate:
+    needs: generate
+    if: needs.generate.outputs.rc == '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      FOUNDRY_REF: '6622753fd5914be87fb1b6d987ceb7cae46c7ff5'
+      LOGICAL_ID: 'asr/faster-whisper/tiny'
+      EXPECTED_DIGEST: 'sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42'
+      PYTHONPATH: '.'
+      PYTHONDONTWRITEBYTECODE: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Download exact generator artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: native-tts-length-generator-${{ github.run_id }}
+          path: ${{ runner.temp }}/tts-generator
+
+      - name: Checkout exact approved Foundry revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: SemperSupra/model-artifact-foundry
+          ref: ${{ env.FOUNDRY_REF }}
+          path: foundry
+          persist-credentials: false
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+
+      - name: Prepare exact independent ASR validator
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .asr-venv
+          .asr-venv/bin/python -m pip install --quiet --disable-pip-version-check --no-input             "faster-whisper==1.2.1" "ctranslate2==4.6.0"
+          PYTHONPATH=. .asr-venv/bin/python qualification/test_validate_tts_audio.py
+          .asr-venv/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          entry=json.loads(Path("foundry/catalog/approved.json").read_text())["artifacts"][os.environ["LOGICAL_ID"]]
+          assert entry["approved_digest"] == os.environ["EXPECTED_DIGEST"]
+          assert entry["upstream_exact_revision"] == "d90ca5fe260221311c53c58e660288d3deb8d356"
+          PY
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          cache="$RUNNER_TEMP/tts-length-validator/foundry-cache"
+          mkdir -p "$cache"
+          MODEL_DIR="$(.asr-venv/bin/python foundry/tools/hydrate.py             --catalog foundry/catalog/approved.json             --id "$LOGICAL_ID"             --cache-root "$cache"             --oras "$(command -v oras)" | tail -n1)"
+          test -d "$MODEL_DIR"
+          echo "MODEL_DIR=$MODEL_DIR" >> "$GITHUB_ENV"
+
+      - name: Independently validate 48-word speech
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/tts-length-validation"
+          mkdir -p "$out"
+          set +e
+          PYTHONPATH=. .asr-venv/bin/python qualification/validate_tts_audio.py             --model-dir "$MODEL_DIR"             --audio "$RUNNER_TEMP/tts-generator/speech.aiff"             --source qualification/tasks/tts-content-fidelity-v1-length48/fixture/source.txt             --generation-evidence "$RUNNER_TEMP/tts-generator/generation.json"             --output "$out/validation.json"             --max-wer 0.10
+          rc=$?
+          set -e
+          test -s "$out/validation.json"
+          RC="$rc" python3 - "$out/validation.json" "$RUNNER_TEMP/tts-generator/generation.json" "$out/final-result.json" <<'PY'
+          import json,os,sys
+          v=json.load(open(sys.argv[1]))
+          g=json.load(open(sys.argv[2]))
+          rc=int(os.environ["RC"])
+          assert rc == (0 if v["success"] else 1)
+          result={
+            "schema_version":1,
+            "record_type":"tts-qualification-result",
+            "experiment_id":"macos-say-samantha-tts-content-v1-length48-boundary",
+            "task_id":"tts-content-fidelity-v1-length48",
+            "actor_id":"macos-say-samantha-macos26-arm64-v0",
+            "generation":g,
+            "validation":v,
+            "success":v["success"],
+            "termination_class":"semantic-success" if v["success"] else "semantic-failure",
+          }
+          open(sys.argv[3],"w").write(json.dumps(result,indent=2,sort_keys=True)+"\n")
+          print("TTS_LENGTH_RESULT="+("PASS" if v["success"] else "FAIL_VALID_OBSERVATION"))
+          print("TTS_LENGTH_WER="+str(v["transcript"]["word_error_rate"]))
+          print("TTS_LENGTH_WORDS_EXPECTED="+str(v["expected"]["word_count"]))
+          print("TTS_LENGTH_WORDS_RECOVERED="+str(v["transcript"]["word_count"]))
+          print("TTS_LENGTH_DURATION_SECONDS="+str(v["audio"]["duration_seconds"]))
+          print("TTS_LENGTH_MISSING_TOKENS="+json.dumps(v["transcript"]["missing_required_tokens"]))
+          PY
+          exit 0
+
+      - name: Upload validator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-tts-length-validation-${{ github.run_id }}
+          path: ${{ runner.temp }}/tts-length-validation/**
+          if-no-files-found: warn
+          retention-days: 30
