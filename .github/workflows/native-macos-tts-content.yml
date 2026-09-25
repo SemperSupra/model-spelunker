@@ -1,9 +1,7 @@
+# FROZEN after generator run 36114073053; initial validator setup was invalid before ASR. Do not regenerate for replay.
 name: Native macOS TTS Content Qualification
 
 on:
-  push:
-    branches:
-      - exp/native-macos-tts-content-v0
   workflow_dispatch:
 
 permissions:
@@ -93,6 +91,7 @@ jobs:
       LOGICAL_ID: 'asr/faster-whisper/tiny'
       EXPECTED_DIGEST: 'sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42'
       PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: '.'
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
 
