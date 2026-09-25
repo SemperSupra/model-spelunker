@@ -1,0 +1,141 @@
+name: Corrected Software Reference v2
+
+on:
+  push:
+    branches:
+      - exp/telemetry-coverage-software-qualification
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: corrected-codegen-reference-v2-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  corrected-reference:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[codegen-reference-v2]')
+    environment: hosted-qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      ACTOR_ID: 'openworker-deepseek-flash-ubuntu24-codegen-v2'
+      MODEL_SPELUNKER_MODEL: 'deepseek:deepseek-flash'
+      MODEL_SPELUNKER_REASONING_EFFORT: 'none'
+      MODEL_SPELUNKER_MAX_TOKENS: '2048'
+      MODEL_SPELUNKER_MAX_ITERATIONS: '8'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate corrected reference contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python qualification/tasks/boundary-bugfix-v2/verify.py --self-test
+          test -s qualification/tasks/boundary-bugfix-v2/fixture/RETRY_POLICY.md
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          task=json.loads(Path("qualification/tasks/boundary-bugfix-v2/task.json").read_text())
+          actor=json.loads(Path("qualification/actors/openworker-deepseek-flash-ubuntu24-codegen-v2.json").read_text())
+          exp=json.loads(Path("qualification/experiments/openworker-deepseek-codegen-reference-v2.json").read_text())
+          assert task["id"] == "boundary-bugfix-v2"
+          assert exp["actors"] == [actor["id"]]
+          assert actor["configuration"]["max_tokens"] == 2048
+          assert actor["configuration"]["max_iterations"] == 8
+          print("PASS corrected reference freeze")
+          PY
+
+      - name: Clone immutable OpenWorker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/openworker"
+          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"
+          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_SHA"
+          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_SHA"
+
+      - name: Install OpenWorker
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/openworker-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/python" -m pip install --quiet --upgrade pip
+          "$venv/bin/python" -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+          "$venv/bin/python" -c 'import coworker; import coworker.engine'
+          echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
+
+      - name: Stage DeepSeek credential and admission
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-DEEPSEEK_API_KEY'; exit 78; }
+          umask 077
+          keyfile="$RUNNER_TEMP/deepseek.key"
+          printf '%s' "$SELECTED_API_KEY" > "$keyfile"
+          KEYFILE="$keyfile" python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          key=Path(os.environ["KEYFILE"]).read_text()
+          req=urllib.request.Request(
+              "https://api.deepseek.com/user/balance",
+              headers={"Accept":"application/json","Authorization":"Bearer "+key},
+          )
+          with urllib.request.urlopen(req,timeout=20) as response:
+              data=json.load(response)
+          if data.get("is_available") is not True:
+              raise SystemExit("DeepSeek authenticated but API balance is unavailable")
+          print("DEEPSEEK_ADMISSION="+json.dumps({"authenticated":True,"available":True},sort_keys=True))
+          PY
+          echo "DEEPSEEK_KEY_FILE=$keyfile" >> "$GITHUB_ENV"
+
+      - name: Run corrected bounded-debugging reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/codegen-reference-v2"
+          mkdir -p "$out"
+          export DEEPSEEK_API_KEY="$(cat "$DEEPSEEK_KEY_FILE")"
+          set +e
+          python3 qualification/run_task.py             --task-commit "$GITHUB_SHA"             --substrate-profile-id gha-linux-x64-openworker-hosted-api             --substrate-profile-commit "$GITHUB_SHA"             --experiment qualification/experiments/openworker-deepseek-codegen-reference-v2.json             --diagnostics "$out/diagnostics.json"             --snapshot-dir "$out/output-snapshot"             --candidate-env-mode minimal             --projected-tools-source candidate             --pass-env DEEPSEEK_API_KEY             --pass-env MODEL_SPELUNKER_MODEL             --pass-env MODEL_SPELUNKER_REASONING_EFFORT             --pass-env MODEL_SPELUNKER_MAX_TOKENS             --pass-env MODEL_SPELUNKER_MAX_ITERATIONS             qualification/tasks/boundary-bugfix-v2             "qualification/actors/$ACTOR_ID.json"             "$out/receipt.json"             -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          unset DEEPSEEK_API_KEY
+          test -s "$out/receipt.json"
+          RC="$rc" RECEIPT="$out/receipt.json" python3 - <<'PY'
+          import json,os
+          r=json.load(open(os.environ["RECEIPT"]))
+          o=r["observation"]
+          assert int(os.environ["RC"]) == (0 if o["success"] else 1)
+          print("CODEGEN_REFERENCE_V2_RESULT="+("PASS" if o["success"] else "FAIL_VALID_OBSERVATION"))
+          print("CODEGEN_REFERENCE_V2_TERMINATION="+str(o.get("termination_class")))
+          print("CODEGEN_REFERENCE_V2_FAILURE_CLASS="+str(o.get("failure_class")))
+          print("CODEGEN_REFERENCE_V2_MODEL_ROUNDS="+str((o.get("workload") or {}).get("model_rounds")))
+          print("CODEGEN_REFERENCE_V2_TOOL_CALLS="+str(o.get("tool_calls")))
+          print("CODEGEN_REFERENCE_V2_WALL_SECONDS="+str(o.get("wall_seconds")))
+          print(json.dumps(r,sort_keys=True))
+          PY
+          exit 0
+
+      - name: Upload corrected reference evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: codegen-reference-v2-${{ github.run_id }}
+          path: ${{ runner.temp }}/codegen-reference-v2/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Remove staged provider credential
+        if: always()
+        shell: bash
+        run: rm -f "${DEEPSEEK_KEY_FILE:-}" || true
