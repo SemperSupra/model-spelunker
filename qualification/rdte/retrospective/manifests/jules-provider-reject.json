@@ -6,15 +6,18 @@
   "sources": [
     {
       "ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161",
-      "kind": "github-issue"
+      "kind": "github-issue",
+      "access_class": "connector-authenticated"
     },
     {
       "ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161#issuecomment-5586288628",
-      "kind": "github-comment"
+      "kind": "github-comment",
+      "access_class": "connector-authenticated"
     },
     {
       "ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161#issuecomment-5586348219",
-      "kind": "github-comment"
+      "kind": "github-comment",
+      "access_class": "connector-authenticated"
     }
   ],
   "events": [
