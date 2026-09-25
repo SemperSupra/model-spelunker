@@ -1,5 +1,5 @@
-# execution-trigger: v3 contract repair validated; feasibility launch
-name: Unified Method-IR v3 DeepSeek Feasibility
+# execution-trigger: replicate declared; no launch token in this commit
+name: Unified Method-IR v3 DeepSeek Replicate
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
       OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       TASK_ID: 'method-ir-siglip2-b16-256-v3'
       ACTOR_ID: 'openworker-deepseek-flash-ubuntu24-method-ir-v3-compact-source-4096-iter12'
-      EXPERIMENT_ID: 'openworker-deepseek-flash-method-ir-v3-feasibility-screen'
+      EXPERIMENT_ID: 'openworker-deepseek-flash-method-ir-v3-same-instance-replicate-1'
       MODEL_SPELUNKER_MODEL: 'deepseek:deepseek-flash'
       MODEL_SPELUNKER_REASONING_EFFORT: 'none'
       MODEL_SPELUNKER_MAX_TOKENS: '4096'
@@ -65,11 +65,11 @@ jobs:
           assert actor["toolset"] == ["list_files","search_files","read_file_lines","write_file"]
           assert actor["configuration"]["max_tokens"] == 4096
           assert actor["configuration"]["max_iterations"] == 12
-          assert exp["experimental_role"] == "screening"
+          assert exp["experimental_role"] == "replicate"
           assert exp["task"]["id"] == task["id"]
           assert actor["id"] in exp["actors"]
-          assert exp["variable_under_test"] == "corrected-task-contract-v3-feasibility"
-          print("PASS corrected Method-IR v3 DeepSeek actor/task/experiment contracts")
+          assert exp["variable_under_test"] == "same-instance-stochastic-repeatability-under-current-kernel"
+          print("PASS frozen Method-IR v3 DeepSeek replicate contracts")
           PY
 
       - name: Clone immutable OpenWorker source
@@ -185,7 +185,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: method-ir-deepseek-orthogonal-${{ github.run_id }}
+          name: method-ir-deepseek-v3-replicate-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/method-ir-deepseek-orthogonal/**
           if-no-files-found: warn
