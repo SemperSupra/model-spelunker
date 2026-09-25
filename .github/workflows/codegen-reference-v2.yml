@@ -1,9 +1,7 @@
+# FROZEN after corrected reference PASS run 36113034752.
 name: Corrected Software Reference v2
 
 on:
-  push:
-    branches:
-      - exp/telemetry-coverage-software-qualification
   workflow_dispatch:
 
 permissions:
@@ -15,7 +13,6 @@ concurrency:
 
 jobs:
   corrected-reference:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[codegen-reference-v2]')
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 12
