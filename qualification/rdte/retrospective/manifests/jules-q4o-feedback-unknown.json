@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "rep_id": "rta-jules-q4o-feedback-unknown",
+  "actor_family": "jules",
+  "trace_quality": "partial",
+  "sources": [
+    {
+      "ref": "https://github.com/SemperSupra/mcp-projection-dev/commit/179a1586193b568cd8904c0a15a0bc71908d0efe",
+      "kind": "git-commit",
+      "access_class": "connector-authenticated"
+    },
+    {
+      "ref": "https://github.com/SemperSupra/mcp-projection-dev/pull/138#issuecomment-5584763409",
+      "kind": "github-comment",
+      "access_class": "connector-authenticated"
+    }
+  ],
+  "events": [
+    {
+      "type": "MUTATE",
+      "at": "2026-09-08T11:55:36Z",
+      "source_ref": "https://github.com/SemperSupra/mcp-projection-dev/commit/179a1586193b568cd8904c0a15a0bc71908d0efe",
+      "material_id": "git-tree:f25d17ceb8353517cd0f815bb584452203558dca"
+    },
+    {
+      "type": "FEEDBACK",
+      "at": "2026-09-08T11:57:53Z",
+      "source_ref": "https://github.com/SemperSupra/mcp-projection-dev/pull/138#issuecomment-5584763409"
+    }
+  ]
+}

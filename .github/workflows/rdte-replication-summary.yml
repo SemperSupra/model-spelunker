@@ -1,0 +1,82 @@
+name: RDT&E Prospective Telemetry Replication Summary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  summarize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile and test replication reducer
+        run: |
+          python -m py_compile             qualification/rdte/retrospective/analyze_process_variants.py             qualification/rdte/retrospective/summarize_replications.py             qualification/rdte/retrospective/test_replication_summary.py
+          python -m unittest -v             qualification.rdte.retrospective.test_process_variants             qualification.rdte.retrospective.test_replication_summary
+
+      - name: Download six privacy-safe prospective artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/replications"
+          mkdir -p "$root"
+
+          fetch_artifact() {
+            id="$1"
+            label="$2"
+            dest="$root/$label"
+            zip="$RUNNER_TEMP/artifact-$id.zip"
+            mkdir -p "$dest"
+            curl -fsSL               -H "Authorization: Bearer $GITHUB_TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/SemperSupra/model-spelunker/actions/artifacts/$id/zip"               -o "$zip"
+            unzip -q "$zip" -d "$dest"
+            rm -f "$zip"
+          }
+
+          fetch_artifact 10853547368 goose-1
+          fetch_artifact 10853844233 goose-2
+          fetch_artifact 10853784982 goose-3
+          fetch_artifact 10853133120 openworker-1
+          fetch_artifact 10853553709 openworker-2
+          fetch_artifact 10853973006 openworker-3
+
+          echo "REPLICATION_ROOT=$root" >> "$GITHUB_ENV"
+
+      - name: Reduce replication variance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .rdte/replication
+          python -m qualification.rdte.retrospective.summarize_replications             --goose-artifact "$REPLICATION_ROOT/goose-1"             --goose-artifact "$REPLICATION_ROOT/goose-2"             --goose-artifact "$REPLICATION_ROOT/goose-3"             --openworker-artifact "$REPLICATION_ROOT/openworker-1"             --openworker-artifact "$REPLICATION_ROOT/openworker-2"             --openworker-artifact "$REPLICATION_ROOT/openworker-3"             --output .rdte/replication/summary.json
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path(".rdte/replication/summary.json").read_text())
+          assert len(result["cohorts"]) == 2
+          for cohort in result["cohorts"]:
+              assert cohort["rep_count"] == 3
+          assert result["interpretation"]["cross_harness_ranking_performed"] is False
+          assert result["interpretation"]["conformance_model_built"] is False
+          assert result["interpretation"]["qualification_state_changed"] is False
+          PY
+
+      - name: Upload replication summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: prospective-telemetry-replication-summary
+          path: .rdte/replication
+          if-no-files-found: error
+          retention-days: 14
