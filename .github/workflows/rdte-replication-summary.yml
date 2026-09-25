@@ -1,9 +1,7 @@
 name: RDT&E Prospective Telemetry Replication Summary
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/rdte-replication-summary.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
