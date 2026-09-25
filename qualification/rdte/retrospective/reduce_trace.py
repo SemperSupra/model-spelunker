@@ -45,9 +45,11 @@ class TraceError(ValueError):
     pass
 
 
-def _time(value: str) -> dt.datetime:
+def _time(value: str | None) -> dt.datetime | None:
+    if value is None:
+        return None
     if not isinstance(value, str) or not value:
-        raise TraceError("event.at must be a non-empty ISO-8601 string")
+        raise TraceError("event.at must be null or a non-empty ISO-8601 string")
     try:
         parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
@@ -57,7 +59,9 @@ def _time(value: str) -> dt.datetime:
     return parsed.astimezone(dt.timezone.utc)
 
 
-def _seconds(a: dt.datetime, b: dt.datetime) -> float:
+def _seconds(a: dt.datetime | None, b: dt.datetime | None) -> float | None:
+    if a is None or b is None:
+        return None
     return max(0.0, (b - a).total_seconds())
 
 
@@ -93,7 +97,7 @@ def _load(manifest: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]
         raise TraceError("events must be a non-empty array")
 
     normalized: list[dict[str, Any]] = []
-    previous: dt.datetime | None = None
+    previous_known: dt.datetime | None = None
     for index, event in enumerate(events):
         if not isinstance(event, dict):
             raise TraceError(f"events[{index}] must be an object")
@@ -101,9 +105,10 @@ def _load(manifest: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]
         if kind not in ALLOWED_TYPES:
             raise TraceError(f"unsupported event type: {kind!r}")
         at = _time(event.get("at"))
-        if previous is not None and at < previous:
-            raise TraceError("events must be chronological")
-        previous = at
+        if at is not None:
+            if previous_known is not None and at < previous_known:
+                raise TraceError("known event timestamps must be chronological")
+            previous_known = at
         source_ref = event.get("source_ref")
         if source_ref not in source_refs:
             raise TraceError(f"event source_ref is not declared: {source_ref!r}")
@@ -166,11 +171,23 @@ def reduce_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         preceding = [
             event
             for event in mutations
-            if event["at"] <= feedback["at"] and event["material_id"] is not None
+            if (
+                event["material_id"] is not None
+                and (
+                    feedback["at"] is None
+                    or event["at"] is None
+                    or event["at"] <= feedback["at"]
+                )
+            )
         ]
         baseline = preceding[-1]["material_id"] if preceding else None
+        feedback_index = events.index(feedback)
         next_mutation = next(
-            (event for event in mutations if event["at"] > feedback["at"]),
+            (
+                event
+                for event in events[feedback_index + 1 :]
+                if event["type"] == "MUTATE"
+            ),
             None,
         )
         if next_mutation is None:
