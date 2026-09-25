@@ -105,6 +105,78 @@ def wilson_interval(
     }
 
 
+def numeric_summary(values: list[int | float]) -> dict[str, Any] | None:
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    return {
+        "observations": len(ordered),
+        "min": ordered[0],
+        "max": ordered[-1],
+        "values": ordered,
+    }
+
+
+def actor_local_native_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Retain native token/cache utilization inside one actor realization only."""
+    paths = {
+        "input_tokens": ("observation", "input_tokens"),
+        "output_tokens": ("observation", "output_tokens"),
+        "cache_read_tokens": ("observation", "cache_read_tokens"),
+        "cache_write_tokens": ("observation", "cache_write_tokens"),
+        "native_prompt_tokens_total": ("observation", "workload", "native_prompt_tokens_total"),
+        "native_completion_tokens_total": ("observation", "workload", "native_completion_tokens_total"),
+        "native_reasoning_tokens_total": ("observation", "workload", "native_reasoning_tokens_total"),
+        "native_cached_tokens_total": ("observation", "workload", "native_cached_tokens_total"),
+    }
+    out: dict[str, Any] = {}
+    for name, path in paths.items():
+        values: list[int | float] = []
+        for receipt in rows:
+            value: Any = receipt
+            for key in path:
+                if not isinstance(value, dict):
+                    value = None
+                    break
+                value = value.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0:
+                values.append(value)
+        summary = numeric_summary(values)
+        if summary is not None:
+            out[name] = summary
+    return out
+
+
+def measurement_semantics() -> dict[str, Any]:
+    return {
+        "actor_local_native": {
+            "cross_actor_equivalence": False,
+            "fields": [
+                "input_tokens",
+                "output_tokens",
+                "cache_read_tokens",
+                "cache_write_tokens",
+                "native_prompt_tokens_total",
+                "native_completion_tokens_total",
+                "native_reasoning_tokens_total",
+                "native_cached_tokens_total",
+            ],
+            "purpose": "actor-local utilization, ceilings, truncation and cost/accounting",
+        },
+        "cross_actor_observations": {
+            "fields": [
+                "validated outcome",
+                "wall_seconds",
+                "request/output/tool bytes",
+                "model/tool calls",
+                "resource observations",
+                "monetary cost when comparable",
+            ],
+            "note": "These are observational comparison planes, not a universal semantic-work scalar.",
+        },
+    }
+
+
 def legacy_ksa_requirements(task_class: str) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     for family, names in KSA_BY_TASK_CLASS.get(task_class, {}).items():
@@ -249,6 +321,11 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "actor_realization_id": actor_id,
                 "actor": actor_records[actor_id],
                 "task_class": task_class,
+                "configuration_coordinates": (
+                    actor_records[actor_id].get("candidate", {}).get("configuration") or {}
+                ),
+                "measurement_semantics": measurement_semantics(),
+                "actor_local_native_metrics": actor_local_native_metrics(rows),
                 "evidence_pattern": evidence_pattern(successes, failures),
                 "evidence": {
                     "reps": len(rows),
