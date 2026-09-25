@@ -1,11 +1,7 @@
 name: RDT&E Runner Science Projector Hook
 
 on:
-  pull_request:
-    paths:
-      - 'qualification/run_task.py'
-      - 'qualification/test_run_task_science_projector.py'
-      - '.github/workflows/rdte-runner-science-projector.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
