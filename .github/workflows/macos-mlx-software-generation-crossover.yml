@@ -1,0 +1,240 @@
+name: Mac MLX Software Generation Crossover
+
+on:
+  push:
+    branches:
+      - exp/macos-mlx-software-generation-crossover
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: macos-mlx-software-generation-crossover-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  crossover:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[macos-codegen-crossover]')
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      HARNESS_ARTIFACT_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker-macos-arm64@sha256:858f836fb1c4d575dcdfff9a64e5ae2628bfe5f0cf07196eeb3351ae8af4d236'
+      HARNESS_BUILD_RECEIPT_SHA256: '054c5dcca5a619e18c725858f476e60ab399af110907738495cd9fdf7f95b7f9'
+      CRANE_VERSION: 'v0.22.1'
+      CRANE_DARWIN_ARM64_SHA256: '2231fc8df8806d20d680ff1225db44e095a55dd6ac1ae8eced4faf4b278b78fb'
+      MLX_LM_VERSION: '0.31.3'
+      MODEL_REPO: 'mlx-community/Qwen3-4B-Instruct-2507-4bit'
+      MODEL_REVISION: '50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b'
+      MODEL_SAFETENSORS_SHA256: '2a73c6c248601ab904e035548abd8e6abb65ea27dcb5f342fb0a8910eb44173f'
+      MODEL_SAFETENSORS_BYTES: '2263022417'
+      MLX_PORT: '8080'
+      ACTOR_ID: 'openworker-qwen3-4b-macos26-mlx-codegen-v1'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate frozen tasks and actor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python qualification/tasks/boundary-bugfix-v2/verify.py --self-test
+          python qualification/tasks/telemetry-coverage-projection-v0/verify.py --self-test
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          actor=json.loads(Path("qualification/actors/openworker-qwen3-4b-macos26-mlx-codegen-v1.json").read_text())
+          ref=json.loads(Path("qualification/experiments/openworker-qwen3-4b-macos26-boundary-bugfix-v2-reference.json").read_text())
+          op=json.loads(Path("qualification/experiments/openworker-qwen3-4b-macos26-telemetry-coverage-v0-operational.json").read_text())
+          assert ref["actors"] == [actor["id"]]
+          assert op["actors"] == [actor["id"]]
+          assert ref["design_block"] == op["design_block"]
+          assert actor["configuration"]["max_tokens"] == 2048
+          assert actor["configuration"]["max_iterations"] == 8
+          assert actor["toolset"] == ["list_files","read_file","write_file"]
+          assert actor["deployment_topology"]["compute_class"] == "gpu"
+          assert actor["deployment_topology"]["transport"] == "loopback-http"
+          print("PASS frozen Mac MLX software crossover contracts")
+          PY
+
+      - name: Hydrate admitted OpenWorker artifact
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/crane-bin"
+          mkdir -p "$bin"
+          archive="$RUNNER_TEMP/go-containerregistry_Darwin_arm64.tar.gz"
+          curl --fail --location --silent --show-error --retry 3             "https://github.com/google/go-containerregistry/releases/download/$CRANE_VERSION/go-containerregistry_Darwin_arm64.tar.gz"             --output "$archive"
+          echo "$CRANE_DARWIN_ARM64_SHA256  $archive" | shasum -a 256 -c -
+          tar -xzf "$archive" -C "$bin" crane
+          "$bin/crane" auth login ghcr.io -u "$GITHUB_ACTOR" -p "$GHCR_TOKEN"
+
+          tarball="$RUNNER_TEMP/openworker-macos-arm64.tar"
+          root="$RUNNER_TEMP/openworker-macos-root"
+          mkdir -p "$root"
+          "$bin/crane" export "$HARNESS_ARTIFACT_REF" "$tarball"
+          tar -xf "$tarball" -C "$root"
+
+          artifact="$root/artifact"
+          test -s "$artifact/build-receipt.json"
+          actual_receipt="$(shasum -a 256 "$artifact/build-receipt.json" | awk '{print $1}')"
+          test "$actual_receipt" = "$HARNESS_BUILD_RECEIPT_SHA256"
+
+          ARTIFACT="$artifact" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["ARTIFACT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+          assert receipt["source"]["revision"]==os.environ["OPENWORKER_SHA"]
+          for row in receipt["payload"]["files"]:
+              path=root/"wheelhouse"/row["path"]
+              data=path.read_bytes()
+              assert len(data)==row["bytes"], path
+              assert hashlib.sha256(data).hexdigest()==row["sha256"], path
+          print("PASS admitted OpenWorker payload")
+          PY
+
+          venv="$RUNNER_TEMP/openworker-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$artifact/wheelhouse"/*.whl
+          "$venv/bin/python" -c 'import coworker; import coworker.engine'
+          echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
+
+      - name: Hydrate exact MLX model and start local service
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/mlx-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --disable-pip-version-check --no-cache-dir "mlx-lm==$MLX_LM_VERSION"
+
+          cat >"$RUNNER_TEMP/resolve_model.py" <<'PY'
+          from huggingface_hub import snapshot_download
+          import os
+          print(snapshot_download(repo_id=os.environ["MODEL_REPO"], revision=os.environ["MODEL_REVISION"]))
+          PY
+          snapshot="$("$venv/bin/python" "$RUNNER_TEMP/resolve_model.py" | tail -1)"
+          test -d "$snapshot"
+          MODEL_FILE="$snapshot/model.safetensors" "$venv/bin/python" - <<'PY'
+          import hashlib,os
+          from pathlib import Path
+          p=Path(os.environ["MODEL_FILE"]).resolve()
+          h=hashlib.sha256()
+          with p.open("rb") as f:
+              for chunk in iter(lambda:f.read(1024*1024),b""): h.update(chunk)
+          assert p.stat().st_size==int(os.environ["MODEL_SAFETENSORS_BYTES"])
+          assert h.hexdigest()==os.environ["MODEL_SAFETENSORS_SHA256"]
+          print("PASS pinned model artifact")
+          PY
+
+          "$venv/bin/python" - <<'PY'
+          import mlx.core as mx
+          mx.set_default_device(mx.gpu)
+          assert "gpu" in str(mx.default_device()).lower()
+          x=mx.array([1.0,2.0]); y=x+1; mx.eval(y); assert y.tolist()==[2.0,3.0]
+          print("PASS MLX GPU preflight",mx.default_device())
+          PY
+
+          log="$RUNNER_TEMP/mlx-server.log"
+          nohup "$venv/bin/python" -m mlx_lm.server --model "$snapshot" --port "$MLX_PORT" >"$log" 2>&1 &
+          echo "MLX_SERVER_PID=$!" >> "$GITHUB_ENV"
+          echo "MLX_SERVER_LOG=$log" >> "$GITHUB_ENV"
+          ready=0
+          for _ in $(seq 1 180); do
+            if curl --fail --silent "http://127.0.0.1:$MLX_PORT/v1/models" >/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          echo "MODEL_SPELUNKER_MODEL=mlx:$snapshot" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MLX_API_KEY=not-needed" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MLX_BASE_URL=http://127.0.0.1:$MLX_PORT/v1" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_REASONING_EFFORT=omit" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MAX_TOKENS=2048" >> "$GITHUB_ENV"
+          echo "MODEL_SPELUNKER_MAX_ITERATIONS=8" >> "$GITHUB_ENV"
+
+      - name: Run boundary-bugfix-v2 reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/macos-codegen-reference"
+          mkdir -p "$out"
+          set +e
+          python3 qualification/run_task.py             --task-commit "$GITHUB_SHA"             --substrate-profile-id gha-macos26-arm64-mlx-openworker             --substrate-profile-commit "$GITHUB_SHA"             --experiment qualification/experiments/openworker-qwen3-4b-macos26-boundary-bugfix-v2-reference.json             --diagnostics "$out/diagnostics.json"             --snapshot-dir "$out/output-snapshot"             --candidate-env-mode minimal             --projected-tools-source candidate             --pass-env MODEL_SPELUNKER_MODEL             --pass-env MODEL_SPELUNKER_MLX_API_KEY             --pass-env MODEL_SPELUNKER_MLX_BASE_URL             --pass-env MODEL_SPELUNKER_REASONING_EFFORT             --pass-env MODEL_SPELUNKER_MAX_TOKENS             --pass-env MODEL_SPELUNKER_MAX_ITERATIONS             qualification/tasks/boundary-bugfix-v2             "qualification/actors/$ACTOR_ID.json"             "$out/receipt.json"             -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          test -s "$out/receipt.json"
+          RC="$rc" RECEIPT="$out/receipt.json" python3 - <<'PY'
+          import json,os
+          r=json.load(open(os.environ["RECEIPT"])); o=r["observation"]
+          assert int(os.environ["RC"])==(0 if o["success"] else 1)
+          print("MAC_CODEGEN_REFERENCE_RESULT="+("PASS" if o["success"] else "FAIL_VALID_OBSERVATION"))
+          print("MAC_CODEGEN_REFERENCE_TERMINATION="+str(o.get("termination_class")))
+          print("MAC_CODEGEN_REFERENCE_FAILURE_CLASS="+str(o.get("failure_class")))
+          print("MAC_CODEGEN_REFERENCE_ROUNDS="+str((o.get("workload") or {}).get("model_rounds")))
+          print("MAC_CODEGEN_REFERENCE_TOOL_CALLS="+str(o.get("tool_calls")))
+          print("MAC_CODEGEN_REFERENCE_WALL="+str(o.get("wall_seconds")))
+          PY
+          exit 0
+
+      - name: Run telemetry-coverage operational task
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/macos-telemetry-operational"
+          mkdir -p "$out"
+          set +e
+          python3 qualification/run_task.py             --task-commit "$GITHUB_SHA"             --substrate-profile-id gha-macos26-arm64-mlx-openworker             --substrate-profile-commit "$GITHUB_SHA"             --experiment qualification/experiments/openworker-qwen3-4b-macos26-telemetry-coverage-v0-operational.json             --diagnostics "$out/diagnostics.json"             --snapshot-dir "$out/output-snapshot"             --candidate-env-mode minimal             --projected-tools-source candidate             --pass-env MODEL_SPELUNKER_MODEL             --pass-env MODEL_SPELUNKER_MLX_API_KEY             --pass-env MODEL_SPELUNKER_MLX_BASE_URL             --pass-env MODEL_SPELUNKER_REASONING_EFFORT             --pass-env MODEL_SPELUNKER_MAX_TOKENS             --pass-env MODEL_SPELUNKER_MAX_ITERATIONS             qualification/tasks/telemetry-coverage-projection-v0             "qualification/actors/$ACTOR_ID.json"             "$out/receipt.json"             -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          test -s "$out/receipt.json"
+          RC="$rc" RECEIPT="$out/receipt.json" python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          r=json.load(open(os.environ["RECEIPT"])); o=r["observation"]
+          assert int(os.environ["RC"])==(0 if o["success"] else 1)
+          print("MAC_TELEMETRY_CODEGEN_RESULT="+("PASS" if o["success"] else "FAIL_VALID_OBSERVATION"))
+          print("MAC_TELEMETRY_CODEGEN_TERMINATION="+str(o.get("termination_class")))
+          print("MAC_TELEMETRY_CODEGEN_FAILURE_CLASS="+str(o.get("failure_class")))
+          print("MAC_TELEMETRY_CODEGEN_ROUNDS="+str((o.get("workload") or {}).get("model_rounds")))
+          print("MAC_TELEMETRY_CODEGEN_TOOL_CALLS="+str(o.get("tool_calls")))
+          print("MAC_TELEMETRY_CODEGEN_WALL="+str(o.get("wall_seconds")))
+          p=Path(os.environ["RECEIPT"]).parent/"output-snapshot"/"telemetry_coverage.py"
+          if p.is_file():
+              print("MAC_TELEMETRY_CODEGEN_OUTPUT_SHA256="+hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+          exit 0
+
+      - name: Capture bounded server tail
+        if: always()
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/macos-software-crossover-evidence"
+          mkdir -p "$out"
+          if [ -n "${MLX_SERVER_LOG:-}" ] && [ -f "$MLX_SERVER_LOG" ]; then
+            tail -c 8000 "$MLX_SERVER_LOG" >"$out/mlx-server-tail.log" || true
+          fi
+
+      - name: Upload immutable crossover evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: macos-mlx-software-crossover-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/macos-codegen-reference/**
+            ${{ runner.temp }}/macos-telemetry-operational/**
+            ${{ runner.temp }}/macos-software-crossover-evidence/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Stop local model service
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${MLX_SERVER_PID:-}" ]; then kill "$MLX_SERVER_PID" 2>/dev/null || true; fi
