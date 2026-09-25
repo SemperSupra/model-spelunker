@@ -1,4 +1,4 @@
-# execution-trigger: replicate declared; no launch token in this commit
+# execution-trigger: one same-instance replicate authorized
 name: Unified Method-IR v3 DeepSeek Replicate
 
 on:
