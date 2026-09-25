@@ -1,0 +1,101 @@
+{
+  "candidate": {
+    "configuration_digest": "sha256:137330a991751611901005fa9f6136ce5b5d7a734cff4729ab93ca704136c801",
+    "deployment_topology": {
+      "compute_class": "provider-opaque",
+      "data_boundary": "external-provider",
+      "harness_placement": "local-process",
+      "runtime_placement": "hosted-service",
+      "transport": "provider-api"
+    },
+    "harness": {
+      "admission_ref": null,
+      "artifact_ref": null,
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "artifact_ref": null,
+      "foundry_ref": null,
+      "id": "deepseek-flash",
+      "provider": "deepseek",
+      "realization": "hosted-service"
+    },
+    "toolset": ["list_files","search_files","read_file_lines","write_file"]
+  },
+  "evidence_digest": "sha256:f2f49c82ef7dbc05bee7e8d48872add4e9d7d0cb5df83ce47d13faf07f8c9d63",
+  "execution_limits": {"wall_seconds":360,"wall_seconds_source":"override"},
+  "experiment": {
+    "claim_type":"feasibility",
+    "design_block":"method-ir-v3-deepseek-feasibility-2026-09",
+    "digest":"sha256:907b3b042bd4561e7096838b044f4cb8a1edd1170e5b79ecd03919681460e15e",
+    "experimental_role":"screening",
+    "id":"openworker-deepseek-flash-method-ir-v3-feasibility-screen",
+    "primary_responses":["semantic-verifier-result","termination-class","state-changed","write-file-attempt-and-status","model-calls-started","model-calls-completed","tool-calls-completed","wall-seconds","source-bound-output-snapshot"]
+  },
+  "observation": {
+    "cache_read_tokens":201088,
+    "cache_write_tokens":0,
+    "candidate_exit_code":0,
+    "cost":null,
+    "engine_error_types":[],
+    "failure_class":"iteration-limit",
+    "failure_signals":["iteration-limit"],
+    "human_interventions":0,
+    "input_tokens":28329,
+    "mobile_action_count":0,
+    "mobile_actions":[],
+    "output_tokens":5927,
+    "state_changed":true,
+    "success":true,
+    "termination_class":"semantic-success",
+    "timed_out":false,
+    "tool_calls":32,
+    "verifier_exit_code":0,
+    "wall_seconds":32.178481,
+    "workload":{
+      "client_wall_seconds_total":31.140991,
+      "completed_tool_names":["list_files","read_file_lines","read_file_lines","read_file_lines","read_file_lines","search_files","search_files","search_files","search_files","search_files","search_files","search_files","search_files","read_file_lines","search_files","search_files","search_files","search_files","search_files","search_files","read_file_lines","read_file_lines","read_file_lines","read_file_lines","read_file_lines","read_file_lines","read_file_lines","search_files","search_files","search_files","search_files","write_file"],
+      "completed_tool_statuses":["ok","ok","ok","ok","ok","ok","error","error","error","error","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok","ok"],
+      "first_event_seconds_first":1.07727,
+      "first_event_seconds_max":1.692549,
+      "first_event_seconds_min":0.755321,
+      "model_calls_completed":12,
+      "model_calls_started":12,
+      "model_rounds":12,
+      "output_text_bytes_total":4112.0,
+      "reasoning_bytes_total":0.0,
+      "request_message_bytes_total":778514.0,
+      "request_tool_schema_bytes_total":18300.0,
+      "started_request_message_bytes_total":778514.0,
+      "started_request_tool_schema_bytes_total":18300.0,
+      "tool_argument_bytes_total":12289.0,
+      "tool_calls_completed":32,
+      "tool_calls_started":32
+    }
+  },
+  "resources":{
+    "cpu_model":"AMD EPYC 7763 64-Core Processor",
+    "cpu_quota_cores":null,
+    "cpuset_cpus_effective":"0-3",
+    "logical_cpus_visible":4,
+    "memory_total_bytes":16770748416,
+    "platform_machine":"x86_64",
+    "platform_system":"Linux"
+  },
+  "run_id":"20260924T203756Z-584243b2",
+  "schema_version":2,
+  "substrate":{"profile_commit":"7255e32059b9c4098ac2866fb6056d84fd5d699b","profile_id":"gha-linux-x64-openworker-hosted-api"},
+  "task":{
+    "id":"method-ir-siglip2-b16-256-v3",
+    "ksa_requirements":[
+      {"evidence_role":"composite","family":"skills","name":"source_bound_research_synthesis"},
+      {"evidence_role":"composite","family":"skills","name":"evidence_span_binding"},
+      {"evidence_role":"composite","family":"abilities","name":"ambiguity_preservation"},
+      {"evidence_role":"supporting","family":"abilities","name":"unknown_preservation"}
+    ],
+    "package_digest":"sha256:acf58014462c048ec1a5c7f5d4e9448d7240097eae67e16e280459679b148e31",
+    "source_commit":"7255e32059b9c4098ac2866fb6056d84fd5d699b",
+    "task_class":"research.method-evidence-binding"
+  }
+}
