@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-flash-method-ir-rice-heldout-v1",
+  "decision_question": "Does the previously characterized DeepSeek Flash + OpenWorker 4096-token/12-iteration compact-source realization generalize to a distinct frozen RICE publication/addendum Method-IR work sample without changing its executable actor configuration?",
+  "task": {
+    "id": "method-ir-rice-agent-refining-v1",
+    "task_class": "research.method-evidence-binding"
+  },
+  "actors": [
+    "openworker-deepseek-flash-ubuntu24-method-ir-v3-compact-source-4096-iter12"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-hosted-provider-alias",
+    "reasoning-effort-none",
+    "max-tokens-4096",
+    "max-iterations-12",
+    "parallel-tool-calls-false",
+    "compact-source-tool-projection:list_files+search_files+read_file_lines+write_file",
+    "task-scoped-single-output-write-authority",
+    "effective-wall-seconds-360",
+    "gha-linux-x64-openworker-hosted-api",
+    "actor-profile-unchanged-from-siglip-v3-point",
+    "actor-task_projection-string-is-descriptive-only; executable-tool-projection-comes-from-frozen-toolset"
+  ],
+  "variable_under_test": "distinct-source-bound-task-instance:siglip2-v3->rice-agent-refining-v1",
+  "claim_type": "reliability",
+  "experimental_role": "holdout",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "state-changed",
+    "configuration-coordinate-binding",
+    "model-calls-started",
+    "model-calls-completed",
+    "tool-calls-completed",
+    "provider-native-token-utilization",
+    "serialized-message-and-output-bytes",
+    "wall-seconds",
+    "source-bound-output-snapshot"
+  ],
+  "design_block": "method-ir-deepseek-cross-instance-generalization-2026-09",
+  "stop_conditions": [
+    "one-valid-heldout-observation",
+    "timeout-censored-at-360",
+    "iteration-censored-at-12",
+    "provider-or-harness-ingress-failure",
+    "validator-integrity-failure",
+    "unexpected-authority-expansion"
+  ],
+  "exclusion_conditions": [
+    "historical-rice-method-ir-or-completeness-output-visible-to-actor",
+    "rubric-or-judge-artifact-visible-to-actor",
+    "task-package-or-frozen-source-drift",
+    "validator-error",
+    "credential-absence",
+    "provider-admission-failure",
+    "uncontrolled-model-harness-tool-token-iteration-wall-authority-or-provider-route-drift"
+  ]
+}
