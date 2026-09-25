@@ -9,6 +9,10 @@
       "kind": "github-issue"
     },
     {
+      "ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/134#issuecomment-5584701777",
+      "kind": "github-comment"
+    },
+    {
       "ref": "https://github.com/SemperSupra/mcp-projection-dev/commit/10f812cf4c9e5a1a5302e8bbad3a09ca602f24e4",
       "kind": "git-commit"
     },
@@ -30,7 +34,7 @@
     {
       "type": "PROVIDER_ADMIT",
       "at": "2026-09-08T11:52:33Z",
-      "source_ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/134"
+      "source_ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/134#issuecomment-5584701777"
     },
     {
       "type": "MUTATE",
