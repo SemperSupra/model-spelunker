@@ -1,10 +1,8 @@
+# FROZEN: manual-only pending authorized private-source execution venue or reviewed public-safe projection.
 # execution-trigger: treatment semantics unchanged
 name: Desktop UI CV B1 Operational Interview
 
 on:
-  push:
-    branches:
-      - exp/desktop-ui-cv-b1-operational
   workflow_dispatch:
 
 permissions:
@@ -16,7 +14,6 @@ concurrency:
 
 jobs:
   reference-and-operational:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[desktop-ui-cv-b1]')
     environment: hosted-qualification
     runs-on: ubuntu-24.04
     timeout-minutes: 20
