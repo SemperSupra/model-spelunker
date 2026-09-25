@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source_receipt": "qualification/evidence/deepseek-codegen-reference-boundary-bugfix-v1-2026-09-25.json",
+  "disposition": "TASK_PACKAGE_CONFOUNDED",
+  "include_in_actor_semantic_evidence": false,
+  "include_in_ksa_evidence": false,
+  "reason": "Actor-visible fixture omitted the retry-policy document named by the task instruction; the verifier enforced policy semantics that were not present in the workcell.",
+  "preserved_observation": {
+    "termination_class": "iteration-censored",
+    "note": "Useful only as task-package/methodology evidence. Do not interpret as configured-actor software/debugging boundary."
+  },
+  "superseded_by_task": "boundary-bugfix-v2",
+  "superseded_by_experiment": "openworker-deepseek-codegen-reference-v2"
+}
