@@ -27,7 +27,7 @@
   },
   "demand_factors": {
     "language": "en-US",
-    "words": 13,
+    "words": 12,
     "required_content_tokens": 6,
     "output_files": 1
   },
