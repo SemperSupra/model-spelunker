@@ -293,3 +293,20 @@ assert coalesced_env["configuration_coordinates"] == {
     "max_iterations": 8,
 }
 print("PASS digest-only and explicit configuration receipts coalesce")
+
+
+# A different source commit for the same admitted substrate profile is provenance,
+# not by itself a new execution-environment realization.
+substrate_a = receipt("run-substrate-a", True, model_rounds=2)
+substrate_b = receipt("run-substrate-b", False, model_rounds=2)
+substrate_b["substrate"]["profile_commit"] = "1" * 40
+substrate_envs = reduce_receipts([substrate_a, substrate_b])
+assert len(substrate_envs) == 1
+substrate_env = substrate_envs[0]
+assert substrate_env["evidence_pattern"] == "MIXED"
+assert substrate_env["substrate_provenance"]["identity_precision"] == "profile-id-only"
+assert substrate_env["substrate_provenance"]["profile_commits_observed"] == [
+    "0" * 40,
+    "1" * 40,
+]
+print("PASS substrate commit provenance does not split semantic identity")
