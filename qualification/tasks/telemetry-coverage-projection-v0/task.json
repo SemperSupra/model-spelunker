@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "id": "telemetry-coverage-projection-v0",
+  "task_class": "software.repository-implementation",
+  "instruction": "Implement project_coverage(receipt: dict) -> dict in telemetry_coverage.py.\n\nThe input is one Model Spelunker schema-v2 run receipt. Do not perform I/O, environment probing, provider calls, or mutation of the input.\n\nReturn exactly:\n{\n  \"schema_version\": 1,\n  \"source\": {\n    \"run_id\": <receipt run_id>,\n    \"task_id\": <receipt task.id>,\n    \"actor_configuration_digest\": <receipt candidate.configuration_digest>,\n    \"model_provider\": <receipt candidate.model.provider>,\n    \"model_id\": <receipt candidate.model.id>,\n    \"runtime_placement\": <receipt candidate.deployment_topology.runtime_placement>,\n    \"transport\": <receipt candidate.deployment_topology.transport>,\n    \"compute_class\": <receipt candidate.deployment_topology.compute_class>\n  },\n  \"signals\": [ ... ]\n}\n\nEmit exactly these signal rows, sorted lexicographically by signal:\ncache_read_tokens\ncache_write_tokens\nhuman_interventions\ninput_tokens\nlogical_cpus_visible\nmemory_total_bytes\nmodel_calls_completed\nmodel_calls_started\noutput_tokens\nplatform_machine\nplatform_system\nterminal_state\ntool_calls\nvalidator_success\nwall_seconds\n\nEvery signal row must contain exactly:\nsignal, purpose, availability, evidence_class, value, unit, source\n\nUse these purposes:\n- terminal_state, validator_success, wall_seconds, tool_calls, human_interventions,\n  logical_cpus_visible, memory_total_bytes, platform_system, platform_machine: \"both\"\n- model_calls_started, model_calls_completed, input_tokens, output_tokens,\n  cache_read_tokens, cache_write_tokens: \"experimental\"\n\nUse evidence_class \"observed\" when the source field is mechanically present and non-null,\notherwise \"unknown\". availability must then be \"available\" or \"unknown\" respectively.\nA present value of 0 or false is available/observed. Missing or null is unknown and value\nmust remain null. Do not coerce missing values to zero.\n\nUse these source paths:\n- observation.termination_class\n- observation.success\n- observation.wall_seconds\n- observation.tool_calls\n- observation.human_interventions\n- observation.workload.model_calls_started\n- observation.workload.model_calls_completed\n- observation.input_tokens\n- observation.output_tokens\n- observation.cache_read_tokens\n- observation.cache_write_tokens\n- resources.logical_cpus_visible\n- resources.memory_total_bytes\n- resources.platform_system\n- resources.platform_machine\n\nUnits:\n- wall_seconds: \"seconds\"\n- *_tokens: \"provider-tokens\"\n- model_calls_*, tool_calls, human_interventions, logical_cpus_visible: \"count\"\n- memory_total_bytes: \"bytes\"\n- terminal_state, validator_success, platform_system, platform_machine: null\n\nDo not add a score, normalized token/work unit, inferred GPU/VRAM/provider hardware,\nor any signal not listed above.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 180
+  },
+  "success": {
+    "kind": "deterministic-hidden-contract-tests"
+  },
+  "allowed_write_paths": [
+    "telemetry_coverage.py"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "medium",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-contract-tests"
+  },
+  "demand_factors": {
+    "files_touched": 1,
+    "fixed_signal_rows": 15,
+    "hidden_runtime_shapes": 3,
+    "nested_input_depth": 4,
+    "missing_vs_zero_cases": true
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "bounded_code_generation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "skills",
+      "name": "schema_contract_implementation",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "unknown_preservation",
+      "evidence_role": "isolating"
+    },
+    {
+      "family": "abilities",
+      "name": "scope_discipline",
+      "evidence_role": "supporting"
+    }
+  ]
+}
