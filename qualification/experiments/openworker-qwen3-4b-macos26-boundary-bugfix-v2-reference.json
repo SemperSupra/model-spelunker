@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "id": "openworker-qwen3-4b-macos26-boundary-bugfix-v2-reference",
+  "decision_question": "Can the exact OpenWorker + Qwen3-4B + MLX macOS configured actor solve the corrected boundary-bugfix-v2 reference under the same 2048-token, 8-iteration, list/read/write envelope used by the hosted DeepSeek software-generation tranche?",
+  "task": {
+    "id": "boundary-bugfix-v2",
+    "task_class": "software.bounded-debugging"
+  },
+  "actors": [
+    "openworker-qwen3-4b-macos26-mlx-codegen-v1"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "boundary-bugfix-v2-task-and-hidden-verifier",
+    "openworker-5bc10d9-admitted-macos-arm64-artifact",
+    "qwen3-4b-instruct-2507-4bit-exact-artifact",
+    "mlx-lm-0.31.3",
+    "reasoning-effort-omitted",
+    "max-tokens-2048",
+    "max-iterations-8",
+    "list-read-write-tool-projection",
+    "task-scoped-authority",
+    "memory-hygiene-control",
+    "github-hosted-macos-26-arm64"
+  ],
+  "variable_under_test": "configured-actor-deployment-crossover:hosted-deepseek-ubuntu -> local-qwen-mlx-macos",
+  "claim_type": "feasibility",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "wall-seconds",
+    "model-calls-started",
+    "model-calls-completed",
+    "tool-calls-completed",
+    "state-changed"
+  ],
+  "design_block": "software-generation-deployment-crossover-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-semantic-failure",
+    "timeout-censored",
+    "iteration-censored",
+    "runtime-ingress-failure",
+    "validator-integrity-failure"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "model-or-harness-artifact-drift",
+    "uncontrolled-tool-budget-or-authority-drift"
+  ]
+}
