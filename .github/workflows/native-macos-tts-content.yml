@@ -1,0 +1,235 @@
+name: Native macOS TTS Content Qualification
+
+on:
+  push:
+    branches:
+      - exp/native-macos-tts-content-v0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: native-macos-tts-content-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: macos-26
+    timeout-minutes: 8
+    outputs:
+      generator_rc: ${{ steps.generate.outputs.rc }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate frozen TTS contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/tasks/tts-content-fidelity-v0/verify.py --self-test
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          task=json.loads(Path("qualification/tasks/tts-content-fidelity-v0/task.json").read_text())
+          actor=json.loads(Path("qualification/actors/macos-say-samantha-macos26-arm64-v0.json").read_text())
+          exp=json.loads(Path("qualification/experiments/macos-say-samantha-tts-content-v0-screen.json").read_text())
+          assert task["schema_version"] == 2
+          assert actor["schema_version"] == 2
+          assert exp["actors"] == [actor["id"]]
+          assert exp["task"]["id"] == task["id"]
+          assert actor["configuration"]["voice"] == "Samantha"
+          assert task["demand_factors"]["words"] == 12
+          print("PASS frozen native TTS contracts")
+          PY
+
+      - name: Generate bounded native TTS artifact
+        id: generate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/tts-generator"
+          mkdir -p "$out"
+          set +e
+          python3 qualification/run_macos_tts.py \
+            --source qualification/tasks/tts-content-fidelity-v0/fixture/source.txt \
+            --output "$out/speech.aiff" \
+            --evidence "$out/generation.json" \
+            --voice Samantha
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          test -s "$out/generation.json"
+          python3 - "$out/generation.json" <<'PY'
+          import json,sys
+          e=json.load(open(sys.argv[1]))
+          print("TTS_GENERATOR_STATUS="+str(e.get("status")))
+          print("TTS_GENERATOR_VOICE_ADMITTED="+str((e.get("actor") or {}).get("voice_admitted")))
+          print("TTS_GENERATOR_WALL_SECONDS="+str(e.get("generation_wall_seconds")))
+          print("TTS_GENERATOR_OUTPUT_SHA256="+str(((e.get("output") or {}).get("sha256"))))
+          print("TTS_GENERATOR_OUTPUT_BYTES="+str(((e.get("output") or {}).get("size_bytes"))))
+          print("TTS_GENERATOR_ENVIRONMENT="+json.dumps(e.get("environment"),sort_keys=True))
+          PY
+
+      - name: Upload generator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-tts-generator-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/tts-generator/**
+          if-no-files-found: error
+          retention-days: 30
+
+  validate:
+    needs: generate
+    if: needs.generate.outputs.generator_rc == '0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      FOUNDRY_REF: '6622753fd5914be87fb1b6d987ceb7cae46c7ff5'
+      LOGICAL_ID: 'asr/faster-whisper/tiny'
+      EXPECTED_DIGEST: 'sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42'
+      PYTHONDONTWRITEBYTECODE: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Download exact generator artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: native-tts-generator-${{ github.run_id }}
+          path: ${{ runner.temp }}/tts-generator
+
+      - name: Checkout exact approved Foundry revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: SemperSupra/model-artifact-foundry
+          ref: ${{ env.FOUNDRY_REF }}
+          path: foundry
+          persist-credentials: false
+
+      - name: Set up ORAS
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
+        with:
+          version: 1.3.3
+
+      - name: Restore exact ASR runtime
+        id: runtime-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: .asr-venv
+          key: model-spelunker-tts-fw1.2.1-ct2-4.6.0-${{ runner.os }}-${{ runner.arch }}-py3
+
+      - name: Build exact ASR runtime on cache miss
+        if: steps.runtime-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv .asr-venv
+          .asr-venv/bin/python -m pip install --quiet --disable-pip-version-check --no-input \
+            "faster-whisper==1.2.1" \
+            "ctranslate2==4.6.0"
+
+      - name: Verify approved ASR selector
+        shell: bash
+        run: |
+          set -euo pipefail
+          .asr-venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          catalog=json.loads(Path("foundry/catalog/approved.json").read_text())
+          entry=catalog["artifacts"][os.environ["LOGICAL_ID"]]
+          assert entry["approved_digest"] == os.environ["EXPECTED_DIGEST"]
+          assert entry["upstream_exact_revision"] == "d90ca5fe260221311c53c58e660288d3deb8d356"
+          assert entry["license_spdx_id"] == "MIT"
+          PY
+          .asr-venv/bin/python qualification/test_validate_tts_audio.py
+
+      - name: Authenticate bounded Foundry read
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | oras login ghcr.io \
+            --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Hydrate exact approved ASR model
+        id: hydrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache="$RUNNER_TEMP/tts-validator/foundry-cache"
+          mkdir -p "$cache"
+          MODEL_DIR="$(.asr-venv/bin/python foundry/tools/hydrate.py \
+            --catalog foundry/catalog/approved.json \
+            --id "$LOGICAL_ID" \
+            --cache-root "$cache" \
+            --oras "$(command -v oras)" | tail -n1)"
+          test -d "$MODEL_DIR"
+          echo "model_dir=$MODEL_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Independently validate generated speech
+        id: validate
+        env:
+          MODEL_DIR: ${{ steps.hydrate.outputs.model_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/tts-validation"
+          mkdir -p "$out"
+          set +e
+          .asr-venv/bin/python qualification/validate_tts_audio.py \
+            --model-dir "$MODEL_DIR" \
+            --audio "$RUNNER_TEMP/tts-generator/speech.aiff" \
+            --source qualification/tasks/tts-content-fidelity-v0/fixture/source.txt \
+            --generation-evidence "$RUNNER_TEMP/tts-generator/generation.json" \
+            --output "$out/validation.json" \
+            --max-wer 0.10
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          test -s "$out/validation.json"
+          RC="$rc" python3 - "$out/validation.json" "$RUNNER_TEMP/tts-generator/generation.json" "$out/final-result.json" <<'PY'
+          import json,os,sys
+          validation=json.load(open(sys.argv[1]))
+          generation=json.load(open(sys.argv[2]))
+          rc=int(os.environ["RC"])
+          assert rc == (0 if validation["success"] else 1)
+          result={
+              "schema_version":1,
+              "record_type":"tts-qualification-result",
+              "experiment_id":"macos-say-samantha-tts-content-v0-screen",
+              "task_id":"tts-content-fidelity-v0",
+              "actor_id":"macos-say-samantha-macos26-arm64-v0",
+              "generation":generation,
+              "validation":validation,
+              "success":validation["success"],
+              "termination_class":"semantic-success" if validation["success"] else "semantic-failure",
+          }
+          open(sys.argv[3],"w").write(json.dumps(result,indent=2,sort_keys=True)+"\n")
+          print("TTS_QUALIFICATION_RESULT="+("PASS" if result["success"] else "FAIL_VALID_OBSERVATION"))
+          print("TTS_ASR_LANGUAGE="+str(validation["transcript"]["language"]))
+          print("TTS_ASR_WER="+str(validation["transcript"]["word_error_rate"]))
+          print("TTS_ASR_MISSING_TOKENS="+json.dumps(validation["transcript"]["missing_required_tokens"]))
+          print("TTS_AUDIO_DURATION_SECONDS="+str(validation["audio"]["duration_seconds"]))
+          print("TTS_AUDIO_SHA256="+str(validation["audio"]["sha256"]))
+          PY
+          exit 0
+
+      - name: Upload validator and joined result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-tts-validation-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/tts-validation/**
+          if-no-files-found: warn
+          retention-days: 30
