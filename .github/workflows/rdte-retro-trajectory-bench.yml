@@ -34,6 +34,8 @@ jobs:
           qualification/rdte/retrospective/test_codex_actions_projection.py
           qualification/rdte/retrospective/project_openworker_stdout.py
           qualification/rdte/retrospective/test_openworker_projection.py
+          qualification/rdte/retrospective/analyze_process_variants.py
+          qualification/rdte/retrospective/test_process_variants.py
       - name: Run deterministic tests
         run: >-
           python -m unittest -v
@@ -41,6 +43,7 @@ jobs:
           qualification.rdte.retrospective.test_source_verifier
           qualification.rdte.retrospective.test_codex_actions_projection
           qualification.rdte.retrospective.test_openworker_projection
+          qualification.rdte.retrospective.test_process_variants
       - name: Verify source facts available from this execution venue
         env:
           GITHUB_TOKEN: ${{ github.token }}
