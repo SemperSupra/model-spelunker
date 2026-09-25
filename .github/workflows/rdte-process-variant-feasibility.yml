@@ -1,9 +1,7 @@
 name: RDT&E Cross-Family Process Variant Feasibility
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/rdte-process-variant-feasibility.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
