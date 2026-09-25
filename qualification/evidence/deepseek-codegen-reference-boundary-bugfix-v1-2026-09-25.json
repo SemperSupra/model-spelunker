@@ -1,0 +1,198 @@
+{
+  "candidate": {
+    "configuration": {
+      "harness_delivery": "source-built-pinned-upstream",
+      "max_iterations": 8,
+      "max_tokens": 2048,
+      "parallel_tool_calls": false,
+      "reasoning_effort": "none"
+    },
+    "configuration_digest": "sha256:44c922cc047b4d1278ab40c06cd7b88bafb17de31efab620f96d21d99e4dd07a",
+    "deployment_topology": {
+      "compute_class": "provider-opaque",
+      "data_boundary": "external-provider",
+      "harness_placement": "local-process",
+      "runtime_placement": "hosted-service",
+      "transport": "provider-api"
+    },
+    "harness": {
+      "admission_ref": null,
+      "artifact_ref": null,
+      "name": "openworker",
+      "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+    },
+    "model": {
+      "artifact_ref": null,
+      "foundry_ref": null,
+      "id": "deepseek-flash",
+      "provider": "deepseek",
+      "realization": "hosted-service"
+    },
+    "toolset": [
+      "list_files",
+      "read_file",
+      "write_file"
+    ]
+  },
+  "evidence_digest": "sha256:fcb399a122621240625fe03066e84ad867a53c09a7a2203114bc8b1257a30603",
+  "execution_limits": {
+    "wall_seconds": 120,
+    "wall_seconds_source": "task"
+  },
+  "experiment": {
+    "claim_type": "feasibility",
+    "design_block": "software-generation-reference-operational-pair-2026-09",
+    "digest": "sha256:0e116f998652839e7596ffb857cd54f5ec6690cf5fc8d1aef5634e3e879c51b7",
+    "experimental_role": "control",
+    "id": "openworker-deepseek-codegen-reference-v1",
+    "primary_responses": [
+      "semantic-verifier-result",
+      "termination-class",
+      "wall-seconds",
+      "model-calls-started",
+      "model-calls-completed",
+      "tool-calls-completed"
+    ]
+  },
+  "observation": {
+    "cache_read_tokens": 16256,
+    "cache_write_tokens": 0,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "iteration-limit",
+    "failure_signals": [
+      "false-completion",
+      "iteration-limit"
+    ],
+    "human_interventions": 0,
+    "input_tokens": 1442,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": 5224,
+    "state_changed": true,
+    "success": false,
+    "termination_class": "iteration-censored",
+    "timed_out": false,
+    "tool_calls": 26,
+    "verifier_exit_code": 1,
+    "wall_seconds": 28.557296,
+    "workload": {
+      "client_wall_seconds_total": 27.678892,
+      "completed_tool_names": [
+        "list_files",
+        "read_file",
+        "list_files",
+        "list_files",
+        "read_file",
+        "read_file",
+        "list_files",
+        "list_files",
+        "list_files",
+        "list_files",
+        "list_files",
+        "list_files",
+        "list_files",
+        "list_files",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file",
+        "list_files",
+        "list_files",
+        "list_files",
+        "list_files",
+        "list_files",
+        "write_file"
+      ],
+      "completed_tool_statuses": [
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "error",
+        "error",
+        "error",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "ok",
+        "error",
+        "error",
+        "error",
+        "error",
+        "error",
+        "ok",
+        "error",
+        "error",
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ],
+      "first_event_seconds_first": 1.181889,
+      "first_event_seconds_max": 1.181889,
+      "first_event_seconds_min": 0.613062,
+      "model_calls_completed": 8,
+      "model_calls_started": 8,
+      "model_rounds": 8,
+      "output_text_bytes_total": 14930,
+      "reasoning_bytes_total": 0,
+      "request_message_bytes_total": 57499,
+      "request_tool_schema_bytes_total": 7744,
+      "started_request_message_bytes_total": 57499,
+      "started_request_tool_schema_bytes_total": 7744,
+      "tool_argument_bytes_total": 1214,
+      "tool_calls_completed": 26,
+      "tool_calls_started": 26
+    }
+  },
+  "resources": {
+    "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": "0-3",
+    "logical_cpus_visible": 4,
+    "memory_total_bytes": 16765374464,
+    "platform_machine": "x86_64",
+    "platform_system": "Linux"
+  },
+  "run_id": "20260925T082257Z-683bccca",
+  "schema_version": 2,
+  "substrate": {
+    "profile_commit": "af4ac64a4dd891d21f4c624c7c6ce649d44baddd",
+    "profile_id": "gha-linux-x64-openworker-hosted-api"
+  },
+  "task": {
+    "id": "boundary-bugfix-v1",
+    "ksa_requirements": [
+      {
+        "evidence_role": "composite",
+        "family": "skills",
+        "name": "fault_localization"
+      },
+      {
+        "evidence_role": "composite",
+        "family": "skills",
+        "name": "bounded_code_repair"
+      },
+      {
+        "evidence_role": "isolating",
+        "family": "abilities",
+        "name": "boundary_condition_handling"
+      },
+      {
+        "evidence_role": "supporting",
+        "family": "abilities",
+        "name": "scope_discipline"
+      }
+    ],
+    "package_digest": "sha256:62bb9058935da13afc1d4e0491f8e43537001a9e039d28eb2317be26306a7722",
+    "source_commit": "af4ac64a4dd891d21f4c624c7c6ce649d44baddd",
+    "task_class": "software.bounded-debugging"
+  }
+}

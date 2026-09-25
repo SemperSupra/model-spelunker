@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "id": "openworker-deepseek-codegen-reference-v2",
+  "decision_question": "With the previously missing retry policy now actor-visible, does the exact OpenWorker + direct DeepSeek configured actor complete the bounded-debugging reference sentinel within the unchanged 2048-token, 8-iteration, Ubuntu/API execution envelope?",
+  "task": {
+    "id": "boundary-bugfix-v2",
+    "task_class": "software.bounded-debugging"
+  },
+  "actors": [
+    "openworker-deepseek-flash-ubuntu24-codegen-v2"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "openworker-5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "deepseek-flash-hosted-service",
+    "reasoning-effort-none",
+    "max-tokens-2048",
+    "max-iterations-8",
+    "list-read-write-tool-projection",
+    "task-scoped-authority",
+    "github-hosted-ubuntu-24.04-x64",
+    "boundary-bugfix-v1-verifier-and-buggy-source"
+  ],
+  "variable_under_test": "task-contract-correction:actor-visible-retry-policy",
+  "claim_type": "boundary",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "termination-class",
+    "wall-seconds",
+    "model-calls-started",
+    "model-calls-completed",
+    "tool-calls-completed"
+  ],
+  "design_block": "software-generation-reference-operational-pair-2026-09",
+  "stop_conditions": [
+    "validated-pass",
+    "valid-semantic-failure",
+    "timeout-censored",
+    "iteration-censored",
+    "provider-or-harness-ingress-failure",
+    "validator-integrity-failure"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "credential-absence",
+    "provider-admission-failure",
+    "uncontrolled-actor-or-substrate-drift"
+  ]
+}
