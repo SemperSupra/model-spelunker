@@ -943,6 +943,11 @@ def main() -> int:
                 "model": candidate["model"],
                 "configuration_digest": canonical_json_digest(candidate),
                 "toolset": candidate["toolset"],
+                **(
+                    {"configuration": candidate["configuration"]}
+                    if experiment_meta is not None and "configuration" in candidate
+                    else {}
+                ),
                 **({"build": candidate["build"]} if "build" in candidate else {}),
                 **(
                     {"deployment_topology": candidate["deployment_topology"]}
