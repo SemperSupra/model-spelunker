@@ -9,4 +9,6 @@ assert word_error_count(expected,one)==1
 missing=expected[:-1]
 assert word_error_count(expected,missing)==1
 assert words("Seven, BRIDGE!") == ["seven","bridge"]
+assert words("The count is 7.") == ["the","count","is","seven"]
+assert word_error_count(words("The count is seven."), words("The count is 7.")) == 0
 print("PASS TTS validator metric self-test")
