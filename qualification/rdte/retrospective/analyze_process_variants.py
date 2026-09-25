@@ -245,14 +245,32 @@ def _finish(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def summarize_goose_trace(path: Path) -> dict[str, Any]:
+    """Return one process-level Goose summary with stream chunks collapsed."""
+    return _finish(_goose(path))
+
+
+def summarize_openworker_trace(path: Path) -> dict[str, Any]:
+    """Return one process-level OpenWorker summary."""
+    return _finish(_openworker(path))
+
+
+def summarize_codex_trace(path: Path) -> dict[str, Any]:
+    """Return one process-level Codex summary."""
+    return _finish(_codex(path))
+
+
 def analyze(
     goose_path: Path,
     openworker_path: Path,
     codex_paths: list[Path],
 ) -> dict[str, Any]:
-    families = [_finish(_goose(goose_path)), _finish(_openworker(openworker_path))]
+    families = [
+        summarize_goose_trace(goose_path),
+        summarize_openworker_trace(openworker_path),
+    ]
     for path in codex_paths:
-        families.append(_finish(_codex(path)))
+        families.append(summarize_codex_trace(path))
 
     anchor_vocabulary = sorted({
         anchor
