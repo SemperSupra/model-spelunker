@@ -1,3 +1,4 @@
+# validator-replay-v2: same preserved generator artifact; validator semantics corrected only
 name: Native TTS Validator Replay
 
 on:
