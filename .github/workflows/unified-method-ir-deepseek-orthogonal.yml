@@ -1,0 +1,200 @@
+# execution-trigger: exact RICE held-out replay after invalid self-test preflight
+name: Unified Method-IR RICE DeepSeek Heldout
+
+on:
+  push:
+    branches:
+      - exp/unified-method-ir-deepseek-orthogonal
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-method-ir-deepseek-orthogonal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  method-ir-deepseek:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[method-ir-rice-heldout]')
+    environment: hosted-qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      TASK_ID: 'method-ir-rice-agent-refining-v1'
+      ACTOR_ID: 'openworker-deepseek-flash-ubuntu24-method-ir-v3-compact-source-4096-iter12'
+      EXPERIMENT_ID: 'openworker-deepseek-flash-method-ir-rice-heldout-v1'
+      MODEL_SPELUNKER_MODEL: 'deepseek:deepseek-flash'
+      MODEL_SPELUNKER_REASONING_EFFORT: 'none'
+      MODEL_SPELUNKER_MAX_TOKENS: '4096'
+      MODEL_SPELUNKER_MAX_ITERATIONS: '12'
+      PYTHONDONTWRITEBYTECODE: '1'
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Prepare frozen Method-IR sources and contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          task="qualification/tasks/$TASK_ID"
+          python3 "$task/prepare_fixture.py"
+          python3 "$task/verify.py" --self-test
+          test -s "$task/fixture/source_manifest.json"
+          test -s "$task/fixture/claim_selection.json"
+          test -s "$task/fixture/sources/paper.md"
+          test -s "$task/fixture/sources/addendum.md"
+          test -s "$task/fixture/sources/config.yaml"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          task=json.loads((Path("qualification/tasks")/os.environ["TASK_ID"]/"task.json").read_text())
+          actor=json.loads((Path("qualification/actors")/(os.environ["ACTOR_ID"]+".json")).read_text())
+          exp=json.loads((Path("qualification/experiments")/(os.environ["EXPERIMENT_ID"]+".json")).read_text())
+          assert task["schema_version"] == 2
+          assert actor["schema_version"] == 2
+          assert actor["deployment_topology"] == {
+              "harness_placement":"local-process",
+              "runtime_placement":"hosted-service",
+              "transport":"provider-api",
+              "compute_class":"provider-opaque",
+              "data_boundary":"external-provider",
+          }
+          assert actor["toolset"] == ["list_files","search_files","read_file_lines","write_file"]
+          assert actor["configuration"]["max_tokens"] == 4096
+          assert actor["configuration"]["max_iterations"] == 12
+          assert exp["experimental_role"] == "holdout"
+          assert exp["task"]["id"] == task["id"]
+          assert actor["id"] in exp["actors"]
+          assert exp["variable_under_test"] == "distinct-source-bound-task-instance:siglip2-v3->rice-agent-refining-v1"
+          assert actor["id"] == "openworker-deepseek-flash-ubuntu24-method-ir-v3-compact-source-4096-iter12"
+          print("PASS frozen RICE Method-IR held-out actor/task/experiment contracts")
+          PY
+
+      - name: Clone immutable OpenWorker source
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream="$RUNNER_TEMP/openworker"
+          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"
+          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_SHA"
+          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_SHA"
+
+      - name: Install OpenWorker in isolated environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/openworker-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/python" -m pip install --quiet --upgrade pip
+          "$venv/bin/python" -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+          "$venv/bin/python" -c 'import coworker; import coworker.engine'
+          echo "OPENWORKER_VENV=$venv" >> "$GITHUB_ENV"
+
+      - name: Stage DeepSeek credential and zero-inference admission
+        shell: bash
+        env:
+          SELECTED_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${SELECTED_API_KEY:-}" || { echo 'QUALIFICATION_BOUNDARY=missing-DEEPSEEK_API_KEY'; exit 78; }
+          umask 077
+          keyfile="$RUNNER_TEMP/deepseek.key"
+          printf '%s' "$SELECTED_API_KEY" > "$keyfile"
+          KEYFILE="$keyfile" python3 - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          key=Path(os.environ["KEYFILE"]).read_text()
+          req=urllib.request.Request(
+              "https://api.deepseek.com/user/balance",
+              headers={"Accept":"application/json","Authorization":"Bearer "+key},
+          )
+          with urllib.request.urlopen(req,timeout=20) as response:
+              data=json.load(response)
+          if data.get("is_available") is not True:
+              raise SystemExit("DeepSeek authenticated but API balance is unavailable")
+          print("DEEPSEEK_ADMISSION="+json.dumps({"authenticated":True,"available":True},sort_keys=True))
+          PY
+          echo "DEEPSEEK_KEY_FILE=$keyfile" >> "$GITHUB_ENV"
+
+      - name: Execute one RICE held-out work sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/method-ir-rice-heldout"
+          mkdir -p "$out"
+          receipt="$out/receipt.json"
+          diagnostics="$out/diagnostics.json"
+          snapshot="$out/output-snapshot"
+          export DEEPSEEK_API_KEY="$(cat "$DEEPSEEK_KEY_FILE")"
+
+          set +e
+          python3 qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id gha-linux-x64-openworker-hosted-api \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --experiment "qualification/experiments/$EXPERIMENT_ID.json" \
+            --diagnostics "$diagnostics" \
+            --snapshot-dir "$snapshot" \
+            --candidate-env-mode minimal \
+            --wall-seconds 360 \
+            --projected-tools-source candidate \
+            --pass-env DEEPSEEK_API_KEY \
+            --pass-env MODEL_SPELUNKER_MODEL \
+            --pass-env MODEL_SPELUNKER_REASONING_EFFORT \
+            --pass-env MODEL_SPELUNKER_MAX_TOKENS \
+            --pass-env MODEL_SPELUNKER_MAX_ITERATIONS \
+            "qualification/tasks/$TASK_ID" \
+            "qualification/actors/$ACTOR_ID.json" \
+            "$receipt" \
+            -- "$OPENWORKER_VENV/bin/python" "$GITHUB_WORKSPACE/qualification/adapters/openworker_projected.py"
+          rc=$?
+          set -e
+          unset DEEPSEEK_API_KEY
+
+          test -s "$receipt"
+          RC="$rc" RECEIPT="$receipt" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
+          obs=receipt["observation"]
+          rc=int(os.environ["RC"])
+          assert rc==(0 if obs["success"] else 1)
+          assert receipt["schema_version"] == 2
+          assert receipt["task"]["id"] == os.environ["TASK_ID"]
+          assert receipt["experiment"]["id"] == os.environ["EXPERIMENT_ID"]
+          assert receipt["candidate"]["model"]["provider"] == "deepseek"
+          assert receipt["candidate"]["model"]["id"] == "deepseek-flash"
+          assert receipt["candidate"]["deployment_topology"]["runtime_placement"] == "hosted-service"
+          assert receipt["resources"]["platform_system"] == "Linux"
+          print("METHOD_IR_RICE_DEEPSEEK_RESULT="+("PASS" if obs["success"] else "FAIL_VALID_OBSERVATION"))
+          print("METHOD_IR_RICE_DEEPSEEK_TERMINATION="+str(obs.get("termination_class")))
+          print("METHOD_IR_RICE_DEEPSEEK_FAILURE_CLASS="+str(obs.get("failure_class")))
+          print("METHOD_IR_RICE_DEEPSEEK_MODEL_CALLS_STARTED="+str((obs.get("workload") or {}).get("model_calls_started")))
+          print("METHOD_IR_RICE_DEEPSEEK_MODEL_ROUNDS="+str((obs.get("workload") or {}).get("model_rounds")))
+          print("METHOD_IR_RICE_DEEPSEEK_TOOL_CALLS="+str(obs.get("tool_calls")))
+          print("METHOD_IR_RICE_DEEPSEEK_WALL_SECONDS="+str(obs.get("wall_seconds")))
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+
+          # Valid negative/censored evidence is an experiment result, not a workflow failure.
+          exit 0
+
+      - name: Upload immutable public-safe evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: method-ir-rice-heldout-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/method-ir-rice-heldout/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Remove staged provider credential
+        if: always()
+        shell: bash
+        run: |
+          rm -f "${DEEPSEEK_KEY_FILE:-}" || true

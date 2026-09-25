@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "run_id": "20260925T061916Z-86f89c49",
+  "actions_run_id": 36102263669,
+  "artifact_id": 10849314419,
+  "artifact_digest": "sha256:764ee94a89f88c7b8c2771b1aa26509e988b80aa1f5dc2605fcfa8ba57ee3546",
+  "output_sha256": "sha256:912143e435a6a843bf3550e43345963fd1ca43f4a0d531376511d05555cc153f",
+  "disposition": "VALID_SEMANTIC_FAIL_SAME_INSTANCE_REPLICATE",
+  "exact_configuration": {
+    "reasoning_effort": "none",
+    "max_tokens": 4096,
+    "max_iterations": 12,
+    "parallel_tool_calls": false,
+    "tool_projection": [
+      "list_files",
+      "search_files",
+      "read_file_lines",
+      "write_file"
+    ],
+    "wall_seconds": 360
+  },
+  "observed": {
+    "state_changed": true,
+    "write_file_completed": true,
+    "verifier_exit_code": 1,
+    "termination_class": "semantic-failure",
+    "failure_class": "false-completion",
+    "model_calls_completed": 11,
+    "tool_calls_completed": 27,
+    "wall_seconds": 25.010852,
+    "input_tokens": 23784,
+    "output_tokens": 4607,
+    "cache_read_tokens": 151808
+  },
+  "localized_defect": {
+    "kind": "output-contract-ordering",
+    "path": "protocol_fields.text_tokenizer_normalization.evidence_refs",
+    "observed": [
+      "source:document.tex:L166",
+      "source:README_siglip2.md:L13"
+    ],
+    "required_sorted": [
+      "source:README_siglip2.md:L13",
+      "source:document.tex:L166"
+    ],
+    "note": "Replaying the v3 structural checks against the produced JSON localized the rejection to this unsorted evidence_refs array; no resource, timeout, iteration, engine, authority, or source-access boundary was observed."
+  },
+  "reliability_update": {
+    "same_instance_semantic_trials": 2,
+    "validated_pass": 1,
+    "validated_fail": 1,
+    "pattern": "MIXED",
+    "note": "Do not infer a 50% population reliability rate from n=2; this establishes stochastic same-instance instability at the tested point."
+  },
+  "ksa_inference": "No per-KSA negative: task requirements remain composite/supporting and the failure is a task/output-contract negative."
+}

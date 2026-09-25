@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "run_id": "20260924T203756Z-584243b2",
+  "actions_run_id": 36056055758,
+  "artifact_id": 10832990265,
+  "artifact_digest": "sha256:32bcdb115b51feb47db114eb0ed4618a27d0dbe2695454b06e993d99212268e0",
+  "output_sha256": "sha256:45f8494a9faaf30a03b14927efd4bda121f8592065894218b93d5e98521edda5",
+  "disposition": "VALID_FEASIBILITY_PASS_WITH_HISTORICAL_ITERATION_METADATA_DEFECT",
+  "acceptance_claim": "single verifier-backed feasibility observation for exact configured actor × Method-IR v3 × hosted Linux substrate",
+  "actor_local_configuration": {
+    "reasoning_effort": "none",
+    "max_tokens": 4096,
+    "max_iterations": 12,
+    "tool_projection": [
+      "list_files",
+      "search_files",
+      "read_file_lines",
+      "write_file"
+    ],
+    "wall_seconds": 360
+  },
+  "preserved_observation": {
+    "verifier_exit_code": 0,
+    "state_changed": true,
+    "semantic_success": true,
+    "model_calls_completed": 12,
+    "tool_calls_completed": 32,
+    "wall_seconds": 32.178481,
+    "input_tokens": 28329,
+    "output_tokens": 5927,
+    "cache_read_tokens": 201088
+  },
+  "historical_metadata_note": "The immutable receipt predates the common-kernel fix that clears stale iteration-limit failure metadata when the verifier passes. Preserve failure_class/failure_signals exactly as observed; interpret termination_class=semantic-success and verifier_exit_code=0 as authoritative for this run.",
+  "kernel_correction_refs": [
+    "ea4eb8f4fcc6073b4553000ee7e95ea83fa9f292",
+    "d4445f58861bdc0b7d3a3a0280ba9bcd3cf36e1d"
+  ],
+  "inference_limits": [
+    "one feasibility observation is not a reliability estimate",
+    "native token counts are actor-local utilization, not cross-actor equivalence metrics",
+    "4096 tokens plus 12 iterations is an observed feasible point, not independent monotonic thresholds",
+    "provider alias is a mutable hosted-service realization; held-out/repeat evidence is required for broader employment claims"
+  ]
+}

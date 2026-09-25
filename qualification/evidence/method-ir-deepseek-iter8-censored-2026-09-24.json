@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "kind": "qualification-observation-summary",
+  "experiment_id": "openworker-deepseek-flash-method-ir-v2-orthogonal-screen",
+  "run_id": "20260924T201815Z-7fb879fa",
+  "actions_run_id": 36053800869,
+  "actor_id": "openworker-deepseek-flash-ubuntu24-method-ir-v2-compact-source",
+  "task_id": "method-ir-siglip2-b16-256-v2",
+  "configuration_digest": "sha256:ca163c57bef3f8f0036352e61181c0641e1137849cfcce3c0f74ad8e4d6692a6",
+  "evidence_digest": "sha256:329f5d1f987503aae34af16863c95243a53fb9eee390bbeb9bbd8484bf0e5649",
+  "disposition": "ITERATION_CENSORED",
+  "observation": {
+    "success": false,
+    "termination_class": "iteration-censored",
+    "failure_class": "iteration-limit",
+    "model_calls_started": 8,
+    "model_calls_completed": 8,
+    "model_rounds": 8,
+    "tool_calls_completed": 17,
+    "state_changed": false,
+    "wall_seconds": 12.605953,
+    "input_tokens": 37226,
+    "output_tokens": 1539,
+    "cache_read_tokens": 145792
+  },
+  "interpretation": "The actor remained active and completed successful source-inspection/search tool calls through the 8-iteration ceiling. Wall time, provider admission, and runtime were nonbinding. This is censored performance evidence, not a semantic or per-KSA negative.",
+  "next_treatment": "Change only max_iterations from 8 to 12; retain task, validator, provider/model, harness version, tool projection, token budget, wall, authority, and substrate."
+}

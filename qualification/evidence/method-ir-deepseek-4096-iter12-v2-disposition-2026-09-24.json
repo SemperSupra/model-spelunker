@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "run_id": "20260924T202905Z-73170e31",
+  "actions_run_id": 36055061286,
+  "artifact_id": 10832046728,
+  "artifact_digest": "sha256:e16ea60c9f46aff328f380d894f592affc0b00cf6cfed61bc9facdebf4ddc3d9",
+  "output_sha256": "sha256:4d5467398c40462d8513a3a4a2887ded3e80f2af9a9655f3edb8bb2cdd19258d",
+  "disposition": "VALID_EXECUTION_VALIDATOR_CONFOUNDED",
+  "actor_evidence_preserved": [
+    "10 model calls started and completed",
+    "write_file completed successfully",
+    "state changed and method_ir.json was materialized",
+    "no timeout, token truncation, iteration censor, engine error, or authority failure"
+  ],
+  "acceptance_claim_withheld": true,
+  "confounds": [
+    "task instruction says evidence refs are source:<relative-path> while files are under sources/, but verifier accepts only paths relative to the sources root and rejects source:sources/...",
+    "task instruction specifies non-empty absence_search only for MISSING, but verifier silently requires null for all non-MISSING statuses",
+    "task instruction permits null numeric comparison values when genuinely unrecoverable, while verifier silently requires finite numeric values",
+    "verifier requires each model comparison evidence_refs to include tables/zeroshot_main.tex but task instruction does not state that condition"
+  ],
+  "next_action": "mint corrected immutable task version with explicit output contract; do not reinterpret or rewrite this run"
+}

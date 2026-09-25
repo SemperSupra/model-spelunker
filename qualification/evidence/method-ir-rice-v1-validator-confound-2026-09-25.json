@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "run_id": "20260925T064333Z-a8b9c82c",
+  "actions_run_id": 36104086156,
+  "artifact_id": 10850830717,
+  "artifact_digest": "sha256:1a1fac1bbd457243211f5c1e0aa91091611eeb91207f9d4e8e8e70e88ca8a50f",
+  "output_sha256": "sha256:f21546d4682e14c1a211f3171837897a224d9457f6a419346898725ab66f9465",
+  "disposition": "VALID_EXECUTION_VALIDATOR_CONFOUNDED",
+  "acceptance_claim_withheld": true,
+  "actor_evidence_preserved": [
+    "12 model calls started and completed",
+    "18 tool calls completed successfully",
+    "write_file completed and method_ir.json was materialized",
+    "state changed",
+    "candidate exited normally",
+    "no timeout, engine/provider error, authority failure, or resource censor",
+    "wall_seconds=28.875745"
+  ],
+  "independent_source_audit": [
+    {
+      "field": "mixed_initial_state_distribution_parameter_p",
+      "finding": "v1 verifier incorrectly required AMBIGUOUS; frozen paper Table 3 explicitly gives per-application p values for Experiments I-V.",
+      "evidence": [
+        "paper.md:L602-L614"
+      ]
+    },
+    {
+      "field": "exploration_bonus_parameter_lambda",
+      "finding": "v1 verifier incorrectly required AMBIGUOUS; frozen paper Table 3 explicitly gives per-application lambda values for Experiments I-V.",
+      "evidence": [
+        "paper.md:L602-L614"
+      ]
+    },
+    {
+      "field": "refining_training_steps_and_optimizer",
+      "finding": "v1 field improperly combines an explicit PPO/MSE/Adam optimization specification with an absent Experiment-II refining budget, forcing loss of known information if classified MISSING.",
+      "evidence": [
+        "paper.md:L112-L141"
+      ]
+    },
+    {
+      "field": "evaluation_trials_and_random_seeds",
+      "finding": "the explicit three-repeat sentence is inside Experiment I; Table 1 reports mean/std for Experiment II but does not explicitly state Experiment-II trial count or seed values. A single EXPLICIT_PAPER expectation overstates the source.",
+      "evidence": [
+        "paper.md:L192-L196",
+        "paper.md:L214-L225"
+      ]
+    }
+  ],
+  "methodology_conclusion": "Do not count verifier_exit_code=1 as actor/KSA negative. Mint a corrected immutable task version that separates explicit optimizer/objective from missing training budget and aligns status expectations to the frozen source evidence; replay the exact actor/configuration only after the repaired contract is green.",
+  "first_launch_note": "Actions 36103914590 failed before inference because the verifier self-test allocated too few synthetic lines. That attempt is INVALID_METHODOLOGY and contains no actor observation."
+}

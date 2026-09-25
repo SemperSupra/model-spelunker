@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "claim": {
+    "claim_id": "CLAIM_SIGLIP2_B16_256_CORE",
+    "comparison": {
+      "siglip": {
+        "imagenet1k_val": 76.7,
+        "coco_text_to_image_recall_at_1": 47.4,
+        "coco_image_to_text_recall_at_1": 65.1,
+        "evidence_refs": ["source:tables/zeroshot_main.tex:L20"]
+      },
+      "siglip2": {
+        "imagenet1k_val": 79.1,
+        "coco_text_to_image_recall_at_1": 53.2,
+        "coco_image_to_text_recall_at_1": 69.7,
+        "evidence_refs": ["source:README_siglip2.md:L18-L19","source:tables/zeroshot_main.tex:L21"]
+      }
+    },
+    "evidence_refs": ["source:README_siglip2.md:L16-L19","source:tables/zeroshot_main.tex:L2-L5","source:tables/zeroshot_main.tex:L20-L21"]
+  },
+  "protocol_fields": {
+    "checkpoint_identity": {"status":"EXPLICIT_CHECKPOINT_README","value":"SigLIP 2 B/16 at 256px maps to checkpoint file siglip2_b16_256.npz with a published download link; the README lists standard (non-NaFlex) B/16 checkpoints at 224, 256, 384, and 512.","evidence_refs":["source:README_siglip2.md:L13","source:README_siglip2.md:L18-L19"],"absence_search":null},
+    "architecture_resolution": {"status":"EXPLICIT_PAPER","value":"Fixed-resolution variant uses the standard ViT with learned positional embedding; patch size 16 and image resolution 256, giving an image sequence length of 256 tokens.","evidence_refs":["source:document.tex:L166","source:document.tex:L208","source:document.tex:L227"],"absence_search":null},
+    "text_tokenizer_normalization": {"status":"EXPLICIT_PAPER","value":"Text length 64; multilingual Gemma tokenizer with vocabulary size 256k; text is transformed to lower case before tokenization.","evidence_refs":["source:document.tex:L166","source:README_siglip2.md:L13"],"absence_search":null},
+    "image_preprocessing": {"status":"INFERABLE_WITH_EVIDENCE","value":"The fixed-resolution variant resizes images to 256px without preserving aspect ratio (square aspect ratio), producing a 16x16 patch grid / sequence length of 256, in contrast to the aspect-preserving NaFlex path; the exact interpolation/augmentation pipeline for this evaluation is not spelled out in the local frozen sources.","evidence_refs":["source:document.tex:L225","source:document.tex:L227"],"absence_search":null},
+    "imagenet1k_evaluation": {"status":"AMBIGUOUS","value":"The paper reports ImageNet-1k val zero-shot classification accuracy in Table 1 (val column, ImageNet-1k group) and names ImageNet as a benchmark, but the local sources do not specify the prompt templates, class-name construction, or scoring procedure used for the ImageNet-1k zero-shot evaluation.","evidence_refs":["source:document.tex:L201","source:document.tex:L257","source:tables/zeroshot_main.tex:L5"],"absence_search":null},
+    "coco_retrieval_evaluation": {"status":"AMBIGUOUS","value":"The paper reports COCO text-to-image and image-to-text retrieval recall@1 in Table 1 (COCO group, T->I and I->T columns), but the local sources do not specify the COCO split (e.g. 5k test), candidate set, or the scoring/matching procedure used for the retrieval evaluation.","evidence_refs":["source:document.tex:L201","source:tables/zeroshot_main.tex:L5"],"absence_search":null},
+    "metric_definitions": {"status":"EXPLICIT_PAPER","value":"ImageNet-1k is reported as zero-shot classification accuracy (val), and COCO retrieval is reported as recall@1 for both text-to-image and image-to-text directions.","evidence_refs":["source:document.tex:L201"],"absence_search":null},
+    "software_runtime": {"status":"MISSING","value":null,"evidence_refs":[],"absence_search":"Checked document.tex and README_siglip2.md for any statement of the big_vision code version, runtime/framework, or library dependencies used to run the zero-shot classification and COCO retrieval evaluations for the B/16 256px models; no such software/runtime specification is present (only training hardware of up to 2048 TPUv5e chips is mentioned, which does not describe the evaluation runtime)."},
+    "randomness_repetition": {"status":"MISSING","value":null,"evidence_refs":[],"absence_search":"Checked document.tex and README_siglip2.md for any statement about random seeds, number of repeated evaluation runs, or variance/reporting protocol for the ImageNet-1k zero-shot and COCO retrieval results; none is present."}
+  },
+  "execution_readiness": {"status":"PARTIAL","blocking_fields":["coco_retrieval_evaluation","imagenet1k_evaluation","randomness_repetition","software_runtime"],"notes":"All six published comparison values for the fixed-resolution B/16 256px models are present in the frozen local sources: SigLIP (INet val 76.7, COCO T->I 47.4, I->T 65.1) in tables/zeroshot_main.tex L20 and SigLIP 2 (INet val 79.1, COCO T->I 53.2, I->T 69.7) in tables/zeroshot_main.tex L21 and README_siglip2.md L19. The checkpoint, architecture/resolution, tokenizer/normalization, and metric definitions are explicit or inferable, allowing the checkpoint identity and core setup to be identified. However, publication-visible material is not sufficient to fully reproduce the evaluations: the exact ImageNet-1k zero-shot protocol (prompt templates, class-name construction, scoring) and the COCO retrieval protocol (split, candidate pool, matching) are ambiguous, and the software runtime and randomness/repetition settings are missing. Hence execution is PARTIAL, and the claim's numerical comparison remains reproducible only as reported values, not as a re-runnable evaluation."}
+}

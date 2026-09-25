@@ -838,7 +838,9 @@ def main() -> int:
         engine_error = has_engine_error_event(stdout)
         turn_end_status = openworker_turn_end_status(stdout)
         iteration_censored = turn_end_status == "max_iterations_exceeded"
-        if validator_error:
+        if success:
+            failure_class = None
+        elif validator_error:
             failure_class = "validator-error"
         elif timed_out:
             failure_class = "timeout"
@@ -876,7 +878,11 @@ def main() -> int:
         )
         if validator_error and "validator-error" not in failure_signals:
             failure_signals.append("validator-error")
-        if iteration_censored and "iteration-limit" not in failure_signals:
+        if (
+            not success
+            and iteration_censored
+            and "iteration-limit" not in failure_signals
+        ):
             failure_signals.append("iteration-limit")
         metrics = harness_metrics(stdout)
         progress = openworker_progress_summary(stdout)
@@ -937,6 +943,11 @@ def main() -> int:
                 "model": candidate["model"],
                 "configuration_digest": canonical_json_digest(candidate),
                 "toolset": candidate["toolset"],
+                **(
+                    {"configuration": candidate["configuration"]}
+                    if experiment_meta is not None and "configuration" in candidate
+                    else {}
+                ),
                 **({"build": candidate["build"]} if "build" in candidate else {}),
                 **(
                     {"deployment_topology": candidate["deployment_topology"]}
