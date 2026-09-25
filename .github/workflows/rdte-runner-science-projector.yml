@@ -29,4 +29,4 @@ jobs:
           python -m qualification.test_run_task_failure_attribution
           python -m qualification.test_run_task_output_snapshot
           python -m qualification.test_run_task_validator_error
-          python -m qualification.test_task_workspace_layout
+          python qualification/test_task_workspace_layout.py
