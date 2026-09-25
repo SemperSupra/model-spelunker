@@ -262,6 +262,12 @@ jobs:
           print(json.dumps(data,sort_keys=True))
           PY
 
+      - name: Self-test optional science projection
+        run: |
+          PYTHONPATH=. python qualification/test_run_task_science_projector.py
+          PYTHONPATH=. python qualification/test_science_projector_goose.py
+          PYTHONPATH=. python qualification/test_science_projector_openworker.py
+
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
 
