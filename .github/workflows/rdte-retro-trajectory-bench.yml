@@ -54,19 +54,38 @@ jobs:
           )
           for manifest in "${manifests[@]}"
           do
-            python qualification/rdte/retrospective/verify_github_sources.py               "qualification/rdte/retrospective/manifests/$manifest"               --output ".rdte/source-verification/$manifest"
+            python qualification/rdte/retrospective/verify_github_sources.py \
+              "qualification/rdte/retrospective/manifests/$manifest" \
+              --output ".rdte/source-verification/$manifest"
           done
-      - name: Project retained Codex native trace from historical Actions log
+      - name: Project retained Codex native traces from historical Actions cohort
         env:
           GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .rdte/native-traces
-          raw_log="$RUNNER_TEMP/codex-job-105906244550.log"
-          curl -fsSL             -H "Authorization: Bearer $GITHUB_TOKEN"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/SemperSupra/model-spelunker/actions/jobs/105906244550/logs"             -o "$raw_log"
-          python qualification/rdte/retrospective/project_codex_actions_log.py             "$raw_log"             --source-ref "github-actions:SemperSupra/model-spelunker/run/35446508113/job/105906244550"             --output .rdte/native-traces/codex-false-completion.json
-          rm -f "$raw_log"
+          jobs=(
+            "105906244416:qwen17-effort-unset"
+            "105906244528:qwen17-effort-none"
+            "105906244550:qwen06-effort-none"
+          )
+          for item in "${jobs[@]}"
+          do
+            job_id="${item%%:*}"
+            label="${item#*:}"
+            raw_log="$RUNNER_TEMP/codex-job-$job_id.log"
+            curl -fsSL \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/SemperSupra/model-spelunker/actions/jobs/$job_id/logs" \
+              -o "$raw_log"
+            python qualification/rdte/retrospective/project_codex_actions_log.py \
+              "$raw_log" \
+              --source-ref "github-actions:SemperSupra/model-spelunker/run/35446508113/job/$job_id" \
+              --output ".rdte/native-traces/$label.json"
+            rm -f "$raw_log"
+          done
       - name: Run initial five-rep batch
         run: >-
           python qualification/rdte/retrospective/run_batch.py
