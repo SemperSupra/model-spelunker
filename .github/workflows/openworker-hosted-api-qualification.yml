@@ -1,4 +1,5 @@
 name: OpenWorker Hosted API Qualification
+run-name: ${{ inputs.assignment_id != '' && format('sidecar:{0}:{1}:{2}', inputs.workset_id, inputs.delegation_id, inputs.assignment_id) || format('OpenWorker Hosted API Qualification: {0}/{1}', inputs.candidate, inputs.task) }}
 
 on:
   workflow_dispatch:
@@ -11,6 +12,18 @@ on:
         description: Task id from qualification/tasks
         required: true
         default: text-repair-v0
+      workset_id:
+        description: Optional Agent Dispatch workset correlation id
+        required: false
+        default: ''
+      delegation_id:
+        description: Optional Agent Dispatch delegation correlation id
+        required: false
+        default: ''
+      assignment_id:
+        description: Optional Agent Dispatch assignment correlation id
+        required: false
+        default: ''
 
 permissions:
   contents: read
