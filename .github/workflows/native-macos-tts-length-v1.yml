@@ -1,10 +1,8 @@
+# FROZEN: manual-only after accepted 48-word boundary PASS run 36202898828.
 # execution-trigger: treatment semantics unchanged
 name: Native macOS TTS Length Boundary
 
 on:
-  push:
-    branches:
-      - exp/native-macos-tts-length-v1
   workflow_dispatch:
 
 permissions:
@@ -17,7 +15,6 @@ concurrency:
 
 jobs:
   generate:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[tts-length-v1]')
     runs-on: macos-26
     timeout-minutes: 8
     outputs:
