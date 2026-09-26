@@ -51,16 +51,25 @@ def assess_observation(observation: dict[str, Any], *, now: str | datetime) -> d
     if max_age_seconds <= 0:
         raise ValueError("max_age_seconds must be positive")
 
-    age_seconds = max(0, int((current_time - observed_at).total_seconds()))
+    raw_age_seconds = int((current_time - observed_at).total_seconds())
+    age_seconds = max(0, raw_age_seconds)
+
     observed_context = observation.get("observed_context_digest")
     current_context = observation.get("current_context_digest")
+    context_incomplete = bool(observed_context) != bool(current_context)
     context_changed = bool(
         observed_context
         and current_context
         and str(observed_context) != str(current_context)
     )
 
-    if context_changed:
+    if raw_age_seconds < 0:
+        freshness_state = "INVALIDATED"
+        freshness_reason = "observation timestamp is in the future"
+    elif context_incomplete:
+        freshness_state = "INVALIDATED"
+        freshness_reason = "context applicability evidence is incomplete"
+    elif context_changed:
         freshness_state = "INVALIDATED"
         freshness_reason = "relevant context changed"
     elif age_seconds > max_age_seconds:
