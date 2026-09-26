@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "id": "maintenance-triage-v0",
+  "task_class": "operations.autonomous-maintenance-triage",
+  "instruction": "Read evidence.json and create triage.json. Classify the failure plane without blaming an actor that has not run, preserve the stated unknowns, and choose the smallest next experiment before any repair. Do not edit any other file.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  },
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "medium"
+  },
+  "demand_factors": {
+    "evidence_documents": 1,
+    "failure_planes": 3,
+    "required_write_paths": 1
+  },
+  "ksa_requirements": [
+    {
+      "family": "skills",
+      "name": "failure_plane_attribution",
+      "evidence_role": "isolating"
+    },
+    {
+      "family": "abilities",
+      "name": "unknown_preservation",
+      "evidence_role": "isolating"
+    },
+    {
+      "family": "skills",
+      "name": "minimal_next_experiment_selection",
+      "evidence_role": "composite"
+    },
+    {
+      "family": "abilities",
+      "name": "scope_discipline",
+      "evidence_role": "supporting"
+    }
+  ],
+  "allowed_write_paths": [
+    "triage.json"
+  ],
+  "projected_tools": [
+    "read_file",
+    "write_file"
+  ]
+}
