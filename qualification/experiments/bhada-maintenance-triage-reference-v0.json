@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "id": "bhada-maintenance-triage-reference-v0",
+  "decision_question": "Does the unified qualification kernel execute and preserve the BHADA maintenance-triage task contract, KSA roles, verifier result, and deployment evidence with a deterministic known-good control?",
+  "task": {
+    "id": "maintenance-triage-v0",
+    "task_class": "operations.autonomous-maintenance-triage"
+  },
+  "actors": [
+    "contract-test-portable-v2"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": false,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "maintenance-triage-v0 task and verifier",
+    "deterministic contract actor",
+    "stdio local subprocess deployment",
+    "task-scoped authority"
+  ],
+  "variable_under_test": null,
+  "claim_type": "feasibility",
+  "experimental_role": "control",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "task-ksa-binding",
+    "failure-plane-attribution-output",
+    "unknown-preservation-output",
+    "deployment-topology-binding"
+  ],
+  "design_block": "bhada-autonomous-maintenance-v0",
+  "stop_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "receipt-contract-failure"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "contract-candidate-defect"
+  ]
+}
