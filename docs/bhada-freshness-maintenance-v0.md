@@ -128,11 +128,13 @@ No generic scheduler is required. Agent Dispatch remains the actuator.
 
 Historical BHADA Provider Health evidence exposed an execution-plane confound: private GitHub-hosted runs can fail before provider code starts when private Actions capacity/quota is unavailable. Those events are readiness/resource evidence, not provider-health negatives.
 
-Preferred private-survey execution is Agent Dispatch -> ordinary GitHub Actions -> already-qualified self-hosted/GARM-backed capacity, while preserving GARM/TrueNAS only as capacity provenance beneath GitHub Actions. Do not fall back to private GitHub-hosted minutes for routine surveys.
+The continuity floor is the public Agent Dispatch remote-survey lane in `SemperSupra/agent-dispatch#34`: a weekly standing survey on standard GitHub-hosted runners in the public repository, with broader coverage every second week. It checks out BHADA read-only through a repository-specific deploy credential, emits only sanitized public evidence, and seals detailed output. This avoids both private-repository hosted-minute exhaustion and dependence on local sovereign resources.
 
-BHADA #103 currently has self-hosted-runner readiness UNKNOWN/unavailable. Do not spam retries. The first live revalidation rep begins when the existing executor is actually ready or another already-authorized equivalent venue exists.
+Self-hosted/GARM/TrueNAS capacity remains an optional alternate executor and useful qualification variable. It must not be required for survey continuity.
 
-Until then, deterministic/public-safe contract reps continue without pretending they are live-provider evidence.
+BHADA #103 currently has self-hosted-runner readiness UNKNOWN/unavailable. Preserve that as a substrate-readiness observation, but do not let it block the remote survey lane or cause repeated local retries.
+
+The remote survey requires only its one-time read credential and age recipient configuration before the first credentialed run. Until that deployment boundary is satisfied, deterministic/public-safe contract reps continue without pretending they are live-provider evidence.
 
 ## Red team
 
