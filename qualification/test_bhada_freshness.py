@@ -14,6 +14,7 @@ def base(**overrides):
         "observed_context_digest": "ctx-a",
         "current_context_digest": "ctx-a",
         "decision_required": False,
+        "execution_readiness": "READY",
         "stages": {
             "search": "PASS",
             "metadata": "PASS",
@@ -91,6 +92,31 @@ unknown = assess_observation(
 assert unknown["operational_state"] == "UNKNOWN"
 assert unknown["next_action"] == "OBSERVE"
 
+
+# Execution readiness gates provider/backend revalidation even when provider evidence is stale.
+quota_blocked_stale = assess_observation(
+    base(
+        observed_at="2026-09-20T12:00:00Z",
+        execution_readiness="QUOTA_EXHAUSTED",
+    ),
+    now=NOW,
+)
+assert quota_blocked_stale["freshness_state"] == "STALE"
+assert quota_blocked_stale["execution_readiness"] == "QUOTA_EXHAUSTED"
+assert quota_blocked_stale["next_action"] == "RESTORE_READINESS"
+assert quota_blocked_stale["task_class"] == "maintenance.readiness"
+
+unknown_execution = assess_observation(
+    base(
+        observed_at="2026-09-20T12:00:00Z",
+        execution_readiness="UNKNOWN",
+    ),
+    now=NOW,
+)
+assert unknown_execution["freshness_state"] == "STALE"
+assert unknown_execution["next_action"] == "OBSERVE_READINESS"
+assert unknown_execution["task_class"] == "maintenance.readiness"
+
 # Old failed evidence must be revalidated before it is treated as a current diagnosis target.
 old_failure = assess_observation(
     base(
@@ -102,4 +128,4 @@ old_failure = assess_observation(
 assert old_failure["freshness_state"] == "STALE"
 assert old_failure["next_action"] == "REVALIDATE"
 
-print("PASS BHADA freshness eligibility preserves freshness, urgency, clock/context, readiness, and diagnosis boundaries")
+print("PASS BHADA freshness eligibility preserves freshness, urgency, execution readiness, clock/context, and diagnosis boundaries")
