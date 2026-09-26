@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source": "public-safe synthetic operational observation",
+  "component": "provider-alpha/backend-beta",
+  "previous_observation": {
+    "stages": {
+      "search": "PASS",
+      "metadata": "PASS",
+      "episodes": "PASS",
+      "resolve": "PASS"
+    }
+  },
+  "current_observation": {
+    "stages": {
+      "search": "PASS",
+      "metadata": "PASS",
+      "episodes": "PASS",
+      "resolve": "UPSTREAM_CHANGED"
+    },
+    "execution_environment": "READY",
+    "candidate_actor_status": "NOT_YET_RUN"
+  },
+  "known_facts": [
+    "The failure first appears at source/backend resolution.",
+    "The execution environment is ready.",
+    "No repair has been attempted."
+  ],
+  "unknowns": [
+    "exact upstream contract change",
+    "whether a source-code repair is required"
+  ],
+  "constraints": [
+    "Do not classify the upstream observation as an actor failure.",
+    "Do not claim a root cause that is not supported by the evidence.",
+    "Diagnose before changing product code."
+  ]
+}
