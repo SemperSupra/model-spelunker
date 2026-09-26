@@ -30,8 +30,8 @@
     "whether a source-code repair is required"
   ],
   "constraints": [
-    "Do not classify the upstream observation as an actor failure.",
-    "Do not claim a root cause that is not supported by the evidence.",
-    "Diagnose before changing product code."
+    "Use only claims supported by the supplied evidence.",
+    "Preserve explicit unknowns rather than guessing.",
+    "Prefer the smallest information-gaining next experiment before mutation or escalation."
   ]
 }
