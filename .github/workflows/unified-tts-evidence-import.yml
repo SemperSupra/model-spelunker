@@ -1,0 +1,89 @@
+# FROZEN: manual-only after successful common-envelope import run 36203423460.
+# execution-trigger: common-envelope semantics unchanged
+name: Unified TTS Evidence Import
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  import-and-reduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install schema validator
+        run: python3 -m pip install --quiet --disable-pip-version-check jsonschema==4.25.1
+
+      - name: Import both native TTS observations into common v2 receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/tts-unified"
+          mkdir -p "$out"
+
+          python3 qualification/import_tts_evidence.py             --task-dir qualification/tasks/tts-content-fidelity-v0             --actor qualification/actors/macos-say-samantha-macos26-arm64-v0.json             --experiment qualification/experiments/macos-say-samantha-tts-content-v0-screen.json             --result qualification/evidence/native-macos-samantha-tts-content-v0-2026-09-25.json             --task-source-commit 9119df8f6fc3045fd6699c053f5e2d093550589d             --substrate-profile-commit 9119df8f6fc3045fd6699c053f5e2d093550589d             --run-id 20260925T083918Z-tts-v0             --output "$out/tts-v0-receipt.json"
+
+          python3 qualification/import_tts_evidence.py             --task-dir qualification/tasks/tts-content-fidelity-v1-length48             --actor qualification/actors/macos-say-samantha-macos26-arm64-v0.json             --experiment qualification/experiments/macos-say-samantha-tts-content-v1-length48-boundary.json             --result qualification/evidence/native-macos-samantha-tts-content-v1-length48-2026-09-26.json             --task-source-commit be40663d33590b7959e9dbe6b77fdf31fe3dc182             --substrate-profile-commit be40663d33590b7959e9dbe6b77fdf31fe3dc182             --run-id 20260925T235651Z-tts-v1             --output "$out/tts-v1-receipt.json"
+
+          python3 - "$out/tts-v0-receipt.json" "$out/tts-v1-receipt.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          import jsonschema
+          schema=json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          rows=[json.load(open(path)) for path in sys.argv[1:]]
+          for row in rows:
+              jsonschema.validate(row,schema)
+              assert row["schema_version"] == 2
+              assert row["candidate"]["harness"]["name"] == "macos-say"
+              assert row["candidate"]["model"]["provider"] == "apple-system-tts"
+              assert row["candidate"]["deployment_topology"]["runtime_placement"] == "local-service"
+              assert row["observation"]["success"] is True
+              assert row["observation"]["tool_calls"] is None
+              assert row["observation"]["input_tokens"] is None
+              assert row["observation"]["output_tokens"] is None
+              assert row["extensions"][0]["kind"] == "audio.tts-generation-validation"
+          assert rows[0]["candidate"]["configuration_digest"] == rows[1]["candidate"]["configuration_digest"]
+          assert rows[0]["substrate"]["profile_id"] == rows[1]["substrate"]["profile_id"]
+          assert rows[0]["substrate"]["profile_commit"] != rows[1]["substrate"]["profile_commit"]
+          print("PASS TTS common-receipt bindings")
+          PY
+
+      - name: Reduce TTS observations through common envelope reducer
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/tts-unified"
+          PYTHONPATH=. python3 qualification/reduce_evidence.py             "$out/tts-v0-receipt.json"             "$out/tts-v1-receipt.json"             --output "$out/tts-envelope.json"
+
+          python3 - "$out/tts-envelope.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          assert len(data["envelopes"]) == 1
+          env=data["envelopes"][0]
+          assert env["task_class"] == "audio.tts-content-generation"
+          assert env["evidence_pattern"] == "PASS_ONLY"
+          assert env["evidence"]["reps"] == 2
+          assert env["evidence"]["semantic_trials"] == 2
+          assert env["evidence"]["validated_pass"] == 2
+          assert env["evidence"]["unique_task_instances"] == 2
+          assert env["ksa_evidence"]["skills"]["text_to_speech_generation"] == "REPEATED_EVIDENCE"
+          assert env["ksa_evidence"]["abilities"]["spoken_content_fidelity"] == "REPEATED_EVIDENCE"
+          assert env["ksa_evidence"]["abilities"]["audio_artifact_production"] == "SUPPORTING_EVIDENCE"
+          commits=env["substrate_provenance"]["profile_commits_observed"]
+          assert len(commits) == 2
+          print("TTS_UNIFIED_ENVELOPE="+json.dumps(env,sort_keys=True))
+          PY
+
+      - name: Upload common receipts and envelope
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unified-tts-envelope-${{ github.run_id }}
+          path: ${{ runner.temp }}/tts-unified/**
+          if-no-files-found: error
+          retention-days: 30
