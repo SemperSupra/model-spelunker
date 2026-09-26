@@ -12,6 +12,7 @@ from typing import Any
 
 PASS_STATES = {"PASS", "WORKING"}
 READINESS_STATES = {"ENVIRONMENT_BLOCKED", "CAPABILITY_REQUIRED", "ACCESS_REQUIRED"}
+EXECUTION_BLOCKED_STATES = {"ENVIRONMENT_BLOCKED", "CAPABILITY_REQUIRED", "ACCESS_REQUIRED", "RESOURCE_EXHAUSTED", "QUOTA_EXHAUSTED", "RUNNER_UNAVAILABLE", "UNAVAILABLE"}
 FAILURE_STATES = {"UPSTREAM_CHANGED", "FAILED", "DEGRADED"}
 UNKNOWN_STATES = {"UNKNOWN", "NOT_RUN"}
 
@@ -85,9 +86,17 @@ def assess_observation(observation: dict[str, Any], *, now: str | datetime) -> d
     operational_state = _operational_state(stages)
 
     decision_required = bool(observation.get("decision_required", False))
+    execution_readiness = str(observation.get("execution_readiness", "READY")).upper()
 
-    # Applicability/freshness is checked before diagnosing historical failures.
-    if freshness_state != "FRESH":
+    # Execution readiness gates component revalidation. Stale provider/backend evidence
+    # must not cause repeated provider probes through a substrate that cannot start work.
+    if execution_readiness in EXECUTION_BLOCKED_STATES:
+        next_action = "RESTORE_READINESS"
+        task_class = "maintenance.readiness"
+    elif execution_readiness == "UNKNOWN":
+        next_action = "OBSERVE_READINESS"
+        task_class = "maintenance.readiness"
+    elif freshness_state != "FRESH":
         next_action = "REVALIDATE"
         task_class = "maintenance.revalidation"
     elif operational_state in READINESS_STATES:
@@ -118,6 +127,7 @@ def assess_observation(observation: dict[str, Any], *, now: str | datetime) -> d
         "freshness_state": freshness_state,
         "freshness_reason": freshness_reason,
         "operational_state": operational_state,
+        "execution_readiness": execution_readiness,
         "eligible_for_maintenance": next_action != "USE_EVIDENCE",
         "urgency": urgency,
         "next_action": next_action,
