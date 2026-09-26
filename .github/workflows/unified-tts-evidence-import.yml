@@ -1,10 +1,8 @@
+# FROZEN: manual-only after successful common-envelope import run 36203423460.
 # execution-trigger: common-envelope semantics unchanged
 name: Unified TTS Evidence Import
 
 on:
-  push:
-    branches:
-      - feat/unified-tts-envelope-import
   workflow_dispatch:
 
 permissions:
