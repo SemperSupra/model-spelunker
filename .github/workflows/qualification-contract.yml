@@ -158,12 +158,16 @@ jobs:
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v1/verify.py --self-test
+          python qualification/tasks/maintenance-triage-v0/verify.py --self-test
 
       - name: Enforce task workspace layout contract
         run: python qualification/test_task_workspace_layout.py
 
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
+
+      - name: Self-test freshness-driven maintenance eligibility
+        run: PYTHONPATH=. python qualification/test_bhada_freshness.py
 
       - name: Exercise unified v2 reference contract
         env:
