@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "id": "bhada-maintenance-triage-v0",
+  "decision_question": "Can diverse configured actors correctly attribute a bounded provider/backend drift observation, preserve UNKNOWN, and select a minimal next experiment without premature repair or human escalation?",
+  "task": {
+    "id": "maintenance-triage-v0",
+    "task_class": "operations.autonomous-maintenance-triage"
+  },
+  "actors": [
+    "openworker-deepseek-flash-gha-direct",
+    "openworker-gemini-3.7-flash-gha-google",
+    "openworker-groq-gpt-oss-20b-gha-direct"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": true
+  },
+  "frozen_factors": [
+    "OpenWorker harness revision",
+    "GitHub-hosted Ubuntu 24.04 x64 venue",
+    "read_file/write_file tool projection",
+    "task-scoped authority",
+    "maintenance-triage-v0 task package and verifier"
+  ],
+  "variable_under_test": "configured actor model/provider realization",
+  "claim_type": "feasibility",
+  "experimental_role": "operational",
+  "primary_responses": [
+    "semantic-verifier-result",
+    "failure-plane-attribution",
+    "unknown-preservation",
+    "minimal-next-experiment-selection",
+    "human-intervention",
+    "wall-seconds"
+  ],
+  "design_block": "bhada-autonomous-maintenance-v0",
+  "stop_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "authority-boundary-reached",
+    "public-safe-data-boundary-violated"
+  ],
+  "exclusion_conditions": [
+    "task-package-invalidated",
+    "validator-error",
+    "execution-environment-unavailable",
+    "credential-or-private-data-boundary-failure"
+  ]
+}
