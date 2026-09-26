@@ -14,6 +14,7 @@ This is a falsification campaign, not an architecture rollout.
 - Expiry/context drift makes work eligible; it does not itself authorize immediate execution.
 - Freshness, urgency, and value-of-revalidation remain separate.
 - Provider/backend/readiness failure is not automatically actor failure.
+- Execution readiness gates component revalidation: stale provider/backend evidence does not justify repeated probes through an unavailable or quota-exhausted substrate.
 - Repair actors may not weaken validators, widen authority, or redefine acceptance.
 - Original actor output remains immutable qualification evidence.
 - Product promotion is separate from qualification acceptance.
@@ -54,6 +55,15 @@ For each eligible event capture:
 - resulting maintenance task, if any.
 
 Prefer refresh-on-use or spare-capacity refresh. Do not trigger merely to satisfy a calendar if no decision/value exists.
+
+Initial cadence hypotheses for v0:
+- **weekly (7-day horizon)** for volatile provider/backend observations;
+- **biweekly (14-day horizon)** for lower-churn surveys;
+- refresh-on-use, context change, or a fresh failure signal may pull a check forward;
+- daily refresh is not a default and must earn its keep from measured churn/value;
+- stagger eligibility/opportunistic execution so many components do not create a synchronized weekly refresh storm.
+
+These are experimental freshness horizons, not a fixed scheduling subsystem. The observed no-change rate, drift discovery rate, revalidation cost, and decision demand determine whether a class moves shorter, longer, or on-demand.
 
 Initial promotion sample: 10 eligible opportunities spanning at least 3 distinct components or failure contexts, unless earlier evidence falsifies the idea.
 
@@ -116,6 +126,10 @@ No generic scheduler is required. Agent Dispatch remains the actuator.
 
 ### Initial live deployment gate
 
+Historical BHADA Provider Health evidence exposed an execution-plane confound: private GitHub-hosted runs can fail before provider code starts when private Actions capacity/quota is unavailable. Those events are readiness/resource evidence, not provider-health negatives.
+
+Preferred private-survey execution is Agent Dispatch -> ordinary GitHub Actions -> already-qualified self-hosted/GARM-backed capacity, while preserving GARM/TrueNAS only as capacity provenance beneath GitHub Actions. Do not fall back to private GitHub-hosted minutes for routine surveys.
+
 BHADA #103 currently has self-hosted-runner readiness UNKNOWN/unavailable. Do not spam retries. The first live revalidation rep begins when the existing executor is actually ready or another already-authorized equivalent venue exists.
 
 Until then, deterministic/public-safe contract reps continue without pretending they are live-provider evidence.
@@ -130,6 +144,7 @@ Kill or narrow the mechanism if any of the following dominates:
 - validator/test overfitting produces false-green repairs;
 - correlated upstream incidents inflate apparent qualification reliability;
 - stale evidence is treated as failed evidence;
+- stale provider evidence causes repeated provider checks through a known-unavailable/quota-exhausted execution plane;
 - readiness/provider/task-package failures leak into actor negatives;
 - repair becomes the default even when substitute/quarantine/retire is cheaper;
 - private data must be exposed to obtain qualification reps;
