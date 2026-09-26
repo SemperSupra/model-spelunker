@@ -158,12 +158,49 @@ jobs:
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v1/verify.py --self-test
+          python qualification/tasks/maintenance-triage-v0/verify.py --self-test
 
       - name: Enforce task workspace layout contract
         run: python qualification/test_task_workspace_layout.py
 
       - name: Self-test task-conditioned evidence reducer
         run: PYTHONPATH=. python qualification/test_reduce_evidence.py
+
+      - name: Self-test freshness-driven maintenance eligibility
+        run: PYTHONPATH=. python qualification/test_bhada_freshness.py
+
+
+      - name: Exercise BHADA maintenance triage v0 reference contract
+        env:
+          RECEIPT_MAINTENANCE: ${{ runner.temp }}/bhada-maintenance-reference.json
+        run: |
+          set -euo pipefail
+          python qualification/run_task.py \
+            --task-commit "$GITHUB_SHA" \
+            --substrate-profile-id contract-bhada-maintenance-v0 \
+            --substrate-profile-commit "$GITHUB_SHA" \
+            --experiment qualification/experiments/bhada-maintenance-triage-reference-v0.json \
+            qualification/tasks/maintenance-triage-v0 \
+            qualification/test-candidate-v2.json \
+            "$RECEIPT_MAINTENANCE" \
+            -- python -c 'import json; from pathlib import Path; result={"failure_plane":"upstream-component","actor_failure":False,"disposition":"diagnose-before-repair","next_experiment":"reproduce-resolution-contract","human_escalation":False,"root_cause":None,"unknowns":["exact upstream contract change","whether a source-code repair is required"]}; Path("triage.json").write_text(json.dumps(result,sort_keys=True),encoding="utf-8")'
+          python - "$RECEIPT_MAINTENANCE" <<'PY'
+          import json,sys
+          from pathlib import Path
+          import jsonschema
+
+          receipt=json.loads(Path(sys.argv[1]).read_text())
+          schema=json.loads(Path("qualification/run-receipt.schema.json").read_text())
+          jsonschema.validate(receipt,schema)
+          assert receipt["schema_version"] == 2
+          assert receipt["task"]["id"] == "maintenance-triage-v0"
+          assert receipt["task"]["task_class"] == "operations.autonomous-maintenance-triage"
+          assert len(receipt["task"]["ksa_requirements"]) == 4
+          assert receipt["observation"]["success"] is True
+          assert receipt["observation"]["human_interventions"] == 0
+          assert receipt["experiment"]["id"] == "bhada-maintenance-triage-reference-v0"
+          print("PASS maintenance triage v0 executes through unified v2 receipt contract")
+          PY
 
       - name: Exercise unified v2 reference contract
         env:

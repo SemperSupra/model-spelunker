@@ -11,6 +11,10 @@ on:
         description: Task id from qualification/tasks
         required: true
         default: text-repair-v0
+      experiment:
+        description: Optional experiment id from qualification/experiments (without .json)
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -28,6 +32,7 @@ jobs:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
       QUALIFICATION_TASK: ${{ inputs.task }}
+      QUALIFICATION_EXPERIMENT: ${{ inputs.experiment }}
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
       CANDIDATE_META: '/tmp/model-spelunker-hosted-candidate.json'
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
@@ -318,11 +323,19 @@ jobs:
             unset MODEL_SPELUNKER_EXTRA_BODY || true
           fi
 
+          experiment_args=()
+          if [ -n "${QUALIFICATION_EXPERIMENT:-}" ]; then
+            experiment_path="qualification/experiments/${QUALIFICATION_EXPERIMENT}.json"
+            test -f "$experiment_path" || { echo "unknown qualification experiment: $QUALIFICATION_EXPERIMENT" >&2; exit 2; }
+            experiment_args=(--experiment "$experiment_path")
+          fi
+
           set +e
           python qualification/run_task.py \
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-linux-x64-openworker-hosted-api \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
+            "${experiment_args[@]}" \
             "qualification/tasks/$QUALIFICATION_TASK" \
             "$CANDIDATE_META" \
             "$RECEIPT" \
