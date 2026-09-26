@@ -183,7 +183,7 @@ jobs:
             qualification/tasks/maintenance-triage-v0 \
             qualification/test-candidate-v2.json \
             "$RECEIPT_MAINTENANCE" \
-            -- python -c 'import json; from pathlib import Path; result={"failure_plane":"upstream-component","actor_failure":False,"disposition":"diagnose-before-repair","next_experiment":"reproduce-resolution-contract","human_escalation":False,"root_cause":None,"unknowns":["exact upstream contract change","whether a source-code repair is required"]}; Path("triage.json").write_text(json.dumps(result,sort_keys=True)+"\\n",encoding="utf-8")'
+            -- python -c 'import json; from pathlib import Path; result={"failure_plane":"upstream-component","actor_failure":False,"disposition":"diagnose-before-repair","next_experiment":"reproduce-resolution-contract","human_escalation":False,"root_cause":None,"unknowns":["exact upstream contract change","whether a source-code repair is required"]}; Path("triage.json").write_text(json.dumps(result,sort_keys=True),encoding="utf-8")'
           python - "$RECEIPT_MAINTENANCE" <<'PY'
           import json,sys
           from pathlib import Path
