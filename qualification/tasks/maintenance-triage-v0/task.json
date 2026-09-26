@@ -2,7 +2,7 @@
   "schema_version": 2,
   "id": "maintenance-triage-v0",
   "task_class": "operations.autonomous-maintenance-triage",
-  "instruction": "Read evidence.json and create triage.json. Classify the failure plane without blaming an actor that has not run, preserve the stated unknowns, and choose the smallest next experiment before any repair. Do not edit any other file.",
+  "instruction": "Read evidence.json and create triage.json with failure_plane, actor_failure, disposition, next_experiment, human_escalation, root_cause, and unknowns. Use only supported evidence, preserve uncertainty, and select the smallest information-gaining next experiment before any mutation. Do not edit any other file.",
   "fixture": "fixture",
   "verifier": "verify.py",
   "limits": {
