@@ -53,6 +53,20 @@ invalidated = assess_observation(
 assert invalidated["freshness_state"] == "INVALIDATED"
 assert invalidated["next_action"] == "REVALIDATE"
 
+incomplete_context = assess_observation(
+    base(current_context_digest=None),
+    now=NOW,
+)
+assert incomplete_context["freshness_state"] == "INVALIDATED"
+assert incomplete_context["next_action"] == "REVALIDATE"
+
+future_timestamp = assess_observation(
+    base(observed_at="2026-09-26T12:05:00Z"),
+    now=NOW,
+)
+assert future_timestamp["freshness_state"] == "INVALIDATED"
+assert "future" in future_timestamp["freshness_reason"]
+
 upstream = assess_observation(
     base(stages={"search": "PASS", "metadata": "PASS", "episodes": "PASS", "resolve": "UPSTREAM_CHANGED"}),
     now=NOW,
@@ -88,4 +102,4 @@ old_failure = assess_observation(
 assert old_failure["freshness_state"] == "STALE"
 assert old_failure["next_action"] == "REVALIDATE"
 
-print("PASS BHADA freshness eligibility preserves freshness, urgency, readiness, and diagnosis boundaries")
+print("PASS BHADA freshness eligibility preserves freshness, urgency, clock/context, readiness, and diagnosis boundaries")
