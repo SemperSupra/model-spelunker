@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "candidate-contract-review-v0",
+  "task_class": "validation.candidate-contract-review",
+  "instruction": "Read review_cases.json. Independently review each candidate against the supplied contract. Write review.json with exactly {\"schema_version\":1,\"cases\":[...]} where each case entry has exactly: id, verdict (PASS|FAIL|UNKNOWN), and defect_paths (array of exact JSON Pointer strings). PASS requires no contract defect; FAIL requires every concrete defect path you can establish from the supplied candidate; UNKNOWN is only for insufficient evidence. Do not rewrite candidates. Do not invent semantic defects outside the supplied contract.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  },
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low"
+  },
+  "allowed_write_paths": [
+    "review.json"
+  ],
+  "projected_tools": [
+    "read_file",
+    "write_file"
+  ]
+}
