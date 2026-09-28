@@ -150,6 +150,9 @@ jobs:
           print("PASS qualification JSON contracts")
           PY
 
+      - name: Compile projected adapters
+        run: python -m py_compile qualification/adapters/openworker_projected.py
+
       - name: Self-test deterministic verifiers
         run: |
           python qualification/tasks/text-repair-v0/verify.py --self-test
