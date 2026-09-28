@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "source": "Model Spelunker Method-IR v3 DeepSeek C1 structural failure / deterministic canonicalization lineage",
+    "source_issue": "https://github.com/SemperSupra/model-spelunker/issues/72",
+    "source_pr": "https://github.com/SemperSupra/model-spelunker/pull/111",
+    "source_candidate_sha256": "96b367ebaaf32aebf77ffc63ed192e4d11a1507a74d2050176452cc167972298",
+    "canonical_derivative_sha256": "4e016bfbf9a23adb8a5bb7369e0183ad2c55286c3d2b14749c3dda5151809d6c",
+    "note": "These compact cases reproduce only the observed sorted-evidence_refs defect class; they are not the full original candidate."
+  },
+  "contract": {
+    "evidence_refs_rule": "For every protocol field shown, evidence_refs MUST be lexicographically sorted ascending and contain no duplicate entries.",
+    "scope_rule": "Review only the supplied evidence_refs contract. Do not infer protocol semantics or source correctness from model priors."
+  },
+  "cases": [
+    {
+      "id": "clean-control",
+      "candidate": {
+        "protocol_fields": {
+          "text_tokenizer_normalization": {
+            "evidence_refs": [
+              "source:README_siglip2.md:L13",
+              "source:document.tex:L166"
+            ]
+          },
+          "image_preprocessing": {
+            "evidence_refs": [
+              "source:README_siglip2.md:L13",
+              "source:document.tex:L185",
+              "source:document.tex:L227"
+            ]
+          },
+          "imagenet1k_evaluation": {
+            "evidence_refs": [
+              "source:document.tex:L201",
+              "source:document.tex:L257",
+              "source:tables/zeroshot_main.tex:L13-L14",
+              "source:tables/zeroshot_main.tex:L4-L5"
+            ]
+          },
+          "coco_retrieval_evaluation": {
+            "evidence_refs": [
+              "source:document.tex:L201",
+              "source:tables/zeroshot_main.tex:L13-L14",
+              "source:tables/zeroshot_main.tex:L4"
+            ]
+          },
+          "software_runtime": {
+            "evidence_refs": [
+              "source:README_siglip2.md:L13",
+              "source:document.tex:L170"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "unsorted-c1-derived",
+      "candidate": {
+        "protocol_fields": {
+          "text_tokenizer_normalization": {
+            "evidence_refs": [
+              "source:document.tex:L166",
+              "source:README_siglip2.md:L13"
+            ]
+          },
+          "image_preprocessing": {
+            "evidence_refs": [
+              "source:document.tex:L227",
+              "source:document.tex:L185",
+              "source:README_siglip2.md:L13"
+            ]
+          },
+          "imagenet1k_evaluation": {
+            "evidence_refs": [
+              "source:tables/zeroshot_main.tex:L4-L5",
+              "source:tables/zeroshot_main.tex:L13-L14",
+              "source:document.tex:L257",
+              "source:document.tex:L201"
+            ]
+          },
+          "coco_retrieval_evaluation": {
+            "evidence_refs": [
+              "source:tables/zeroshot_main.tex:L4",
+              "source:tables/zeroshot_main.tex:L13-L14",
+              "source:document.tex:L201"
+            ]
+          },
+          "software_runtime": {
+            "evidence_refs": [
+              "source:document.tex:L170",
+              "source:README_siglip2.md:L13"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

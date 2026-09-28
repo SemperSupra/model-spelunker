@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "macos-mlx-qwen4b-text-repair-reference-v0",
+  "decision_question": "Can the exact OpenWorker + Qwen3-4B-Instruct-2507-4bit + macOS-26/MLX configured actor complete the existing deterministic text-repair reference before it is interpreted on validator-role work?",
+  "task": {
+    "id": "text-repair-v0",
+    "task_class": "software.bounded-repair"
+  },
+  "actors": [
+    "openworker-qwen3-4b-macos26-mlx"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "OpenWorker revision",
+    "exact model revision/hash",
+    "macOS-26 runner class",
+    "MLX-LM version",
+    "task package",
+    "deterministic verifier",
+    "max iterations",
+    "max tokens policy"
+  ],
+  "variable_under_test": "first valid task-conditioned reference on the admitted macOS/MLX actor realization",
+  "stop_conditions": [
+    "model/runtime fails before useful inference",
+    "task/verifier calibration failure",
+    "unexpected authority expansion"
+  ]
+}

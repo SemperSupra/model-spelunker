@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "gha-local-validator-crossover-v0",
+  "decision_question": "Can the already-demonstrated public-GHA CPU Qwen3-1.7B and macOS/MLX Qwen3-4B configured actors independently detect a real structural candidate defect while avoiding false positives on a clean control?",
+  "task": {
+    "id": "candidate-contract-review-v0",
+    "task_class": "validation.candidate-contract-review"
+  },
+  "actors": [
+    "openworker-qwen3-1.7b-gha-ollama",
+    "openworker-qwen3-4b-macos26-mlx"
+  ],
+  "replication": {
+    "reps_per_actor": 1,
+    "independent": true,
+    "randomized_order": false
+  },
+  "frozen_factors": [
+    "task package",
+    "candidate cases",
+    "validator contract",
+    "OpenWorker revision",
+    "max iterations",
+    "max tokens policy",
+    "independent deterministic verifier",
+    "no cross-actor communication"
+  ],
+  "variable_under_test": "configured local-model + execution-substrate realization",
+  "stop_conditions": [
+    "invalid task/verifier calibration",
+    "provider/runtime fails before a model round",
+    "unexpected authority expansion",
+    "candidate case mutation"
+  ]
+}
