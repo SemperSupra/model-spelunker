@@ -374,11 +374,17 @@ async def run(instruction: str) -> int:
         "groq": ("GROQ_API_KEY", "https://api.groq.com/openai/v1"),
         "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
         "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
+        "mlx": (
+            "MODEL_SPELUNKER_MLX_API_KEY",
+            os.environ.get("MODEL_SPELUNKER_MLX_BASE_URL", ""),
+        ),
     }
     if _PROVIDER in compatible:
         from coworker.providers.openai_provider import OpenAIProvider
 
         key_name, base_url = compatible[_PROVIDER]
+        if not base_url:
+            raise RuntimeError(f"{_PROVIDER} OpenAI-compatible base URL is not configured")
         delegate = OpenAIProvider(
             api_key=os.environ[key_name],
             base_url=base_url,
