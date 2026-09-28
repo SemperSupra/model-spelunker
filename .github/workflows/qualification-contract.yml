@@ -40,6 +40,7 @@ jobs:
           discovery_task = json.loads(Path("qualification/tasks/validation-discovery-v0/task.json").read_text())
           debugging_task = json.loads(Path("qualification/tasks/boundary-bugfix-v0/task.json").read_text())
           reconciliation_task = json.loads(Path("qualification/tasks/repository-reconciliation-v0/task.json").read_text())
+          candidate_review_task = json.loads(Path("qualification/tasks/candidate-contract-review-v0/task.json").read_text())
           api_boundary_task = json.loads(Path("qualification/tasks/api-boundary-classification-v0/task.json").read_text())
           method_ir_task = json.loads(Path("qualification/tasks/method-ir-siglip2-b16-256-v0/task.json").read_text())
           api_boundary_task_v1 = json.loads(Path("qualification/tasks/api-boundary-classification-v1/task.json").read_text())
@@ -85,6 +86,7 @@ jobs:
           assert discovery_task["task_class"] == "repository.capability-discovery"
           assert debugging_task["task_class"] == "software.bounded-debugging"
           assert reconciliation_task["task_class"] == "repository.state-reconciliation"
+          assert candidate_review_task["task_class"] == "validation.candidate-contract-review"
           assert api_boundary_task["task_class"] == "reverse-engineering.api-boundary-classification"
           assert method_ir_task["task_class"] == "research.method-evidence-binding"
           assert api_boundary_task_v1["task_class"] == api_boundary_task["task_class"]
@@ -93,6 +95,7 @@ jobs:
           assert discovery_task["allowed_write_paths"] == ["result.json"]
           assert debugging_task["allowed_write_paths"] == ["src/retry.py"]
           assert reconciliation_task["allowed_write_paths"] == ["reconciliation.json"]
+          assert candidate_review_task["allowed_write_paths"] == ["review.json"]
           assert api_boundary_task["allowed_write_paths"] == ["classification.json"]
           assert method_ir_task["allowed_write_paths"] == ["method_ir.json"]
           assert api_boundary_task_v1["allowed_write_paths"] == ["classification.json"]
@@ -115,6 +118,7 @@ jobs:
           jsonschema.validate(discovery_task, task_schema)
           jsonschema.validate(debugging_task, task_schema)
           jsonschema.validate(reconciliation_task, task_schema)
+          jsonschema.validate(candidate_review_task, task_schema)
           jsonschema.validate(api_boundary_task, task_schema)
           jsonschema.validate(method_ir_task, task_schema)
           jsonschema.validate(api_boundary_task_v1, task_schema)
@@ -131,6 +135,7 @@ jobs:
               discovery_task["id"]: discovery_task["task_class"],
               debugging_task["id"]: debugging_task["task_class"],
               reconciliation_task["id"]: reconciliation_task["task_class"],
+              candidate_review_task["id"]: candidate_review_task["task_class"],
               api_boundary_task["id"]: api_boundary_task["task_class"],
               method_ir_task["id"]: method_ir_task["task_class"],
               api_boundary_task_v1["id"]: api_boundary_task_v1["task_class"],
@@ -151,6 +156,7 @@ jobs:
           python qualification/tasks/validation-discovery-v0/verify.py --self-test
           python qualification/tasks/boundary-bugfix-v0/verify.py --self-test
           python qualification/tasks/repository-reconciliation-v0/verify.py --self-test
+          python qualification/tasks/candidate-contract-review-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v0/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
