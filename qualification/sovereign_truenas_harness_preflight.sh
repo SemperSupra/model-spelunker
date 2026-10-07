@@ -18,7 +18,7 @@ CODEX_NATIVE_SHA='da4bc5c13a97a4a21999919bde2a9e2c943904a7bd444893d5ac8fc35c0b51
 CODEX_PATCH_SHA='237e3b219738b5199a92236a2dfa0a8fd3ac25dad03586084d6616535a194e15'
 GOOSE_NATIVE_SHA='f117d4f40bedc3e5371e04355729f1ba27066a5552be691cd22296e6294e2699'
 
-for cmd in docker gh python3; do
+for cmd in docker python3; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "required command unavailable: $cmd" >&2
     exit 2
@@ -41,18 +41,40 @@ cleanup() {
 }
 trap cleanup EXIT
 
-login="$(gh api user --jq .login)"
-if [ -z "$login" ]; then
-  echo "GitHub CLI authentication unavailable" >&2
-  exit 2
-fi
-gh auth token | docker login ghcr.io -u "$login" --password-stdin >/dev/null
+registry_auth_ready=false
+
+ensure_registry_auth() {
+  if [ "$registry_auth_ready" = true ]; then
+    return 0
+  fi
+  command -v gh >/dev/null 2>&1 || {
+    echo "GHCR artifact pull requires authentication, but gh is unavailable" >&2
+    return 1
+  }
+  local login
+  login="$(gh api user --jq .login 2>/dev/null || true)"
+  [ -n "$login" ] || {
+    echo "GHCR artifact pull requires authentication, but GitHub CLI is not authenticated" >&2
+    return 1
+  }
+  gh auth token | docker login ghcr.io -u "$login" --password-stdin >/dev/null
+  registry_auth_ready=true
+}
+
+pull_artifact() {
+  local ref="$1"
+  if docker pull "$ref" >/dev/null 2>&1; then
+    return 0
+  fi
+  ensure_registry_auth
+  docker pull "$ref" >/dev/null
+}
 
 hydrate() {
   local ref="$1"
   local out="$2"
   mkdir -p "$out"
-  docker pull "$ref" >/dev/null
+  pull_artifact "$ref"
   local cid
   cid="$(docker create "$ref" /artifact/noop)"
   trap 'docker rm -f "'"$cid"'" >/dev/null 2>&1 || true; cleanup' EXIT
