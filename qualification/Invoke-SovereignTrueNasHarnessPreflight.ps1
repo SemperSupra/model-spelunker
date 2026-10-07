@@ -60,6 +60,16 @@ function Invoke-RemoteBashBytes {
     }
 }
 
+function Sanitize-RemoteError {
+    param([string]$Text)
+
+    $safe = [string]$Text
+    $safe = [regex]::Replace($safe, '(?i)authorization\s*:\s*bearer\s+\S+', 'Authorization: Bearer [REDACTED]')
+    $safe = [regex]::Replace($safe, '(?i)(ghp|gho|github_pat)_[A-Za-z0-9_]+', '[REDACTED_GITHUB_TOKEN]')
+    $safe = [regex]::Replace($safe, '(?i)(sk-[A-Za-z0-9_-]{16,})', '[REDACTED_API_KEY]')
+    return $safe
+}
+
 Require-Command gh
 Require-Command ssh.exe
 
@@ -78,8 +88,20 @@ Write-Host "==> Sovereign TrueNAS harness preflight; no model inference"
 $remote = Invoke-RemoteBashBytes -HostName $TrueNas -InputBytes $bytes
 if ($remote.ExitCode -ne 0) {
     $err = Join-Path $env:TEMP "sovereign-harness-preflight-stderr.txt"
-    Write-Utf8NoBom -Path $err -Text $remote.Stderr
-    throw "TrueNAS harness preflight failed with exit code $($remote.ExitCode). Remote stderr preserved locally at $err"
+    $safeError = Sanitize-RemoteError -Text $remote.Stderr
+    Write-Utf8NoBom -Path $err -Text $safeError
+
+    $lines = @($safeError -split "[\r\n]+" | Where-Object { $_ -ne "" })
+    $tail = if ($lines.Count -gt 40) {
+        ($lines[($lines.Count - 40)..($lines.Count - 1)] -join [Environment]::NewLine)
+    } else {
+        ($lines -join [Environment]::NewLine)
+    }
+
+    Write-Host "==> Sanitized remote stderr tail"
+    if ($tail) { Write-Host $tail }
+
+    throw "TrueNAS harness preflight failed with exit code $($remote.ExitCode). Sanitized remote stderr preserved locally at $err"
 }
 $result = $remote.Stdout.Trim()
 
