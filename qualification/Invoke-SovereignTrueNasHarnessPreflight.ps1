@@ -24,45 +24,8 @@ function Write-Utf8NoBom {
     [IO.File]::WriteAllText($Path,$Text,$enc)
 }
 
-function Invoke-RemoteBashBytes {
-    param(
-        [string]$HostName,
-        [byte[]]$InputBytes
-    )
-
-    $ssh = (Get-Command ssh.exe -ErrorAction Stop).Source
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $ssh
-    $psi.Arguments = ('-o BatchMode=yes -o ConnectTimeout=10 "{0}" "bash -s"' -f ($HostName -replace '"',''))
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-    $psi.CreateNoWindow = $true
-
-    $process = New-Object System.Diagnostics.Process
-    $process.StartInfo = $psi
-    [void]$process.Start()
-
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
-
-    $process.StandardInput.BaseStream.Write($InputBytes, 0, $InputBytes.Length)
-    $process.StandardInput.BaseStream.Flush()
-    $process.StandardInput.Close()
-
-    $process.WaitForExit()
-
-    [pscustomobject]@{
-        ExitCode = $process.ExitCode
-        Stdout = $stdoutTask.Result
-        Stderr = $stderrTask.Result
-    }
-}
-
 function Sanitize-RemoteError {
     param([string]$Text)
-
     $safe = [string]$Text
     $safe = [regex]::Replace($safe, '(?i)authorization\s*:\s*bearer\s+\S+', 'Authorization: Bearer [REDACTED]')
     $safe = [regex]::Replace($safe, '(?i)(ghp|gho|github_pat)_[A-Za-z0-9_]+', '[REDACTED_GITHUB_TOKEN]')
@@ -72,6 +35,7 @@ function Sanitize-RemoteError {
 
 Require-Command gh
 Require-Command ssh.exe
+Require-Command scp.exe
 
 $sha = (gh api "repos/$Repo/branches/main" --jq ".commit.sha").Trim()
 if ($LASTEXITCODE -ne 0 -or $sha.Length -ne 40) {
@@ -82,77 +46,132 @@ $payload = gh api --method GET "repos/$Repo/contents/$ScriptPath" -f "ref=$sha" 
 if ($LASTEXITCODE -ne 0 -or -not $payload.content) {
     throw "Could not fetch sovereign harness preflight from Model Spelunker."
 }
-$bytes = [Convert]::FromBase64String(($payload.content -replace '\s',''))
 
-Write-Host "==> Sovereign TrueNAS harness preflight; no model inference"
-$remote = Invoke-RemoteBashBytes -HostName $TrueNas -InputBytes $bytes
-if ($remote.ExitCode -ne 0) {
-    $err = Join-Path $env:TEMP "sovereign-harness-preflight-stderr.txt"
-    $safeError = Sanitize-RemoteError -Text $remote.Stderr
-    Write-Utf8NoBom -Path $err -Text $safeError
-
-    $lines = @($safeError -split "[\r\n]+" | Where-Object { $_ -ne "" })
-    $tail = if ($lines.Count -gt 40) {
-        ($lines[($lines.Count - 40)..($lines.Count - 1)] -join [Environment]::NewLine)
-    } else {
-        ($lines -join [Environment]::NewLine)
-    }
-
-    Write-Host "==> Sanitized remote stderr tail"
-    if ($tail) { Write-Host $tail }
-
-    throw "TrueNAS harness preflight failed with exit code $($remote.ExitCode). Sanitized remote stderr preserved locally at $err"
+[byte[]]$bytes = [Convert]::FromBase64String(($payload.content -replace '\s',''))
+if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+    [byte[]]$bytes = $bytes[3..($bytes.Length - 1)]
 }
-$result = $remote.Stdout.Trim()
+
+$work = Join-Path $env:TEMP ("model-spelunker-preflight-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $work | Out-Null
+$localScript = Join-Path $work "preflight.sh"
+$stderrPath = Join-Path $work "remote-stderr.txt"
+[IO.File]::WriteAllBytes($localScript, $bytes)
+
+$remoteDir = $null
+$sshBase = @("-o","BatchMode=yes","-o","ConnectTimeout=10",$TrueNas)
 
 try {
-    $doc = $result | ConvertFrom-Json
-} catch {
-    throw "Harness preflight did not return valid JSON."
-}
-if ($doc.schema -ne "model-spelunker.sovereign-harness-preflight.v1") {
-    throw "Unexpected preflight schema."
-}
-if ($doc.model_inference_performed -or $doc.credentials_projected -or $doc.persistent_docker_auth_written) {
-    throw "Preflight authority boundary was violated."
-}
-$failed = @($doc.harnesses | Where-Object { $_.state -ne "PASS" })
-if ($failed.Count -gt 0) {
-    throw "One or more admitted harness artifacts failed preflight."
-}
-
-$stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
-$out = Join-Path $env:TEMP ("sovereign-harness-preflight-" + $stamp + ".json")
-Write-Utf8NoBom -Path $out -Text ($result + [Environment]::NewLine)
-
-$publication = "NOT_REQUESTED"
-if (-not $NoPublish) {
-    $body = Join-Path $env:TEMP ("sovereign-harness-preflight-" + $stamp + ".md")
-    $indented = (($result -split [Environment]::NewLine) | ForEach-Object { "    " + $_ }) -join [Environment]::NewLine
-    $lines = @(
-        "## Sovereign TrueNAS admitted-harness preflight",
-        "",
-        "- Model Spelunker source: " + $sha,
-        "- Node: truenas",
-        "- Model inference: none",
-        "- Persistent credential projection: none",
-        "",
-        "This is a harness/substrate admission preflight only. It does not qualify a model or actor.",
-        "",
-        $indented
-    )
-    Write-Utf8NoBom -Path $body -Text (($lines -join [Environment]::NewLine) + [Environment]::NewLine)
-    gh issue comment $Issue --repo $Repo --body-file $body | Out-Host
+    Write-Host "==> Verify native TrueNAS GitHub CLI"
+    $ghCheck = @(& ssh.exe @sshBase 'PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"; command -v gh; gh --version | head -n 1; gh auth status >/dev/null')
     if ($LASTEXITCODE -ne 0) {
-        throw "Preflight passed locally but publication to issue 139 failed. Result preserved at $out"
+        throw "TrueNAS gh is missing from ~/.local/bin or is not authenticated."
     }
-    $publication = "ISSUE_139"
-}
+    $ghCheck | ForEach-Object { if ($_){ Write-Host $_ } }
 
-[pscustomobject]@{
-    status = "PASS_HARNESS_PREFLIGHT"
-    source_revision = $sha
-    result_path = $out
-    publication = $publication
-    harnesses = @($doc.harnesses | ForEach-Object { $_.harness })
-} | ConvertTo-Json -Depth 8
+    Write-Host "==> Stage exact preflight script by SCP"
+    $remoteDir = (& ssh.exe @sshBase "mktemp -d -t model-spelunker-preflight.XXXXXX").Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $remoteDir) {
+        throw "Could not create temporary TrueNAS preflight directory."
+    }
+
+    $destination = $TrueNas + ":" + $remoteDir + "/preflight.sh"
+    $scpArgs = @("-q","-o","BatchMode=yes","-o","ConnectTimeout=10",$localScript,$destination)
+    & scp.exe @scpArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not transfer preflight script to TrueNAS."
+    }
+
+    Write-Host "==> Sovereign TrueNAS harness preflight; no model inference"
+    $remoteScript = $remoteDir + "/preflight.sh"
+    $remoteCommand = 'PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"; chmod 700 ' + "'" + $remoteScript + "'" + '; bash ' + "'" + $remoteScript + "'"
+
+    $stdoutLines = @(& ssh.exe @sshBase $remoteCommand 2> $stderrPath)
+    $rc = $LASTEXITCODE
+    $stdout = ($stdoutLines -join [Environment]::NewLine).Trim()
+    $stderr = if (Test-Path $stderrPath) { Get-Content -Raw $stderrPath } else { "" }
+
+    if ($rc -ne 0) {
+        $safeError = Sanitize-RemoteError -Text $stderr
+        $safePath = Join-Path $env:TEMP "sovereign-harness-preflight-stderr.txt"
+        Write-Utf8NoBom -Path $safePath -Text $safeError
+
+        $lines = @($safeError -split "[\r\n]+" | Where-Object { $_ -ne "" })
+        $tail = if ($lines.Count -gt 40) {
+            ($lines[($lines.Count - 40)..($lines.Count - 1)] -join [Environment]::NewLine)
+        } else {
+            ($lines -join [Environment]::NewLine)
+        }
+
+        Write-Host "==> Sanitized remote stderr tail"
+        if ($tail) { Write-Host $tail }
+        if ($stdout) {
+            Write-Host "==> Remote stdout"
+            Write-Host $stdout
+        }
+        throw "TrueNAS harness preflight failed with exit code $rc. Sanitized stderr preserved locally at $safePath"
+    }
+
+    try {
+        $doc = $stdout | ConvertFrom-Json
+    } catch {
+        throw "Harness preflight returned success but stdout was not valid JSON."
+    }
+
+    if ($doc.schema -ne "model-spelunker.sovereign-harness-preflight.v1") {
+        throw "Unexpected preflight schema: $($doc.schema)"
+    }
+    if ($doc.model_inference_performed -or $doc.credentials_projected -or $doc.persistent_docker_auth_written) {
+        throw "Preflight authority boundary was violated."
+    }
+
+    $failed = @($doc.harnesses | Where-Object { $_.state -ne "PASS" })
+    if ($failed.Count -gt 0) {
+        throw "One or more admitted harness artifacts failed preflight."
+    }
+
+    $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $out = Join-Path $env:TEMP ("sovereign-harness-preflight-" + $stamp + ".json")
+    Write-Utf8NoBom -Path $out -Text ($stdout + [Environment]::NewLine)
+
+    $publication = "NOT_REQUESTED"
+    if (-not $NoPublish) {
+        $body = Join-Path $work ("sovereign-harness-preflight-" + $stamp + ".md")
+        $indented = (($stdout -split "[\r\n]+") | ForEach-Object { "    " + $_ }) -join [Environment]::NewLine
+        $lines = @(
+            "## Sovereign TrueNAS admitted-harness preflight",
+            "",
+            "- Model Spelunker source: " + $sha,
+            "- Node: truenas",
+            "- Model inference: none",
+            "- Registry authentication: native TrueNAS gh -> temporary Docker auth",
+            "- Credential values projected: none",
+            "",
+            "This is harness/substrate admission evidence only. It does not qualify a model or configured actor.",
+            "",
+            $indented
+        )
+        Write-Utf8NoBom -Path $body -Text (($lines -join [Environment]::NewLine) + [Environment]::NewLine)
+        gh issue comment $Issue --repo $Repo --body-file $body | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "Preflight passed locally but publication to issue 139 failed. Result preserved at $out"
+        }
+        $publication = "ISSUE_139"
+    }
+
+    [pscustomobject]@{
+        status = "PASS_HARNESS_PREFLIGHT"
+        source_revision = $sha
+        result_path = $out
+        publication = $publication
+        harnesses = @($doc.harnesses | ForEach-Object { $_.harness })
+    } | ConvertTo-Json -Depth 8
+}
+finally {
+    if ($remoteDir) {
+        & ssh.exe @sshBase "rm -rf '$remoteDir'" 2>$null | Out-Null
+    }
+    if (Test-Path $work) {
+        Remove-Item -LiteralPath $work -Recurse -Force
+    }
+}
