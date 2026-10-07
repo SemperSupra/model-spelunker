@@ -24,6 +24,42 @@ function Write-Utf8NoBom {
     [IO.File]::WriteAllText($Path,$Text,$enc)
 }
 
+function Invoke-RemoteBashBytes {
+    param(
+        [string]$HostName,
+        [byte[]]$InputBytes
+    )
+
+    $ssh = (Get-Command ssh.exe -ErrorAction Stop).Source
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $ssh
+    $psi.Arguments = ('-o BatchMode=yes -o ConnectTimeout=10 "{0}" "bash -s"' -f ($HostName -replace '"',''))
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    [void]$process.Start()
+
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
+    $process.StandardInput.BaseStream.Write($InputBytes, 0, $InputBytes.Length)
+    $process.StandardInput.BaseStream.Flush()
+    $process.StandardInput.Close()
+
+    $process.WaitForExit()
+
+    [pscustomobject]@{
+        ExitCode = $process.ExitCode
+        Stdout = $stdoutTask.Result
+        Stderr = $stderrTask.Result
+    }
+}
+
 Require-Command gh
 Require-Command ssh.exe
 
@@ -37,13 +73,15 @@ if ($LASTEXITCODE -ne 0 -or -not $payload.content) {
     throw "Could not fetch sovereign harness preflight from Model Spelunker."
 }
 $bytes = [Convert]::FromBase64String(($payload.content -replace '\s',''))
-$script = [Text.Encoding]::UTF8.GetString($bytes)
 
 Write-Host "==> Sovereign TrueNAS harness preflight; no model inference"
-$result = ($script | & ssh.exe -o BatchMode=yes -o ConnectTimeout=10 $TrueNas "bash -s" 2>&1) -join [Environment]::NewLine
-if ($LASTEXITCODE -ne 0) {
-    throw "TrueNAS harness preflight failed."
+$remote = Invoke-RemoteBashBytes -HostName $TrueNas -InputBytes $bytes
+if ($remote.ExitCode -ne 0) {
+    $err = Join-Path $env:TEMP "sovereign-harness-preflight-stderr.txt"
+    Write-Utf8NoBom -Path $err -Text $remote.Stderr
+    throw "TrueNAS harness preflight failed with exit code $($remote.ExitCode). Remote stderr preserved locally at $err"
 }
+$result = $remote.Stdout.Trim()
 
 try {
     $doc = $result | ConvertFrom-Json
