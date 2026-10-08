@@ -99,6 +99,13 @@ actual_regctl_sha="$(sha256sum "$regctl" | awk '{print $1}')"
 chmod 0700 "$regctl"
 regctl_version="$("$regctl" version 2>/dev/null | head -n 1)"
 
+current_stage='github-package-scope'
+oauth_scopes="$(gh api -i user 2>/dev/null | awk -F': ' 'tolower($1)=="x-oauth-scopes" {print tolower($2)}' | tr -d '\r')"
+if [ -n "$oauth_scopes" ] && ! printf '%s' "$oauth_scopes" | grep -Eq '(^|, ?)(read:packages|write:packages)(,|$)'; then
+  echo "TrueNAS GitHub credential lacks read:packages; run: gh auth refresh -h github.com -s read:packages" >&2
+  false
+fi
+
 current_stage='registry-auth'
 regctl_config="$root/regctl.json"
 login="$(gh api user --jq .login)"
