@@ -33,6 +33,37 @@ function Sanitize-RemoteError {
     return $safe
 }
 
+function Invoke-SshCapture {
+    param(
+        [string]$HostName,
+        [string]$RemoteCommand
+    )
+
+    $ssh = (Get-Command ssh.exe -ErrorAction Stop).Source
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $ssh
+    $escapedCommand = $RemoteCommand.Replace('"','\"')
+    $psi.Arguments = '-o BatchMode=yes -o ConnectTimeout=10 "' + $HostName + '" "' + $escapedCommand + '"'
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    [void]$process.Start()
+
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+
+    [pscustomobject]@{
+        ExitCode = $process.ExitCode
+        Stdout = $stdoutTask.Result
+        Stderr = $stderrTask.Result
+    }
+}
+
 Require-Command gh
 Require-Command ssh.exe
 Require-Command scp.exe
@@ -86,10 +117,10 @@ try {
     $remoteScript = $remoteDir + "/preflight.sh"
     $remoteCommand = 'PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"; chmod 700 ' + "'" + $remoteScript + "'" + '; bash ' + "'" + $remoteScript + "'"
 
-    $stdoutLines = @(& ssh.exe @sshBase $remoteCommand 2> $stderrPath)
-    $rc = $LASTEXITCODE
-    $stdout = ($stdoutLines -join [Environment]::NewLine).Trim()
-    $stderr = if (Test-Path $stderrPath) { Get-Content -Raw $stderrPath } else { "" }
+    $remoteResult = Invoke-SshCapture -HostName $TrueNas -RemoteCommand $remoteCommand
+    $rc = $remoteResult.ExitCode
+    $stdout = ([string]$remoteResult.Stdout).Trim()
+    $stderr = [string]$remoteResult.Stderr
 
     if ($rc -ne 0) {
         $safeError = Sanitize-RemoteError -Text $stderr
