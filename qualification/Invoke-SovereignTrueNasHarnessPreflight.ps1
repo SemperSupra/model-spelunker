@@ -86,7 +86,6 @@ if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $by
 $work = Join-Path $env:TEMP ("model-spelunker-preflight-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $localScript = Join-Path $work "preflight.sh"
-$stderrPath = Join-Path $work "remote-stderr.txt"
 [IO.File]::WriteAllBytes($localScript, $bytes)
 
 $remoteDir = $null
@@ -115,7 +114,7 @@ try {
 
     Write-Host "==> Sovereign TrueNAS harness preflight; no model inference"
     $remoteScript = $remoteDir + "/preflight.sh"
-    $remoteCommand = 'PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"; chmod 700 ' + "'" + $remoteScript + "'" + '; bash ' + "'" + $remoteScript + "'"
+    $remoteCommand = 'chmod 700 ' + "'" + $remoteScript + "'" + '; bash ' + "'" + $remoteScript + "'"
 
     $remoteResult = Invoke-SshCapture -HostName $TrueNas -RemoteCommand $remoteCommand
     $rc = $remoteResult.ExitCode
