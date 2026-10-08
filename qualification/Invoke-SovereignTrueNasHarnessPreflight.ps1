@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $Repo = "SemperSupra/model-spelunker"
 $ScriptPath = "qualification/sovereign_truenas_harness_preflight.sh"
+$HelperPath = "qualification/hydrate_oci_layout.py"
 $Issue = 139
 
 function Require-Command {
@@ -77,16 +78,26 @@ $payload = gh api --method GET "repos/$Repo/contents/$ScriptPath" -f "ref=$sha" 
 if ($LASTEXITCODE -ne 0 -or -not $payload.content) {
     throw "Could not fetch sovereign harness preflight from Model Spelunker."
 }
+$helperPayload = gh api --method GET "repos/$Repo/contents/$HelperPath" -f "ref=$sha" | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or -not $helperPayload.content) {
+    throw "Could not fetch OCI hydration helper from Model Spelunker."
+}
 
 [byte[]]$bytes = [Convert]::FromBase64String(($payload.content -replace '\s',''))
 if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
     [byte[]]$bytes = $bytes[3..($bytes.Length - 1)]
 }
+[byte[]]$helperBytes = [Convert]::FromBase64String(($helperPayload.content -replace '\s',''))
+if ($helperBytes.Length -ge 3 -and $helperBytes[0] -eq 0xEF -and $helperBytes[1] -eq 0xBB -and $helperBytes[2] -eq 0xBF) {
+    [byte[]]$helperBytes = $helperBytes[3..($helperBytes.Length - 1)]
+}
 
 $work = Join-Path $env:TEMP ("model-spelunker-preflight-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $localScript = Join-Path $work "preflight.sh"
+$localHelper = Join-Path $work "hydrate_oci_layout.py"
 [IO.File]::WriteAllBytes($localScript, $bytes)
+[IO.File]::WriteAllBytes($localHelper, $helperBytes)
 
 $remoteDir = $null
 $sshBase = @("-o","BatchMode=yes","-o","ConnectTimeout=10",$TrueNas)
@@ -105,11 +116,11 @@ try {
         throw "Could not create temporary TrueNAS preflight directory."
     }
 
-    $destination = $TrueNas + ":" + $remoteDir + "/preflight.sh"
-    $scpArgs = @("-q","-o","BatchMode=yes","-o","ConnectTimeout=10",$localScript,$destination)
+    $destination = $TrueNas + ":" + $remoteDir + "/"
+    $scpArgs = @("-q","-o","BatchMode=yes","-o","ConnectTimeout=10",$localScript,$localHelper,$destination)
     & scp.exe @scpArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "Could not transfer preflight script to TrueNAS."
+        throw "Could not transfer preflight tooling to TrueNAS."
     }
 
     Write-Host "==> Sovereign TrueNAS harness preflight; no model inference"
@@ -174,7 +185,9 @@ try {
             "- Model Spelunker source: " + $sha,
             "- Node: truenas",
             "- Model inference: none",
-            "- Registry authentication: native TrueNAS gh -> temporary Docker auth",
+            "- Registry authentication: native TrueNAS gh -> temporary regctl auth",
+            "- Artifact transport: rootless regctl -> OCI layout",
+            "- Docker daemon/socket/sudo: not used",
             "- Credential values projected: none",
             "",
             "This is harness/substrate admission evidence only. It does not qualify a model or configured actor.",
