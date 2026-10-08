@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
 # Zero-inference preflight for admitted Model Spelunker harness artifacts.
 # Intended to run on the sovereign TrueNAS Linux/x86_64 node.
 # This script does not call any model endpoint and does not persist credentials.
