@@ -74,6 +74,24 @@
         }
       },
       "route_note": "OpenRouter pinned to DeepSeek with provider fallback disabled. Direct DeepSeek deepseek-flash currently maps to DeepSeek-V4.1-Flash; exact provider-served realization remains receipt/provenance evidence."
+    },
+    "openrouter-cohere-north-mini-code-free": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "cohere/north-mini-code:free",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "zero-token-price",
+      "route_note": "Explicit zero-priced OpenRouter coding-model endpoint; GHA admission requires available model, tools capability, and zero prompt/completion pricing. Provider/backend remains hosted and mutable."
+    },
+    "openrouter-poolside-laguna-s21-free": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "poolside/laguna-s-2.1:free",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "zero-token-price",
+      "route_note": "Explicit zero-priced OpenRouter coding-model endpoint; GHA admission requires available model, tools capability, and zero prompt/completion pricing. Model endpoint can disappear; classify as admission not model failure."
     }
   }
 }
