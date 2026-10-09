@@ -84,9 +84,29 @@ def reduce_receipt(data):
         state="NO_MODEL_COMPLETION_CENSORED"
     else:
         state="SEMANTIC_FAIL"
+    raw_names=workload.get("tool_name_counts")
+    safe_names={}
+    if raw_names is not None:
+        if not isinstance(raw_names,dict):
+            raise ValueError("invalid tool name counts")
+        if set(raw_names)-{"list_files","read_file","write_file"}:
+            raise ValueError("unknown tool in admitted task projection")
+        for name,value in raw_names.items():
+            if type(value)!=int or value<0:
+                raise ValueError("invalid tool count")
+            safe_names[name]=value
+    approvals={}
+    for name in ("write_approvals_granted","write_approvals_denied"):
+        value=workload.get(name)
+        if value is not None:
+            if type(value)!=int or value<0:
+                raise ValueError("invalid write approval count")
+            approvals[name]=value
     return {
         "model_id":model_id,
         "state":state,
+        "observed_tool_name_counts":safe_names,
+        **approvals,
         "evidence_digest":digest,
         "external_verifier_exit_code":rc,
         "tool_calls":tools,
@@ -97,10 +117,13 @@ def reduce_receipt(data):
         "failure_class":classification,
     }
 
-def reduce_folder(folder,run,commit):
+def reduce_folder(folder,run,commit,expected_models=MODELS):
     if run<=0 or not COMMIT.fullmatch(commit):
         raise ValueError("bad workflow provenance")
-    rows={m:{"model_id":m,"state":"NO_RECEIPT"} for m in MODELS}
+    if (not expected_models or len(set(expected_models))!=len(expected_models)
+            or any(model not in MODELS for model in expected_models)):
+        raise ValueError("unknown or duplicate experiment model")
+    rows={m:{"model_id":m,"state":"NO_RECEIPT"} for m in expected_models}
     for path in sorted(folder.rglob("*.json")) if folder.exists() else []:
         try:
             data=json.loads(path.read_text(encoding="utf-8"))
@@ -108,6 +131,8 @@ def reduce_folder(folder,run,commit):
         except (ValueError,KeyError,TypeError):
             continue
         model=row["model_id"]
+        if model not in rows:
+            raise ValueError("receipt from unselected model")
         if rows[model]["state"]!="NO_RECEIPT":
             raise ValueError("duplicate model receipt")
         rows[model]=row
@@ -120,7 +145,7 @@ def reduce_folder(folder,run,commit):
         "harness_artifact":ARTIFACT,
         "task":TASK,
         "interpretation":"single-rep-verifier-evidence-no-general-support-claim",
-        "treatments":[rows[m] for m in MODELS],
+        "treatments":[rows[m] for m in expected_models],
     }
 
 def body_of(result):
@@ -164,8 +189,10 @@ def main():
     parser.add_argument("--receipts-dir",required=True,type=Path)
     parser.add_argument("--run-id",required=True,type=int)
     parser.add_argument("--commit",required=True)
+    parser.add_argument("--expected-model",action="append",choices=MODELS)
     a=parser.parse_args()
-    result=reduce_folder(a.receipts_dir,a.run_id,a.commit)
+    models=tuple(a.expected_model) if a.expected_model else MODELS
+    result=reduce_folder(a.receipts_dir,a.run_id,a.commit,models)
     answer=post_once(body_of(result))
     print(json.dumps({"dle":answer,"run_id":a.run_id,
        "results":[{"model_id":r["model_id"],"state":r["state"]} for r in result["treatments"]]},
