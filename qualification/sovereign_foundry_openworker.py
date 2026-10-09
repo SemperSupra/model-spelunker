@@ -310,11 +310,19 @@ def publish(out: Path, *, registry_image: str) -> dict:
     expected = verified["manifest_digest"]
     tag = "src-" + SOURCE_SHA[:12] + "-abi-" + expected.split(":")[1][:16]
     destination = registry_image + ":" + tag
-    with tempfile.TemporaryDirectory(prefix="model-spelunker-publish-") as td:
-        tmp = Path(td)
-        tmp.chmod(0o700)
-        regctl = regctl_path(tmp)
-        cfg = tmp / "regctl.json"
+    # TrueNAS and hardened Linux substrates may mount /tmp with noexec.
+    # Executables (regctl and offline-admission venv) must be staged on the
+    # already-proven, user-owned executable filesystem alongside the build.
+    # Keep the short-lived registry credential *separately* on system temp
+    # storage to avoid capturing secrets in home-dataset snapshots.
+    with tempfile.TemporaryDirectory(prefix=".model-spelunker-exec-", dir=str(out.parent)) as exec_td, \
+         tempfile.TemporaryDirectory(prefix="model-spelunker-auth-") as auth_td:
+        executable_tmp = Path(exec_td)
+        auth_tmp = Path(auth_td)
+        executable_tmp.chmod(0o700)
+        auth_tmp.chmod(0o700)
+        regctl = regctl_path(executable_tmp)
+        cfg = auth_tmp / "regctl.json"
         registry_login(regctl, cfg)
         prior = image_digest(regctl, cfg, destination)
         if prior and prior != expected:
@@ -325,7 +333,7 @@ def publish(out: Path, *, registry_image: str) -> dict:
         if observed != expected:
             raise ValueError("published OCI manifest digest mismatch")
         immutable_ref = registry_image + "@" + expected
-        admission = admit_from_registry(regctl, cfg, immutable_ref, expected, tmp)
+        admission = admit_from_registry(regctl, cfg, immutable_ref, expected, executable_tmp)
     atomic_json(out / "admission.json", admission)
     result = {"state": "BUILD_ADMITTED", "artifact_ref": immutable_ref,
               "manifest_digest": expected, "harness_realization": realization_binding(),

@@ -123,6 +123,43 @@ class FoundryTests(unittest.TestCase):
             self.assertEqual(sum(src.startswith("ocidir://") for src, _ in copy_requests), 1)
             self.assertEqual(json.loads((out / "admission.json").read_text())["admission"]["state"], "BUILD_ADMITTED")
 
+    def test_publish_executes_on_user_volume_not_system_tmp(self):
+        # TrueNAS /tmp may be noexec; regctl *and* admission venv must be
+        # placed under the previously working user-owned output parent.
+        # Registry credentials must NOT be stored on the home dataset.
+        with tempfile.TemporaryDirectory() as td:
+            out, digest = self.fixture(Path(td))
+            execution_roots = []
+            credential_paths = []
+            def fake_regctl(executable_root):
+                execution_roots.append(executable_root)
+                return Path("/ignored")
+            def fake_login(tool, config):
+                credential_paths.append(config)
+            def fake_copy(tool, config, src, dst):
+                if src.startswith("ocidir://"):
+                    return
+                import shutil
+                shutil.copytree(out / "oci", Path(dst.removeprefix("ocidir://").rsplit(":", 1)[0]))
+            def fake_admit(tool, config, ref, expected, work):
+                self.assertEqual(work, execution_roots[-1])
+                self.assertEqual(expected, digest)
+                return {"admission": {"state": "BUILD_ADMITTED"}}
+            with mock.patch.object(foundry, "regctl_path", side_effect=fake_regctl), \
+                 mock.patch.object(foundry, "registry_login", side_effect=fake_login), \
+                 mock.patch.object(foundry, "registry_copy", side_effect=fake_copy), \
+                 mock.patch.object(foundry, "image_digest", return_value=digest), \
+                 mock.patch.object(foundry, "admit_from_registry", side_effect=fake_admit):
+                result = foundry.publish(out, registry_image=foundry.IMAGE)
+            self.assertEqual(result["state"], "BUILD_ADMITTED")
+            self.assertEqual(len(execution_roots), 1)
+            self.assertEqual(len(credential_paths), 1)
+            self.assertEqual(execution_roots[0].parent, out.parent)
+            self.assertNotEqual(credential_paths[0].parent, execution_roots[0])
+            self.assertFalse(credential_paths[0].is_relative_to(out.parent))
+            self.assertFalse(execution_roots[0].exists())
+            self.assertFalse(credential_paths[0].parent.exists())
+
     def test_publish_refuses_unknown_registry_image(self):
         with tempfile.TemporaryDirectory() as td:
             out, _ = self.fixture(Path(td))
