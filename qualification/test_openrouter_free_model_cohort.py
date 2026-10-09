@@ -18,6 +18,23 @@ for key,model in expected.items():
     assert entry["reasoning_effort"]=="omit"
     assert not entry.get("extra_body")
 
+# A third, much larger free model is a separate selected treatment; it does
+# not change the original two-model cohort's model list or reporting defaults.
+nemotron=catalog["candidates"]["openrouter-nvidia-nemotron3-ultra-free"]
+assert nemotron["provider"]=="openrouter"
+assert nemotron["model"]=="nvidia/nemotron-3-ultra-550b-a55b:free"
+assert nemotron["cost_class"]=="zero-token-price"
+assert nemotron["reasoning_effort"]=="omit"
+assert nemotron["treatment_kind"]=="model"
+single=(root/".github/workflows/openworker-nemotron-ultra-free-interview.yml").read_text()
+assert "branches: [main]" in single
+assert "pull_request:" not in single
+assert "secrets: inherit" in single
+assert "issues: write" in single
+assert "max_iterations: '8'" in single
+assert "--expected-max-iterations 8" in single
+assert "--expected-model \"nvidia/nemotron-3-ultra-550b-a55b:free\"" in single
+
 hosted=(root/".github/workflows/openworker-hosted-api-qualification.yml").read_text()
 caller=(root/".github/workflows/openworker-free-coding-model-interview.yml").read_text()
 assert "workflow_call:" in hosted
