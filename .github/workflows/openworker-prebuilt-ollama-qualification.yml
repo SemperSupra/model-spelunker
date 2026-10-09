@@ -79,7 +79,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: openworker-prebuilt-ollama-qualification-${{ github.ref }}-${{ inputs.task }}-${{ inputs.experiment }}
+  group: openworker-prebuilt-ollama-qualification-${{ github.ref }}-${{ inputs.task }}-${{ inputs.experiment }}-${{ inputs.treatment_id }}
   cancel-in-progress: true
 
 jobs:
