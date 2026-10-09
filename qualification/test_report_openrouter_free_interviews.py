@@ -111,6 +111,27 @@ class Tests(unittest.TestCase):
             self.assertEqual(row["write_approvals_granted"],1)
             self.assertNotIn("path",report.body_of(result))
 
+    def test_iteration_budget_is_bound_into_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            payload=json.loads(path.read_text())
+            payload["candidate"]["configuration"]={"max_iterations":8}
+            path.write_text(json.dumps(payload))
+            result=report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),8)
+            self.assertEqual(result["treatments"][0]["max_iterations"],8)
+            self.assertIn('"max_iterations": 8',report.body_of(result))
+            with self.assertRaisesRegex(ValueError,"iteration budget"):
+                report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),4)
+
+    def test_malformed_iteration_budget_cannot_be_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            payload=json.loads(path.read_text())
+            payload["candidate"]["configuration"]={"max_iterations":"8"}
+            path.write_text(json.dumps(payload))
+            result=report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),8)
+            self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
+
     def test_unauthorized_model_selection_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
