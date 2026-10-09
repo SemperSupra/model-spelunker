@@ -31,3 +31,41 @@ jobs:
       candidate: ${{ matrix.candidate }}
       task: boundary-bugfix-v0
     secrets: inherit
+
+  report:
+    name: Publish allowlisted task results to DLE
+    if: always()
+    needs: [interview]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout trusted reporting code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Retrieve task receipts from this run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/free-model-receipts"
+          # Missing artifacts may mean key, quota, registry or workcell failure.
+          # The report records NO_RECEIPT; never reinterpret that as task FAIL.
+          if ! gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "hosted-qualification-openrouter-*-boundary-bugfix-v0-${GITHUB_RUN_ID}" \
+            --dir "$RUNNER_TEMP/free-model-receipts"; then
+            echo "No complete set of hosted task receipts; projecting observed files only."
+          fi
+      - name: Return bounded evidence directly to owning issue
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/report_openrouter_free_interviews.py \
+            --receipts-dir "$RUNNER_TEMP/free-model-receipts" \
+            --run-id "$GITHUB_RUN_ID" \
+            --commit "$GITHUB_SHA"
