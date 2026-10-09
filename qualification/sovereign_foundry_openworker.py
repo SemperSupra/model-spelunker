@@ -30,6 +30,9 @@ REGCTL_SHA256 = "8e0e62a497fcdb8048d18aa927a139613176ba0531f412bc541044e28f9856b
 IMAGE = "ghcr.io/sempersupra/model-spelunker-harness-openworker"
 RECIPE = "openworker-wheelhouse-sovereign-python-abi-v1"
 PROFILE_REF = "qualification/harness-realizations/openworker-linux-amd64-sovereign-python-abi-v1.json"
+DLE_REPOSITORY = "SemperSupra/model-spelunker"
+DLE_ISSUE = 147
+DLE_MARKER_PREFIX = "model-spelunker-foundry-admission:v1:"
 
 
 def realization_binding() -> dict:
@@ -342,9 +345,126 @@ def publish(out: Path, *, registry_image: str) -> dict:
     return result
 
 
+
+def dle_record(out: Path) -> dict:
+    """Derive a public-safe immutable-identity receipt from admitted local evidence."""
+    local = verify_local(out)
+    publication_path = out / "publication.json"
+    admission_path = out / "admission.json"
+    if not publication_path.is_file() or not admission_path.is_file():
+        raise ValueError("local GHCR admission receipts are missing; nothing to report")
+    publication = json.loads(publication_path.read_text(encoding="utf-8"))
+    admission = json.loads(admission_path.read_text(encoding="utf-8"))
+    artifact_ref = IMAGE + "@" + local["manifest_digest"]
+    if publication.get("state") != "BUILD_ADMITTED":
+        raise ValueError("publication has no BUILD_ADMITTED result")
+    if publication.get("artifact_ref") != artifact_ref or publication.get("manifest_digest") != local["manifest_digest"]:
+        raise ValueError("publication artifact identity disagrees with local verified payload")
+    if publication.get("harness_realization") != realization_binding():
+        raise ValueError("publication realization identity drift")
+    if (admission.get("record_type") != "harness-artifact-admission"
+        or admission.get("admission", {}).get("state") != "BUILD_ADMITTED"
+        or admission.get("artifact", {}).get("ref") != artifact_ref
+        or admission.get("artifact", {}).get("digest") != local["manifest_digest"]):
+        raise ValueError("admission state or registry digest disagrees with publication")
+    checks = admission["admission"].get("checks")
+    if not isinstance(checks, list) or not checks:
+        raise ValueError("admission checks missing")
+    allowed_checks = {
+        "manifest-digest", "embedded-build-receipt", "payload-hashes",
+        "offline-wheelhouse-install-no-resolve", "coworker-import-and-cli",
+    }
+    if any(not isinstance(row, dict)
+           or row.get("name") not in allowed_checks
+           or row.get("result") != "PASS" for row in checks):
+        raise ValueError("unknown or unsuccessful admission check; cannot report success")
+    build_receipt = out / "payload" / "build-receipt.json"
+    if admission["artifact"].get("build_receipt_digest") != digest_file(build_receipt):
+        raise ValueError("admitted build receipt digest mismatch")
+    build = json.loads(build_receipt.read_text(encoding="utf-8"))
+    # Deliberate allowlist: never transmit arbitrary build metadata, raw logs,
+    # user/host names, local paths, environment variables, or token contents.
+    return {
+        "record_type": "harness-foundry-dle-result",
+        "schema_version": 1,
+        "governing_issue": DLE_REPOSITORY + "#" + str(DLE_ISSUE),
+        "phase": "publish-and-independent-admission",
+        "state": "BUILD_ADMITTED",
+        "harness": "openworker",
+        "source_revision": SOURCE_SHA,
+        "recipe_id": RECIPE,
+        "target_class": "linux-x86_64-python3",
+        "realization": realization_binding(),
+        "artifact_ref": artifact_ref,
+        "manifest_digest": local["manifest_digest"],
+        "build_receipt_digest": admission["artifact"]["build_receipt_digest"],
+        "payload_file_count": local["payload_files"],
+        "admission_checks": sorted(row["name"] for row in checks),
+        "inference_performed": False,
+        "actor_task_qualification": "NOT_PERFORMED",
+        "source_of_evidence": "native-producer-receipts",
+    }
+
+
+def dle_body(record: dict) -> str:
+    digest = record["manifest_digest"].removeprefix("sha256:")
+    marker = "<!-- " + DLE_MARKER_PREFIX + digest + " -->"
+    return (
+        marker + "\n"
+        + "### Rootless foundry: BUILD_ADMITTED (native producer receipt)\n\n"
+        + "Structured result (public-safe allowlist; no local host identity or secrets):\n\n"
+        + "```json\n" + json.dumps(record, indent=2, sort_keys=True) + "\n```\n\n"
+        + "The `BUILD_ADMITTED` state refers to mechanical artifact admission only. "
+          "Actor × Task qualification remains unperformed.\n"
+    )
+
+
+def gh_api_json(args: list[str]) -> object:
+    result = subprocess.run(
+        ["gh", "api", *args], capture_output=True, text=True, check=False
+    )
+    if result.returncode:
+        # gh stderr may include session/private network data; don't echo it.
+        raise RuntimeError("GitHub DLE API unavailable (authorization, transport, or issue write)")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("GitHub DLE API returned malformed JSON") from exc
+
+
+def sync_dle(out: Path) -> dict:
+    """At-least-once DLE delivery via owning GitHub issue; exact-body dedup."""
+    record = dle_record(out)
+    body = dle_body(record)
+    issue_path = "repos/" + DLE_REPOSITORY + "/issues/" + str(DLE_ISSUE) + "/comments"
+    pages = gh_api_json(["--paginate", "--slurp", issue_path + "?per_page=100"])
+    if not isinstance(pages, list):
+        raise ValueError("unexpected GitHub issue comments response")
+    # gh --paginate --slurp returns an array of page arrays.
+    comments = [comment for page in pages for comment in (page if isinstance(page, list) else [page])]
+    marker = body.splitlines()[0]
+    matches = [comment for comment in comments if isinstance(comment, dict) and marker in str(comment.get("body", ""))]
+    if matches:
+        if any(comment.get("body") != body for comment in matches):
+            raise ValueError("DLE duplicate key has divergent evidence; reconcile manually")
+        return {
+            "state": "ALREADY_RECORDED", "governing_issue": record["governing_issue"],
+            "comment_url": matches[0].get("html_url"),
+            "manifest_digest": record["manifest_digest"],
+        }
+    posted = gh_api_json(["--method", "POST", issue_path, "-f", "body=" + body])
+    if not isinstance(posted, dict) or posted.get("body") != body or not posted.get("html_url"):
+        raise ValueError("GitHub did not acknowledge the exact DLE receipt body")
+    return {
+        "state": "RECORDED", "governing_issue": record["governing_issue"],
+        "comment_url": posted["html_url"],
+        "manifest_digest": record["manifest_digest"],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("phase", choices=["observe", "plan", "build", "verify", "publish"])
+    parser.add_argument("phase", choices=["observe", "plan", "build", "verify", "publish", "sync-dle"])
     parser.add_argument("--output", type=Path)
     parser.add_argument("--registry-image", default=IMAGE)
     args = parser.parse_args()
@@ -361,8 +481,19 @@ def main() -> int:
                 result = build(out)
             elif args.phase == "verify":
                 result = verify_local(out)
+            elif args.phase == "sync-dle":
+                result = sync_dle(out)
             else:
                 result = publish(out, registry_image=args.registry_image)
+                try:
+                    result["dle"] = sync_dle(out)
+                except (RuntimeError, ValueError, OSError, KeyError) as err:
+                    # Artifact publication/admission already completed. Keep it
+                    # durable locally; no rebuild or republish needed to replay.
+                    result["dle"] = {"state": "PENDING", "governing_issue": DLE_REPOSITORY + "#" + str(DLE_ISSUE)}
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                    print("DLE_PENDING: " + str(err) + "; retry with sync-dle (no republish)", file=sys.stderr)
+                    return 3
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     except (RuntimeError, ValueError, OSError, KeyError) as exc:
