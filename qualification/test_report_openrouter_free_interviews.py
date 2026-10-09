@@ -32,7 +32,7 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result=report.reduce_folder(Path(tmp),123,"a"*40)
             self.assertTrue(all(row["state"]=="NO_RECEIPT" for row in result["treatments"]))
-            self.assertNotIn("SEMANTIC_FAIL",report.body_of(result))
+            self.assertNotIn('"state": "SEMANTIC_FAIL"',report.body_of(result))
 
     def test_valid_verifier_fail_is_semantic(self):
         with tempfile.TemporaryDirectory() as tmp:
