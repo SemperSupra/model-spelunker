@@ -10,10 +10,11 @@ REPO="SemperSupra/model-spelunker"
 ISSUE=139
 TASK="boundary-bugfix-v0"
 ARTIFACT="ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83"
-MODELS=(
+DEFAULT_MODELS=(
     "cohere/north-mini-code:free",
     "poolside/laguna-s-2.1:free",
 )
+MODELS=DEFAULT_MODELS+("nvidia/nemotron-3-ultra-550b-a55b:free",)
 SHA=re.compile(r"sha256:[a-f0-9]{64}")
 COMMIT=re.compile(r"[a-f0-9]{40}")
 
@@ -124,7 +125,7 @@ def reduce_receipt(data):
         "failure_class":classification,
     }
 
-def reduce_folder(folder,run,commit,expected_models=MODELS,expected_max_iterations=None):
+def reduce_folder(folder,run,commit,expected_models=DEFAULT_MODELS,expected_max_iterations=None):
     if run<=0 or not COMMIT.fullmatch(commit):
         raise ValueError("bad workflow provenance")
     if (not expected_models or len(set(expected_models))!=len(expected_models)
@@ -201,7 +202,7 @@ def main():
     parser.add_argument("--expected-model",action="append",choices=MODELS)
     parser.add_argument("--expected-max-iterations",type=int)
     a=parser.parse_args()
-    models=tuple(a.expected_model) if a.expected_model else MODELS
+    models=tuple(a.expected_model) if a.expected_model else DEFAULT_MODELS
     if a.expected_max_iterations is not None and not 1<=a.expected_max_iterations<=12:
         parser.error("expected iteration budget must be between 1 and 12")
     result=reduce_folder(a.receipts_dir,a.run_id,a.commit,models,a.expected_max_iterations)
