@@ -21,7 +21,7 @@ class Tests(unittest.TestCase):
                 "success":False, "verifier_exit_code":1,
                 "tool_calls":0,"candidate_exit_code":0,
                 "failure_class":"false-completion",
-                "workload":{"provider_finish_reason_counts":{"stop":1}},
+                "workload":{"model_rounds":1,"provider_finish_reason_counts":{"stop":1}},
             },
         }
         path=folder/("receipt-"+model.replace("/","_")+".json")
@@ -43,6 +43,31 @@ class Tests(unittest.TestCase):
             self.assertEqual(rows[0]["provider_finish_reason_counts"],{"stop":1})
             self.assertEqual(rows[1]["state"],"NO_RECEIPT")
             self.assertNotIn(tmp,report.body_of(result))
+
+    def test_rate_limit_is_censored_not_semantic_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp),report.MODELS[1])
+            receipt=json.loads(path.read_text())
+            receipt["observation"]["engine_error_types"]=["RateLimitError"]
+            receipt["observation"]["failure_class"]="candidate-error-event"
+            receipt["observation"]["failure_signals"]=["engine-error-event","state-unchanged"]
+            receipt["observation"]["workload"]={"model_calls_started":1,"model_rounds":0}
+            path.write_text(json.dumps(receipt))
+            row=report.reduce_folder(Path(tmp),123,"a"*40)["treatments"][1]
+            self.assertEqual(row["state"],"PROVIDER_RATE_LIMIT_CENSORED")
+            self.assertEqual(row["completed_model_rounds"],0)
+            self.assertEqual(row["observed_engine_error_types"],["RateLimitError"])
+            self.assertEqual(row["external_verifier_exit_code"],1)
+            self.assertNotEqual(row["state"],"SEMANTIC_FAIL")
+
+    def test_empty_rounds_without_error_are_censored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            receipt=json.loads(path.read_text())
+            receipt["observation"]["workload"]={"model_rounds":0}
+            path.write_text(json.dumps(receipt))
+            row=report.reduce_folder(Path(tmp),123,"a"*40)["treatments"][0]
+            self.assertEqual(row["state"],"NO_MODEL_COMPLETION_CENSORED")
 
     def test_identity_drift_rejected_not_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
