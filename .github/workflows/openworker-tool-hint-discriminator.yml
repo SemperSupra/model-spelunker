@@ -42,3 +42,4 @@ jobs:
       realization_digest: ''
       treatment_id: ${{ matrix.treatment_id }}
       tool_hint_mode: ${{ matrix.tool_hint_mode }}
+      output_diagnostic_mode: ${{ matrix.tool_hint_mode == 'inspect-before-claim-v1' && 'boundary-output-v1' || 'none' }}
