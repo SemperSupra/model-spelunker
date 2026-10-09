@@ -321,7 +321,7 @@ jobs:
           expected_hint=os.environ["MODEL_SPELUNKER_TOOL_HINT_MODE"]
           assert receipt["candidate"]["configuration_digest"]
           # The metadata binding above makes the hint a separate configured actor.
-          assert expected_hint in ("none","inspect-before-claim-v1")
+          assert expected_hint in ("none","inspect-before-claim-v1","policy-first-v1")
           rc=int(os.environ["QUALIFICATION_RC"])
           assert rc==(0 if receipt["observation"]["success"] else 1)
           print(json.dumps(receipt,sort_keys=True))
