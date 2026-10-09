@@ -21,6 +21,22 @@ on:
         description: OpenWorker reasoning_effort projection; use omit to leave the provider/model default unforced
         required: false
         default: 'none'
+      python_version:
+        description: Optional exact Python version matching the admitted artifact ABI
+        required: false
+        default: ''
+      treatment_id:
+        description: Short actor treatment label used in receipt artifact identity
+        required: false
+        default: generic
+      realization_profile_ref:
+        description: Optional exact harness realization profile reference
+        required: false
+        default: ''
+      realization_digest:
+        description: Optional SHA-256 realization profile digest
+        required: false
+        default: ''
   workflow_call:
     inputs:
       artifact_ref:
@@ -41,6 +57,23 @@ on:
         type: string
         default: 'none'
 
+      python_version:
+        required: false
+        type: string
+        default: ''
+      treatment_id:
+        required: false
+        type: string
+        default: generic
+      realization_profile_ref:
+        required: false
+        type: string
+        default: ''
+      realization_digest:
+        required: false
+        type: string
+        default: ''
+
 permissions:
   contents: read
   packages: read
@@ -51,7 +84,7 @@ concurrency:
 
 jobs:
   qualify:
-    name: Prebuilt OpenWorker + Qwen3 1.7B
+    name: OpenWorker ${{ inputs.treatment_id }} + Qwen3 1.7B
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -59,6 +92,8 @@ jobs:
       OPENWORKER_VERSION: '0.0.0'
       HARNESS_ARTIFACT_REF: ${{ inputs.artifact_ref }}
       HARNESS_ADMISSION_REF: ${{ inputs.admission_ref }}
+      HARNESS_REALIZATION_PROFILE_REF: ${{ inputs.realization_profile_ref }}
+      HARNESS_REALIZATION_PROFILE_DIGEST: ${{ inputs.realization_digest }}
       OLLAMA_VERSION: '0.34.1'
       OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
       OLLAMA_MODEL_TAG: 'qwen3:1.7b'
@@ -83,6 +118,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Match candidate Python ABI
+        if: inputs.python_version != ''
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: ${{ inputs.python_version }}
+
       - name: Hydrate admitted OpenWorker artifact
         shell: bash
         env:
@@ -106,6 +147,12 @@ jobs:
           receipt=json.loads((root/"build-receipt.json").read_text())
           assert receipt["harness"]["name"]=="openworker"
           assert receipt["source"]["revision"]==os.environ["OPENWORKER_UPSTREAM_SHA"]
+          expected_profile=os.environ.get("HARNESS_REALIZATION_PROFILE_DIGEST") or ""
+          expected_ref=os.environ.get("HARNESS_REALIZATION_PROFILE_REF") or ""
+          if expected_profile:
+              realization=receipt["build"]["configuration"]["realization"]
+              assert realization["profile_digest"]==expected_profile
+              assert realization["profile_ref"]==expected_ref
           for row in receipt["payload"]["files"]:
               path=root/row["path"]
               data=path.read_bytes()
@@ -192,6 +239,11 @@ jobs:
                   "harness_delivery":"prebuilt-admitted-artifact",
               },
           }
+          if os.environ.get("HARNESS_REALIZATION_PROFILE_DIGEST"):
+              candidate["harness"]["realization"]={
+                  "profile_ref":os.environ["HARNESS_REALIZATION_PROFILE_REF"],
+                  "profile_digest":os.environ["HARNESS_REALIZATION_PROFILE_DIGEST"],
+              }
           Path(os.environ["CANDIDATE_META"]).write_text(json.dumps(candidate,indent=2,sort_keys=True)+"\n")
           PY
 
@@ -236,7 +288,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: openworker-prebuilt-qualification-${{ inputs.task }}-${{ github.run_id }}
+          name: openworker-prebuilt-qualification-${{ inputs.task }}-${{ inputs.treatment_id }}-${{ github.run_id }}
           path: ${{ env.RECEIPT }}
           if-no-files-found: ignore
           retention-days: 30
