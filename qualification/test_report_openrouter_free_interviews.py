@@ -143,7 +143,8 @@ class Tests(unittest.TestCase):
             self.assertEqual(len(only["treatments"]),1)
             self.assertEqual(only["treatments"][0]["model_id"],model)
             self.assertEqual(only["treatments"][0]["max_iterations"],8)
-            self.assertEqual(report.reduce_folder(Path(tmp),123,"a"*40)["treatments"][0]["state"],"NO_RECEIPT")
+            with self.assertRaisesRegex(ValueError,"unselected model"):
+                report.reduce_folder(Path(tmp),123,"a"*40)
             with self.assertRaisesRegex(ValueError,"iteration budget"):
                 report.reduce_folder(Path(tmp),123,"a"*40,(model,),4)
 
