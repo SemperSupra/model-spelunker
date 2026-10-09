@@ -186,6 +186,9 @@ jobs:
           print(json.dumps(data,sort_keys=True))
           PY
 
+      - name: Self-test bounded synthetic repair-output diagnostic
+        run: PYTHONPATH=. python qualification/test_diagnose_openworker_boundary.py
+
       - name: Self-test task-neutral OpenWorker tool-use hint
         run: PYTHONPATH=. python qualification/test_tool_hint.py
 
