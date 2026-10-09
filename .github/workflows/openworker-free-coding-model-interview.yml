@@ -1,0 +1,33 @@
+name: OpenWorker Free Coding Model Interview
+
+# Secret-bearing inference runs only from an already-merged trusted main.
+# PR validation is credential-free in the existing contract workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/openworker-free-coding-model-interview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: openworker-free-coding-interview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  interview:
+    name: ${{ matrix.candidate }} / boundary-bugfix-v0
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate:
+          - openrouter-cohere-north-mini-code-free
+          - openrouter-poolside-laguna-s21-free
+    uses: ./.github/workflows/openworker-hosted-api-qualification.yml
+    with:
+      candidate: ${{ matrix.candidate }}
+      task: boundary-bugfix-v0
+    secrets: inherit

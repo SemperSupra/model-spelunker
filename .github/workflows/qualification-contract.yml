@@ -64,6 +64,8 @@ jobs:
               "openrouter-free-router",
               "openrouter-groq-gpt-oss-20b-byok",
               "openrouter-deepseek-v41-flash-byok",
+              "openrouter-cohere-north-mini-code-free",
+              "openrouter-poolside-laguna-s21-free",
           }
           assert candidates["deepseek-flash"]["provider"] == "deepseek"
           assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
@@ -157,6 +159,9 @@ jobs:
 
       - name: Self-test rootless sovereign OpenWorker producer
         run: PYTHONPATH=. python qualification/test_sovereign_foundry_openworker.py
+
+      - name: Self-test free OpenRouter coding model cohort
+        run: PYTHONPATH=. python qualification/test_openrouter_free_model_cohort.py
 
       - name: Self-test deterministic verifiers
         run: |

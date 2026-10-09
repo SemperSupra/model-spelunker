@@ -12,8 +12,18 @@ on:
         required: true
         default: text-repair-v0
 
+  workflow_call:
+    inputs:
+      candidate:
+        required: true
+        type: string
+      task:
+        required: true
+        type: string
+
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: openworker-hosted-api-${{ github.ref }}-${{ inputs.candidate }}
@@ -26,6 +36,8 @@ jobs:
     timeout-minutes: 10
     env:
       OPENWORKER_UPSTREAM_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OPENWORKER_ARTIFACT_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
+      OPENWORKER_ADMISSION_REF: 'github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json'
       HOSTED_CATALOG: 'qualification/models/hosted-api.json'
       QUALIFICATION_TASK: ${{ inputs.task }}
       HOSTED_KEY_FILE: '/tmp/model-spelunker-hosted-provider.key'
@@ -88,23 +100,38 @@ jobs:
           },sort_keys=True))
           PY
 
-      - name: Clone immutable OpenWorker source
+      - name: Hydrate pinned OpenWorker artifact in hosted workcell
         shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          upstream="$RUNNER_TEMP/openworker"
-          git clone --quiet --no-checkout https://github.com/andrewyng/openworker.git "$upstream"
-          git -C "$upstream" checkout --quiet --detach "$OPENWORKER_UPSTREAM_SHA"
-          test "$(git -C "$upstream" rev-parse HEAD)" = "$OPENWORKER_UPSTREAM_SHA"
-
-      - name: Install OpenWorker in isolated environment
-        shell: bash
-        run: |
-          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull "$OPENWORKER_ARTIFACT_REF" >/dev/null
+          root="$RUNNER_TEMP/hosted-openworker-artifact"
+          mkdir -p "$root"
+          cid="$(docker create "$OPENWORKER_ARTIFACT_REF" /artifact/noop)"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          docker cp "$cid:/artifact/." "$root/"
+          ARTIFACT_ROOT="$root" python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ["ARTIFACT_ROOT"])
+          receipt=json.loads((root/"build-receipt.json").read_text())
+          assert receipt["harness"]["name"]=="openworker"
+          assert receipt["source"]["revision"]==os.environ["OPENWORKER_UPSTREAM_SHA"]
+          for row in receipt["payload"]["files"]:
+              relative=Path(row["path"])
+              assert not relative.is_absolute() and ".." not in relative.parts
+              path=root/relative
+              data=path.read_bytes()
+              assert len(data)==row["bytes"]
+              assert hashlib.sha256(data).hexdigest()==row["sha256"]
+          print("PASS pinned hosted OpenWorker artifact integrity")
+          PY
           python3 -m venv "$RUNNER_TEMP/openworker-venv"
-          source "$RUNNER_TEMP/openworker-venv/bin/activate"
-          python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet -e "$RUNNER_TEMP/openworker"
+          "$RUNNER_TEMP/openworker-venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$root/wheelhouse"/*.whl
+          "$RUNNER_TEMP/openworker-venv/bin/python" -c 'import coworker; import coworker.engine'
 
       - name: Stage DeepSeek credential
         if: steps.treatment.outputs.provider == 'deepseek'
@@ -190,8 +217,9 @@ jobs:
                   with urllib.request.urlopen(request,timeout=20) as response:
                       return json.load(response),dict(response.headers.items())
               except urllib.error.HTTPError as exc:
-                  body=exc.read(512).decode("utf-8",errors="replace")
-                  raise SystemExit(f"{provider} admission failed: HTTP {exc.code}: {body}") from exc
+                  # Treat transport/admission errors as provider boundaries.
+                  # The API body is untrusted and may contain private metadata.
+                  raise SystemExit(f"QUALIFICATION_BOUNDARY={provider}-admission-http-{exc.code}") from exc
 
           if provider=="deepseek":
               data,_=get(base+"/user/balance")
@@ -224,10 +252,30 @@ jobs:
           elif provider=="openrouter":
               data,_=get(base+"/key")
               info=data.get("data") or {}
+              models,_=get(base+"/models")
+              exact=next((row for row in models.get("data",[]) if isinstance(row,dict) and row.get("id")==model),None)
+              if exact is None:
+                  raise SystemExit("QUALIFICATION_BOUNDARY=OpenRouter-model-not-visible")
+              pricing=exact.get("pricing") or {}
+              supported=exact.get("supported_parameters") or []
+              if model != "openrouter/free":
+                  if not model.endswith(":free"):
+                      raise SystemExit("QUALIFICATION_BOUNDARY=non-free-model-id")
+                  if "tools" not in supported:
+                      raise SystemExit("QUALIFICATION_BOUNDARY=tool-calling-not-supported")
+                  try:
+                      prices=(float(pricing["prompt"]),float(pricing["completion"]))
+                  except (KeyError,ValueError,TypeError):
+                      raise SystemExit("QUALIFICATION_BOUNDARY=free-pricing-unverifiable")
+                  if prices != (0.0,0.0):
+                      raise SystemExit("QUALIFICATION_BOUNDARY=nonzero-provider-price")
               evidence={
                   "authenticated":True,
-                  "is_free_tier":info.get("is_free_tier"),
+                  "model_active":True,
+                  "tool_calling_supported":"tools" in supported,
+                  "zero_token_price":model=="openrouter/free" or (float(pricing.get("prompt",1))==0 and float(pricing.get("completion",1))==0),
                   "treatment_kind":os.environ["HOSTED_TREATMENT_KIND"],
+                  "is_free_tier_account":info.get("is_free_tier"),
               }
 
           else:
@@ -253,6 +301,7 @@ jobs:
 
           configuration={
               "candidate_id":os.environ["HOSTED_CANDIDATE_ID"],
+              "harness_delivery":"immutable-ghcr-admitted-wheelhouse",
               "projection":projected_tools,
               "parallel_tool_calls":False,
               "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
@@ -270,6 +319,8 @@ jobs:
               "harness":{
                   "name":"openworker",
                   "version":os.environ["OPENWORKER_UPSTREAM_SHA"],
+                  "artifact_ref":os.environ["OPENWORKER_ARTIFACT_REF"],
+                  "admission_ref":os.environ["OPENWORKER_ADMISSION_REF"],
               },
               "model":{
                   "provider":os.environ["HOSTED_PROVIDER"],
@@ -341,6 +392,8 @@ jobs:
           assert receipt["candidate"]["model"]["provider"]==os.environ["HOSTED_PROVIDER"]
           assert receipt["candidate"]["model"]["id"]==os.environ["HOSTED_MODEL"]
           assert receipt["candidate"]["model"]["treatment_kind"]==os.environ["HOSTED_TREATMENT_KIND"]
+          assert receipt["candidate"]["harness"]["artifact_ref"]==os.environ["OPENWORKER_ARTIFACT_REF"]
+          assert receipt["candidate"]["harness"]["admission_ref"]==os.environ["OPENWORKER_ADMISSION_REF"]
           assert rc==(0 if receipt["observation"]["success"] else 1)
           print(json.dumps(receipt,sort_keys=True))
           print("QUALIFICATION_RESULT=" + ("PASS" if receipt["observation"]["success"] else "FAIL (valid observation)"))
