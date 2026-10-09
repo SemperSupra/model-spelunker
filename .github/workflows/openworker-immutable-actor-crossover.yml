@@ -31,7 +31,7 @@ jobs:
             realization_digest: ''
           - treatment_id: sovereign-cpython311
             artifact_ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:319f59f933477b306d25fbb9eef130bac0e71d9cd13e0c5b53879b7cf11f8860
-            admission_ref: github:SemperSupra/model-spelunker#147
+            admission_ref: github:SemperSupra/model-spelunker#147:comment-6077343763
             python_version: '3.11'
             realization_profile_ref: qualification/harness-realizations/openworker-linux-amd64-sovereign-python-abi-v1.json
             realization_digest: sha256:6d10d8b58f5f351cee24808ec49db1f63568abf903788a49ae4f428d94224213
