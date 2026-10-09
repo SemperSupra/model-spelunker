@@ -443,6 +443,11 @@
             "write_approvals_denied": {
               "type": "integer",
               "minimum": 0
+            },
+            "configured_max_iterations": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
             }
           }
         },
