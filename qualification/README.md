@@ -69,6 +69,27 @@ runtime is a substrate observation and should not consume model inference time.
 For open-source harnesses, the compiled/package projection is part of the configured
 actor when it can change startup cost or the runtime/model-facing capability surface.
 
+**Substrate-targeted harness realizations are first-class configured-actor factors.**
+The foundry should produce build/feature/ABI/runtime-specific realizations where
+there is a defensible task or capability hypothesis, not enforce one universal
+binary for every execution venue. The generic GHA artifact is a useful control,
+not presumed optimal. See
+[`harness-realizations/README.md`](harness-realizations/README.md) and
+[`harness-realization.schema.json`](harness-realization.schema.json).
+
+Actor profiles may optionally include `harness.realization.profile_ref` and
+`harness.realization.profile_digest`. The portable launch validator checks
+the referenced profile's exact canonical digest and matching harness identity.
+Different realization digests change the configured-actor configuration digest,
+while legacy profiles and receipts retain their original interpretation.
+A realization recipe is *not* an admitted artifact: still bind the exact OCI
+digest and mechanical admission receipt before scoring Actor × Task performance.
+
+Build, runtime configuration, and substrate placement effects must first be
+tested separately, holding model/task/tool authority fixed when feasible.
+Do not optimize compiler/feature matrices blindly; stop when no task-conditioned
+benefit is demonstrated or a compatibility/security regression appears.
+
 Receipts may therefore preserve a small optional `candidate.build` block containing
 the source revision, build profile, toolchain, default-feature decision, selected
 features, and final artifact digest. The complete candidate metadata still contributes
