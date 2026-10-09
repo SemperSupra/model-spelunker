@@ -19,7 +19,8 @@ class FoundryTests(unittest.TestCase):
             "harness": {"name": "openworker", "declared_version": "0.0.0"},
             "source": {"repository": foundry.SOURCE, "revision": foundry.SOURCE_SHA, "lockfile_digest": None},
             "build": {"recipe_id": foundry.RECIPE, "target": "linux-x86_64-python3",
-                      "builder_class": "test", "toolchain": "python-test", "configuration": {}},
+                      "builder_class": "test", "toolchain": "python-test",
+                      "configuration": {"realization": foundry.realization_binding()}},
             "payload": {"kind": "python-wheelhouse", "files": [
                 {"path": "wheelhouse/" + wheel.name,
                  "sha256": foundry.digest_file(wheel).split(":")[1],
@@ -44,6 +45,22 @@ class FoundryTests(unittest.TestCase):
             (out / "payload" / "wheelhouse" / "example-0.1-py3-none-any.whl").write_bytes(b"tampered")
             with self.assertRaisesRegex(ValueError, "size mismatch|digest mismatch"):
                 foundry.verify_local(out)
+
+    def test_realization_profile_drift_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            out, _ = self.fixture(Path(td))
+            with mock.patch.object(foundry, "realization_binding", return_value={
+                "profile_ref": foundry.PROFILE_REF,
+                "profile_digest": "sha256:" + "0" * 64,
+            }):
+                with self.assertRaisesRegex(ValueError, "realization binding mismatch"):
+                    foundry.verify_local(out)
+
+    def test_published_binding_matches_declared_profile(self):
+        binding = foundry.realization_binding()
+        self.assertEqual(binding["profile_ref"], foundry.PROFILE_REF)
+        self.assertTrue(binding["profile_digest"].startswith("sha256:"))
+        self.assertEqual(len(binding["profile_digest"]), 71)
 
     def test_modified_oci_layer_rejected(self):
         with tempfile.TemporaryDirectory() as td:
