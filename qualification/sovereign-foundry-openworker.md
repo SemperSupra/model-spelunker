@@ -92,6 +92,18 @@ credential/config files to a public repo or issue.
   already matches the expected digest, it skips the push and re-admits the
   remote artifact. Mismatched existing tag fails closed.
 - Registry credentials and re-fetch cache are in temporary storage only.
+- On TrueNAS or any hardened Linux substrate with a possible `noexec`
+  system `/tmp`, the publisher places `regctl`, OCI re-hydration data, and the
+  admission smoke virtual environment inside a **temporary user-owned
+  executable directory alongside the already-verified artifact**. Ephemeral
+  registry credentials remain separately under the system temporary directory
+  (0700) to avoid accidental home-dataset snapshots. Both are removed even on
+  failed publication. No mount-option changes or privilege escalation.
+- If the repository main branch advances after a successful local build, the
+  original verified output directory remains the authority for publication.
+  Do not derive a **new** output name from the refreshed main SHA or rebuild
+  merely because the producer code changed. Supply `--output` with the exact
+  previously verified artifact path.
   If the push succeeds but admission fails, record `PUBLISH_UNVERIFIED`;
   do not call the artifact BUILD_ADMITTED or infer actor qualification.
 - Reversal means deleting the user-owned local output path and, if authorized,
