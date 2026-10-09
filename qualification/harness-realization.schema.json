@@ -1,0 +1,191 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/SemperSupra/model-spelunker/qualification/harness-realization.schema.json",
+  "title": "Harness realization build and target profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_type",
+    "id",
+    "harness",
+    "target",
+    "build",
+    "experiment"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "record_type": {
+      "const": "harness-realization-profile"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]+$"
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "source_revision"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "architecture",
+        "abi",
+        "capability_requirements"
+      ],
+      "properties": {
+        "os": {
+          "type": "string",
+          "enum": [
+            "linux",
+            "macos",
+            "windows"
+          ]
+        },
+        "architecture": {
+          "type": "string",
+          "enum": [
+            "amd64",
+            "arm64"
+          ]
+        },
+        "abi": {
+          "type": "string",
+          "minLength": 1
+        },
+        "isa_floor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "capability_requirements": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recipe_id",
+        "toolchain_identity",
+        "features",
+        "compiler_flags",
+        "payload_kind"
+      ],
+      "properties": {
+        "recipe_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolchain_identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "features": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "compiler_flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "payload_kind": {
+          "type": "string",
+          "enum": [
+            "native-binary",
+            "python-wheelhouse",
+            "script-bundle",
+            "other"
+          ]
+        },
+        "dependency_lock_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "optimization_axis",
+        "hypothesis",
+        "primary_response",
+        "stop_rule"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "control",
+            "candidate"
+          ]
+        },
+        "optimization_axis": {
+          "type": "string",
+          "enum": [
+            "none",
+            "feature-set",
+            "toolchain",
+            "compiler-flags",
+            "dependency-layout",
+            "runtime-integration",
+            "other"
+          ]
+        },
+        "baseline_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hypothesis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "primary_response": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stop_rule": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
