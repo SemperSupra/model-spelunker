@@ -1,7 +1,11 @@
 name: OpenWorker Nemotron Ultra Free Model Contrast
 
-# One explicitly named free model contrast against North Mini Code's 8-round
-# budget result (run 37974196493). Trusted-main synthetic workcell only.
+# Independent replicate of the exact task-PASS actor binding observed at
+# GHA run 37975254520 (N=1). Reuse exactly the same task, admitted harness,
+# fixed model slug, 8-round limit, authority and external validator.
+# A second PASS is evidence of repeatability, not universal qualification.
+# A 429/provider outage is CENSORED, not a semantic task failure.
+# Trusted-main synthetic workcell; do not expose secrets to PR jobs.
 on:
   push:
     branches: [main]
