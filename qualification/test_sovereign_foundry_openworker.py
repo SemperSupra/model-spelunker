@@ -48,7 +48,8 @@ class FoundryTests(unittest.TestCase):
     def test_modified_oci_layer_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             out, _ = self.fixture(Path(td))
-            layer = next((out / "oci" / "blobs" / "sha256").iterdir())
+            layout = json.loads((out / "layout-receipt.json").read_text())
+            layer = out / "oci" / "blobs" / "sha256" / layout["layer_digest"].split(":")[1]
             layer.write_bytes(b"bad layer")
             with self.assertRaises(ValueError):
                 foundry.verify_local(out)
@@ -116,7 +117,7 @@ class FoundryTests(unittest.TestCase):
             out, digest = self.fixture(Path(td))
             with mock.patch.object(foundry, "generic_requirements", side_effect=AssertionError("must not rebuild")):
                 result = foundry.build(out)
-            self.assertEqual(result["state"], "LOCAL_VERIFIED")
+            self.assertEqual(result["state"], "ALREADY_BUILT")
             self.assertEqual(result["manifest_digest"], digest)
 
 
