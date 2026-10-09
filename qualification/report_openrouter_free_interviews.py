@@ -25,12 +25,9 @@ def reduce_receipt(data):
     model_id=model.get("id")
     if model_id not in MODELS or model.get("provider")!="openrouter":
         raise ValueError("wrong provider/model")
-    config=candidate.get("configuration") or {}
-    if not isinstance(config,dict):
-        raise ValueError("invalid actor configuration")
-    budget=config.get("max_iterations")
-    if budget is not None and (type(budget)!=int or not 1<=budget<=12):
-        raise ValueError("invalid bounded iteration budget")
+    # Execution receipts deliberately store only configuration_digest. The
+    # numerical limit must come from the harness's observed runtime summary,
+    # not from a synthetic assertion about unrecoverable candidate metadata.
     if (candidate.get("harness") or {}).get("artifact_ref")!=ARTIFACT:
         raise ValueError("wrong immutable harness artifact")
     if (data.get("task") or {}).get("id")!=TASK:
@@ -75,6 +72,9 @@ def reduce_receipt(data):
     if not isinstance(signals,list):
         raise ValueError("invalid failure signals")
     workload=obs.get("workload") or {}
+    budget=workload.get("configured_max_iterations")
+    if budget is not None and (type(budget)!=int or not 1<=budget<=12):
+        raise ValueError("invalid observed bounded iteration budget")
     rounds=workload.get("model_rounds",0)
     if type(rounds)!=int or rounds<0:
         raise ValueError("invalid model round count")
