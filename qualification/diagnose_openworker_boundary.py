@@ -78,6 +78,17 @@ def bounded_summary(snapshot_dir: Path, diagnostics: Path, task_receipt: Path) -
     if not summary_lines:
         raise ValueError("adapter summary missing from bounded diagnostics")
     summary=json.loads(summary_lines[-1])
+    read_flags=summary.get("synthetic_read_provenance")
+    expected_flags={
+        "readme_read_observed", "source_read_observed", "normative_policy_read_observed"
+    }
+    if read_flags is None:
+        policy_witness={"status":"UNAVAILABLE"}
+    elif (isinstance(read_flags,dict) and set(read_flags)==expected_flags
+          and all(type(value) is bool for value in read_flags.values())):
+        policy_witness={"status":"OBSERVED", **read_flags}
+    else:
+        raise ValueError("invalid read-provenance flag projection")
     tool_names=list(summary.get("tool_calls", []))
     if any(name not in ALLOWED_TOOLS for name in tool_names):
         raise ValueError("observed tool name not on synthetic workcell allowlist")
@@ -123,6 +134,7 @@ def bounded_summary(snapshot_dir: Path, diagnostics: Path, task_receipt: Path) -
         "backoff_function_declared":signature_function_present,
         "tool_name_counts":{k:tool_names.count(k) for k in sorted(ALLOWED_TOOLS)},
         "approval_counts":counts,
+        "synthetic_read_provenance":policy_witness,
         "case_pass":outcome,
         "postwrite_accepted":bool(receipt.get("observation",{}).get("success")),
         "note":"Diagnostic only; original external verifier remains authoritative",
