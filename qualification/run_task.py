@@ -428,6 +428,29 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         if values:
             summary[field + "_total"] = round(float(sum(values)), 6)
 
+    # Classification-only telemetry: expose model/provider finish reasons without
+    # publishing raw assistant text, prompts, tool arguments, or request bodies.
+    # A "stop" with zero tool calls differs materially from a "tool_calls"
+    # finish that the harness failed to parse or execute.
+    allowed_finish_reasons = {
+        "stop", "tool_calls", "function_call", "length",
+        "content_filter", "end_turn", "complete",
+    }
+    finish_counts: dict[str, int] = {}
+    unknown_finish_reasons = 0
+    for item in observations:
+        reason = item.get("finish_reason")
+        if not isinstance(reason, str) or not reason:
+            continue
+        if reason in allowed_finish_reasons:
+            finish_counts[reason] = finish_counts.get(reason, 0) + 1
+        else:
+            unknown_finish_reasons += 1
+    if finish_counts:
+        summary["provider_finish_reason_counts"] = dict(sorted(finish_counts.items()))
+    if unknown_finish_reasons:
+        summary["provider_finish_reason_unknown_count"] = unknown_finish_reasons
+
     ttft = [
         float(item["first_event_seconds"])
         for item in observations
