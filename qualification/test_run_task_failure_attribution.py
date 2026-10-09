@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from qualification.run_task import engine_error_types, goose_stream_provider_observations, has_engine_error_event, workload_summary, tool_action_summary
+from qualification.run_task import engine_error_types, goose_stream_provider_observations, has_engine_error_event, tool_action_summary, workload_summary, tool_action_summary
 
 assert has_engine_error_event('OPENWORKER_EVENT={"type":"EventType.ERROR","error":"x"}')
 assert has_engine_error_event('OPENWORKER_EVENT={"type": "EventType.ERROR", "error": "x"}')
@@ -60,3 +60,15 @@ assert "/private/" not in str(safe)
 assert tool_action_summary("OPENWORKER_SUMMARY={invalid}") == {}
 assert tool_action_summary("") == {}
 print("PASS bounded tool-name and approval telemetry")
+
+# The native adapter emits an explicit, observed configuration cap. Only the
+# allowlisted integer is projected; arbitrary summary paths/text stay private.
+good='OPENWORKER_SUMMARY={"tool_calls":["list_files","read_file"],"max_iterations":8,"approvals":[],"host_secret":"NO_LEAK"}'
+projected=tool_action_summary(good)
+assert projected["configured_max_iterations"]==8
+assert projected["tool_name_counts"]["read_file"]==1
+assert "host_secret" not in str(projected)
+for raw in ('"8"', '0', '13', 'null', 'true'):
+    bad='OPENWORKER_SUMMARY={"tool_calls":[],"max_iterations":'+raw+'}'
+    assert "configured_max_iterations" not in tool_action_summary(bad)
+print("PASS bounded observed max-iteration projection")
