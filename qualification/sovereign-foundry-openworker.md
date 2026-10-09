@@ -73,6 +73,8 @@ python3 -m qualification.sovereign_foundry_openworker publish \
   --output "$HOME/.local/share/model-spelunker-foundry/openworker-$short"
 ```
 
+The publisher automatically returns a sanitized digest-bound admission result to the governing GitHub issue (#147). The issue is the existing DLE authority; no terminal copy/paste is needed. If GHCR publication succeeds but issue reporting fails, the command reports `DLE_PENDING`: do not rebuild or re-publish. The same operator or actor can safely replay only the result with `python3 -m qualification.sovereign_foundry_openworker sync-dle --output "$out"`. Existing identical receipts are reused; divergent receipts fail closed.
+
 The returned `artifact_ref` must use the immutable `@sha256:` form. Store
 `payload/build-receipt.json`, `layout-receipt.json`, `admission.json`,
 and `publication.json` as the DLE evidence set; the private raw executor log

@@ -176,4 +176,5 @@ class FoundryTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    from qualification.test_sovereign_foundry_dle_return import DleReturnTests
     unittest.main()
