@@ -145,9 +145,9 @@ def verify_local(out: Path) -> dict:
 
 
 def build(out: Path) -> dict:
-    facts = generic_requirements()
     if out.exists():
         return {**verify_local(out), "state": "ALREADY_BUILT"}
+    facts = generic_requirements()
     if not out.parent.is_dir():
         raise ValueError("output parent must already exist")
     stage = Path(tempfile.mkdtemp(prefix=".foundry-openworker-", dir=out.parent))
