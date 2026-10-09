@@ -1,0 +1,62 @@
+name: OpenWorker North Mini File-Tool Diagnostic
+
+# One bounded model-side rep with secret-free downstream reporting.
+# No secret-bearing PR jobs: only trusted-main push or explicit dispatch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/openworker-north-tool-action-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: openworker-north-tool-action-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  interview:
+    uses: ./.github/workflows/openworker-hosted-api-qualification.yml
+    with:
+      candidate: openrouter-cohere-north-mini-code-free
+      task: boundary-bugfix-v0
+    secrets: inherit
+
+  report:
+    if: always()
+    needs: [interview]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout trusted reporter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch only this model's task receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/north-mini-receipts"
+          if ! gh run download "$GITHUB_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "hosted-qualification-openrouter-cohere-north-mini-code-free-boundary-bugfix-v0-${GITHUB_RUN_ID}" \
+              --dir "$RUNNER_TEMP/north-mini-receipts"; then
+            echo "No valid task artifact returned; report will classify as NO_RECEIPT."
+          fi
+      - name: Return safe evidence to qualification DLE
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/report_openrouter_free_interviews.py \
+            --receipts-dir "$RUNNER_TEMP/north-mini-receipts" \
+            --run-id "$GITHUB_RUN_ID" \
+            --commit "$GITHUB_SHA" \
+            --expected-model "cohere/north-mini-code:free"
