@@ -217,8 +217,9 @@ jobs:
                   with urllib.request.urlopen(request,timeout=20) as response:
                       return json.load(response),dict(response.headers.items())
               except urllib.error.HTTPError as exc:
-                  body=exc.read(512).decode("utf-8",errors="replace")
-                  raise SystemExit(f"{provider} admission failed: HTTP {exc.code}: {body}") from exc
+                  # Treat transport/admission errors as provider boundaries.
+                  # The API body is untrusted and may contain private metadata.
+                  raise SystemExit(f"QUALIFICATION_BOUNDARY={provider}-admission-http-{exc.code}") from exc
 
           if provider=="deepseek":
               data,_=get(base+"/user/balance")
