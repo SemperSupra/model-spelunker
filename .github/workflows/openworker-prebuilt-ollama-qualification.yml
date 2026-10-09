@@ -45,6 +45,14 @@ on:
         description: Controlled synthetic-task postwrite diagnostic (not the task verifier)
         required: false
         default: none
+      model_tag:
+        description: Exact named Ollama model variant (digest separately constrained)
+        required: false
+        default: qwen3:1.7b
+      model_digest_prefix:
+        description: Expected pinned Ollama model digest prefix; full digest recorded from Ollama
+        required: false
+        default: 8f68893c685c
   workflow_call:
     inputs:
       artifact_ref:
@@ -92,17 +100,26 @@ on:
         type: string
         default: none
 
+      model_tag:
+        required: false
+        type: string
+        default: qwen3:1.7b
+      model_digest_prefix:
+        required: false
+        type: string
+        default: 8f68893c685c
+
 permissions:
   contents: read
   packages: read
 
 concurrency:
-  group: openworker-prebuilt-ollama-qualification-${{ github.ref }}-${{ inputs.task }}-${{ inputs.experiment }}-${{ inputs.treatment_id }}
+  group: openworker-prebuilt-ollama-qualification-${{ github.ref }}-${{ inputs.task }}-${{ inputs.experiment }}-${{ inputs.treatment_id }}-${{ inputs.model_tag }}
   cancel-in-progress: true
 
 jobs:
   qualify:
-    name: OpenWorker ${{ inputs.treatment_id }} + Qwen3 1.7B
+    name: OpenWorker ${{ inputs.treatment_id }} + ${{ inputs.model_tag }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -114,14 +131,14 @@ jobs:
       HARNESS_REALIZATION_PROFILE_DIGEST: ${{ inputs.realization_digest }}
       OLLAMA_VERSION: '0.34.1'
       OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
-      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
-      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_MODEL_TAG: ${{ inputs.model_tag }}
+      OLLAMA_MODEL_DIGEST_PREFIX: ${{ inputs.model_digest_prefix }}
       OLLAMA_HOST: '127.0.0.1:11434'
       OLLAMA_MODELS: '/tmp/model-spelunker-openworker-prebuilt-models'
       OLLAMA_NUM_PARALLEL: '1'
       OLLAMA_MAX_LOADED_MODELS: '1'
       OLLAMA_CONTEXT_LENGTH: '32768'
-      MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
+      MODEL_SPELUNKER_MODEL: ${{ format('ollama:{0}', inputs.model_tag) }}
       MODEL_SPELUNKER_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       MODEL_SPELUNKER_TOOL_HINT_MODE: ${{ inputs.tool_hint_mode }}
       MODEL_SPELUNKER_OUTPUT_DIAGNOSTIC_MODE: ${{ inputs.output_diagnostic_mode }}
