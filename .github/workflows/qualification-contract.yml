@@ -189,6 +189,9 @@ jobs:
       - name: Self-test task-neutral OpenWorker tool-use hint
         run: PYTHONPATH=. python qualification/test_tool_hint.py
 
+      - name: Self-test bounded OpenWorker tool-use hint treatment
+        run: PYTHONPATH=. python qualification/test_tool_hint.py
+
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
 
