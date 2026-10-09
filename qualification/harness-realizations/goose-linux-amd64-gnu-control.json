@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "record_type": "harness-realization-profile",
+  "id": "goose-linux-amd64-gnu-control",
+  "harness": {
+    "name": "goose",
+    "source_revision": "2090ad1c65ddb39497601a936a9fe17d66254bfe"
+  },
+  "target": {
+    "os": "linux",
+    "architecture": "amd64",
+    "abi": "gnu",
+    "isa_floor": "x86-64",
+    "capability_requirements": [
+      "linux-userspace",
+      "native-executable"
+    ]
+  },
+  "build": {
+    "recipe_id": "goose-minimal-rustls-v1",
+    "toolchain_identity": "rustc-1.96.1",
+    "features": [
+      "rustls-tls"
+    ],
+    "compiler_flags": [],
+    "payload_kind": "native-binary",
+    "dependency_lock_digest": null
+  },
+  "experiment": {
+    "role": "control",
+    "optimization_axis": "none",
+    "baseline_ref": null,
+    "hypothesis": "Generic pinned Linux/amd64 Goose supplies the unchanged comparison control for target-specific realizations; no performance improvement is claimed.",
+    "primary_response": "deterministic-task-verifier-success",
+    "stop_rule": "Stop if artifact admission or baseline task execution is unavailable; record the failure plane."
+  }
+}

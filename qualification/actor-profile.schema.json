@@ -52,6 +52,25 @@
             "null"
           ],
           "minLength": 1
+        },
+        "realization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "profile_ref",
+            "profile_digest"
+          ],
+          "properties": {
+            "profile_ref": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^qualification/harness-realizations/[A-Za-z0-9._/-]+\\.json$"
+            },
+            "profile_digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
         }
       }
     },

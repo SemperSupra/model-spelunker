@@ -11,6 +11,8 @@ from pathlib import Path
 
 from qualification.run_task import tree_digest
 
+ROOT=Path(__file__).resolve().parents[1]
+
 
 def canonical_digest(value: object) -> str:
     payload=json.dumps(value,sort_keys=True,separators=(",",":")).encode("utf-8")
@@ -22,6 +24,41 @@ def read(path: Path) -> dict:
     if not isinstance(value,dict):
         raise ValueError(f"{path}: expected JSON object")
     return value
+
+
+def validate_harness_realization_binding(actor: dict, repository_root: Path) -> None:
+    """Bind optional harness build/target realization without changing v1 receipts.
+
+    The actor's full candidate metadata already enters configuration_digest.
+    This additional check prevents a referenced realization profile from drifting.
+    """
+    harness=actor.get("harness") or {}
+    binding=harness.get("realization")
+    if binding is None:
+        return
+    if not isinstance(binding,dict):
+        raise ValueError("harness realization binding must be an object")
+    if set(binding)!={"profile_ref","profile_digest"}:
+        raise ValueError("harness realization binding requires profile_ref and profile_digest")
+    ref=binding["profile_ref"]
+    digest=binding["profile_digest"]
+    if not isinstance(ref,str) or not ref.startswith("qualification/harness-realizations/") or not ref.endswith(".json"):
+        raise ValueError("harness realization reference must be a repository qualification profile")
+    if not isinstance(digest,str) or len(digest)!=71 or not digest.startswith("sha256:"):
+        raise ValueError("harness realization digest must be sha256")
+    root=repository_root.resolve()
+    target=(root/ref).resolve()
+    if root not in target.parents or ".." in Path(ref).parts:
+        raise ValueError("harness realization path escapes repository")
+    value=read(target)
+    if value.get("record_type")!="harness-realization-profile" or value.get("schema_version")!=1:
+        raise ValueError("unsupported harness realization profile")
+    identity=value.get("harness") or {}
+    if identity.get("name")!=harness.get("name"):
+        raise ValueError("harness realization name mismatch")
+    actual=canonical_digest(value)
+    if actual!=digest:
+        raise ValueError(f"harness realization profile digest mismatch: {actual} != {digest}")
 
 
 def validate_packet(
@@ -57,6 +94,8 @@ def validate_packet(
 
     if packet["actor"]["profile_ref"] != str(actor_profile):
         raise ValueError("actor profile_ref does not match supplied actor profile")
+
+    validate_harness_realization_binding(actor, ROOT)
 
     if packet["substrate"]["profile_ref"] != str(substrate_profile):
         raise ValueError("substrate profile_ref does not match supplied substrate profile")
