@@ -158,6 +158,9 @@ jobs:
       - name: Self-test rootless sovereign OpenWorker producer
         run: PYTHONPATH=. python qualification/test_sovereign_foundry_openworker.py
 
+      - name: Self-test free OpenRouter coding model cohort
+        run: PYTHONPATH=. python qualification/test_openrouter_free_model_cohort.py
+
       - name: Self-test deterministic verifiers
         run: |
           python qualification/tasks/text-repair-v0/verify.py --self-test
