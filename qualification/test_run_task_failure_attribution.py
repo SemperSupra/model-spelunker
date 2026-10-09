@@ -50,7 +50,7 @@ sample = {
     ],
 }
 import json
-safe = tool_action_summary("prefix\\nOPENWORKER_SUMMARY="+json.dumps(sample)+"\\n")
+safe = tool_action_summary("prefix\nOPENWORKER_SUMMARY="+json.dumps(sample)+"\n")
 assert safe["tool_name_counts"] == {"list_files":1,"read_file":2,"write_file":1}
 assert safe["unknown_tool_name_count"] == 1
 assert safe["write_approvals_granted"] == 1
