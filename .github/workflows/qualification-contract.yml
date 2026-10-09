@@ -155,6 +155,9 @@ jobs:
           PYTHONPATH=. python qualification/test_harness_realization_binding.py
           PYTHONPATH=. python qualification/test_package_artifact_oci.py
 
+      - name: Self-test rootless sovereign OpenWorker producer
+        run: PYTHONPATH=. python qualification/test_sovereign_foundry_openworker.py
+
       - name: Self-test deterministic verifiers
         run: |
           python qualification/tasks/text-repair-v0/verify.py --self-test
