@@ -28,6 +28,14 @@ jobs:
             ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83
             admission: qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json
             smoke: openworker
+          - name: openworker-sovereign
+            ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:319f59f933477b306d25fbb9eef130bac0e71d9cd13e0c5b53879b7cf11f8860
+            smoke: openworker
+            digest: sha256:319f59f933477b306d25fbb9eef130bac0e71d9cd13e0c5b53879b7cf11f8860
+            python: '3.11'
+            source_revision: 5bc10d928e0b64aae74313349a3b17bd19643ae2
+            realization_digest: sha256:6d10d8b58f5f351cee24808ec49db1f63568abf903788a49ae4f428d94224213
+            python_abi: cpython-311-x86_64-linux-gnu
           - name: goose
             ref: ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:e4202698e3442086b2aa69de8d9a155740d2ddcb234905cc6e7108ed54f2b636
             admission: qualification/harness-artifacts/goose-2090ad1c65dd-linux-x64.admission.json
@@ -42,6 +50,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Match sovereign-built Python ABI
+        if: matrix.python != ''
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: ${{ matrix.python }}
 
       - name: Install fetch and syscall probes
         run: |
@@ -78,7 +92,19 @@ jobs:
             exit 1
           fi
           manifest_digest="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["manifest_digest"])' "$summary")"
-          python qualification/verify_hydrated_artifact.py             "$root" "${{ matrix.admission }}" --manifest-digest "$manifest_digest"
+          if [[ -n "${{ matrix.admission }}" ]]; then
+            python qualification/verify_hydrated_artifact.py "$root" "${{ matrix.admission }}" --manifest-digest "$manifest_digest"
+          else
+            # Independent transport witness for a foreign/native-built artifact.
+            # Do not fabricate an admission receipt from its embedded self-report.
+            python qualification/verify_hydrated_artifact.py "$root" \
+              --manifest-digest "$manifest_digest" \
+              --expected-oci-digest "${{ matrix.digest }}" \
+              --expected-harness openworker \
+              --expected-source-revision "${{ matrix.source_revision }}" \
+              --expected-realization-digest "${{ matrix.realization_digest }}" \
+              --expected-python-abi "${{ matrix.python_abi }}"
+          fi
           echo "HYDRATED_ROOT=$root" >> "$GITHUB_ENV"
 
       - name: Smoke admitted payload with network syscalls prohibited by policy check
