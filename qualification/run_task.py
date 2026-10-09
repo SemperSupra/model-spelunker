@@ -332,6 +332,51 @@ def harness_metrics(stdout: str) -> dict[str, int | None]:
     }
 
 
+def tool_action_summary(stdout: str) -> dict[str, object]:
+    """Project only safe tool names/approval outcomes from OpenWorker diagnostics.
+
+    This intentionally excludes tool argument paths, file content, raw model
+    output and provider request/response bodies.
+    """
+    raw = last_marker(stdout, "OPENWORKER_SUMMARY=")
+    if not raw:
+        return {}
+    try:
+        summary = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(summary, dict):
+        return {}
+    raw_calls = summary.get("tool_calls")
+    if not isinstance(raw_calls, list):
+        return {}
+    safe_tools = {"list_files", "read_file", "write_file"}
+    counts = {name: 0 for name in sorted(safe_tools)}
+    unknown = 0
+    for tool in raw_calls:
+        if isinstance(tool, str) and tool in safe_tools:
+            counts[tool] += 1
+        else:
+            unknown += 1
+    output = {"tool_name_counts": counts}
+    if unknown:
+        output["unknown_tool_name_count"] = unknown
+    approvals = summary.get("approvals")
+    if isinstance(approvals, list):
+        allowed = 0
+        denied = 0
+        for row in approvals:
+            if not isinstance(row, dict) or row.get("tool_name") != "write_file":
+                continue
+            if row.get("allowed") is True:
+                allowed += 1
+            elif row.get("allowed") is False:
+                denied += 1
+        output["write_approvals_granted"] = allowed
+        output["write_approvals_denied"] = denied
+    return output
+
+
 def model_call_start_summary(stdout: str) -> dict[str, object]:
     starts: list[dict[str, object]] = []
     prefix = "MODEL_SPELUNKER_MODEL_CALL_STARTED="
@@ -768,6 +813,7 @@ def main() -> int:
         error_types = engine_error_types(stdout)
         workload = workload_summary(provider_rounds)
         workload.update(model_call_start_summary(stdout))
+        workload.update(tool_action_summary(stdout))
 
         evidence = {
             "candidate_exit_code": candidate_exit,

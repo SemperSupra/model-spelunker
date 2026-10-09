@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from qualification.run_task import engine_error_types, goose_stream_provider_observations, has_engine_error_event, workload_summary
+from qualification.run_task import engine_error_types, goose_stream_provider_observations, has_engine_error_event, workload_summary, tool_action_summary
 
 assert has_engine_error_event('OPENWORKER_EVENT={"type":"EventType.ERROR","error":"x"}')
 assert has_engine_error_event('OPENWORKER_EVENT={"type": "EventType.ERROR", "error": "x"}')
@@ -40,3 +40,23 @@ assert "free-form-untrusted-raw-output" not in str(observed)
 assert "raw" not in observed
 assert "provider_finish_reason_counts" not in workload_summary([{}])
 print("PASS provider finish-reason tool-protocol attribution")
+
+sample = {
+    "tool_calls":["list_files","read_file","read_file","write_file","arbitrary_unknown_tool"],
+    "approvals":[
+        {"tool_name":"write_file","path":"/private/absolute/path","allowed":True},
+        {"tool_name":"write_file","path":"secret.txt","allowed":False},
+        {"tool_name":"read_file","path":"private","allowed":False},
+    ],
+}
+import json
+safe = tool_action_summary("prefix\nOPENWORKER_SUMMARY="+json.dumps(sample)+"\n")
+assert safe["tool_name_counts"] == {"list_files":1,"read_file":2,"write_file":1}
+assert safe["unknown_tool_name_count"] == 1
+assert safe["write_approvals_granted"] == 1
+assert safe["write_approvals_denied"] == 1
+assert "secret.txt" not in str(safe)
+assert "/private/" not in str(safe)
+assert tool_action_summary("OPENWORKER_SUMMARY={invalid}") == {}
+assert tool_action_summary("") == {}
+print("PASS bounded tool-name and approval telemetry")

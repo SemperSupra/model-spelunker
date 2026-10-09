@@ -413,6 +413,36 @@
             "started_request_tool_schema_bytes_total": {
               "type": "number",
               "minimum": 0
+            },
+            "tool_name_counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "list_files": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "read_file": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "write_file": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "unknown_tool_name_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "write_approvals_granted": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "write_approvals_denied": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         },

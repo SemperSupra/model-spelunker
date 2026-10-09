@@ -87,6 +87,35 @@ class Tests(unittest.TestCase):
             result=report.reduce_folder(Path(tmp),123,"a"*40)
             self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
 
+    def test_selected_model_diagnostic_has_no_fake_second_workcell(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.fixture(Path(tmp),report.MODELS[0])
+            result=report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],))
+            self.assertEqual(len(result["treatments"]),1)
+            self.assertEqual(result["treatments"][0]["state"],"SEMANTIC_FAIL")
+            self.assertNotIn(report.MODELS[1],report.body_of(result))
+
+    def test_safe_tool_action_counts_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            receipt=json.loads(path.read_text())
+            receipt["observation"]["workload"].update({
+                "tool_name_counts":{"read_file":2,"list_files":1,"write_file":1},
+                "write_approvals_granted":1,
+                "write_approvals_denied":0,
+            })
+            path.write_text(json.dumps(receipt))
+            result=report.reduce_folder(Path(tmp),123,"a"*40)
+            row=result["treatments"][0]
+            self.assertEqual(row["observed_tool_name_counts"]["read_file"],2)
+            self.assertEqual(row["write_approvals_granted"],1)
+            self.assertNotIn("path",report.body_of(result))
+
+    def test_unauthorized_model_selection_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                report.reduce_folder(Path(tmp),123,"a"*40,("not-listed:free",))
+
     def test_dle_posts_identical_payload_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             body=report.body_of(report.reduce_folder(Path(tmp),123,"a"*40))
