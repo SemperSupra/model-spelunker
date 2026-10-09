@@ -1,0 +1,47 @@
+name: OpenWorker Immutable Actor Crossover
+
+# This is an experiment composition over the existing reusable qualifier,
+# not a second harness installer/materializer.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/openworker-immutable-actor-crossover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: openworker-immutable-actor-crossover-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  interview:
+    name: Task workcell / ${{ matrix.treatment_id }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - treatment_id: gha-generic
+            artifact_ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83
+            admission_ref: github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json
+            python_version: ''
+            realization_profile_ref: ''
+            realization_digest: ''
+          - treatment_id: sovereign-cpython311
+            artifact_ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:319f59f933477b306d25fbb9eef130bac0e71d9cd13e0c5b53879b7cf11f8860
+            admission_ref: github:SemperSupra/model-spelunker#147
+            python_version: '3.11'
+            realization_profile_ref: qualification/harness-realizations/openworker-linux-amd64-sovereign-python-abi-v1.json
+            realization_digest: sha256:6d10d8b58f5f351cee24808ec49db1f63568abf903788a49ae4f428d94224213
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: ${{ matrix.artifact_ref }}
+      admission_ref: ${{ matrix.admission_ref }}
+      task: text-repair-v0
+      reasoning_effort: none
+      python_version: ${{ matrix.python_version }}
+      treatment_id: ${{ matrix.treatment_id }}
+      realization_profile_ref: ${{ matrix.realization_profile_ref }}
+      realization_digest: ${{ matrix.realization_digest }}
