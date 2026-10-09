@@ -11,6 +11,10 @@ on:
         description: Task id from qualification/tasks
         required: true
         default: text-repair-v0
+      max_iterations:
+        description: Maximum bounded OpenWorker tool/model rounds (1-12)
+        required: false
+        default: '4'
 
   workflow_call:
     inputs:
@@ -20,6 +24,10 @@ on:
       task:
         required: true
         type: string
+      max_iterations:
+        required: false
+        type: string
+        default: '4'
 
 permissions:
   contents: read
@@ -45,6 +53,7 @@ jobs:
       RECEIPT: '/tmp/model-spelunker-hosted-receipt.json'
       SUBSTRATE_PROFILE_COMMIT: '15ea4903a060d06c56c20f9f81b02c06541298e0'
       MODEL_SPELUNKER_MAX_TOKENS: '2048'
+      MODEL_SPELUNKER_MAX_ITERATIONS: ${{ inputs.max_iterations }}
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
       PYTHONDONTWRITEBYTECODE: '1'
 
@@ -306,7 +315,7 @@ jobs:
               "parallel_tool_calls":False,
               "max_tokens":int(os.environ["MODEL_SPELUNKER_MAX_TOKENS"]),
               "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
-              "max_iterations":4,
+              "max_iterations":int(os.environ["MODEL_SPELUNKER_MAX_ITERATIONS"]),
               "api_base":os.environ["HOSTED_API_BASE"],
               "cost_class":os.environ["HOSTED_COST_CLASS"],
               "provider_alias_semantics":"hosted mutable service",
@@ -314,6 +323,9 @@ jobs:
           extra_body=json.loads(os.environ["HOSTED_EXTRA_BODY_JSON"])
           if extra_body:
               configuration["extra_body"]=extra_body
+
+          if not 1 <= configuration["max_iterations"] <= 12:
+              raise SystemExit("QUALIFICATION_BOUNDARY=max-iterations-outside-bounded-envelope")
 
           candidate={
               "harness":{

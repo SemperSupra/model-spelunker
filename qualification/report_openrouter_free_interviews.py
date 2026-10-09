@@ -25,6 +25,9 @@ def reduce_receipt(data):
     model_id=model.get("id")
     if model_id not in MODELS or model.get("provider")!="openrouter":
         raise ValueError("wrong provider/model")
+    # Execution receipts deliberately store only configuration_digest. The
+    # numerical limit must come from the harness's observed runtime summary,
+    # not from a synthetic assertion about unrecoverable candidate metadata.
     if (candidate.get("harness") or {}).get("artifact_ref")!=ARTIFACT:
         raise ValueError("wrong immutable harness artifact")
     if (data.get("task") or {}).get("id")!=TASK:
@@ -69,6 +72,9 @@ def reduce_receipt(data):
     if not isinstance(signals,list):
         raise ValueError("invalid failure signals")
     workload=obs.get("workload") or {}
+    budget=workload.get("configured_max_iterations")
+    if budget is not None and (type(budget)!=int or not 1<=budget<=12):
+        raise ValueError("invalid observed bounded iteration budget")
     rounds=workload.get("model_rounds",0)
     if type(rounds)!=int or rounds<0:
         raise ValueError("invalid model round count")
@@ -105,6 +111,7 @@ def reduce_receipt(data):
     return {
         "model_id":model_id,
         "state":state,
+        **({"max_iterations":budget} if budget is not None else {}),
         "observed_tool_name_counts":safe_names,
         **approvals,
         "evidence_digest":digest,
@@ -117,7 +124,7 @@ def reduce_receipt(data):
         "failure_class":classification,
     }
 
-def reduce_folder(folder,run,commit,expected_models=MODELS):
+def reduce_folder(folder,run,commit,expected_models=MODELS,expected_max_iterations=None):
     if run<=0 or not COMMIT.fullmatch(commit):
         raise ValueError("bad workflow provenance")
     if (not expected_models or len(set(expected_models))!=len(expected_models)
@@ -131,6 +138,8 @@ def reduce_folder(folder,run,commit,expected_models=MODELS):
         except (ValueError,KeyError,TypeError):
             continue
         model=row["model_id"]
+        if expected_max_iterations is not None and row.get("max_iterations") != expected_max_iterations:
+            raise ValueError("observed actor iteration budget disagrees with experiment")
         if model not in rows:
             raise ValueError("receipt from unselected model")
         if rows[model]["state"]!="NO_RECEIPT":
@@ -190,9 +199,12 @@ def main():
     parser.add_argument("--run-id",required=True,type=int)
     parser.add_argument("--commit",required=True)
     parser.add_argument("--expected-model",action="append",choices=MODELS)
+    parser.add_argument("--expected-max-iterations",type=int)
     a=parser.parse_args()
     models=tuple(a.expected_model) if a.expected_model else MODELS
-    result=reduce_folder(a.receipts_dir,a.run_id,a.commit,models)
+    if a.expected_max_iterations is not None and not 1<=a.expected_max_iterations<=12:
+        parser.error("expected iteration budget must be between 1 and 12")
+    result=reduce_folder(a.receipts_dir,a.run_id,a.commit,models,a.expected_max_iterations)
     answer=post_once(body_of(result))
     print(json.dumps({"dle":answer,"run_id":a.run_id,
        "results":[{"model_id":r["model_id"],"state":r["state"]} for r in result["treatments"]]},

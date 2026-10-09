@@ -1,0 +1,66 @@
+name: OpenWorker North Mini Iteration-Budget Interview
+
+# One controlled runtime-envelope crossover to the existing 4-iteration receipt
+# (run 37972012676). Secret-bearing workcell is trusted-main ONLY.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/openworker-north-tool-budget-8.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: openworker-north-budget-8-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  interview:
+    uses: ./.github/workflows/openworker-hosted-api-qualification.yml
+    with:
+      candidate: openrouter-cohere-north-mini-code-free
+      task: boundary-bugfix-v0
+      max_iterations: '8'
+    secrets: inherit
+
+  report:
+    if: always()
+    needs: [interview]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout trusted reporting code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Retrieve bounded task receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/north-budget-receipts"
+          if ! gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "hosted-qualification-openrouter-cohere-north-mini-code-free-boundary-bugfix-v0-${GITHUB_RUN_ID}" \
+            --dir "$RUNNER_TEMP/north-budget-receipts"; then
+            echo "No admitted task receipt: preserve NO_RECEIPT, not a model failure."
+          fi
+
+      - name: Return exact-model workcell result to DLE
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/report_openrouter_free_interviews.py \
+            --receipts-dir "$RUNNER_TEMP/north-budget-receipts" \
+            --run-id "$GITHUB_RUN_ID" \
+            --commit "$GITHUB_SHA" \
+            --expected-model "cohere/north-mini-code:free" \
+            --expected-max-iterations 8

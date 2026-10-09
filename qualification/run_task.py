@@ -359,6 +359,11 @@ def tool_action_summary(stdout: str) -> dict[str, object]:
         else:
             unknown += 1
     output = {"tool_name_counts": counts}
+    # Keep only bounded, exact integer configuration evidence from the
+    # executing harness. Never project the raw OpenWorker summary.
+    observed_max_iterations = summary.get("max_iterations")
+    if type(observed_max_iterations) is int and 1 <= observed_max_iterations <= 12:
+        output["configured_max_iterations"] = observed_max_iterations
     if unknown:
         output["unknown_tool_name_count"] = unknown
     approvals = summary.get("approvals")
