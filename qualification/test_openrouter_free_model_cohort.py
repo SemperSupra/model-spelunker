@@ -35,3 +35,12 @@ for key in expected:
     assert caller.count(key)==1
 assert "boundary-bugfix-v0" in caller
 print("PASS free-model cohort and trust-boundary contract")
+
+diagnostic=(root/".github/workflows/openworker-north-tool-action-diagnostic.yml").read_text()
+assert "branches: [main]" in diagnostic
+assert "pull_request:" not in diagnostic
+assert "secrets: inherit" in diagnostic
+assert "issues: write" in diagnostic
+assert "--expected-model" in diagnostic
+assert "cohere/north-mini-code:free" in diagnostic
+assert "openrouter-poolside-laguna-s21-free" not in diagnostic
