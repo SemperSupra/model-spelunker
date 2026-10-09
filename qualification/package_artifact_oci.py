@@ -11,7 +11,6 @@ import argparse
 import hashlib
 import io
 import json
-import os
 from pathlib import Path
 import stat
 import tarfile
@@ -191,7 +190,7 @@ def package(payload: Path, layout: Path, ref_name: str, architecture: str, os_na
         "config_digest": config_digest,
         "layer_digest": layer_digest,
         "layer_size_bytes": layer_size,
-        "payload_root": str(payload.resolve()),
+        "payload_root": "artifact",
         "container_runtime_used": False,
         "docker_socket_used": False,
         "sudo_used": False,
