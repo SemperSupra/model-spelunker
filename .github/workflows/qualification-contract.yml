@@ -53,6 +53,7 @@ jobs:
           harness_build_schema = json.loads(Path("qualification/harness-build-receipt.schema.json").read_text())
           harness_admission_schema = json.loads(Path("qualification/harness-admission-receipt.schema.json").read_text())
           launch_packet_schema = json.loads(Path("qualification/portable-launch-packet.schema.json").read_text())
+          harness_realization_schema = json.loads(Path("qualification/harness-realization.schema.json").read_text())
 
           candidates = hosted["candidates"]
           assert set(candidates) == {
@@ -104,6 +105,10 @@ jobs:
           jsonschema.Draft7Validator.check_schema(harness_build_schema)
           jsonschema.Draft7Validator.check_schema(harness_admission_schema)
           jsonschema.Draft7Validator.check_schema(launch_packet_schema)
+          jsonschema.Draft7Validator.check_schema(harness_realization_schema)
+          for path in sorted(Path("qualification/harness-realizations").glob("*.json")):
+              realization = json.loads(path.read_text())
+              jsonschema.validate(realization, harness_realization_schema)
           for path in sorted(Path("qualification/launch-packets").glob("*.json")):
               launch_packet = json.loads(path.read_text())
               jsonschema.validate(launch_packet, launch_packet_schema)
@@ -144,6 +149,11 @@ jobs:
               assert set(experiment["actors"]) <= actor_ids
           print("PASS qualification JSON contracts")
           PY
+
+      - name: Self-test substrate realization and OCI packer
+        run: |
+          PYTHONPATH=. python qualification/test_harness_realization_binding.py
+          PYTHONPATH=. python qualification/test_package_artifact_oci.py
 
       - name: Self-test deterministic verifiers
         run: |
