@@ -147,7 +147,7 @@ def verify_local(out: Path) -> dict:
 def build(out: Path) -> dict:
     facts = generic_requirements()
     if out.exists():
-        return {"state": "ALREADY_BUILT", **verify_local(out)}
+        return {**verify_local(out), "state": "ALREADY_BUILT"}
     if not out.parent.is_dir():
         raise ValueError("output parent must already exist")
     stage = Path(tempfile.mkdtemp(prefix=".foundry-openworker-", dir=out.parent))
@@ -188,6 +188,12 @@ def build(out: Path) -> dict:
         layout_receipt = package(payload, stage / "oci", "artifact", "amd64", "linux")
         atomic_json(stage / "layout-receipt.json", layout_receipt)
         verification = verify_local(stage)
+        # Persist only the distribution payload and evidence, never the source
+        # checkout or build/smoke environments.
+        for disposable in ("src", "build-venv", "smoke"):
+            path = stage / disposable
+            if path.exists():
+                shutil.rmtree(path)
         stage.rename(out)
         return {"state": "BUILT_AND_LOCAL_VERIFIED", **verification}
     finally:
