@@ -7,6 +7,11 @@ on:
     paths:
       - '.github/workflows/openworker-immutable-actor-crossover.yml'
   workflow_dispatch:
+    inputs:
+      task:
+        description: Harness-neutral qualification task package (defaults to current failure discriminator)
+        required: false
+        default: boundary-bugfix-v0
 
 permissions:
   contents: read
@@ -39,7 +44,7 @@ jobs:
     with:
       artifact_ref: ${{ matrix.artifact_ref }}
       admission_ref: ${{ matrix.admission_ref }}
-      task: text-repair-v0
+      task: ${{ inputs.task || 'boundary-bugfix-v0' }}
       reasoning_effort: none
       python_version: ${{ matrix.python_version }}
       treatment_id: ${{ matrix.treatment_id }}
