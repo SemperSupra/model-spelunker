@@ -1,0 +1,66 @@
+name: OpenWorker Nemotron Ultra Free Model Contrast
+
+# One explicitly named free model contrast against North Mini Code's 8-round
+# budget result (run 37974196493). Trusted-main synthetic workcell only.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/openworker-nemotron-ultra-free-interview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: openworker-nemotron-ultra-free-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  interview:
+    uses: ./.github/workflows/openworker-hosted-api-qualification.yml
+    with:
+      candidate: openrouter-nvidia-nemotron3-ultra-free
+      task: boundary-bugfix-v0
+      max_iterations: '8'
+    secrets: inherit
+
+  report:
+    if: always()
+    needs: [interview]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout trusted reporting code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Retrieve bounded task receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/nemotron-ultra-receipts"
+          if ! gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "hosted-qualification-openrouter-nvidia-nemotron3-ultra-free-boundary-bugfix-v0-${GITHUB_RUN_ID}" \
+            --dir "$RUNNER_TEMP/nemotron-ultra-receipts"; then
+            echo "No admitted task receipt: preserve NO_RECEIPT, not a model failure."
+          fi
+
+      - name: Return exact-model workcell result to DLE
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/report_openrouter_free_interviews.py \
+            --receipts-dir "$RUNNER_TEMP/nemotron-ultra-receipts" \
+            --run-id "$GITHUB_RUN_ID" \
+            --commit "$GITHUB_SHA" \
+            --expected-model "nvidia/nemotron-3-ultra-550b-a55b:free" \
+            --expected-max-iterations 8

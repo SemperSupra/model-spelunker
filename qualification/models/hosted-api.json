@@ -92,6 +92,15 @@
       "reasoning_effort": "omit",
       "cost_class": "zero-token-price",
       "route_note": "Explicit zero-priced OpenRouter coding-model endpoint; GHA admission requires available model, tools capability, and zero prompt/completion pricing. Model endpoint can disappear; classify as admission not model failure."
+    },
+    "openrouter-nvidia-nemotron3-ultra-free": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "zero-token-price",
+      "route_note": "Single task-conditioned, explicitly pinned large MoE free-model contrast. Runtime zero-inference admission checks exact live model ID, tools support and prompt/completion price 0 before model call; no confidential material."
     }
   }
 }

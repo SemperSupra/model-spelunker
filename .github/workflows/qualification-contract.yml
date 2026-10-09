@@ -66,6 +66,7 @@ jobs:
               "openrouter-deepseek-v41-flash-byok",
               "openrouter-cohere-north-mini-code-free",
               "openrouter-poolside-laguna-s21-free",
+              "openrouter-nvidia-nemotron3-ultra-free",
           }
           assert candidates["deepseek-flash"]["provider"] == "deepseek"
           assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
@@ -78,6 +79,9 @@ jobs:
           assert candidates["openrouter-deepseek-v41-flash-byok"]["provider"] == "openrouter"
           assert candidates["openrouter-deepseek-v41-flash-byok"]["extra_body"]["provider"]["only"] == ["deepseek"]
           assert candidates["openrouter-deepseek-v41-flash-byok"]["extra_body"]["provider"]["allow_fallbacks"] is False
+          assert candidates["openrouter-nvidia-nemotron3-ultra-free"]["provider"] == "openrouter"
+          assert candidates["openrouter-nvidia-nemotron3-ultra-free"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+          assert candidates["openrouter-nvidia-nemotron3-ultra-free"]["cost_class"] == "zero-token-price"
           assert candidates["openrouter-free-router"]["treatment_kind"] == "router"
           assert candidates["openrouter-free-router"]["model"] == "openrouter/free"
           for candidate_id, candidate in candidates.items():

@@ -132,6 +132,22 @@ class Tests(unittest.TestCase):
             result=report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),8)
             self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
 
+    def test_one_large_free_model_is_distinct_from_legacy_cohort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model="nvidia/nemotron-3-ultra-550b-a55b:free"
+            path=self.fixture(Path(tmp),model)
+            receipt=json.loads(path.read_text())
+            receipt["observation"]["workload"]["configured_max_iterations"]=8
+            path.write_text(json.dumps(receipt))
+            only=report.reduce_folder(Path(tmp),123,"a"*40,(model,),8)
+            self.assertEqual(len(only["treatments"]),1)
+            self.assertEqual(only["treatments"][0]["model_id"],model)
+            self.assertEqual(only["treatments"][0]["max_iterations"],8)
+            with self.assertRaisesRegex(ValueError,"unselected model"):
+                report.reduce_folder(Path(tmp),123,"a"*40)
+            with self.assertRaisesRegex(ValueError,"iteration budget"):
+                report.reduce_folder(Path(tmp),123,"a"*40,(model,),4)
+
     def test_unauthorized_model_selection_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
