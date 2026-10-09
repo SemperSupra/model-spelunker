@@ -115,7 +115,7 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path=self.fixture(Path(tmp))
             payload=json.loads(path.read_text())
-            payload["candidate"]["configuration"]={"max_iterations":8}
+            payload["observation"]["workload"]["configured_max_iterations"]=8
             path.write_text(json.dumps(payload))
             result=report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),8)
             self.assertEqual(result["treatments"][0]["max_iterations"],8)
@@ -127,7 +127,7 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path=self.fixture(Path(tmp))
             payload=json.loads(path.read_text())
-            payload["candidate"]["configuration"]={"max_iterations":"8"}
+            payload["observation"]["workload"]["configured_max_iterations"]="8"
             path.write_text(json.dumps(payload))
             result=report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),8)
             self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
