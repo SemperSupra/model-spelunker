@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "record_type": "harness-realization-profile",
+  "id": "openworker-linux-amd64-sovereign-python-abi-v1",
+  "harness": {
+    "name": "openworker",
+    "source_revision": "5bc10d928e0b64aae74313349a3b17bd19643ae2"
+  },
+  "target": {
+    "os": "linux",
+    "architecture": "amd64",
+    "abi": "python3-cpython-runtime-resolved",
+    "isa_floor": "x86-64",
+    "capability_requirements": [
+      "linux-userspace",
+      "python3-compatible-native-wheels",
+      "user-level-venv"
+    ]
+  },
+  "build": {
+    "recipe_id": "openworker-wheelhouse-sovereign-python-abi-v1",
+    "toolchain_identity": "runtime-resolved-Python3-and-uv-pip-25.2",
+    "features": [
+      "dependency-closed-offline-wheelhouse",
+      "python-abi-local"
+    ],
+    "compiler_flags": [],
+    "payload_kind": "python-wheelhouse",
+    "dependency_lock_digest": null
+  },
+  "experiment": {
+    "role": "candidate",
+    "optimization_axis": "dependency-layout",
+    "baseline_ref": "github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json",
+    "hypothesis": "A native ABI-compatible userland wheelhouse built on the intended Linux execution target reduces dependency/ABI incompatibility without changing harness task semantics; no speed improvement is assumed.",
+    "primary_response": "deterministic-task-verifier-success-and-abi-compatibility",
+    "stop_rule": "Stop if native build, offline import, payload validation, or same-model/task baseline comparison fails; preserve failures as substrate/build evidence."
+  }
+}

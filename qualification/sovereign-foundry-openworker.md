@@ -8,6 +8,10 @@ This is a **native Linux x86_64 Python/ABI realization** of pinned OpenWorker
 local build outperforms the existing GHA artifact. The exact installed Python
 interpreter ABI and dependency wheelhouse are part of the realized build receipt.
 No model inference is performed during build, packaging, or admission.
+The build and publication receipts bind the exact canonical SHA-256 digest of
+`qualification/harness-realizations/openworker-linux-amd64-sovereign-python-abi-v1.json`.
+This gives later configured-actor interviews a stable target-realization reference;
+the actual ABI/toolchain and immutable OCI digest remain separate evidence.
 
 ## Execution boundaries
 

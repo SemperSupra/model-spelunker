@@ -29,6 +29,17 @@ REGCTL_VERSION = "v0.11.6"
 REGCTL_SHA256 = "8e0e62a497fcdb8048d18aa927a139613176ba0531f412bc541044e28f9856bd"
 IMAGE = "ghcr.io/sempersupra/model-spelunker-harness-openworker"
 RECIPE = "openworker-wheelhouse-sovereign-python-abi-v1"
+PROFILE_REF = "qualification/harness-realizations/openworker-linux-amd64-sovereign-python-abi-v1.json"
+
+
+def realization_binding() -> dict:
+    profile = json.loads((Path(__file__).resolve().parents[1] / PROFILE_REF).read_text(encoding="utf-8"))
+    if profile["harness"]["name"] != "openworker" or profile["harness"]["source_revision"] != SOURCE_SHA:
+        raise ValueError("realization profile source mismatch")
+    if profile["build"]["recipe_id"] != RECIPE:
+        raise ValueError("realization profile recipe mismatch")
+    payload = json.dumps(profile, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {"profile_ref": PROFILE_REF, "profile_digest": sha(payload)}
 
 
 def sha(data: bytes) -> str:
@@ -121,6 +132,8 @@ def verify_local(out: Path) -> dict:
         raise ValueError("pinned source/recipe mismatch")
     if receipt["harness"]["name"] != "openworker":
         raise ValueError("harness identity mismatch")
+    if receipt["build"].get("configuration", {}).get("realization") != realization_binding():
+        raise ValueError("harness realization binding mismatch")
     for row in receipt["payload"]["files"]:
         rel = Path(row["path"])
         if rel.is_absolute() or ".." in rel.parts:
@@ -181,7 +194,8 @@ def build(out: Path) -> dict:
                       "configuration": {"python_abi": facts["python_abi"],
                                         "payload": "offline-wheelhouse",
                                         "compiler_flags": [],
-                                        "no_root": True}},
+                                        "no_root": True,
+                                        "realization": realization_binding()}},
             "payload": {"kind": "python-wheelhouse", "files": files},
         }
         atomic_json(payload / "build-receipt.json", build_receipt)
@@ -314,7 +328,8 @@ def publish(out: Path, *, registry_image: str) -> dict:
         admission = admit_from_registry(regctl, cfg, immutable_ref, expected, tmp)
     atomic_json(out / "admission.json", admission)
     result = {"state": "BUILD_ADMITTED", "artifact_ref": immutable_ref,
-              "manifest_digest": expected, "model_inference": False}
+              "manifest_digest": expected, "harness_realization": realization_binding(),
+              "model_inference": False}
     atomic_json(out / "publication.json", result)
     return result
 
