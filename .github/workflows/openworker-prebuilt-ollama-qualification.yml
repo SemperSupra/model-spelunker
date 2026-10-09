@@ -37,6 +37,10 @@ on:
         description: Optional SHA-256 realization profile digest
         required: false
         default: ''
+      tool_hint_mode:
+        description: Optional task-neutral tool-use prompt treatment
+        required: false
+        default: none
   workflow_call:
     inputs:
       artifact_ref:
@@ -74,6 +78,11 @@ on:
         type: string
         default: ''
 
+      tool_hint_mode:
+        required: false
+        type: string
+        default: none
+
 permissions:
   contents: read
   packages: read
@@ -105,6 +114,7 @@ jobs:
       OLLAMA_CONTEXT_LENGTH: '32768'
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
       MODEL_SPELUNKER_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+      MODEL_SPELUNKER_TOOL_HINT_MODE: ${{ inputs.tool_hint_mode }}
       QUALIFICATION_TASK: ${{ inputs.task }}
       QUALIFICATION_EXPERIMENT: ${{ inputs.experiment }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-prebuilt-candidate.json'
@@ -237,6 +247,7 @@ jobs:
                   "max_iterations":4,
                   "ollama_context_length":int(os.environ["OLLAMA_CONTEXT_LENGTH"]),
                   "harness_delivery":"prebuilt-admitted-artifact",
+                  "tool_hint_mode":os.environ["MODEL_SPELUNKER_TOOL_HINT_MODE"],
               },
           }
           if os.environ.get("HARNESS_REALIZATION_PROFILE_DIGEST"):
@@ -278,6 +289,10 @@ jobs:
           receipt=json.loads(Path(os.environ["RECEIPT"]).read_text())
           assert receipt["candidate"]["harness"]["artifact_ref"]==os.environ["HARNESS_ARTIFACT_REF"]
           assert receipt["candidate"]["harness"]["admission_ref"]==os.environ["HARNESS_ADMISSION_REF"]
+          expected_hint=os.environ["MODEL_SPELUNKER_TOOL_HINT_MODE"]
+          assert receipt["candidate"]["configuration_digest"]
+          # The metadata binding above makes the hint a separate configured actor.
+          assert expected_hint in ("none","inspect-before-claim-v1")
           rc=int(os.environ["QUALIFICATION_RC"])
           assert rc==(0 if receipt["observation"]["success"] else 1)
           print(json.dumps(receipt,sort_keys=True))
