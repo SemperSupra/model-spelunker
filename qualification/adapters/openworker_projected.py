@@ -30,7 +30,7 @@ from coworker.providers.router import ProviderRouter
 from coworker.tools import ToolRegistry
 
 from android_mobile_tools import mobile_action_log, mobile_tool_functions
-from tool_hint import apply_tool_hint
+from tool_hint import apply_tool_hint, synthetic_read_provenance
 
 
 MODEL = os.environ.get("MODEL_SPELUNKER_MODEL", "ollama:qwen3:1.7b")
@@ -457,6 +457,12 @@ async def run(instruction: str) -> int:
         "event_counts": dict(counts),
         "target_exists": target.is_file(),
     }
+    # Synthetic task only: keep read provenance as a strict three-boolean
+    # allowlist. Never emit arbitrary paths, file contents, or model arguments.
+    if os.environ.get("MODEL_SPELUNKER_TASK_ID") == "boundary-bugfix-v0":
+        summary["synthetic_read_provenance"] = synthetic_read_provenance(
+            engine.messages, workspace
+        )
     provider.enrich_openrouter_generations()
     usage_summary = {
         "input": int(usage_totals.get("input", 0)),
