@@ -41,6 +41,10 @@ on:
         description: Optional task-neutral tool-use prompt treatment
         required: false
         default: none
+      output_diagnostic_mode:
+        description: Controlled synthetic-task postwrite diagnostic (not the task verifier)
+        required: false
+        default: none
   workflow_call:
     inputs:
       artifact_ref:
@@ -83,6 +87,11 @@ on:
         type: string
         default: none
 
+      output_diagnostic_mode:
+        required: false
+        type: string
+        default: none
+
 permissions:
   contents: read
   packages: read
@@ -115,6 +124,9 @@ jobs:
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
       MODEL_SPELUNKER_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       MODEL_SPELUNKER_TOOL_HINT_MODE: ${{ inputs.tool_hint_mode }}
+      MODEL_SPELUNKER_OUTPUT_DIAGNOSTIC_MODE: ${{ inputs.output_diagnostic_mode }}
+      BOUNDARY_SNAPSHOT: '/tmp/model-spelunker-boundary-snapshot'
+      BOUNDARY_REPORT: '/tmp/model-spelunker-boundary-diagnostic.json'
       QUALIFICATION_TASK: ${{ inputs.task }}
       QUALIFICATION_EXPERIMENT: ${{ inputs.experiment }}
       CANDIDATE_META: '/tmp/model-spelunker-openworker-prebuilt-candidate.json'
@@ -269,12 +281,22 @@ jobs:
           if [[ -n "$QUALIFICATION_EXPERIMENT" ]]; then
             experiment_args=(--experiment "qualification/experiments/$QUALIFICATION_EXPERIMENT")
           fi
+          snapshot_args=()
+          case "$MODEL_SPELUNKER_OUTPUT_DIAGNOSTIC_MODE" in
+            none) ;;
+            boundary-output-v1)
+              test "$QUALIFICATION_TASK" = "boundary-bugfix-v0"
+              snapshot_args=(--snapshot-dir "$BOUNDARY_SNAPSHOT")
+              ;;
+            *) echo "unsupported output diagnostic mode" >&2; exit 2 ;;
+          esac
           set +e
           python qualification/run_task.py \
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-linux-x64-openworker-prebuilt-ollama \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
             --diagnostics "$DIAGNOSTICS" \
+            "${snapshot_args[@]}" \
             "${experiment_args[@]}" \
             "qualification/tasks/$QUALIFICATION_TASK" \
             "$CANDIDATE_META" \
@@ -283,6 +305,13 @@ jobs:
           qualification_rc=$?
           set -e
           test -f "$RECEIPT"
+          if [[ "$MODEL_SPELUNKER_OUTPUT_DIAGNOSTIC_MODE" == "boundary-output-v1" ]]; then
+            python qualification/diagnose_openworker_boundary.py \
+              --snapshot-dir "$BOUNDARY_SNAPSHOT" \
+              --diagnostics "$DIAGNOSTICS" \
+              --receipt "$RECEIPT" \
+              --output "$BOUNDARY_REPORT"
+          fi
           QUALIFICATION_RC="$qualification_rc" python3 - <<'PY'
           import json,os
           from pathlib import Path
@@ -304,6 +333,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openworker-prebuilt-qualification-${{ inputs.task }}-${{ inputs.treatment_id }}-${{ github.run_id }}
-          path: ${{ env.RECEIPT }}
+          path: |
+            ${{ env.RECEIPT }}
+            ${{ env.BOUNDARY_REPORT }}
           if-no-files-found: ignore
           retention-days: 30
