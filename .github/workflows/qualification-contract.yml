@@ -64,6 +64,8 @@ jobs:
               "openrouter-free-router",
               "openrouter-groq-gpt-oss-20b-byok",
               "openrouter-deepseek-v41-flash-byok",
+              "openrouter-cohere-north-mini-code-free",
+              "openrouter-poolside-laguna-s21-free",
           }
           assert candidates["deepseek-flash"]["provider"] == "deepseek"
           assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
