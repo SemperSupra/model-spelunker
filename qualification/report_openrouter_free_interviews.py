@@ -53,13 +53,46 @@ def reduce_receipt(data):
     classification=obs.get("failure_class")
     if classification not in ("false-completion","tool-protocol","timeout","candidate-error","task-state"):
         classification="other-or-none"
+
+    # A deterministic verifier can legitimately reject an unchanged task
+    # after a provider rejected the model request. That is NOT evidence that
+    # the model tried and failed the semantic task. Separate the failure
+    # plane before emitting any task-class support/negative evidence.
+    errors=obs.get("engine_error_types") or []
+    if not isinstance(errors,list):
+        raise ValueError("invalid engine error evidence")
+    observed_error_types=sorted({
+        e for e in errors if isinstance(e,str)
+        and e in ("RateLimitError","ProviderError","APIConnectionError","APITimeoutError")
+    })
+    signals=obs.get("failure_signals") or []
+    if not isinstance(signals,list):
+        raise ValueError("invalid failure signals")
+    workload=obs.get("workload") or {}
+    rounds=workload.get("model_rounds",0)
+    if type(rounds)!=int or rounds<0:
+        raise ValueError("invalid model round count")
+    if good:
+        state="PASS"
+    elif "RateLimitError" in observed_error_types:
+        state="PROVIDER_RATE_LIMIT_CENSORED"
+    elif "engine-error-event" in signals or observed_error_types:
+        state="PROVIDER_OR_ENGINE_CENSORED"
+    elif obs.get("timed_out") is True:
+        state="TIMEOUT_CENSORED"
+    elif rounds==0:
+        state="NO_MODEL_COMPLETION_CENSORED"
+    else:
+        state="SEMANTIC_FAIL"
     return {
         "model_id":model_id,
-        "state":"PASS" if good else "SEMANTIC_FAIL",
+        "state":state,
         "evidence_digest":digest,
         "external_verifier_exit_code":rc,
         "tool_calls":tools,
         "provider_finish_reason_counts":safe,
+        "observed_engine_error_types":observed_error_types,
+        "completed_model_rounds":rounds,
         "candidate_exited_zero":obs.get("candidate_exit_code")==0,
         "failure_class":classification,
     }
@@ -94,8 +127,9 @@ def body_of(result):
     marker="<!-- openworker-free-model-interview:v1:"+str(result["source_run"])+" -->"
     fence=chr(96)*3
     return (marker+"\n### Stronger free-model OpenWorker workcell receipts\n\n"
-            +"NO_RECEIPT means no verified task evidence (provider admission, "
-            +"credential, capacity, or infrastructure unknown), not a model failure.\n\n"
+            +"NO_RECEIPT and provider/timeout CENSORED states are not semantic model "
+            +"task failures. Only an observed completed task with an external "
+            +"verifier failure is SEMANTIC_FAIL.\n\n"
             +fence+"json\n"+json.dumps(result,sort_keys=True,indent=2)
             +"\n"+fence+"\n")
 
