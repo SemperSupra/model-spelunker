@@ -30,6 +30,7 @@ from coworker.providers.router import ProviderRouter
 from coworker.tools import ToolRegistry
 
 from android_mobile_tools import mobile_action_log, mobile_tool_functions
+from tool_hint import apply_tool_hint
 
 
 MODEL = os.environ.get("MODEL_SPELUNKER_MODEL", "ollama:qwen3:1.7b")
@@ -446,6 +447,7 @@ async def run(instruction: str) -> int:
     summary = {
         "model": MODEL,
         "model_settings": MODEL_SETTINGS,
+        "tool_hint_mode": os.environ.get("MODEL_SPELUNKER_TOOL_HINT_MODE", "none"),
         "max_iterations": MAX_ITERATIONS,
         "projection": registry.names(),
         "tool_calls": tool_names(engine.messages),
@@ -516,6 +518,9 @@ def main() -> int:
             + json.dumps({"sha256": digest, "chars": len(transcript)}, sort_keys=True),
             flush=True,
         )
+
+    hint_mode = os.environ.get("MODEL_SPELUNKER_TOOL_HINT_MODE", "none")
+    instruction = apply_tool_hint(instruction, hint_mode)
 
     provider = MODEL.split(":", 1)[0] if ":" in MODEL else "openai"
     provider_key = {
