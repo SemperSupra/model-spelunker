@@ -148,6 +148,39 @@ class Tests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"iteration budget"):
                 report.reduce_folder(Path(tmp),123,"a"*40,(model,),4)
 
+    def test_independent_transfer_task_binds_identity_and_classifies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            model="nvidia/nemotron-3-ultra-550b-a55b:free"
+            path=self.fixture(folder,model)
+            data=json.loads(path.read_text())
+            data["task"]["id"]=report.TRANSFER_TASK
+            data["observation"]["workload"]["configured_max_iterations"]=8
+            path.write_text(json.dumps(data))
+            result=report.reduce_folder(
+                folder,123,"a"*40,(model,),8,expected_task=report.TRANSFER_TASK
+            )
+            self.assertEqual(result["task"],report.TRANSFER_TASK)
+            self.assertEqual(result["treatments"][0]["state"],"SEMANTIC_FAIL")
+            with self.assertRaisesRegex(ValueError,"unadmitted task"):
+                report.reduce_folder(
+                    folder,123,"a"*40,(model,),8,expected_task="unadmitted-task"
+                )
+            old=report.reduce_folder(folder,123,"a"*40,(model,),8)
+            self.assertEqual(old["task"],report.TASK)
+            self.assertEqual(old["treatments"][0]["state"],"NO_RECEIPT")
+            self.assertIn('"task": "'+report.TRANSFER_TASK+'"',report.body_of(result))
+
+    def test_transfer_absent_receipt_not_semantic_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result=report.reduce_folder(
+                Path(tmp),123,"a"*40,
+                ("nvidia/nemotron-3-ultra-550b-a55b:free",),
+                8,expected_task=report.TRANSFER_TASK,
+            )
+            self.assertEqual(result["task"],report.TRANSFER_TASK)
+            self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
+
     def test_unauthorized_model_selection_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
