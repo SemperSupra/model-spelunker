@@ -177,6 +177,52 @@ class Tests(unittest.TestCase):
             result=report.reduce_folder(Path(tmp),123,"a"*40)
             self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
 
+    def test_live_zero_round_timeout_has_no_observed_budget_but_is_censored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model="nvidia/nemotron-3-ultra-550b-a55b:free"
+            path=self.fixture(Path(tmp),model)
+            data=json.loads(path.read_text())
+            data["task"]["id"]=report.TRANSFER_TASK
+            data["observation"].update({
+                "timed_out":True,"candidate_exit_code":124,
+                "tool_calls":None,"failure_class":"timeout",
+                "failure_signals":["timeout","state-unchanged"],
+                "engine_error_types":[],
+                "workload":{"model_calls_started":1,"model_rounds":0,
+                    "started_request_message_bytes_total":289,
+                    "started_request_tool_schema_bytes_total":968},
+            })
+            path.write_text(json.dumps(data))
+            result=report.reduce_folder(
+                Path(tmp),38035293652,"a"*40,(model,),8,
+                expected_task=report.TRANSFER_TASK,
+            )
+            row=result["treatments"][0]
+            self.assertEqual(row["state"],"TIMEOUT_CENSORED")
+            self.assertIsNone(row["tool_calls"])
+            self.assertEqual(row["iteration_budget_observation"],"UNOBSERVED_PRE_COMPLETION")
+            self.assertNotIn("max_iterations",row)
+            self.assertIn("TIMEOUT_CENSORED",report.body_of(result))
+            self.assertNotIn('"state": "NO_RECEIPT"',report.body_of(result))
+
+    def test_unobserved_budget_is_not_accepted_on_semantic_trial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            with self.assertRaisesRegex(ValueError,"iteration budget"):
+                report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),8)
+
+    def test_wrong_observed_budget_still_rejected_when_censored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            data=json.loads(path.read_text())
+            data["observation"].update({
+                "timed_out":True,"tool_calls":None,
+                "workload":{"model_rounds":0,"configured_max_iterations":4},
+            })
+            path.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError,"iteration budget"):
+                report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),8)
+
     def test_malformed_iteration_budget_cannot_be_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=self.fixture(Path(tmp))
