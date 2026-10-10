@@ -161,7 +161,22 @@ def reduce_folder(folder,run,commit,expected_models=DEFAULT_MODELS,expected_max_
             continue
         model=row["model_id"]
         if expected_max_iterations is not None and row.get("max_iterations") != expected_max_iterations:
-            raise ValueError("observed actor iteration budget disagrees with experiment")
+            # The adapter emits the iteration-limit observation only after a
+            # completed provider round. A censored attempt with zero completed
+            # rounds cannot witness that numeric setting; preserve its honest
+            # censor outcome without pretending the budget was observed.
+            censored_states={
+                "TIMEOUT_CENSORED",
+                "PROVIDER_RATE_LIMIT_CENSORED",
+                "PROVIDER_OR_ENGINE_CENSORED",
+                "NO_MODEL_COMPLETION_CENSORED",
+            }
+            if (row.get("state") in censored_states
+                and row.get("completed_model_rounds")==0
+                and "max_iterations" not in row):
+                row["iteration_budget_observation"]="UNOBSERVED_PRE_COMPLETION"
+            else:
+                raise ValueError("observed actor iteration budget disagrees with experiment")
         if model not in rows:
             raise ValueError("receipt from unselected model")
         if rows[model]["state"]!="NO_RECEIPT":
