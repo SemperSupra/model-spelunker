@@ -9,6 +9,8 @@ import subprocess
 REPO="SemperSupra/model-spelunker"
 ISSUE=139
 TASK="boundary-bugfix-v0"
+TRANSFER_TASK="validation-discovery-v0"
+ALLOWED_TASKS=(TASK,TRANSFER_TASK)
 ARTIFACT="ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83"
 DEFAULT_MODELS=(
     "cohere/north-mini-code:free",
@@ -18,7 +20,9 @@ MODELS=DEFAULT_MODELS+("nvidia/nemotron-3-ultra-550b-a55b:free",)
 SHA=re.compile(r"sha256:[a-f0-9]{64}")
 COMMIT=re.compile(r"[a-f0-9]{40}")
 
-def reduce_receipt(data):
+def reduce_receipt(data,expected_task=TASK):
+    if expected_task not in ALLOWED_TASKS:
+        raise ValueError("unadmitted task selector")
     if not isinstance(data,dict):
         raise ValueError("not an object")
     candidate=data.get("candidate") or {}
@@ -31,7 +35,7 @@ def reduce_receipt(data):
     # not from a synthetic assertion about unrecoverable candidate metadata.
     if (candidate.get("harness") or {}).get("artifact_ref")!=ARTIFACT:
         raise ValueError("wrong immutable harness artifact")
-    if (data.get("task") or {}).get("id")!=TASK:
+    if (data.get("task") or {}).get("id")!=expected_task:
         raise ValueError("wrong task")
     digest=data.get("evidence_digest")
     if not isinstance(digest,str) or not SHA.fullmatch(digest):
@@ -125,7 +129,9 @@ def reduce_receipt(data):
         "failure_class":classification,
     }
 
-def reduce_folder(folder,run,commit,expected_models=DEFAULT_MODELS,expected_max_iterations=None):
+def reduce_folder(folder,run,commit,expected_models=DEFAULT_MODELS,expected_max_iterations=None,expected_task=TASK):
+    if expected_task not in ALLOWED_TASKS:
+        raise ValueError("unadmitted task selector")
     if run<=0 or not COMMIT.fullmatch(commit):
         raise ValueError("bad workflow provenance")
     if (not expected_models or len(set(expected_models))!=len(expected_models)
@@ -135,7 +141,7 @@ def reduce_folder(folder,run,commit,expected_models=DEFAULT_MODELS,expected_max_
     for path in sorted(folder.rglob("*.json")) if folder.exists() else []:
         try:
             data=json.loads(path.read_text(encoding="utf-8"))
-            row=reduce_receipt(data)
+            row=reduce_receipt(data,expected_task=expected_task)
         except (ValueError,KeyError,TypeError):
             continue
         model=row["model_id"]
@@ -153,7 +159,7 @@ def reduce_folder(folder,run,commit,expected_models=DEFAULT_MODELS,expected_max_
         "source_commit":commit,
         "run_url":f"https://github.com/{REPO}/actions/runs/{run}",
         "harness_artifact":ARTIFACT,
-        "task":TASK,
+        "task":expected_task,
         "interpretation":"single-rep-verifier-evidence-no-general-support-claim",
         "treatments":[rows[m] for m in expected_models],
     }
@@ -200,12 +206,13 @@ def main():
     parser.add_argument("--run-id",required=True,type=int)
     parser.add_argument("--commit",required=True)
     parser.add_argument("--expected-model",action="append",choices=MODELS)
+    parser.add_argument("--expected-task",choices=ALLOWED_TASKS,default=TASK)
     parser.add_argument("--expected-max-iterations",type=int)
     a=parser.parse_args()
     models=tuple(a.expected_model) if a.expected_model else DEFAULT_MODELS
     if a.expected_max_iterations is not None and not 1<=a.expected_max_iterations<=12:
         parser.error("expected iteration budget must be between 1 and 12")
-    result=reduce_folder(a.receipts_dir,a.run_id,a.commit,models,a.expected_max_iterations)
+    result=reduce_folder(a.receipts_dir,a.run_id,a.commit,models,a.expected_max_iterations,a.expected_task)
     answer=post_once(body_of(result))
     print(json.dumps({"dle":answer,"run_id":a.run_id,
        "results":[{"model_id":r["model_id"],"state":r["state"]} for r in result["treatments"]]},
