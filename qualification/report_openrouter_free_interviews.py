@@ -44,8 +44,23 @@ def reduce_receipt(data,expected_task=TASK):
     good=obs.get("success")
     rc=obs.get("verifier_exit_code")
     tools=obs.get("tool_calls")
-    if type(good)!=bool or type(rc)!=int or type(tools)!=int or tools<0:
+    if type(good)!=bool or type(rc)!=int:
         raise ValueError("invalid result")
+    # The native task runner intentionally records an unknown tool count as
+    # null when its process times out before any provider round completes.
+    # Preserve that valid censored evidence rather than discarding the receipt
+    # and incorrectly reporting NO_RECEIPT. Never accept null tools for a
+    # completed semantic trial or a claimed verifier PASS.
+    completed_rounds=(obs.get("workload") or {}).get("model_rounds")
+    censored_null_tools=(
+        tools is None
+        and good is False
+        and obs.get("timed_out") is True
+        and type(completed_rounds)==int
+        and completed_rounds==0
+    )
+    if not censored_null_tools and (type(tools)!=int or tools<0):
+        raise ValueError("invalid result tool count")
     if (good and rc!=0) or (not good and rc==0):
         raise ValueError("verifier/result disagreement")
     counts=(obs.get("workload") or {}).get("provider_finish_reason_counts") or {}

@@ -123,6 +123,60 @@ class Tests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"iteration budget"):
                 report.reduce_folder(Path(tmp),123,"a"*40,(report.MODELS[0],),4)
 
+    def test_zero_round_timeout_with_unknown_tools_is_censored_not_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model="nvidia/nemotron-3-ultra-550b-a55b:free"
+            path=self.fixture(Path(tmp),model)
+            payload=json.loads(path.read_text())
+            payload["task"]["id"]=report.TRANSFER_TASK
+            payload["observation"].update({
+                "timed_out":True,
+                "candidate_exit_code":124,
+                "tool_calls":None,
+                "failure_class":"timeout",
+                "failure_signals":["timeout","state-unchanged"],
+                "engine_error_types":[],
+                "workload":{"model_calls_started":1,"model_rounds":0,
+                            "started_request_tool_schema_bytes_total":968,
+                            "configured_max_iterations":8},
+            })
+            path.write_text(json.dumps(payload))
+            result=report.reduce_folder(
+                Path(tmp),38035293652,"a"*40,(model,),8,
+                expected_task=report.TRANSFER_TASK
+            )
+            row=result["treatments"][0]
+            self.assertEqual(row["state"],"TIMEOUT_CENSORED")
+            self.assertIsNone(row["tool_calls"])
+            self.assertEqual(row["completed_model_rounds"],0)
+            self.assertEqual(result["task"],report.TRANSFER_TASK)
+            self.assertNotIn('"state": "NO_RECEIPT"',report.body_of(result))
+
+    def test_null_tools_must_not_mask_completed_task_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            payload=json.loads(path.read_text())
+            payload["observation"]["tool_calls"]=None
+            payload["observation"]["workload"]["model_rounds"]=1
+            path.write_text(json.dumps(payload))
+            result=report.reduce_folder(Path(tmp),123,"a"*40)
+            self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
+
+    def test_null_tools_must_not_mask_claimed_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=self.fixture(Path(tmp))
+            payload=json.loads(path.read_text())
+            payload["observation"].update({
+                "success":True,
+                "verifier_exit_code":0,
+                "tool_calls":None,
+                "timed_out":True,
+                "workload":{"model_rounds":0},
+            })
+            path.write_text(json.dumps(payload))
+            result=report.reduce_folder(Path(tmp),123,"a"*40)
+            self.assertEqual(result["treatments"][0]["state"],"NO_RECEIPT")
+
     def test_malformed_iteration_budget_cannot_be_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=self.fixture(Path(tmp))
