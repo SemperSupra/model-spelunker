@@ -98,7 +98,11 @@ class ExplicitLocalRouteTests(unittest.TestCase):
             "https://api.openai.com/v1",
             "",
         ):
-            with self.subTest(url="sanitized"):
+            # Force every resolution to the public-IP negative fixture.
+            # This test must never consult live DNS or the model endpoint.
+            with self.subTest(url="sanitized"), patch.object(
+                route.socket, "getaddrinfo", return_value=fake_dns("8.8.8.8")
+            ):
                 with self.assertRaises(route.LocalOpenAIRouteHold):
                     route.resolve_local_openai_route(
                         "local-openai:code",
