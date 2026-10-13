@@ -23,6 +23,8 @@ from typing import Any, Optional
 
 import aisuite as ai
 
+from local_openai_route import resolve_local_openai_route
+
 from coworker.engine import ApprovalOutcome, PermissionRequest, TurnEngine
 from coworker.permissions import Mode, PermissionEngine
 from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient
@@ -376,7 +378,14 @@ async def run(instruction: str) -> int:
         "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/"),
         "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
     }
-    if _PROVIDER in compatible:
+    if _PROVIDER == "local-openai":
+        # A distinct prefix is mandatory: never allow ProviderRouter to fall
+        # through to the ordinary OpenAI provider when local routing is absent.
+        from coworker.providers.openai_provider import OpenAIProvider
+
+        engine_model, base_url, key = resolve_local_openai_route(MODEL, os.environ)
+        delegate = OpenAIProvider(api_key=key, base_url=base_url)
+    elif _PROVIDER in compatible:
         from coworker.providers.openai_provider import OpenAIProvider
 
         key_name, base_url = compatible[_PROVIDER]
