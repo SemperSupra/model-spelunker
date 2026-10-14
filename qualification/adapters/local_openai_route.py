@@ -70,6 +70,15 @@ def resolve_local_openai_route(
     if api_key and parsed.scheme != "https":
         raise LocalOpenAIRouteHold("LOCAL_AUTHENTICATED_HTTP_HOLD")
 
+    # The pinned OpenWorker source creates a stock OpenAI SDK client without
+    # setting httpx trust_env=False. Its transport can therefore inherit
+    # HTTP(S)_PROXY/ALL_PROXY and send even a private URL through an external
+    # proxy. This treatment refuses that ambient route rather than assuming
+    # NO_PROXY will always be honored. Do not log proxy values.
+    proxy_keys = {"http_proxy", "https_proxy", "all_proxy"}
+    if any(key.lower() in proxy_keys and value for key, value in environ.items()):
+        raise LocalOpenAIRouteHold("LOCAL_AMBIENT_PROXY_HOLD")
+
     try:
         addresses = {
             result[4][0]
