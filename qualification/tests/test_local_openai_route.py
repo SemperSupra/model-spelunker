@@ -116,6 +116,28 @@ class ExplicitLocalRouteTests(unittest.TestCase):
                         {"MODEL_SPELUNKER_LOCAL_OPENAI_BASE_URL": "http://10.1.1.1/v1"},
                     )
 
+    def test_inherited_proxy_never_carries_private_inference(self):
+        for key in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+            env = {
+                "MODEL_SPELUNKER_LOCAL_OPENAI_BASE_URL": "http://10.1.2.3:8080/v1",
+                key: "http://untrusted.invalid:3128",
+            }
+            with self.subTest(key=key), self.assertRaises(route.LocalOpenAIRouteHold) as caught:
+                route.resolve_local_openai_route("local-openai:code", env)
+            self.assertEqual(str(caught.exception), "LOCAL_AMBIENT_PROXY_HOLD")
+            self.assertNotIn("untrusted.invalid", str(caught.exception))
+
+    def test_empty_proxy_config_is_not_blocking(self):
+        env = {
+            "MODEL_SPELUNKER_LOCAL_OPENAI_BASE_URL": "http://10.1.2.3:8080/v1",
+            "HTTPS_PROXY": "",
+            "NO_PROXY": "*",
+        }
+        with patch.object(route.socket, "getaddrinfo", return_value=fake_dns("10.1.2.3")):
+            model, _, key = route.resolve_local_openai_route("local-openai:code", env)
+        self.assertEqual(model, "code")
+        self.assertEqual(key, "local-no-auth")
+
     def test_dns_failure_redacts(self):
         with patch.object(route.socket, "getaddrinfo", side_effect=OSError("sensitive machine name")):
             with self.assertRaises(route.LocalOpenAIRouteHold) as caught:
