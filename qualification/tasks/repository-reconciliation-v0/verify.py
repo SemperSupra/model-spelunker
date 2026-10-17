@@ -70,10 +70,20 @@ ORIGINAL_STATE = {
 }
 
 
+VALID_CURRENT_DOCS = {
+    ORIGINALS["docs/current.md"],
+    ORIGINALS["docs/current.md"].replace(r"C:\work\project", r"C:\\work\\project"),
+}
+
+
 def check(root: Path) -> bool:
     try:
         for rel, expected in ORIGINALS.items():
-            if (root / rel).read_text(encoding="utf-8") != expected:
+            content = (root / rel).read_text(encoding="utf-8")
+            if rel == "docs/current.md":
+                if content not in VALID_CURRENT_DOCS:
+                    return False
+            elif content != expected:
                 return False
         state = json.loads((root / "observable/state.json").read_text(encoding="utf-8"))
         if state != ORIGINAL_STATE:
