@@ -45,6 +45,10 @@ REQUIRED_EVIDENCE_OPTIONS = {
         ["/reachable_before_session", "/call_context"],
         ["/reachable_before_session", "/request_fields"],
     ],
+    "e04": [
+        ["/reachable_before_session", "/call_context"],
+        ["/reachable_before_session", "/request_fields"],
+    ],
     "e08": [
         ["/session_guard_observed", "/reachable_before_session"],
         ["/session_guard_observed", "/remote_mutation"],
