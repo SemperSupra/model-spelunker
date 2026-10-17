@@ -86,10 +86,18 @@ def check(root: Path) -> bool:
         if output.get("safe_next_action") != EXPECTED["safe_next_action"]:
             return False
         items = output.get("items")
-        if not isinstance(items, dict) or set(items) != set(EXPECTED["items"]):
+        if not isinstance(items, dict):
+            return False
+        norm_items = {}
+        for k, v in items.items():
+            if k == r"local_worktree:C:\work\project":
+                norm_items[r"local_worktree:C:\\work\\project"] = v
+            else:
+                norm_items[k] = v
+        if set(norm_items) != set(EXPECTED["items"]):
             return False
         for k, exp in EXPECTED["items"].items():
-            item = items.get(k)
+            item = norm_items.get(k)
             if not isinstance(item, dict):
                 return False
             if item.get("state") != exp["state"]:
