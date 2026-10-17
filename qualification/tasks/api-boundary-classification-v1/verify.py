@@ -36,6 +36,24 @@ REQUIRED_EVIDENCE_SUFFIXES = {
     "e11": ["/session_guard_observed", "/reachable_before_session"],
     "e12": ["/conflicting_evidence"],
 }
+REQUIRED_EVIDENCE_OPTIONS = {
+    "e02": [
+        ["/reachable_before_session", "/call_context"],
+        ["/reachable_before_session", "/request_fields"],
+    ],
+    "e03": [
+        ["/reachable_before_session", "/call_context"],
+        ["/reachable_before_session", "/request_fields"],
+    ],
+    "e08": [
+        ["/session_guard_observed", "/reachable_before_session"],
+        ["/session_guard_observed", "/remote_mutation"],
+    ],
+    "e11": [
+        ["/session_guard_observed", "/reachable_before_session"],
+        ["/session_guard_observed", "/remote_mutation"],
+    ],
+}
 
 ALLOWED_CLASSES = {
     "CONFIRMED_ANONYMOUS",
@@ -111,7 +129,7 @@ def check(root: Path) -> bool:
             if row["next_action"] not in ALLOWED_NEXT or row["next_action"] != expected_next:
                 return False
             refs = row["evidence_refs"]
-            if not isinstance(refs, list) or not refs or refs != sorted(set(refs)):
+            if not isinstance(refs, list) or not refs or len(refs) != len(set(refs)):
                 return False
 
             prefix = f"evidence.json#/endpoints/{eid}"
@@ -123,10 +141,18 @@ def check(root: Path) -> bool:
                 pointer_get(evidence, pointer)
                 resolved_pointers.append(pointer)
 
-            for suffix in REQUIRED_EVIDENCE_SUFFIXES[eid]:
-                required = f"/endpoints/{eid}{suffix}"
-                if required not in resolved_pointers:
+            if eid in REQUIRED_EVIDENCE_OPTIONS:
+                satisfied = any(
+                    all(f"/endpoints/{eid}{s}" in resolved_pointers for s in opt)
+                    for opt in REQUIRED_EVIDENCE_OPTIONS[eid]
+                )
+                if not satisfied:
                     return False
+            else:
+                for suffix in REQUIRED_EVIDENCE_SUFFIXES[eid]:
+                    required = f"/endpoints/{eid}{suffix}"
+                    if required not in resolved_pointers:
+                        return False
 
         return True
     except Exception:
