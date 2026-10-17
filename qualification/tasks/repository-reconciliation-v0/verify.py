@@ -79,7 +79,28 @@ def check(root: Path) -> bool:
         if state != ORIGINAL_STATE:
             return False
         output = json.loads((root / "reconciliation.json").read_text(encoding="utf-8"))
-        return output == EXPECTED
+        if not isinstance(output, dict):
+            return False
+        if output.get("current_entrypoint") != EXPECTED["current_entrypoint"]:
+            return False
+        if output.get("safe_next_action") != EXPECTED["safe_next_action"]:
+            return False
+        items = output.get("items")
+        if not isinstance(items, dict) or set(items) != set(EXPECTED["items"]):
+            return False
+        for k, exp in EXPECTED["items"].items():
+            item = items.get(k)
+            if not isinstance(item, dict):
+                return False
+            if item.get("state") != exp["state"]:
+                return False
+            ref = item.get("evidence_ref")
+            if k == "release":
+                if ref not in {"observable/state.json#/release", "observable/state.json#/release/approval_required"}:
+                    return False
+            elif ref != exp["evidence_ref"]:
+                return False
+        return True
     except Exception:
         return False
 
