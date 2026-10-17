@@ -1,0 +1,40 @@
+{
+  "admission": {
+    "checks": [
+      {
+        "name": "manifest-digest",
+        "result": "PASS"
+      },
+      {
+        "name": "embedded-build-receipt",
+        "result": "PASS"
+      },
+      {
+        "name": "payload-hashes",
+        "result": "PASS"
+      },
+      {
+        "name": "offline-wheelhouse-install-no-resolve",
+        "result": "PASS"
+      },
+      {
+        "name": "coworker-import-and-cli",
+        "result": "PASS"
+      }
+    ],
+    "state": "BUILD_ADMITTED",
+    "target": "linux-x86_64-python3"
+  },
+  "artifact": {
+    "build_receipt_digest": "sha256:e6e7fb98e7bd5c46a395e97ccf5045706a2b3cf3160ff1d12b7cf08eef385e8b",
+    "digest": "sha256:319f59f933477b306d25fbb9eef130bac0e71d9cd13e0c5b53879b7cf11f8860",
+    "packaging": "oci-distribution",
+    "ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:319f59f933477b306d25fbb9eef130bac0e71d9cd13e0c5b53879b7cf11f8860"
+  },
+  "harness": {
+    "declared_version": "0.0.0",
+    "name": "openworker"
+  },
+  "record_type": "harness-artifact-admission",
+  "schema_version": 1
+}

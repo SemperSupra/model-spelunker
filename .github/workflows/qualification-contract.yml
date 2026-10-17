@@ -67,6 +67,8 @@ jobs:
               "openrouter-cohere-north-mini-code-free",
               "openrouter-poolside-laguna-s21-free",
               "openrouter-nvidia-nemotron3-ultra-free",
+              "openrouter-google-gemma-4-31b-free",
+              "openrouter-nvidia-nemotron-3-nano-omni-free",
           }
           assert candidates["deepseek-flash"]["provider"] == "deepseek"
           assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
@@ -256,6 +258,9 @@ jobs:
 
       - name: Self-test venue-portability receipt comparator
         run: PYTHONPATH=. python qualification/test_compare_portable_receipts.py
+
+      - name: Self-test direct-packet actuator isolation and cost gate
+        run: PYTHONPATH=. python qualification/test_llm_coder_actuator.py
 
       - name: Reduce current actor qualification evidence
         run: |

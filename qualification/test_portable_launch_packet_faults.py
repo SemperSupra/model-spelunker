@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,8 @@ def run(packet: dict) -> subprocess.CompletedProcess[str]:
     with tempfile.NamedTemporaryFile("w",suffix=".json",delete=False) as handle:
         json.dump(packet,handle)
         path=Path(handle.name)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(ROOT)
     try:
         return subprocess.run([
             sys.executable,str(ROOT/"qualification/validate_portable_launch_packet.py"),
@@ -22,7 +25,7 @@ def run(packet: dict) -> subprocess.CompletedProcess[str]:
             "--task-dir","qualification/tasks/text-repair-v0",
             "--actor-profile","qualification/actors/contract-test-portable.json",
             "--substrate-profile","qualification/fixtures/substrate-profile-gha-v2.json",
-        ],cwd=ROOT,text=True,capture_output=True)
+        ],cwd=ROOT,text=True,capture_output=True,env=env)
     finally:
         path.unlink(missing_ok=True)
 

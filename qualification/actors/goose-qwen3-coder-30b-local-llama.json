@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "goose-qwen3-coder-30b-local-llama",
+  "harness": {
+    "name": "goose",
+    "version": "1.55.0",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "llama-server",
+    "id": "qwen3-coder-30b",
+    "realization": "local-artifact",
+    "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "local-workstation/darwin-arm64",
+    "inference_route": "local:llama-server-openai-v1",
+    "substrate_profile": "local-darwin-arm64-gpu"
+  },
+  "toolset": [
+    "developer"
+  ],
+  "configuration": {
+    "context": 65536,
+    "ubatch_size": 1024,
+    "cache_type_k": "q8_0",
+    "cache_type_v": "q8_0",
+    "flash_attn": true,
+    "cache_prompt": true,
+    "thinking_effort": "off",
+    "harness_delivery": "local-userspace-binary"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
