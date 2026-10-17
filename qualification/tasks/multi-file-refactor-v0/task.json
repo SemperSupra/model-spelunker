@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "multi-file-refactor-v0",
+  "task_class": "software.multi-file-refactoring",
+  "instruction": "Refactor the currency conversion across src/currency.py and src/invoice.py. In src/currency.py, replace the legacy convert function with convert_currency(amount_cents: int, exchange_rate: float) -> int. The function must multiply amount_cents by exchange_rate and round to the nearest integer cent using standard rounding (use round()). Update src/invoice.py to import convert_currency instead of convert, and ensure calculate_total_cents calls convert_currency with the updated name and signature. Both files must typecheck and maintain their module-level exports. Do not modify src/config.py or any files outside src/currency.py and src/invoice.py.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-hidden-tests"
+  },
+  "allowed_write_paths": [
+    "src/currency.py",
+    "src/invoice.py"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-boundary-tests"
+  }
+}
