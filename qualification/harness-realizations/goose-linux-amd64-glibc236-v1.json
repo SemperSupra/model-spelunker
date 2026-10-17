@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "record_type": "harness-realization-profile",
+  "id": "goose-linux-amd64-glibc236-v1",
+  "harness": {
+    "name": "goose",
+    "source_revision": "2bcb8583a18a0623eb78c9ed845d597ed99fae48"
+  },
+  "target": {
+    "os": "linux",
+    "architecture": "amd64",
+    "abi": "gnu",
+    "isa_floor": "x86-64",
+    "capability_requirements": [
+      "linux-userspace",
+      "native-executable",
+      "glibc-2.36-compatible"
+    ]
+  },
+  "build": {
+    "recipe_id": "goose-native-binary-glibc236-v1",
+    "toolchain_identity": "glibc 2.36; gcc 12.2.0; Linux x86_64",
+    "features": [
+      "glibc-2.36-compatibility"
+    ],
+    "compiler_flags": [],
+    "payload_kind": "native-binary",
+    "dependency_lock_digest": null
+  },
+  "experiment": {
+    "role": "candidate",
+    "optimization_axis": "toolchain",
+    "baseline_ref": "qualification/harness-artifacts/goose-2090ad1c65dd-linux-x64.admission.json",
+    "hypothesis": "A native glibc 2.36-compatible Goose 1.55.0 binary executes on Linux x86_64 targets with glibc 2.36 baselines without glibc version faults.",
+    "primary_response": "deterministic-task-verifier-success-and-abi-compatibility",
+    "stop_rule": "Stop if native build or execution fails; record the failure plane."
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "admission": {
+    "checks": [
+      {
+        "name": "manifest-digest",
+        "result": "PASS"
+      },
+      {
+        "name": "embedded-build-receipt",
+        "result": "PASS"
+      },
+      {
+        "name": "payload-hashes",
+        "result": "PASS"
+      },
+      {
+        "evidence": "sha256:10c1cd810d30aadb672d017a9563d375020466b0a752682a4afd0217b671ba43",
+        "name": "binary-sha256",
+        "result": "PASS"
+      },
+      {
+        "evidence": "1.55.0",
+        "name": "version-identity",
+        "result": "PASS"
+      },
+      {
+        "name": "cli-help",
+        "result": "PASS"
+      }
+    ],
+    "state": "BUILD_ADMITTED",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "artifact": {
+    "build_receipt_digest": "sha256:d8d8e089b0ad8120effc93328c420ee5b771ae43e7709616dfdbf892f351df49",
+    "digest": "sha256:1abe2926b302929a909d410747b6ae60fa7856d0ec9adf8977469763b0d982d9",
+    "packaging": "oci-distribution",
+    "ref": "ghcr.io/sempersupra/model-spelunker-harness-goose@sha256:1abe2926b302929a909d410747b6ae60fa7856d0ec9adf8977469763b0d982d9"
+  },
+  "harness": {
+    "declared_version": "1.55.0",
+    "name": "goose"
+  },
+  "record_type": "harness-artifact-admission",
+  "schema_version": 1
+}
