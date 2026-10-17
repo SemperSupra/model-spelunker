@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "portable-dispatch-semantics-v0",
+  "task_class": "reverse-engineering.static-semantic-reconstruction",
+  "instruction": "Analyze disassembly.txt and the source-known stripped ELF shared library target.bin. Recover command dispatch behavior as a general 32-bit expression graph in recovered.json. Available expression nodes: {'op':'input'}, {'op':'const','value': uint32}, {'op':'add'|'mul'|'xor','args':[expression,expression]}, and {'op':'rol','arg':expression,'bits':integer 0..31}. Apply 32-bit unsigned wraparound at each operation. The JSON root must contain exactly schema_version=1, width=32, commands, default. Commands is a map of decimal command strings to expressions; default is an expression. Do not read source or ground-truth verifier. Do not execute target.bin. Provide general input-independent semantic expressions rather than fixed example outputs. No source files may be modified.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {"wall_seconds": 300},
+  "success": {"kind": "independent-held-out-semantic-equivalence"},
+  "allowed_write_paths": ["recovered.json"],
+  "projected_tools": ["read_file", "write_file"],
+  "demands": {"novelty":"high","ambiguity":"medium","planning_horizon":"medium","tool_discovery":"medium","recovery_requirement":"medium","context_volume":"medium","environment_uncertainty":"medium","verification_strength":"held-out-input-semantic-oracle"}
+}
