@@ -60,6 +60,8 @@ class CapabilityEnforcingProvider(ProviderClient):
     def __init__(self, delegate: ProviderClient) -> None:
         self.delegate = delegate
         self.suppressed_batches: list[dict[str, Any]] = []
+        self.unprojected_tool_calls: list[dict[str, Any]] = []
+        self.stripped_stray_tool_markup = 0
         self.provider_observations: list[dict[str, Any]] = []
         self.model_calls_started = 0
 
@@ -230,8 +232,38 @@ class CapabilityEnforcingProvider(ProviderClient):
     def capabilities(self, model: str) -> ModelCapabilities:
         return self.delegate.capabilities(model)
 
-    def _enforce(self, model: str, turn: AssistantTurn) -> AssistantTurn:
+    def _enforce(
+        self,
+        model: str,
+        turn: AssistantTurn,
+        tools: Optional[list[dict[str, Any]]] = None,
+    ) -> AssistantTurn:
         calls = list(turn.tool_calls or [])
+        if not calls and turn.text and tools:
+            try:
+                from coworker.providers.openai_provider import (
+                    _LEAKED_TOOL_SYNTAX,
+                    _salvage_tool_calls_from_text,
+                    looks_like_unparsed_tool_call,
+                )
+            except ImportError:
+                pass
+            else:
+                salvaged = _salvage_tool_calls_from_text(turn.text, tools=None)
+                if salvaged:
+                    self.unprojected_tool_calls.append(
+                        {"names": [str(call.name) for call in salvaged if call.name]}
+                    )
+                    turn = replace(turn, text=None, tool_calls=[salvaged[0]])
+                    calls = list(turn.tool_calls or [])
+                elif looks_like_unparsed_tool_call(turn.text, tools):
+                    cleaned = turn.text
+                    import re
+
+                    for marker in _LEAKED_TOOL_SYNTAX:
+                        cleaned = re.sub(re.escape(marker), "", cleaned, flags=re.IGNORECASE)
+                    self.stripped_stray_tool_markup += 1
+                    turn = replace(turn, text=cleaned.strip() or "Completed.")
         if self.capabilities(model).parallel_tool_calls or len(calls) <= 1:
             return turn
         kept = calls[0]
@@ -267,7 +299,7 @@ class CapabilityEnforcingProvider(ProviderClient):
             tools=tools,
             **settings,
         )
-        turn = self._enforce(model, turn)
+        turn = self._enforce(model, turn, tools=tools)
         self._observe(
             requested_model=model,
             messages=messages,
@@ -308,7 +340,7 @@ class CapabilityEnforcingProvider(ProviderClient):
             if chunk.turn is None:
                 yield chunk
             else:
-                turn = self._enforce(model, chunk.turn)
+                turn = self._enforce(model, chunk.turn, tools=tools)
                 self._observe(
                     requested_model=model,
                     messages=messages,
@@ -346,7 +378,10 @@ def registry_for(workspace: Path) -> ToolRegistry:
     return registry
 
 
-def tool_names(messages: list[dict[str, Any]]) -> list[str]:
+def tool_names(
+    messages: list[dict[str, Any]],
+    allowed_names: Optional[set[str]] = None,
+) -> list[str]:
     names: list[str] = []
     for message in messages:
         if message.get("role") != "assistant":
@@ -354,7 +389,7 @@ def tool_names(messages: list[dict[str, Any]]) -> list[str]:
         for call in message.get("tool_calls") or []:
             function = call.get("function") or {}
             name = function.get("name")
-            if name:
+            if name and (allowed_names is None or str(name) in allowed_names):
                 names.append(str(name))
     return names
 
@@ -364,6 +399,7 @@ async def run(instruction: str) -> int:
     write_target = os.environ.get("MODEL_SPELUNKER_WRITE_TARGET", "value.txt")
     target = (workspace / write_target).resolve()
     registry = registry_for(workspace)
+    projected_set = set(registry.names())
     permissions = PermissionEngine(
         workspace_root=workspace,
         mode=Mode.CUSTOM,
@@ -394,6 +430,8 @@ async def run(instruction: str) -> int:
     approvals: list[dict[str, Any]] = []
 
     async def approver(request: PermissionRequest) -> ApprovalOutcome:
+        if request.tool_name not in projected_set:
+            return ApprovalOutcome.DENY
         arguments = dict(request.arguments or {})
         raw = str(arguments.get("path") or "")
         path = Path(raw)
@@ -450,10 +488,12 @@ async def run(instruction: str) -> int:
         "tool_hint_mode": os.environ.get("MODEL_SPELUNKER_TOOL_HINT_MODE", "none"),
         "max_iterations": MAX_ITERATIONS,
         "projection": registry.names(),
-        "tool_calls": tool_names(engine.messages),
+        "tool_calls": tool_names(engine.messages, projected_set),
         "approval_count": len(approvals),
         "approvals": approvals,
         "suppressed_speculative_batches": provider.suppressed_batches,
+        "unprojected_tool_calls": provider.unprojected_tool_calls,
+        "stripped_stray_tool_markup": provider.stripped_stray_tool_markup,
         "event_counts": dict(counts),
         "target_exists": target.is_file(),
     }

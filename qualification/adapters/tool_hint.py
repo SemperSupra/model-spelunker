@@ -7,6 +7,7 @@ actor's prompt/configuration and must be recorded as a distinct treatment.
 NONE = "none"
 INSPECT_V1 = "inspect-before-claim-v1"
 POLICY_FIRST_V1 = "policy-first-v1"
+INSPECT_ALL_V1 = "inspect-all-inputs-v1"
 
 _HINT = (
     "Operational discipline: for a repository repair, inspect the relevant "
@@ -29,6 +30,26 @@ _POLICY_HINT = (
 )
 
 
+_INSPECT_ALL_HINT = (
+    "Operational discipline across all task classes (repair, state "
+    "reconciliation, capability discovery, and boundary classification): "
+    "first list and read all relevant workspace documents, coordination "
+    "guidance, normative specifications, and machine-observable evidence "
+    "files before synthesizing the output. Issue one tool call per turn so "
+    "no read_file or write_file call is suppressed by sequential tool "
+    "execution, and never claim completion before write_file has executed on "
+    "the authorized output path. Derive every state, classification, and "
+    "next_action strictly from observable evidence: cite the specific leaf "
+    "fields (such as booleans, call_context, request_fields, live_probe "
+    "leaf properties, or conflicting_evidence) in sorted RFC 6901 JSON "
+    "Pointers (escaping '/' in key names as '~1'). When an endpoint or item "
+    "lacks a completed live anonymous probe and is not a mutation/login "
+    "boundary, require a bounded probe rather than NONE; when session gating "
+    "or login mutation is present, use AUTH_BOUNDARY. Do not modify read-only "
+    "fixture files."
+)
+
+
 def apply_tool_hint(instruction: str, mode: str) -> str:
     if not isinstance(instruction, str) or not instruction.strip():
         raise ValueError("task instruction must be nonempty")
@@ -38,6 +59,8 @@ def apply_tool_hint(instruction: str, mode: str) -> str:
         return instruction + "\n\n" + _HINT
     if mode == POLICY_FIRST_V1:
         return instruction + "\n\n" + _HINT + "\n\n" + _POLICY_HINT
+    if mode == INSPECT_ALL_V1:
+        return instruction + "\n\n" + _INSPECT_ALL_HINT
     raise ValueError("unsupported tool hint treatment")
 
 
