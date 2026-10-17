@@ -173,6 +173,35 @@ class OpenWorkerUnprojectedToolGuardTests(unittest.TestCase):
             ["read_file", "write_file"],
         )
 
+    def test_parse_allowed_write_targets_single_and_multi(self) -> None:
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp).resolve()
+            # Default fallback to MODEL_SPELUNKER_WRITE_TARGET
+            os.environ.pop("MODEL_SPELUNKER_ALLOWED_WRITE_PATHS", None)
+            os.environ["MODEL_SPELUNKER_WRITE_TARGET"] = "src/single.py"
+            targets = ow.parse_allowed_write_targets(workspace)
+            self.assertEqual(targets, {(workspace / "src/single.py").resolve()})
+
+            # Comma-separated MODEL_SPELUNKER_ALLOWED_WRITE_PATHS takes precedence
+            os.environ["MODEL_SPELUNKER_ALLOWED_WRITE_PATHS"] = "src/currency.py, src/invoice.py"
+            targets = ow.parse_allowed_write_targets(workspace)
+            expected = {
+                (workspace / "src/currency.py").resolve(),
+                (workspace / "src/invoice.py").resolve(),
+            }
+            self.assertEqual(targets, expected)
+
+            # Test write target validation
+            self.assertTrue(ow.is_write_target_allowed(Path("src/currency.py"), workspace, targets))
+            self.assertTrue(ow.is_write_target_allowed(Path("src/invoice.py"), workspace, targets))
+            self.assertTrue(ow.is_write_target_allowed((workspace / "src/currency.py").resolve(), workspace, targets))
+            self.assertFalse(ow.is_write_target_allowed(Path("src/config.py"), workspace, targets))
+            self.assertFalse(ow.is_write_target_allowed(Path(".env"), workspace, targets))
+
 
 if __name__ == "__main__":
     unittest.main()
+

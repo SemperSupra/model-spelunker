@@ -394,10 +394,29 @@ def tool_names(
     return names
 
 
+def parse_allowed_write_targets(workspace: Path) -> set[Path]:
+    allowed_env = os.environ.get("MODEL_SPELUNKER_ALLOWED_WRITE_PATHS", "").strip()
+    if allowed_env:
+        return {
+            (workspace / p.strip()).resolve()
+            for p in allowed_env.split(",")
+            if p.strip()
+        }
+    write_target = os.environ.get("MODEL_SPELUNKER_WRITE_TARGET", "value.txt")
+    return {(workspace / write_target).resolve()}
+
+
+def is_write_target_allowed(
+    path: Path, workspace: Path, allowed_targets: set[Path]
+) -> bool:
+    if not path.is_absolute():
+        path = workspace / path
+    return path.resolve() in allowed_targets
+
+
 async def run(instruction: str) -> int:
     workspace = Path.cwd().resolve()
-    write_target = os.environ.get("MODEL_SPELUNKER_WRITE_TARGET", "value.txt")
-    target = (workspace / write_target).resolve()
+    allowed_targets = parse_allowed_write_targets(workspace)
     registry = registry_for(workspace)
     projected_set = set(registry.names())
     permissions = PermissionEngine(
@@ -435,11 +454,9 @@ async def run(instruction: str) -> int:
         arguments = dict(request.arguments or {})
         raw = str(arguments.get("path") or "")
         path = Path(raw)
-        if not path.is_absolute():
-            path = workspace / path
         allowed = (
             request.tool_name == "write_file"
-            and path.resolve() == target
+            and is_write_target_allowed(path, workspace, allowed_targets)
         )
         approvals.append(
             {
@@ -495,7 +512,7 @@ async def run(instruction: str) -> int:
         "unprojected_tool_calls": provider.unprojected_tool_calls,
         "stripped_stray_tool_markup": provider.stripped_stray_tool_markup,
         "event_counts": dict(counts),
-        "target_exists": target.is_file(),
+        "target_exists": bool(allowed_targets and all(t.is_file() for t in allowed_targets)),
     }
     # Synthetic task only: keep read provenance as a strict three-boolean
     # allowlist. Never emit arbitrary paths, file contents, or model arguments.
