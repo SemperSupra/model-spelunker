@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "aider-qwen3-coder-30b-local-ollama",
+  "harness": {
+    "name": "aider",
+    "version": "0.86.2",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3-coder:30b",
+    "realization": "local-artifact",
+    "artifact_ref": "ollama-sha256:06c1097efce0431c2045fe7b2e5108366e43bee1b4603a7aded8f21689e90bca",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "local-workstation/linux-x64",
+    "inference_route": "local:ollama-openai-v1",
+    "substrate_profile": "local-linux-x64-gpu"
+  },
+  "toolset": [
+    "developer",
+    "git"
+  ],
+  "configuration": {
+    "edit_format": "diff",
+    "cache_prompts": true,
+    "streaming": true,
+    "map_tokens": 1024,
+    "context": 32768,
+    "thinking_effort": "off",
+    "harness_delivery": "local-userspace-uv"
+  },
+  "authority_profile": "task-scoped-workcell"
+}

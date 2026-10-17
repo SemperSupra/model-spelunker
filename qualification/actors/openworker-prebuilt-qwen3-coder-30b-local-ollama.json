@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "openworker-prebuilt-qwen3-coder-30b-local-ollama",
+  "harness": {
+    "name": "openworker",
+    "version": "5bc10d928e0b64aae74313349a3b17bd19643ae2",
+    "artifact_ref": "ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:319f59f933477b306d25fbb9eef130bac0e71d9cd13e0c5b53879b7cf11f8860",
+    "admission_ref": "github:SemperSupra/model-spelunker#147:comment-6233963646",
+    "realization": {
+      "profile_ref": "qualification/harness-realizations/openworker-linux-amd64-sovereign-python-abi-v1.json",
+      "profile_digest": "sha256:6d10d8b58f5f351cee24808ec49db1f63568abf903788a49ae4f428d94224213"
+    }
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3-coder:30b",
+    "realization": "local-artifact",
+    "artifact_ref": "ollama-sha256:06c1097efce0431c2045fe7b2e5108366e43bee1b4603a7aded8f21689e90bca",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "local-workstation/linux-x64",
+    "inference_route": "local:ollama-openai-v1",
+    "substrate_profile": "local-linux-x64-gpu"
+  },
+  "toolset": [
+    "read_file",
+    "write_file"
+  ],
+  "configuration": {
+    "context": 32768,
+    "reasoning_effort": "none",
+    "max_iterations": 8,
+    "harness_delivery": "prebuilt-admitted-artifact"
+  },
+  "authority_profile": "task-scoped-workcell"
+}

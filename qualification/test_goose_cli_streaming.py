@@ -12,7 +12,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / "qualification" / "adapters" / "goose_cli.py"
 
-with tempfile.TemporaryDirectory(prefix="goose-adapter-stream-test-") as temp:
+cache_dir = Path.home() / ".cache"
+cache_dir.mkdir(parents=True, exist_ok=True)
+
+with tempfile.TemporaryDirectory(prefix="goose-adapter-stream-test-", dir=str(cache_dir)) as temp:
     temp = Path(temp)
     fake = temp / "fake-goose"
     fake.write_text(

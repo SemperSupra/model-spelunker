@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "goose-qwen3-coder-30b-local-ollama",
+  "harness": {
+    "name": "goose",
+    "version": "1.55.0",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3-coder:30b",
+    "realization": "local-artifact",
+    "artifact_ref": "ollama-sha256:06c1097efce0431c2045fe7b2e5108366e43bee1b4603a7aded8f21689e90bca",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "local-workstation/linux-x64",
+    "inference_route": "local:ollama-openai-v1",
+    "substrate_profile": "local-linux-x64-gpu"
+  },
+  "toolset": [
+    "developer"
+  ],
+  "configuration": {
+    "context": 32768,
+    "thinking_effort": "off",
+    "max_turns": 6,
+    "max_tool_repetitions": 2,
+    "harness_delivery": "local-userspace-binary"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
