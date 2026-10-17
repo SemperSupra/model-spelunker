@@ -262,6 +262,9 @@ jobs:
       - name: Self-test direct-packet actuator isolation and cost gate
         run: PYTHONPATH=. python qualification/test_llm_coder_actuator.py
 
+      - name: Self-test OpenWorker unprojected tool-call guard
+        run: PYTHONPATH=. python qualification/test_openworker_unprojected_tool_guard.py
+
       - name: Reduce current actor qualification evidence
         run: |
           PYTHONPATH=. python qualification/reduce_evidence.py \

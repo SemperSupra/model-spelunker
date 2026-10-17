@@ -54,6 +54,15 @@ def main() -> int:
         }
     )
 
+    try:
+        max_turns = int(os.environ.get("MODEL_SPELUNKER_MAX_ITERATIONS", "4"))
+    except ValueError:
+        print("MODEL_SPELUNKER_MAX_ITERATIONS must be an integer", file=sys.stderr)
+        return 2
+    if not 1 <= max_turns <= 24:
+        print("MODEL_SPELUNKER_MAX_ITERATIONS must be between 1 and 24", file=sys.stderr)
+        return 2
+
     command = [
         goose_bin,
         "run",
@@ -68,7 +77,7 @@ def main() -> int:
         "--with-builtin",
         "developer",
         "--max-turns",
-        "4",
+        str(max_turns),
         "--max-tool-repetitions",
         "2",
         "--output-format",

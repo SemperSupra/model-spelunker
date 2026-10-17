@@ -1,6 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from qualification.adapters.tool_hint import NONE, INSPECT_V1, POLICY_FIRST_V1, apply_tool_hint, synthetic_read_provenance
+from qualification.adapters.tool_hint import NONE, INSPECT_V1, POLICY_FIRST_V1, INSPECT_ALL_V1, apply_tool_hint, synthetic_read_provenance
 
 simple = "Repair the authorized repository file."
 assert apply_tool_hint(simple, NONE) == simple
@@ -19,6 +19,11 @@ assert "normative behavior" in policy
 assert "README" in policy
 assert "docs/RETRY.md" not in policy
 assert "attempt - 1" not in policy
+inspect_all = apply_tool_hint(simple, INSPECT_ALL_V1)
+assert inspect_all.startswith(simple + "\n\n")
+assert "all task classes" in inspect_all
+assert "RFC 6901 JSON Pointers" in inspect_all
+assert "docs/RETRY.md" not in inspect_all
 
 
 for wrong in ("auto", "bypass", "run-shell", "inspect-v2"):
