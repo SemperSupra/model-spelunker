@@ -155,5 +155,6 @@ jobs:
             ${{ runner.temp }}/container-launch/out/receipt.json
             ${{ runner.temp }}/qualification-portability-summary.json
             ${{ runner.temp }}/qualification-portability-container-image.txt
+            ${{ runner.temp }}/re-ghidra/output/ghidra-export.json
           if-no-files-found: ignore
           retention-days: 30
