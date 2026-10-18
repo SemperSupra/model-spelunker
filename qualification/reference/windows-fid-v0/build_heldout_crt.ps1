@@ -27,6 +27,6 @@ $path=Join-Path $OutputDir 'compile-heldout.cmd'
 Set-Content -Path $path -Value $batch -Encoding ascii
 cmd.exe /d /c ('"' + $path + '"')
 if ($LASTEXITCODE -ne 0) { throw ("W4C_HELDOUT_COMPILE_FAIL_{0}" -f $LASTEXITCODE) }
-python -c "import sys,pathlib; sys.path.insert(0,sys.argv[1]); from verify_msvc import pe_identity; x=pe_identity(pathlib.Path(sys.argv[2])); assert x['machine']=='AMD64' if isinstance(x['machine'],str) else True" $PSScriptRoot (Join-Path $OutputDir 'crt_static_heldout.exe')
+python -c "import sys,pathlib; sys.path.insert(0,sys.argv[1]); from verify_msvc import pe_identity; x=pe_identity(pathlib.Path(sys.argv[2])); assert x['format']=='PE32+ x64'" $PSScriptRoot (Join-Path $OutputDir 'crt_static_heldout.exe')
 if ($LASTEXITCODE -ne 0) { throw 'W4C_HELDOUT_PE_ORACLE_FAIL' }
 Write-Output "W4C_HELDOUT_PRODUCED=/O1 /MT; separate /O2 /MT and /MD controls retained"
