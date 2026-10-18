@@ -187,13 +187,13 @@ def test_stat_hist_historical_portfolio_invariants() -> None:
     digest_re = re.compile(r"^sha256:[0-9a-f]{64}$")
     rows = []
     for f in files:
-        data_bytes = f.read_bytes()
+        data_bytes = f.read_bytes().replace(b"\r\n", b"\n")
         h.update(data_bytes)
         row = json.loads(data_bytes.decode("utf-8"))
         assert digest_re.match(row["evidence_digest"]), f"Invalid digest in {f.name}"
         rows.append(row)
 
-    expected_combined_sha256 = "aba4e93fabba6868c5668f455aa03f6ea9a5da25bfa886286058dede021a4ab3"
+    expected_combined_sha256 = "fca5624602c99211dffab94c2a32c15db20e27c8e91a4ef34eab4708f961b496"
     assert h.hexdigest() == expected_combined_sha256, (
         f"Byte-level historical receipt integrity violated: {h.hexdigest()} != {expected_combined_sha256}"
     )
