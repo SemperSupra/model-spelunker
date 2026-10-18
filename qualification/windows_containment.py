@@ -113,8 +113,10 @@ class WindowsJobObject:
 
     def assign_process(self, proc_handle: int) -> None:
         """Assign a process handle to this Job Object. Fails closed on error."""
-        if os.name != "nt" or not self.handle:
+        if os.name != "nt":
             return
+        if not self.handle:
+            raise RuntimeError("fail-closed: cannot assign process to an uninitialized or closed Job Object")
         res = kernel32.AssignProcessToJobObject(self.handle, wintypes.HANDLE(proc_handle))
         if not res:
             err = ctypes.get_last_error()
@@ -122,8 +124,10 @@ class WindowsJobObject:
 
     def terminate(self, exit_code: int = 1) -> None:
         """Terminate all processes assigned to this Job Object immediately."""
-        if os.name != "nt" or not self.handle:
+        if os.name != "nt":
             return
+        if not self.handle:
+            raise RuntimeError("fail-closed: cannot terminate an uninitialized or closed Job Object")
         res = kernel32.TerminateJobObject(self.handle, exit_code)
         if not res:
             err = ctypes.get_last_error()
@@ -134,8 +138,12 @@ class WindowsJobObject:
     def close(self) -> None:
         """Close the job object handle, triggering kernel cleanup of all child processes."""
         if os.name == "nt" and self.handle:
-            kernel32.CloseHandle(self.handle)
+            h = self.handle
             self.handle = None
+            res = kernel32.CloseHandle(h)
+            if not res:
+                err = ctypes.get_last_error()
+                raise RuntimeError(f"fail-closed: CloseHandle failed with Win32 error {err}")
 
     def __enter__(self) -> WindowsJobObject:
         return self
@@ -152,6 +160,8 @@ if os.name == "nt":
         """Subprocess Popen that creates the process suspended, atomically assigns it to a Job Object, and resumes it."""
 
         def __init__(self, *args: Any, job: WindowsJobObject | None = None, **kwargs: Any) -> None:
+            if job is None or not getattr(job, "handle", None):
+                raise ValueError("fail-closed: SuspendedJobPopen requires an active WindowsJobObject with a valid handle")
             self._job = job
             super().__init__(*args, **kwargs)
 
@@ -181,6 +191,9 @@ if os.name == "nt":
             unused_start_new_session: Any,
             unused_process_group: Any,
         ) -> None:
+            if self._job is None or not self._job.handle:
+                raise RuntimeError("fail-closed: SuspendedJobPopen requires an active WindowsJobObject before process creation")
+
             if isinstance(args, str):
                 pass
             elif isinstance(args, bytes):
@@ -243,6 +256,8 @@ if os.name == "nt":
             if cwd is not None:
                 cwd = os.fsdecode(cwd)
 
+            sys.audit("subprocess.Popen", executable, args, cwd, env)
+
             # Force CREATE_SUSPENDED so child cannot execute a single instruction before job assignment
             creationflags |= CREATE_SUSPENDED
 
@@ -266,14 +281,18 @@ if os.name == "nt":
             self.pid = pid
 
             # Assign process to Job Object while STILL SUSPENDED
-            if self._job is not None and self._job.handle:
-                try:
-                    self._job.assign_process(hp)
-                except Exception:
-                    # Fail-closed: kill the suspended process before it ever runs
-                    _winapi.TerminateProcess(hp, 1)
-                    _winapi.CloseHandle(ht)
-                    raise
+            if self._job is None or not self._job.handle:
+                _winapi.TerminateProcess(hp, 1)
+                _winapi.CloseHandle(ht)
+                raise RuntimeError("fail-closed: Job Object handle lost prior to process assignment")
+
+            try:
+                self._job.assign_process(hp)
+            except Exception:
+                # Fail-closed: kill the suspended process before it ever runs
+                _winapi.TerminateProcess(hp, 1)
+                _winapi.CloseHandle(ht)
+                raise
 
             # Process is safely bound to Job Object; resume primary thread to begin execution
             res = kernel32.ResumeThread(wintypes.HANDLE(ht))

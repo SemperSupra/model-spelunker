@@ -193,11 +193,16 @@ def resolve_sovereign_api_key(explicit_keys: tuple[str, ...] = ()) -> str:
     for key_name in explicit_keys:
         val = os.environ.get(key_name)
         if val:
+            if val.startswith("sk-proj-") or val.startswith("sk-ant-"):
+                raise ValueError("fail-closed: cloud API key cannot be projected as sovereign local API key")
             return val
-    for fallback_name in ("BIGMAC_API_KEY", "OPENAI_API_KEY"):
-        val = os.environ.get(fallback_name)
-        if val:
-            return val
+
+    # Only accept explicit sovereign keys, never generic cloud fallback OPENAI_API_KEY
+    val = os.environ.get("BIGMAC_API_KEY") or os.environ.get("SOVEREIGN_API_KEY")
+    if val:
+        if val.startswith("sk-proj-") or val.startswith("sk-ant-"):
+            raise ValueError("fail-closed: cloud API key cannot be projected as sovereign local API key")
+        return val
 
     endpoint_config = Path.home() / ".local" / "sovereign-actors" / "config" / "endpoint.json"
     if endpoint_config.is_file():
@@ -205,7 +210,10 @@ def resolve_sovereign_api_key(explicit_keys: tuple[str, ...] = ()) -> str:
             data = json.loads(endpoint_config.read_text(encoding="utf-8"))
             key = data.get("endpoints", {}).get("bigmac", {}).get("api_key")
             if key:
-                return str(key)
+                s_key = str(key)
+                if s_key.startswith("sk-proj-") or s_key.startswith("sk-ant-"):
+                    raise ValueError("fail-closed: cloud API key cannot be projected as sovereign local API key")
+                return s_key
         except Exception:
             pass
 

@@ -76,6 +76,7 @@ def main() -> int:
             print(f"fail-closed: GOOSE_OLLAMA_HOST must target a local/private network: {exc}", file=sys.stderr)
             return 2
         env["OLLAMA_HOST"] = ollama_host
+        env["GOOSE_EFFECTIVE_ENDPOINT"] = ollama_host
     elif provider == "openai":
         base_url = env.get("GOOSE_OPENAI_BASE_URL") or env.get("OPENAI_BASE_URL") or ""
         if not base_url:
@@ -87,6 +88,7 @@ def main() -> int:
             print(f"fail-closed: OPENAI_BASE_URL must target a local/private network: {exc}", file=sys.stderr)
             return 2
         env["OPENAI_BASE_URL"] = base_url
+        env["GOOSE_EFFECTIVE_ENDPOINT"] = base_url
         api_key = resolve_sovereign_api_key(("GOOSE_OPENAI_API_KEY",))
         if api_key:
             env["OPENAI_API_KEY"] = api_key

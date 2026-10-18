@@ -55,35 +55,43 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    cfg_file = os.environ.get("OPENCODE_CONFIG") or r"C:\Users\Mark\.local\sovereign-actors\config\opencode.json"
-    if not Path(cfg_file).is_file():
-        cfg_file = str(Path.home() / ".config" / "opencode" / "opencode.json")
+    if "OPENCODE_CONFIG" in os.environ:
+        cfg_file = os.environ["OPENCODE_CONFIG"]
+        if not Path(cfg_file).is_file():
+            print(f"fail-closed: missing opencode config file: {cfg_file}", file=sys.stderr)
+            return 2
+    else:
+        default_cfg = r"C:\Users\Mark\.local\sovereign-actors\config\opencode.json"
+        alt_cfg = str(Path.home() / ".config" / "opencode" / "opencode.json")
+        if Path(default_cfg).is_file():
+            cfg_file = default_cfg
+        elif Path(alt_cfg).is_file():
+            cfg_file = alt_cfg
+        else:
+            print(f"fail-closed: missing opencode config file (checked {default_cfg} and {alt_cfg})", file=sys.stderr)
+            return 2
 
     model = os.environ.get("OPENCODE_MODEL") or os.environ.get("MODEL_SPELUNKER_MODEL") or "bigmac/qwen3-coder-30b"
     if "/" not in model:
         model = f"bigmac/{model}"
     active_provider = model.split("/")[0]
 
-    # Validate provider endpoint in opencode config for the active provider
-    if Path(cfg_file).is_file():
-        try:
-            cfg_data = json.loads(Path(cfg_file).read_text(encoding="utf-8"))
-            providers = cfg_data.get("providers", {})
-            active_cfg = providers.get(active_provider)
-            if active_cfg:
-                base_url = active_cfg.get("baseURL") or active_cfg.get("baseUrl")
-                if not base_url:
-                    print(f"fail-closed: missing baseURL for active provider '{active_provider}' in {cfg_file}", file=sys.stderr)
-                    return 2
-                validate_sovereign_endpoint(base_url)
-            else:
-                for p_name, p_val in providers.items():
-                    base_url = p_val.get("baseURL") or p_val.get("baseUrl")
-                    if base_url:
-                        validate_sovereign_endpoint(base_url)
-        except Exception as exc:
-            print(f"fail-closed: invalid sovereign provider endpoint in opencode config: {exc}", file=sys.stderr)
+    # Validate exact provider endpoint in opencode config for the active provider
+    try:
+        cfg_data = json.loads(Path(cfg_file).read_text(encoding="utf-8"))
+        providers = cfg_data.get("providers", {})
+        if active_provider not in providers:
+            print(f"fail-closed: active provider '{active_provider}' not declared in {cfg_file}", file=sys.stderr)
             return 2
+        active_cfg = providers[active_provider]
+        base_url = active_cfg.get("baseURL") or active_cfg.get("baseUrl")
+        if not base_url:
+            print(f"fail-closed: missing baseURL for active provider '{active_provider}' in {cfg_file}", file=sys.stderr)
+            return 2
+        validate_sovereign_endpoint(base_url)
+    except Exception as exc:
+        print(f"fail-closed: invalid sovereign provider endpoint in opencode config: {exc}", file=sys.stderr)
+        return 2
 
     env = dict(os.environ)
     env["OPENCODE_CONFIG"] = cfg_file

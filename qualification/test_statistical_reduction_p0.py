@@ -216,6 +216,7 @@ def test_stat_hist_historical_portfolio_invariants() -> None:
         assert ev["incomplete"] == 0
         assert ev["censored"] == 0
         assert ev["failure_taxonomy"]["protocol_failures"] == 4
+        assert ev["failure_taxonomy"]["protocol_cause_inferred"] is True
         assert ev["failure_taxonomy"]["validator_invalid"] == 0
         assert ev["operational_success_rate"]["passes"] == 0
         assert ev["operational_success_rate"]["trials"] == 4

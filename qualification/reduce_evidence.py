@@ -221,6 +221,7 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     },
                     "failure_taxonomy": {
                         "protocol_failures": protocol_failures,
+                        "protocol_cause_inferred": (protocol_failures > 0),
                         "turn_budget_failures": turn_budget_failures,
                         "semantic_failures": semantic_failures,
                         "timeout_censored": censored,

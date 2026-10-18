@@ -244,11 +244,12 @@ def detect_failure_signals(
 
 def _terminate_candidate_group(proc: subprocess.Popen[str], job: Any = None) -> None:
     if os.name == "nt":
+        job_err = None
         if job is not None:
             try:
                 job.terminate(1)
-            except Exception:
-                pass
+            except Exception as exc:
+                job_err = exc
         # Unconditionally invoke taskkill with bounded timeout to clean any surviving detached descendants
         try:
             subprocess.run(
@@ -259,11 +260,23 @@ def _terminate_candidate_group(proc: subprocess.Popen[str], job: Any = None) -> 
                 check=False,
             )
         except Exception:
-            if proc.poll() is None:
-                try:
-                    proc.terminate()
-                except Exception:
-                    pass
+            pass
+
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+
+        if proc.poll() is None:
+            try:
+                proc.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+
+        if job_err is not None and proc.poll() is None:
+            raise RuntimeError(f"fail-closed: Job Object termination failed and candidate survived: {job_err}")
         return
     if os.name != "posix":
         if proc.poll() is None:

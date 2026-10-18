@@ -265,6 +265,11 @@ jobs:
       - name: Self-test OpenWorker unprojected tool-call guard
         run: PYTHONPATH=. python qualification/test_openworker_unprojected_tool_guard.py
 
+      - name: Self-test endpoint policy and statistical reduction
+        run: |
+          PYTHONPATH=. python qualification/test_endpoint_policy_p0.py
+          PYTHONPATH=. python qualification/test_statistical_reduction_p0.py
+
       - name: Reduce current actor qualification evidence
         run: |
           PYTHONPATH=. python qualification/reduce_evidence.py \

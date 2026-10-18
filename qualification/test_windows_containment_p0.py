@@ -240,6 +240,41 @@ def test_proc_abi_64bit_typing_and_error_handling() -> None:
     print("PASS: PROC-ABI 64-bit HANDLE typing and error handling")
 
 
+def test_proc_nojob_uncontained_execution_rejected() -> None:
+    """PROC-NOJOB: Calling SuspendedJobPopen without an active job or with a closed job must fail closed with zero side effects."""
+    if os.name != "nt":
+        print("SKIP: PROC-NOJOB requires Windows NT")
+        return
+
+    from qualification.windows_containment import SuspendedJobPopen
+
+    with tempfile.TemporaryDirectory() as td:
+        marker = Path(td) / "uncontained.marker"
+        cmd = [sys.executable, "-c", f"import pathlib; pathlib.Path({repr(str(marker))}).write_text('bad')"]
+
+        # Case 1: job=None
+        try:
+            SuspendedJobPopen(cmd, cwd=Path(td), job=None)
+            raise AssertionError("SuspendedJobPopen with job=None must fail closed")
+        except ValueError as exc:
+            assert "fail-closed" in str(exc)
+        assert not marker.exists(), "Side effect executed when job=None!"
+
+        # Case 2: job with closed/None handle
+        closed_job = WindowsJobObject()
+        closed_job.close()
+        assert closed_job.handle is None
+
+        try:
+            SuspendedJobPopen(cmd, cwd=Path(td), job=closed_job)
+            raise AssertionError("SuspendedJobPopen with closed job must fail closed")
+        except ValueError as exc:
+            assert "fail-closed" in str(exc)
+        assert not marker.exists(), "Side effect executed when job was closed!"
+
+    print("PASS: PROC-NOJOB Uncontained execution rejected with zero side-effects")
+
+
 if __name__ == "__main__":
     test_proc_01_parent_exits_while_descendants_live()
     test_proc_02_nested_runtime_breakaway_attempt()
@@ -247,4 +282,5 @@ if __name__ == "__main__":
     test_proc_04_job_object_lifecycle_and_diagnostics()
     test_proc_boot_instruction_zero_spawn_containment()
     test_proc_abi_64bit_typing_and_error_handling()
-    print("ALL P0 Process Containment tests PASS (PROC-01..PROC-04, PROC-BOOT, PROC-ABI)")
+    test_proc_nojob_uncontained_execution_rejected()
+    print("ALL P0 Process Containment tests PASS (PROC-01..PROC-04, PROC-BOOT, PROC-ABI, PROC-NOJOB)")

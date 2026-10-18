@@ -58,35 +58,39 @@ def main() -> int:
 
     vibe_home = os.environ.get("VIBE_HOME") or r"C:\Users\Mark\.local\sovereign-actors\config\vibe"
     config_file = Path(vibe_home) / "config.toml"
-    active_api_base = None
-    if config_file.is_file():
-        try:
-            import tomllib
-            with open(config_file, "rb") as f:
-                cfg_data = tomllib.load(f)
-            active_model_name = cfg_data.get("active_model", "bigmac")
-            # Find provider for active_model
-            models = cfg_data.get("models", [])
-            provider_name = active_model_name
-            for m in models:
-                if m.get("name") == active_model_name or m.get("alias") == active_model_name:
-                    provider_name = m.get("provider", provider_name)
-                    break
-            providers = cfg_data.get("providers", [])
-            for p in providers:
-                if p.get("name") == provider_name:
-                    active_api_base = p.get("api_base")
-                    break
-        except Exception as exc:
-            print(f"fail-closed: cannot parse vibe config.toml: {exc}", file=sys.stderr)
-            return 2
-
-    endpoint_url = active_api_base or os.environ.get("VIBE_OPENAI_BASE_URL") or "http://192.168.178.105:8080/v1"
-    try:
-        validate_sovereign_endpoint(endpoint_url)
-    except ValueError as exc:
-        print(f"fail-closed: target model base URL must be local/private: {exc}", file=sys.stderr)
+    if not config_file.is_file():
+        print(f"fail-closed: missing vibe config.toml in {vibe_home}", file=sys.stderr)
         return 2
+
+    try:
+        import tomllib
+        with open(config_file, "rb") as f:
+            cfg_data = tomllib.load(f)
+        active_model_name = cfg_data.get("active_model", "bigmac")
+        models = cfg_data.get("models", [])
+        provider_name = None
+        for m in models:
+            if m.get("name") == active_model_name or m.get("alias") == active_model_name:
+                provider_name = m.get("provider", m.get("name"))
+                break
+        if not provider_name:
+            provider_name = active_model_name
+
+        providers = cfg_data.get("providers", [])
+        active_api_base = None
+        for p in providers:
+            if p.get("name") == provider_name:
+                active_api_base = p.get("api_base")
+                break
+        if not active_api_base:
+            print(f"fail-closed: missing api_base for provider '{provider_name}' in {config_file}", file=sys.stderr)
+            return 2
+        validate_sovereign_endpoint(active_api_base)
+    except Exception as exc:
+        print(f"fail-closed: cannot validate sovereign route in vibe config.toml: {exc}", file=sys.stderr)
+        return 2
+
+    endpoint_url = active_api_base
 
     bigmac_key = resolve_sovereign_api_key(("BIGMAC_API_KEY",))
 

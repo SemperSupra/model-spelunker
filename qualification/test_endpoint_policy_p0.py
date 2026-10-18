@@ -140,7 +140,8 @@ def test_net_02_proxy_and_environment_sanitization() -> None:
     for key in PROXY_VARIABLES:
         assert key not in cleaned_minimal, f"{key} was not scrubbed in minimal mode"
     assert "PATH" in cleaned_minimal
-    assert "SYSTEMROOT" in cleaned_minimal
+    if os.name == "nt":
+        assert "SYSTEMROOT" in cleaned_minimal
     assert cleaned_minimal["MY_ALLOWED_VAR"] == "safe_value"
     # Unallowed variable MUST be dropped in minimal mode
     assert "UNSAFE_CUSTOM_SECRET" not in cleaned_minimal, "Unsafe custom var leaked into minimal env"
@@ -216,8 +217,39 @@ def test_net_03_secret_isolation_in_argv_and_diagnostics() -> None:
     print("PASS: NET-03 Secret isolation in argv, diagnostics, and outbound egress blocks")
 
 
+def test_net_04_sovereign_api_key_cloud_fallback_rejected() -> None:
+    """CRED-FALLBACK: Generic OPENAI_API_KEY must not be projected as sovereign key; cloud keys fail closed."""
+    orig_env = dict(os.environ)
+    try:
+        os.environ.pop("BIGMAC_API_KEY", None)
+        os.environ.pop("SOVEREIGN_API_KEY", None)
+        os.environ["OPENAI_API_KEY"] = "sk-proj-cloud-secret-key-123"
+
+        # resolve_sovereign_api_key without explicit keys must NOT return the cloud OPENAI_API_KEY
+        resolved = resolve_sovereign_api_key()
+        assert resolved != "sk-proj-cloud-secret-key-123", "Cloud OPENAI_API_KEY was projected as sovereign key!"
+
+        # Attempting to pass cloud key explicitly fails closed
+        try:
+            resolve_sovereign_api_key(("OPENAI_API_KEY",))
+            raise AssertionError("Cloud key should fail closed in resolve_sovereign_api_key")
+        except ValueError as exc:
+            assert "fail-closed" in str(exc)
+
+        # Legitimate sovereign key resolves
+        os.environ["BIGMAC_API_KEY"] = "local-sovereign-valid-key"
+        resolved_sovereign = resolve_sovereign_api_key()
+        assert resolved_sovereign == "local-sovereign-valid-key"
+    finally:
+        os.environ.clear()
+        os.environ.update(orig_env)
+
+    print("PASS: NET-04 (CRED-FALLBACK) Sovereign API key rejects cloud fallback and projection")
+
+
 if __name__ == "__main__":
     test_net_01_prohibited_endpoints()
     test_net_02_proxy_and_environment_sanitization()
     test_net_03_secret_isolation_in_argv_and_diagnostics()
-    print("ALL P0 Endpoint Policy & Egress tests PASS (NET-01..NET-03)")
+    test_net_04_sovereign_api_key_cloud_fallback_rejected()
+    print("ALL P0 Endpoint Policy & Egress tests PASS (NET-01..NET-04, CRED-FALLBACK)")

@@ -66,22 +66,30 @@ def main() -> int:
     model = os.environ.get("MODEL_SPELUNKER_MODEL", "qwen3-coder-30b")
     default_cfg = r"C:\Users\Mark\.local\sovereign-actors\config\pi"
     cfg_dir = os.environ.get("PI_CODING_AGENT_DIR") or (default_cfg if Path(default_cfg).is_dir() else "")
+    if not cfg_dir or not Path(cfg_dir).is_dir():
+        print(f"fail-closed: missing pi config directory (PI_CODING_AGENT_DIR): {cfg_dir}", file=sys.stderr)
+        return 2
 
-    # Validate provider endpoint for the active provider in models.json
-    if cfg_dir and Path(cfg_dir).is_dir():
-        models_json = Path(cfg_dir) / "models.json"
-        if models_json.is_file():
-            try:
-                models_data = json.loads(models_json.read_text(encoding="utf-8"))
-                active_cfg = models_data.get("providers", {}).get(provider, {})
-                base_url = active_cfg.get("baseUrl") or active_cfg.get("baseURL")
-                if not base_url:
-                    print(f"fail-closed: missing baseUrl for active provider '{provider}' in {models_json}", file=sys.stderr)
-                    return 2
-                validate_sovereign_endpoint(base_url)
-            except Exception as exc:
-                print(f"fail-closed: invalid sovereign provider endpoint in pi config: {exc}", file=sys.stderr)
-                return 2
+    models_json = Path(cfg_dir) / "models.json"
+    if not models_json.is_file():
+        print(f"fail-closed: missing models.json in pi config directory: {models_json}", file=sys.stderr)
+        return 2
+
+    try:
+        models_data = json.loads(models_json.read_text(encoding="utf-8"))
+        providers = models_data.get("providers", {})
+        if provider not in providers:
+            print(f"fail-closed: active provider '{provider}' not declared in {models_json}", file=sys.stderr)
+            return 2
+        active_cfg = providers[provider]
+        base_url = active_cfg.get("baseUrl") or active_cfg.get("baseURL")
+        if not base_url:
+            print(f"fail-closed: missing baseUrl for active provider '{provider}' in {models_json}", file=sys.stderr)
+            return 2
+        validate_sovereign_endpoint(base_url)
+    except Exception as exc:
+        print(f"fail-closed: invalid sovereign provider endpoint in pi config: {exc}", file=sys.stderr)
+        return 2
 
     env = dict(os.environ)
     env.update(
