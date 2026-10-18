@@ -19,3 +19,29 @@
 - The **one-shot heavyweight Ghidra/VStudio runner job is intentionally removed from the ordinary PR workflow after qualification** to avoid charging free GHA minutes for unrelated changes. Reuse scripts through the existing admitted typed Agent Dispatch #485 execution path or a separately authorized single-purpose study. No unreviewed generic command interface or workflow-authoring grant.
 
 **Limitations and next rung:** This is same-compiler/same-source controlled matching on four functions, not MSVC CRT/VCRuntime/UCRT coverage, cross-version/different-linker applicability, library matching at production scale, or a configured AI actor interview. FID names are candidates until provenance and an independent executable behavior oracle are checked. Next: classify the ten shipped FID database versions, test MSVC static-library CRT functions under license-safe build conditions with decoys and mismatch controls, then Android NDK ARM64 under AAR ownership. BSim remains `NOT_QUALIFIED` (separate Linux CLI exit-22 failure).
+
+## W-2 installed Microsoft CRT archive source census (2026-10-18)
+
+[Actual `windows-2025` GHA #39118688097](https://github.com/SemperSupra/model-spelunker/actions/runs/39118688097) **PASS**. Same native Visual Studio producer/SDK roots as W-1, no new vendor download, no PE execution, no private input. `inventory_crt_archives.ps1` and stdlib-only `inventory_crt_archives.py` parsed real COFF library archive headers and counted members with populated code (`.text`) sections and the `IMAGE_SCN_CNT_CODE` flag. Results:
+
+| Installed archive | Total members | COFF members with code sections |
+| --- | ---: | ---: |
+| MSVC `libcmt.lib` | 1193 | 963 |
+| MSVC `libcpmt.lib` | 110 | 92 |
+| MSVC `libvcruntime.lib` | 63 | 46 |
+| MSVC `msvcrt.lib` | 1337 | 963 |
+| MSVC `vcruntime.lib` | 116 | 1 |
+| UCRT `libucrt.lib` | 787 | 741 |
+| UCRT `ucrt.lib` | 1395 | 0 |
+| WinSDK `kernel32.lib` | 1401 | 0 |
+
+Bounded metadata-only [GHA artifact #12133596525](https://github.com/SemperSupra/model-spelunker/actions/runs/39118688097/artifacts/12133596525) retains per-archive hashes/size, member counts, <=10 code-member name samples, and section-classification result. Archive bytes, complete vendor symbol tables, PDBs and CRT signatures were **not** uploaded.
+
+**Interpretation:** `libcmt`, `libcpmt`, `libvcruntime`, and `libucrt` have genuine COFF code-bearing members worth evaluating as labeled FID references. `ucrt.lib` and `kernel32.lib` here provide negative import-library-only controls under this parser. Despite its familiar dynamic CRT name, `msvcrt.lib` contains many code-bearing COFF members as well: an archive should **not** be labeled pure import-only based on its filename. These are sections within *archive members*, not unique functions, application runtime proof, or FID recognition rates. An import archive can include code stubs; section counts alone do not establish library code identity. The parser is a bounded diagnostic, not a general COFF archive parser certification.
+
+**Efficiency:** The temporary `windows-crt-archive-one-shot` job was removed from routine PR-triggered qualification CI immediately after the successful observation. Exact parser/source and this evidence remain in draft PR #184. Subsequent cheap workflows must pass independently.
+
+**Next W-3:** choose a small set of actual MSVC/UCRT *code-bearing static* archive members with trustworthy symbols, preserve exact MSVC/SDK/toolchain and archive SHA, independently validate their presence in a **statically linked source-known PE target** (using linker map/PDB only on reference side). Test Ghidra's *shipped* Visual Studio FID signatures first; create new custom FID only for documented missing coverage; require false-positive and absent-library controls. Distinguish a recognized CRT implementation from an API import thunk. BSim remains separate and NOT_QUALIFIED.
+
+## Parallel Android A-0
+Under AAR-private #82 and public AAR draft PR #39, [public GHA #39118512769](https://github.com/SemperSupra/android-artifact-recovery/actions/runs/39118512769) **PASS** for installed NDK **27.3.13750724**, ARM64, libc++_static archive 53 members, compiler-rt builtins 279 members, and libunwind not present at tested NDK path. Reference metadata SHA-256 retained in [AAR artifact #12132839720](https://github.com/SemperSupra/android-artifact-recovery/actions/runs/39118512769/artifacts/12132839720), no library bytes uploaded. This is an *inventory only*, not Ghidra FID/native JNI matching. The temporary AAR workflow job was removed. Do not duplicate Android goldens/recovery logic in Model Spelunker.
