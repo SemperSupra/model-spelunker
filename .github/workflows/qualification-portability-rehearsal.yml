@@ -155,7 +155,7 @@ jobs:
   windows-native-msvc-reference:
     name: Native Visual Studio MSVC PE reference (one-shot)
     runs-on: windows-2025
-    timeout-minutes: 15
+    timeout-minutes: 22
     permissions:
       contents: read
     steps:
@@ -175,6 +175,18 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & ./qualification/reference/windows-fid-v0/build_msvc.ps1
 
+      - name: Use pinned JDK 21 for source-known Windows FID trial
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Match native MSVC PE helpers with pinned Ghidra FID
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./qualification/reference/windows-fid-v0/run_ghidra_fid.ps1
+
       - name: Retain bounded public-safe Windows compiler reference receipts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -184,6 +196,8 @@ jobs:
             ${{ runner.temp }}/re-windows-msvc-v0/windows-native-receipt.json
             ${{ runner.temp }}/re-windows-msvc-v0/msvc-inventory.json
             ${{ runner.temp }}/re-windows-msvc-v0/msvc-versions.txt
+            ${{ runner.temp }}/re-windows-msvc-v0/fid-msvc-receipt.json
+            ${{ runner.temp }}/re-windows-msvc-v0/ghidra-shipped-fid.json
           if-no-files-found: ignore
           retention-days: 30
 
