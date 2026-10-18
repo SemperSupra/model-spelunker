@@ -20,7 +20,7 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
-    if treatment not in {"static", "static_heldout", "static_debug", "dynamic"}:
+    if treatment not in {"static", "static_heldout", "debug", "dynamic"}:
         raise ValueError("unadmitted treatment")
     truth = {}
     for line in mapping.splitlines():
@@ -102,7 +102,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--map", type=Path, required=True)
     ap.add_argument("--query-log", type=Path, required=True)
-    ap.add_argument("--treatment", choices=("static","static_heldout","static_debug","dynamic"), required=True)
+    ap.add_argument("--treatment", choices=("static","static_heldout","debug","dynamic"), required=True)
     ap.add_argument("--output", type=Path, required=True)
     args=ap.parse_args()
     result=evaluate(_read(args.map), _read(args.query_log), args.treatment)
