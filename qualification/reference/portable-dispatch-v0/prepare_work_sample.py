@@ -48,13 +48,22 @@ def main() -> int:
     options = ["--disassemble"]
     if "llvm-objdump" in Path(objdump).name:
         options.append("--print-imm-hex")
-    disasm = subprocess.run([objdump, *options, str(target)], check=True,
+    # Absolute target paths leak disposable workdir names into the disassembly header.
+    # Use a stable relative operand and cwd, so identical bytes + tool versions match.
+    disasm = subprocess.run([objdump, *options, target.name], cwd=dest, check=True,
                             capture_output=True, text=True, timeout=30).stdout
     if not disasm.strip():
         raise RuntimeError("disassembly empty")
     (dest / "disassembly.txt").write_text(disasm, encoding="utf-8")
     version_script.unlink()
+    def tool_version(executable: str) -> str:
+        proc = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=10, check=True)
+        return proc.stdout.splitlines()[0] if proc.stdout else "UNKNOWN"
+
     manifest = {"schema_version": 1, "source_sha256": digest(source),
+                "tool_versions": {"compiler": tool_version(args.cc),
+                                  "strip": tool_version(args.strip),
+                                  "objdump": tool_version(objdump)},
                 "sha256": {name: digest(dest / name) for name in ("target.bin", "disassembly.txt")},
                 "build_command_profile": "source-known-clang-O1-stripped-shared-ELF",
                 "status": "UNQUALIFIED_ACTOR_TASK"}
