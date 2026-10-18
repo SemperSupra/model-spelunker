@@ -9,6 +9,7 @@ from pathlib import Path
 
 LINE = re.compile(r"(?i)^\s*\w{4}:\w{8}\s+(\S+)\s+([0-9a-f]{9,16})\s+f\s+(\S+?):([\w.$-]+\.obj)\s*$")
 MATCH = re.compile(r"RE_SHIPPED_FID_MATCH=([0-9a-f]+)\|([^|\r\n]+)\|([^|\r\n]+)\|([^|\r\n]+)\|([^|\r\n]+)\|([^|\r\n]+)\|(\d+)")
+TIE_CLASS = re.compile(r"RE_SHIPPED_FID_TIE_GROUP=([0-9a-f]+)\|(\d+)\|(\d+)\|(\d+)")
 CRT = ("libcmt", "libucrt", "libvcruntime")
 
 def read(p: Path) -> str:
@@ -53,6 +54,33 @@ def run(root: Path) -> dict:
                             "linker_truth":source})
         if observed != len(entries) or observed > analyzed or eligible<1:
             raise ValueError("FID candidate count incompatible with analyzed functions or no eligible DB")
+        tie_groups={}
+        for a,count,names,versions in TIE_CLASS.findall(diagnostic):
+            if a in tie_groups:raise ValueError("duplicate tie-group entry")
+            count,names,versions=map(int,(count,names,versions))
+            if count <= 1 or not 1 <= names <= count or not 1 <= versions <= count:
+                raise ValueError("invalid tie group cardinality")
+            tie_groups[a]=(count,names,versions)
+        tied={e["address"]:e for e in entries if e["ties"]>1}
+        if set(tie_groups)!=set(tied):
+            raise ValueError("tied addresses and tie-group projection disagree")
+        for address,e in tied.items():
+            if tie_groups[address][0]!=e["ties"]:
+                raise ValueError("tie-group count differs from candidate receipt")
+        consensus=sum(v[1]==1 for v in tie_groups.values())
+        conflicts=sum(v[1]>1 for v in tie_groups.values())
+        def tie_stat(name):
+            found=re.findall(r"RE_SHIPPED_FID_"+name+r"=(\d+)",diagnostic)
+            if len(found)!=1:return None
+            return int(found[0])
+        if tie_stat("TIE_CONSENSUS")!=consensus or tie_stat("TIE_CONFLICT")!=conflicts:
+            raise ValueError("tie category totals inconsistent")
+        consensus_crt_exact=sum(e["classification"]=="TP_EXACT_CRT" for e in entries
+                                if e["address"] in tie_groups and
+                                tie_groups[e["address"]][1]==1)
+        conflict_crt_error=sum(e["classification"]=="MISMATCH_CRT" for e in entries
+                               if e["address"] in tie_groups and
+                               tie_groups[e["address"]][1]>1)
         known=sum(v["library"].lower() in CRT for v in source_truth.values())
         tp=sum(x["classification"]=="TP_EXACT_CRT" for x in entries)
         wrong=sum(x["classification"]=="MISMATCH_CRT" for x in entries)
@@ -66,6 +94,14 @@ def run(root: Path) -> dict:
                           "wrong_name_on_crt_address":wrong,
                           "non_crt_or_unattributed_candidates":unattributed,
                           "ambiguous_matches":ambiguous,
+                          "tie_consensus_name_groups":consensus,
+                          "tie_conflicting_name_groups":conflicts,
+                          "tie_consensus_exact_crt_names_calibration":consensus_crt_exact,
+                          "tie_conflict_wrong_crt_name_calibration":conflict_crt_error,
+                          "tie_equivalence_classes": [
+                            {"address":k,"total_records":v[0],"distinct_names":v[1],
+                             "distinct_library_variants":v[2]}
+                            for k,v in list(tie_groups.items())[:100]],
                           "bounded_candidates":entries[:60]}
     if findings["static"]["known_crt_map_symbols"]<=findings["dynamic"]["known_crt_map_symbols"]:
         raise ValueError("/MT had no higher CRT-code provenance than /MD")
