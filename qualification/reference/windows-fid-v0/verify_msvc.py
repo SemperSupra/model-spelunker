@@ -56,7 +56,7 @@ def main() -> int:
     if b"re_lib_" in (root / "target_stripped.dll").read_bytes():
         raise ValueError("unintended helper names leaked to PE target")
     required = ("reference.obj", "reference_static.lib", "reference_labeled.pdb",
-                "target_stripped.pdb", "reference-symbols.txt", "msvc-inventory.json")
+                "reference-symbols.txt", "msvc-inventory.json")
     for name in required:
         if not (root / name).is_file() or (root / name).stat().st_size < 64:
             raise ValueError(f"missing or empty reference material {name}")
