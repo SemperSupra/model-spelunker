@@ -28,6 +28,6 @@ jobs:
       admission_ref: 'github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json'
       task: ${{ matrix.task }}
       reasoning_effort: 'none'
-      treatment_id: 'aar-r8-qwen3-1.7b-baseline'
-      tool_hint_mode: 'none'
+      treatment_id: 'aar-r8-qwen3-1.7b-inspect-v1'
+      tool_hint_mode: 'inspect-before-claim-v1'
       output_diagnostic_mode: 'none'
