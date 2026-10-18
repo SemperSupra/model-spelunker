@@ -151,38 +151,3 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
-
-  w3b-bundled-crt-fid:
-    name: W3b shipped Ghidra FID vs native MSVC CRT (one-shot)
-    runs-on: windows-2025
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Rebuild independently verified real MSVC /MT versus /MD fixture
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & ./qualification/reference/windows-fid-v0/build_crt_linkage.ps1
-      - name: Query only prepackaged Ghidra FID references and compare linker MAP ground truth
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & ./qualification/reference/windows-fid-v0/run_bundled_crt_fid.ps1
-      - name: Retain bounded comparison and shipped-reference inventory only
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: mscrt-bundled-fid-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/re-msvc-crt-linkage-v0/ghidra-bundled-fid-evaluation.json
-            ${{ runner.temp }}/re-msvc-crt-linkage-v0/ghidra-shipped-fid-census.json
-          if-no-files-found: ignore
-          retention-days: 30
