@@ -31,7 +31,7 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
     if not truth:
         raise ValueError("no independent MAP symbols")
     def count(tag):
-        vals = re.findall(r"(?m)^RE_SHIPPED_FID_" + tag + r"=(\d+)\s*$", ghidra)
+        vals = re.findall(r"RE_SHIPPED_FID_" + tag + r"=(\d+)(?!\d)", ghidra)
         if len(vals) != 1:
             raise ValueError("missing/duplicate Ghidra counter " + tag)
         return int(vals[0])
