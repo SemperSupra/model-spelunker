@@ -1,0 +1,33 @@
+name: AAR source-known R8 configured-actor smoke (one-shot PR)
+# One-time public-source qualification. Remove PR auto trigger after collecting
+# exact model/task/harness receipts. Never use private runners or model API keys.
+on:
+  pull_request:
+    paths:
+      - "qualification/tasks/aar-r8-factor-contrast-v0/**"
+      - "qualification/tasks/aar-r8-jadx-repair-triage-v0/**"
+      - ".github/workflows/aar-r8-openworker-smoke.yml"
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: aar-r8-openworker-once-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  source-known-configured-actor:
+    if: github.event.pull_request.number == 186
+    strategy:
+      fail-fast: false
+      matrix:
+        task:
+          - aar-r8-factor-contrast-v0
+          - aar-r8-jadx-repair-triage-v0
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
+      admission_ref: 'github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json'
+      task: ${{ matrix.task }}
+      reasoning_effort: 'none'
+      treatment_id: 'aar-r8-qwen3-1.7b-baseline'
+      tool_hint_mode: 'none'
+      output_diagnostic_mode: 'none'
