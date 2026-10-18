@@ -34,7 +34,7 @@ def run(root: Path) -> dict:
             m=re.findall(r"RE_SHIPPED_FID_"+re.escape(k)+r"=(\d+)",diagnostic)
             if len(m)!=1: raise ValueError("missing/duplicate tool count "+k)
             return int(m[0])
-        analyzed=tagged("FUNCTIONS_ANALYZED")
+        analyzed=int(re.findall(r"RE_FID_FUNCTIONS_ANALYZED=(\d+)", diagnostic)[-1])
         eligible=tagged("ELIGIBLE_COUNT")
         observed=tagged("MATCH_COUNT")
         ambiguous=tagged("AMBIGUOUS_COUNT")
