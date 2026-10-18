@@ -1,6 +1,6 @@
 # Bounded one-shot Ghidra official built-in Visual Studio FID matching experiment.
 # Uses only our self-authored /MT and /MD PE; no third-party FID creation.
-param([string] $OutputDir = (Join-Path $env:RUNNER_TEMP 're-msvc-crt-linkage-v0'), [switch]$IncludeHeldout)
+param([string] $OutputDir = (Join-Path $env:RUNNER_TEMP 're-msvc-crt-linkage-v0'), [switch]$IncludeHeldout, [switch]$IncludeDebug)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $OutputDir=(Resolve-Path $OutputDir).Path
@@ -45,6 +45,10 @@ if ($IncludeHeldout) {
   if (-not (Test-Path (Join-Path $OutputDir 'crt_static_heldout.map'))) {throw 'HELDOUT_MAP_NOT_BUILT'}
   $variants+= 'static_heldout'
 }
+if ($IncludeDebug) {
+  if (-not (Test-Path (Join-Path $OutputDir 'w5-debug-crt-preflight.json'))) {throw 'W5_DEBUG_CRT_PRODUCER_ORACLE_REQUIRED'}
+  $variants += 'static_debug'
+}
 foreach($flavor in $variants) {
   $image=Join-Path $OutputDir ("crt_"+$flavor+".exe")
   if (-not (Test-Path $image)) { throw 'MISSING_SOURCE_KNOWN_PE' }
@@ -61,7 +65,7 @@ foreach($flavor in $variants) {
 }
 python (Join-Path $PSScriptRoot 'verify_bundled_crt_fid.py') --root $OutputDir
 if ($LASTEXITCODE -ne 0) {throw 'BUNDLED_FID_INDEPENDENT_EVALUATION_FAILED'}
-if ($IncludeHeldout) {
+if ($IncludeHeldout -or $IncludeDebug) {
   foreach($flavor in $variants) {
     python (Join-Path $PSScriptRoot 'score_heldout_fid.py') --map (Join-Path $OutputDir ("crt_"+$flavor+".map")) --query-log (Join-Path $logdir ("query-"+$flavor+".console.log")) --treatment $flavor --output (Join-Path $OutputDir ("w4c-score-"+$flavor+".json"))
     if ($LASTEXITCODE -ne 0) {throw ("W4C_ORACLE_FAILED_"+$flavor)}
