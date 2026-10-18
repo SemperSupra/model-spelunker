@@ -151,34 +151,3 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
-
-  windows-crt-archive-one-shot:
-    name: Windows CRT code-bearing archive audit (one-shot)
-    runs-on: windows-2025
-    timeout-minutes: 8
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Native Visual Studio producer and exact toolchain roots
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & ./qualification/reference/windows-fid-v0/build_msvc.ps1
-      - name: Inspect installed CRT/UCRT versus import libraries
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & ./qualification/reference/windows-fid-v0/inventory_crt_archives.ps1
-      - name: Retain metadata-only CRT receipt
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: windows-crt-library-inventory-${{ github.run_id }}
-          path: ${{ runner.temp }}/re-windows-msvc-v0/crt-archive-receipt.json
-          if-no-files-found: ignore
-          retention-days: 30
-
