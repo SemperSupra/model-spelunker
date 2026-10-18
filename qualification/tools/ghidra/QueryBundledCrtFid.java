@@ -71,8 +71,15 @@ public class QueryBundledCrtFid extends GhidraScript {
                 }
                 if (best == null) continue;
                 matches++;
-                if (ties > 1) ambiguous++;
-                if (matches > outputLimit) throw new IllegalStateException("match output limit");
+                if (ties > 1) {
+                    ambiguous++;
+                    if (topNames.size() == 1) tieConsensus++;
+                    else tieConflict++;
+                }
+                // Retain only the first 500 displayed match rows, but count
+                // the complete observation population, never silently claiming
+                // the bounded sample is representative of all hits.
+                if (matches > outputLimit) continue;
                 println("RE_SHIPPED_FID_MATCH=" +
                     Long.toHexString(row.function.getEntryPoint().getOffset()).toLowerCase(Locale.ROOT)
                     + "|" + field(best.getFunctionRecord().getName())
@@ -82,8 +89,6 @@ public class QueryBundledCrtFid extends GhidraScript {
                     + "|" + field(best.getLibraryRecord().getLibraryVariant())
                     + "|" + ties);
                 if (ties > 1) {
-                    if (topNames.size() == 1) tieConsensus++;
-                    else tieConflict++;
                     // Omit individual alternative names: only bounded
                     // equivalence-class cardinalities cross into the logs.
                     println("RE_SHIPPED_FID_TIE_GROUP=" +
@@ -96,6 +101,8 @@ public class QueryBundledCrtFid extends GhidraScript {
         println("RE_SHIPPED_FID_TIE_CONFLICT=" + tieConflict);
         println("RE_SHIPPED_FID_CANDIDATE_ROWS=" + candidateRows);
         println("RE_SHIPPED_FID_MATCH_COUNT=" + matches);
+        println("RE_SHIPPED_FID_EMITTED_COUNT=" + Math.min(matches, outputLimit));
+        println("RE_SHIPPED_FID_TRUNCATED_COUNT=" + Math.max(0, matches-outputLimit));
         println("RE_SHIPPED_FID_AMBIGUOUS_COUNT=" + ambiguous);
     }
 }
