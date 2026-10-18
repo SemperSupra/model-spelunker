@@ -1,0 +1,8 @@
+{
+  "candidate_stderr_chars": 0,
+  "candidate_stderr_tail": "",
+  "candidate_stdout_chars": 137,
+  "candidate_stdout_tail": "I've successfully written \"READY\" followed by a newline to value.txt. The file now contains exactly:\n\nREADY\n\n(with a newline at the end)\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": "PASS ok\n"
+}

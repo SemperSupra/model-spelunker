@@ -1,0 +1,141 @@
+{
+  "envelopes": [
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-npm",
+            "profile": "windows-x64",
+            "source_revision": "v1.3.0",
+            "toolchain": "node-v24"
+          },
+          "configuration_digest": "sha256:1fc047e2e80d11ad95ab18922d3c63fe1d4e7a60745cdcf96cb28b0d63da7797",
+          "harness": {
+            "name": "pi",
+            "version": "1.3.0"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "read",
+            "write",
+            "edit"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "05c1044837afa6929eb63c1dbae3574fac57a82a",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:533123c76683898c0b116928b5639925a93c1e529b83f04af77c7ecbb8c93295",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 0,
+        "reps": 4,
+        "run_ids": [
+          "20261017T182053Z-c11c3b74",
+          "20261017T182120Z-55cec38b",
+          "20261017T182123Z-1b94f3f6",
+          "20261017T182125Z-9d7c48a4"
+        ],
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 1.0,
+          "lower_95": 0.510109,
+          "upper_95": 1.0
+        },
+        "task_ids": [
+          "text-repair-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 0,
+        "validated_pass": 4
+      },
+      "evidence_pattern": "PASS_ONLY",
+      "ksa_evidence": {
+        "abilities": {
+          "scope_discipline": "REPEATED_EVIDENCE"
+        },
+        "skills": {
+          "bounded_change_execution": "REPEATED_EVIDENCE",
+          "governed_file_tool_use": "REPEATED_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-repair"
+    },
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-binary",
+            "profile": "windows-x64",
+            "source_revision": "v1.55.0",
+            "toolchain": "rust"
+          },
+          "configuration_digest": "sha256:09f9321afa19308c90e261b401ec7c5e8a132badc44b3f0016074a83513d901a",
+          "harness": {
+            "name": "goose",
+            "version": "1.55.0"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "developer"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "05c1044837afa6929eb63c1dbae3574fac57a82a",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:8dd9cdec28bff7e8ba9ec114081361911cbb9ab5d724ddd9c8abb37ebaa67f40",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 0,
+        "reps": 4,
+        "run_ids": [
+          "20261017T182042Z-c4fbb800",
+          "20261017T182110Z-804ee826",
+          "20261017T182113Z-6b192cb6",
+          "20261017T182117Z-183a5da9"
+        ],
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 1.0,
+          "lower_95": 0.510109,
+          "upper_95": 1.0
+        },
+        "task_ids": [
+          "text-repair-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 0,
+        "validated_pass": 4
+      },
+      "evidence_pattern": "PASS_ONLY",
+      "ksa_evidence": {
+        "abilities": {
+          "scope_discipline": "REPEATED_EVIDENCE"
+        },
+        "skills": {
+          "bounded_change_execution": "REPEATED_EVIDENCE",
+          "governed_file_tool_use": "REPEATED_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-repair"
+    }
+  ],
+  "schema_version": 1
+}

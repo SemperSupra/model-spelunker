@@ -1,0 +1,73 @@
+{
+  "candidate": {
+    "build": {
+      "default_features": false,
+      "features": [],
+      "kind": "user-local-binary",
+      "profile": "windows-x64",
+      "source_revision": "v1.55.0",
+      "toolchain": "rust"
+    },
+    "configuration_digest": "sha256:09f9321afa19308c90e261b401ec7c5e8a132badc44b3f0016074a83513d901a",
+    "harness": {
+      "name": "goose",
+      "version": "1.55.0"
+    },
+    "model": {
+      "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+      "id": "qwen3-coder-30b",
+      "provider": "llama-server"
+    },
+    "toolset": [
+      "developer"
+    ]
+  },
+  "evidence_digest": "sha256:99a62dfaaa760fd165795a6613d04a44c4899ec8fca799f24af479c9c2572b4f",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": null,
+    "state_changed": true,
+    "success": true,
+    "termination_class": "semantic-success",
+    "timed_out": false,
+    "tool_calls": null,
+    "verifier_exit_code": 0,
+    "wall_seconds": 2.406,
+    "workload": {
+      "model_calls_started": 0,
+      "model_rounds": 2,
+      "serving_providers": [
+        "openai"
+      ]
+    }
+  },
+  "resources": {
+    "cpu_model": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 12,
+    "memory_total_bytes": null
+  },
+  "run_id": "20261017T182113Z-6b192cb6",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "05c1044837afa6929eb63c1dbae3574fac57a82a",
+    "profile_id": "local-windows-11-x64"
+  },
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:072f1a521e979b8c9ea76f3a680f59c62ee5d11518171d82a9f4626e2d6c2884",
+    "source_commit": "05c1044837afa6929eb63c1dbae3574fac57a82a",
+    "task_class": "software.bounded-repair"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "candidate_stderr_chars": 0,
+  "candidate_stderr_tail": "",
+  "candidate_stdout_chars": 425,
+  "candidate_stdout_tail": "Can't initialize prompt toolkit: No Windows console found. Are you running \ncmd.exe?\nCan't initialize prompt toolkit: No Windows console found. Are you running \ncmd.exe?\nTerminal does not support pretty output (UnicodeDecodeError)\nAider v0.86.2\nModel: openai/qwen3-coder-30b with whole edit format\nGit repo: none\nRepo-map: disabled\n\nvalue.txt\n```\nREADY\n\n```\nTokens: 613 sent, 8 received.\n\nvalue.txt\nApplied edit to value.txt\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": "FAIL value.txt mismatch: expected 'READY\\n', got 'READY\\n\\n'\n"
+}
