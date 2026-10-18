@@ -17,6 +17,14 @@
 
 **Outcome:** `raw_pcode_extension=TOOL_QUALIFIED_ON_SYNTHETIC_ELF`; `actor_semantic_lift=UNKNOWN`; `pcode_bytewise_reproducibility=NOT_TESTED`; `additional_model_or_private_cloud_cost=$0`. Next qualifying treatment requires the **same actor/model, tool policy, artifact, verifier and budget**, differing only in (A) baseline decompiler/function summary vs (B) baseline + raw p-code. Model must have source/oracle blocked by OS/network controls before any blind claim. Score independently verified recovered semantics and cost, not number of opcodes or amount of context.
 
+## Source-informed tail-call falsification (compiler to Ghidra)
+
+**The call-count mismatch is now explained rather than merely catalogued.** We independently compiled the exact source-known dispatcher with Clang 17 and confirmed its stripped ELF SHA-256 equals the Ghidra tool-control fixture `4e42cdd47a7a7531470ef9487c66979ce0a90a773c4dddce16151d2ba6430490`. At `-O1`, the dispatcher has two ordinary `call` instructions for affine/rotate helpers plus one optimized *tail `jmp`* for `handler_fold`. Rebuilding with `-fno-optimize-sibling-calls` (single factor) changes that third jump to an ordinary `call`. This accounts for the apparent 3 distinct Ghidra callee targets vs 2 raw p-code `CALL` operations, without a missing function.
+
+Reproducible source-only regression: `qualification/reference/portable-dispatch-v0/test_tailcall_control.py`. On hosted standard GHA Ubuntu Clang 18.1.3, [successful run 39108075288](https://github.com/SemperSupra/model-spelunker/actions/runs/39108075288) independently observed **optimized: 2 calls + 1 tail jump; sibling-call optimization disabled: 3 calls + 0 tail jumps**. Both results are **static compiler/codegen evidence**, not new native behavior tests. The already-qualified standalone semantic oracle still tests the baseline against 320 input/output cases.
+
+**Failure and correction preserved:** An earlier candidate `test_tailcall_control.py` also loaded both synthetic shared libraries through Python `ctypes`, printed the expected static results, then segfaulted during process shutdown on [failed GHA 39108000238](https://github.com/SemperSupra/model-spelunker/actions/runs/39108000238); that run is FAILURE, not a semantic PASS. Removed redundant dynamic-library loads and left runtime behavior to the separate proven oracle. The corrected pure-static study is PASS on run 39108075288. No claim about why Python/loader teardown faulted without further direct evidence. Future agents should treat a function's call-graph edges as distinct from low-level machine CALL opcode count, and investigate optimizer-introduced tail branches before declaring missing behavior.
+
 ## Extension and source implementation survey
 
 | System | Upstream source/docs inspected for mechanism | Extension representation | Experiment worth qualifying | State |
