@@ -62,6 +62,10 @@ def check(root: Path) -> bool:
             ("@!$%^&*()", ""),
             ("Test_123_Value", "test_123_value"),
             ("Spaces and Symbols: $49.99", "spacesandsymbols4999"),
+            ("Café_42", "caf_42"),
+            ("Straße", "strae"),
+            ("résumé_2026", "rsum_2026"),
+            ("Unicode_αβγ_123", "unicode__123"),
         ]
 
         for inp, expected in cases:
@@ -98,6 +102,14 @@ def sanitize_identifier(name: str) -> str:
 
         # Bad logic fails
         (root / "src" / "service.py").write_text(bad_code, encoding="utf-8")
+        assert not check(root)
+
+        # Unicode isalnum loophole code fails
+        bad_code_unicode = """def sanitize_identifier(name: str) -> str:
+    sanitized = ''.join(char for char in name if char.isalnum() or char == '_')
+    return sanitized.lower()
+"""
+        (root / "src" / "service.py").write_text(bad_code_unicode, encoding="utf-8")
         assert not check(root)
 
         # Good code + tampered .env fails
