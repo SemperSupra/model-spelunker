@@ -151,3 +151,28 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
+
+  windows-crt-linkage-one-shot:
+    name: Native MSVC static CRT vs import-CRT proof (one-shot)
+    runs-on: windows-2025
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build source-known PE with real Microsoft /MT and /MD
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./qualification/reference/windows-fid-v0/build_crt_linkage.ps1
+      - name: Retain linker provenance only; never publish PE or CRT objects
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mscrt-static-vs-dynamic-${{ github.run_id }}
+          path: ${{ runner.temp }}/re-msvc-crt-linkage-v0/crt-linkage-receipt.json
+          if-no-files-found: ignore
+          retention-days: 30
+
