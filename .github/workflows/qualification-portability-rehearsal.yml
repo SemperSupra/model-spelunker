@@ -106,6 +106,33 @@ jobs:
       - name: Run fail-closed portability unit controls
         run: PYTHONPATH=. python qualification/test_compare_portable_receipts.py
 
+      - name: Verify source-known binary RE fixture and independent oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Test the explicit unmaterialized guard: this must not be a false green.
+          set +e
+          python3 qualification/tasks/portable-dispatch-semantics-v0/verify.py --self-test
+          unprepared_exit=$?
+          set -e
+          test "$unprepared_exit" -eq 77
+
+          # Rebuild twice to test hash stability inside the same pinned hosted image.
+          python3 qualification/reference/portable-dispatch-v0/prepare_work_sample.py \
+            --destination "$RUNNER_TEMP/re-probe-a"
+          python3 "$RUNNER_TEMP/re-probe-a/verify.py" --self-test
+          python3 qualification/reference/portable-dispatch-v0/prepare_work_sample.py \
+            --destination "$RUNNER_TEMP/re-probe-b"
+          python3 "$RUNNER_TEMP/re-probe-b/verify.py" --self-test
+          python3 - "$RUNNER_TEMP/re-probe-a/oracle_manifest.json" "$RUNNER_TEMP/re-probe-b/oracle_manifest.json" <<'PY'
+          import json, sys
+          a, b = (json.load(open(p, encoding="utf-8")) for p in sys.argv[1:])
+          assert a["source_sha256"] == b["source_sha256"]
+          assert a["sha256"] == b["sha256"], "repeated binary/disassembly hashes differ"
+          assert a["tool_versions"] == b["tool_versions"]
+          print("PASS source-known stripped ELF re-build + 8 negative oracle controls")
+          PY
+
       - name: Upload bounded rehearsal evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
