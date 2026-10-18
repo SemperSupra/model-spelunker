@@ -9,6 +9,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+try:
+    from qualification.endpoint_policy import (
+        validate_sovereign_endpoint,
+        resolve_sovereign_api_key,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
+except ImportError:
+    from endpoint_policy import (
+        validate_sovereign_endpoint,
+        resolve_sovereign_api_key,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
+
 
 def resolve_vibe_bin() -> str:
     default_bin = r"C:\Users\Mark\.local\bin\vibe.exe"
@@ -24,13 +41,7 @@ def main() -> int:
         print("missing task instruction on stdin", file=sys.stderr)
         return 2
 
-    forbidden_cloud = (
-        "OPENROUTER_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "GEMINI_API_KEY",
-        "GOOGLE_API_KEY",
-    )
-    present = [name for name in forbidden_cloud if os.environ.get(name)]
+    present = [name for name in FORBIDDEN_CLOUD_CREDENTIALS if os.environ.get(name)]
     if present:
         print(
             "cloud credentials forbidden in sovereign Vibe run: "
@@ -46,18 +57,14 @@ def main() -> int:
         return 2
 
     vibe_home = os.environ.get("VIBE_HOME") or r"C:\Users\Mark\.local\sovereign-actors\config\vibe"
-    bigmac_key = os.environ.get("BIGMAC_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if not bigmac_key:
-        endpoint_config = Path.home() / ".local" / "sovereign-actors" / "config" / "endpoint.json"
-        if endpoint_config.is_file():
-            try:
-                import json
-                data = json.loads(endpoint_config.read_text(encoding="utf-8"))
-                bigmac_key = data.get("endpoints", {}).get("bigmac", {}).get("api_key")
-            except Exception:
-                pass
-    if not bigmac_key:
-        bigmac_key = "local-sovereign-dummy-key"
+    endpoint_url = os.environ.get("VIBE_OPENAI_BASE_URL") or "http://192.168.178.105:8080/v1"
+    try:
+        validate_sovereign_endpoint(endpoint_url)
+    except ValueError as exc:
+        print(f"fail-closed: target model base URL must be local/private: {exc}", file=sys.stderr)
+        return 2
+
+    bigmac_key = resolve_sovereign_api_key(("BIGMAC_API_KEY",))
 
     env = dict(os.environ)
     env["VIBE_HOME"] = vibe_home

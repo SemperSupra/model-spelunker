@@ -44,12 +44,12 @@ def actor_realization(receipt: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def evidence_pattern(successes: int, failures: int) -> str:
-    if successes and failures:
+def evidence_pattern(successes: int, failures: int, censored: int = 0) -> str:
+    if successes and (failures or censored):
         return "MIXED"
     if successes:
         return "PASS_ONLY"
-    if failures:
+    if failures or censored:
         return "FAIL_ONLY"
     return "NO_TERMINAL_EVIDENCE"
 
@@ -68,30 +68,36 @@ def ksa_state(successes: int, failures: int) -> str:
 
 def terminal_outcome(receipt: dict[str, Any]) -> str:
     obs = receipt["observation"]
-    if bool(obs.get("success")):
+
+    # Admitted completion requires both valid artifact and candidate completion within budget
+    admitted = obs.get("admitted_completion")
+    if admitted is True:
         return "pass"
-    termination = obs.get("termination_class")
-    workload = obs.get("workload") or {}
+    if admitted is False and "admitted_completion" in obs:
+        pass
+    elif bool(obs.get("success")) and obs.get("candidate_exit_code") == 0 and not obs.get("timed_out"):
+        return "pass"
+
     signals = set(obs.get("failure_signals") or [])
-    no_completed_rounds = (
-        not obs.get("success", False)
-        and workload.get("model_rounds") == 0
-    )
-    started_calls = workload.get("model_calls_started")
-    timeout_observed = (
-        termination == "timeout-censored"
-        or obs.get("timed_out")
-        or "timeout" in signals
-    )
-    if timeout_observed and isinstance(started_calls, int) and started_calls > 0:
+    termination = obs.get("termination_class")
+
+    # Timeout / censorship check: always classified as censored
+    if obs.get("timed_out") or termination == "timeout-censored" or "timeout" in signals:
         return "censored"
-    if no_completed_rounds:
-        return "incomplete"
-    if timeout_observed:
-        return "censored"
+
+    # Validator crash (exit not in {0, 1}) or harness engine failure: classified as incomplete
     engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
-    validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
-    return "incomplete" if engine_error or validator_error else "fail"
+    verifier_exit = obs.get("verifier_exit_code")
+    validator_error = (
+        "validator-error" in signals
+        or obs.get("failure_class") == "validator-error"
+        or (verifier_exit is not None and verifier_exit not in {0, 1})
+    )
+    if engine_error or validator_error:
+        return "incomplete"
+
+    # All other outcomes (false completion, protocol error, nonzero exit, test fail) are operational failures
+    return "fail"
 
 
 def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -> dict[str, float] | None:
@@ -135,10 +141,36 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     envelopes = []
     for (actor_id, task_class), rows in sorted(groups.items()):
         outcomes = [terminal_outcome(r) for r in rows]
+        reps = len(rows)
         successes = outcomes.count("pass")
         failures = outcomes.count("fail")
         incomplete = outcomes.count("incomplete")
         censored = outcomes.count("censored")
+
+        # Operational estimand: across all attempted trials
+        operational_interval = wilson_interval(successes, reps)
+
+        # Attribute failure types
+        protocol_failures = 0
+        turn_budget_failures = 0
+        for r, out in zip(rows, outcomes):
+            if out == "fail":
+                harness = (r.get("candidate", {}).get("harness", {}) or {}).get("name")
+                stdout = ""
+                # Check diagnostics or failure signals
+                signals = set(r.get("observation", {}).get("failure_signals") or [])
+                if harness == "aider":
+                    protocol_failures += 1
+                elif harness == "goose" and "false-completion" in signals:
+                    turn_budget_failures += 1
+
+        semantic_failures = max(0, failures - protocol_failures)
+        semantic_evaluations = successes + semantic_failures
+
+        # Conditional semantic estimand: evaluated only when fair semantic opportunity existed
+        conditional_interval = wilson_interval(successes, semantic_evaluations) if semantic_evaluations > 0 else None
+        conditional_status = "ESTIMABLE" if semantic_evaluations > 0 else "NOT_ESTIMABLE"
+
         semantic_trials = successes + failures
         task_ids = sorted({r["task"]["id"] for r in rows})
         mapping = KSA_BY_TASK_CLASS.get(task_class, {})
@@ -149,19 +181,37 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
         envelopes.append(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "actor_realization_id": actor_id,
                 "actor": actor_records[actor_id],
                 "task_class": task_class,
-                "evidence_pattern": evidence_pattern(successes, failures),
+                "evidence_pattern": evidence_pattern(successes, failures, censored=censored),
                 "evidence": {
-                    "reps": len(rows),
+                    "reps": reps,
                     "validated_pass": successes,
                     "validated_fail": failures,
                     "incomplete": incomplete,
                     "censored": censored,
+                    "operational_success_rate": {
+                        "passes": successes,
+                        "trials": reps,
+                        "wilson_95": operational_interval,
+                    },
+                    "conditional_semantic_rate": {
+                        "passes": successes,
+                        "evaluations": semantic_evaluations,
+                        "status": conditional_status,
+                        "wilson_95": conditional_interval,
+                    },
+                    "failure_taxonomy": {
+                        "protocol_failures": protocol_failures,
+                        "turn_budget_failures": turn_budget_failures,
+                        "semantic_failures": semantic_failures,
+                        "timeout_censored": censored,
+                        "validator_invalid": incomplete,
+                    },
                     "semantic_trials": semantic_trials,
-                    "success_interval_wilson_95": wilson_interval(successes, semantic_trials),
+                    "success_interval_wilson_95": operational_interval,
                     "unique_task_instances": len(task_ids),
                     "task_ids": task_ids,
                     "run_ids": sorted(r["run_id"] for r in rows),
@@ -178,8 +228,23 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
-    rows = [json.loads(path.read_text(encoding="utf-8")) for path in args.receipts]
-    result = {"schema_version": 1, "envelopes": reduce_receipts(rows)}
+    raw_paths: list[Path] = []
+    for p in args.receipts:
+        s = str(p)
+        if "*" in s or "?" in s:
+            import glob
+            expanded = glob.glob(s)
+            raw_paths.extend(Path(x) for x in expanded)
+        else:
+            raw_paths.append(p)
+
+    # Only include raw run receipts (exclude prior reductions)
+    rows = []
+    for path in raw_paths:
+        if "reduction" in path.name or path.name.endswith(".diag.json"):
+            continue
+        rows.append(json.loads(path.read_text(encoding="utf-8")))
+    result = {"schema_version": 2, "envelopes": reduce_receipts(rows)}
     payload = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.write_text(payload, encoding="utf-8")

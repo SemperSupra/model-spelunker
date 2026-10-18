@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""P0 Causal Falsification Tests: Statistical Soundness & Estimands (STAT-01, STAT-02, STAT-03)."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from qualification.reduce_evidence import (
+    reduce_receipts,
+    terminal_outcome,
+    wilson_interval,
+)
+
+
+def make_mock_receipt(
+    run_id: str,
+    harness: str,
+    task_class: str,
+    *,
+    success: bool,
+    verifier_exit: int,
+    candidate_exit: int,
+    timed_out: bool,
+    admitted_completion: bool | None = None,
+    failure_signals: list[str] | None = None,
+    model_rounds: int | None = None,
+) -> dict:
+    obs = {
+        "success": success,
+        "verifier_exit_code": verifier_exit,
+        "candidate_exit_code": candidate_exit,
+        "timed_out": timed_out,
+        "termination_class": "semantic-success" if success else ("timeout-censored" if timed_out else "semantic-failure"),
+        "failure_signals": failure_signals or [],
+        "workload": {"model_rounds": model_rounds},
+    }
+    if admitted_completion is not None:
+        obs["admitted_completion"] = admitted_completion
+        obs["artifact_valid"] = (verifier_exit == 0)
+        obs["candidate_completed"] = (candidate_exit == 0 and not timed_out)
+        obs["within_wall_budget"] = not timed_out
+
+    return {
+        "run_id": run_id,
+        "task": {"id": f"task-{task_class}", "task_class": task_class},
+        "candidate": {"harness": {"name": harness}, "model": {"id": "qwen3-coder-30b"}, "toolset": ["dev"]},
+        "substrate": {"profile_id": "test-substrate"},
+        "observation": obs,
+    }
+
+
+def test_stat_01_wilson_denominators_and_null_telemetry() -> None:
+    """STAT-01: Correct Wilson denominators and null != 0 for unobserved telemetry."""
+    # 4/4
+    w44 = wilson_interval(4, 4)
+    assert w44 is not None
+    assert round(w44["lower_95"], 4) == 0.5101
+    assert round(w44["upper_95"], 4) == 1.0000
+
+    # 3/4
+    w34 = wilson_interval(3, 4)
+    assert w34 is not None
+    assert round(w34["lower_95"], 4) == 0.3006
+    assert round(w34["upper_95"], 4) == 0.9544
+
+    # 3/3
+    w33 = wilson_interval(3, 3)
+    assert w33 is not None
+    assert round(w33["lower_95"], 4) == 0.4385
+    assert round(w33["upper_95"], 4) == 1.0000
+
+    # 0/4
+    w04 = wilson_interval(0, 4)
+    assert w04 is not None
+    assert round(w04["lower_95"], 4) == 0.0000
+    assert round(w04["upper_95"], 4) == 0.4899
+
+    print("PASS: STAT-01 Wilson denominators and intervals verified")
+
+
+def test_stat_02_verifier_success_with_timeout_censoring() -> None:
+    """STAT-02: Verifier success with timeout/nonzero candidate exit separates artifact validity from completion."""
+    # Simulating Pi boundary trial 3: verifier passed (0), but candidate timed out (124)
+    r_pass = [
+        make_mock_receipt(f"pi-{i}", "pi", "bounded-debugging", success=True, verifier_exit=0, candidate_exit=0, timed_out=False, admitted_completion=True)
+        for i in range(1, 4)
+    ]
+    r_timeout = make_mock_receipt(
+        "pi-4",
+        "pi",
+        "bounded-debugging",
+        success=False,
+        verifier_exit=0,  # Verifier passed!
+        candidate_exit=124,
+        timed_out=True,  # Process timed out!
+        admitted_completion=False,
+        failure_signals=["timeout"],
+    )
+    receipts = r_pass + [r_timeout]
+
+    envelopes = reduce_receipts(receipts)
+    assert len(envelopes) == 1
+    ev = envelopes[0]["evidence"]
+
+    # Must report 3 passes, 0 fails, 1 censored, 0 incomplete
+    assert ev["validated_pass"] == 3
+    assert ev["validated_fail"] == 0
+    assert ev["censored"] == 1
+    assert ev["incomplete"] == 0
+
+    # Operational rate: 3/4 -> [0.3006, 0.9544]
+    op_w = ev["operational_success_rate"]["wilson_95"]
+    assert round(op_w["lower_95"], 4) == 0.3006
+    assert round(op_w["upper_95"], 4) == 0.9544
+
+    # Conditional semantic rate: 3/3 -> [0.4385, 1.0000]
+    cond_w = ev["conditional_semantic_rate"]["wilson_95"]
+    assert round(cond_w["lower_95"], 4) == 0.4385
+    assert round(cond_w["upper_95"], 4) == 1.0000
+
+    print("PASS: STAT-02 Separate artifact validity and timeout censoring")
+
+
+def test_stat_03_aider_operational_failures_and_semantic_status() -> None:
+    """STAT-03: Aider protocol failures are visible operational failures with semantic status NOT_ESTIMABLE."""
+    receipts = [
+        make_mock_receipt(
+            f"aider-{i}",
+            "aider",
+            "bounded-repair",
+            success=False,
+            verifier_exit=1,
+            candidate_exit=0,
+            timed_out=False,
+            admitted_completion=False,
+            failure_signals=["false-completion"],
+            model_rounds=None,
+        )
+        for i in range(1, 5)
+    ]
+
+    envelopes = reduce_receipts(receipts)
+    assert len(envelopes) == 1
+    ev = envelopes[0]["evidence"]
+
+    # Operational failure must be recorded (0 passes, 4 failures)
+    assert ev["validated_pass"] == 0
+    assert ev["validated_fail"] == 4
+    assert ev["incomplete"] == 0
+    assert ev["censored"] == 0
+
+    # Operational Wilson interval: 0/4 -> [0.0, 0.4899]
+    op_w = ev["operational_success_rate"]["wilson_95"]
+    assert op_w["estimate"] == 0.0
+    assert round(op_w["upper_95"], 4) == 0.4899
+
+    # Conditional semantic status: NOT_ESTIMABLE
+    assert ev["conditional_semantic_rate"]["status"] == "NOT_ESTIMABLE"
+    assert ev["conditional_semantic_rate"]["wilson_95"] is None
+    assert ev["failure_taxonomy"]["protocol_failures"] == 4
+
+    print("PASS: STAT-03 Aider operational failures and NOT_ESTIMABLE semantic status")
+
+
+if __name__ == "__main__":
+    test_stat_01_wilson_denominators_and_null_telemetry()
+    test_stat_02_verifier_success_with_timeout_censoring()
+    test_stat_03_aider_operational_failures_and_semantic_status()
+    print("ALL P0 Statistical Soundness tests PASS (STAT-01..STAT-03)")

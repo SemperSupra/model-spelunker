@@ -16,6 +16,23 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+try:
+    from qualification.windows_containment import WindowsJobObject
+except ImportError:
+    try:
+        from windows_containment import WindowsJobObject
+    except ImportError:
+        WindowsJobObject = None
+
+try:
+    from qualification.endpoint_policy import sanitize_candidate_env
+except ImportError:
+    try:
+        from endpoint_policy import sanitize_candidate_env
+    except ImportError:
+        sanitize_candidate_env = None
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -219,19 +236,28 @@ def detect_failure_signals(
     return signals
 
 
-def _terminate_candidate_group(proc: subprocess.Popen[str]) -> None:
+def _terminate_candidate_group(proc: subprocess.Popen[str], job: Any = None) -> None:
     if os.name == "nt":
-        if proc.poll() is None:
+        if job is not None:
             try:
-                subprocess.run(
-                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                )
+                job.terminate(1)
             except Exception:
-                if proc.poll() is None:
+                pass
+        # Unconditionally invoke taskkill with bounded timeout to clean any surviving detached descendants
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+            )
+        except Exception:
+            if proc.poll() is None:
+                try:
                     proc.terminate()
+                except Exception:
+                    pass
         return
     if os.name != "posix":
         if proc.poll() is None:
@@ -265,40 +291,55 @@ def run_candidate_process(
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout_file, tempfile.TemporaryFile(
         mode="w+", encoding="utf-8"
     ) as stderr_file:
-        proc = subprocess.Popen(
-            command,
-            cwd=cwd,
-            text=True,
-            stdin=subprocess.PIPE,
-            stdout=stdout_file,
-            stderr=stderr_file,
-            env=env,
-            start_new_session=(os.name == "posix"),
-        )
-        if proc.stdin is None:
-            raise RuntimeError("candidate stdin unavailable")
-        proc.stdin.write(input_text)
-        proc.stdin.close()
+        job = None
+        if os.name == "nt" and WindowsJobObject is not None:
+            job = WindowsJobObject()
 
-        timed_out=False
+        proc = None
+        timed_out = False
+        return_code = 1
         try:
-            return_code=proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out=True
-            return_code=124
-        finally:
-            _terminate_candidate_group(proc)
-            if proc.poll() is None:
+            proc = subprocess.Popen(
+                command,
+                cwd=cwd,
+                text=True,
+                stdin=subprocess.PIPE,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                env=env,
+                start_new_session=(os.name == "posix"),
+            )
+            if job is not None:
+                job.assign_process(int(proc._handle))
+
+            if proc.stdin is not None:
                 try:
-                    proc.wait(timeout=1)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait()
+                    proc.stdin.write(input_text)
+                    proc.stdin.close()
+                except (BrokenPipeError, OSError):
+                    pass
+
+            try:
+                return_code = proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                return_code = 124
+        finally:
+            if proc is not None:
+                _terminate_candidate_group(proc, job=job)
+                if proc.poll() is None:
+                    try:
+                        proc.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+            if job is not None:
+                job.close()
 
         stdout_file.seek(0)
         stderr_file.seek(0)
-        stdout=stdout_file.read()
-        stderr=stderr_file.read()
+        stdout = stdout_file.read()
+        stderr = stderr_file.read()
         return return_code, stdout, stderr, timed_out
 
 def new_run_id() -> str:
@@ -483,6 +524,9 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         "tool_argument_bytes",
         "client_wall_seconds",
     )
+    if not observations:
+        return {"model_rounds": None}
+
     summary: dict[str, object] = {"model_rounds": len(observations)}
     for field in numeric_fields:
         values = [
@@ -724,7 +768,13 @@ def main() -> int:
         initial_tree_digest = tree_digest(workdir)
 
         started = time.monotonic()
-        if args.candidate_env_mode == "inherit":
+        if sanitize_candidate_env is not None:
+            candidate_env = sanitize_candidate_env(
+                os.environ,
+                mode=args.candidate_env_mode,
+                pass_env=args.pass_env,
+            )
+        elif args.candidate_env_mode == "inherit":
             candidate_env = dict(os.environ)
         else:
             baseline = {
@@ -783,7 +833,11 @@ def main() -> int:
         final_tree_digest = tree_digest(workdir)
         state_changed = final_tree_digest != initial_tree_digest
         validator_error = verifier.returncode not in {0, 1}
-        success = verifier.returncode == 0 and not timed_out
+        artifact_valid = verifier.returncode == 0
+        candidate_completed = candidate_exit == 0 and not timed_out
+        within_wall_budget = not timed_out
+        admitted_completion = artifact_valid and candidate_completed and within_wall_budget
+        success = admitted_completion
         provider_rounds = provider_observations(stdout)
         if not provider_rounds and (candidate.get("harness") or {}).get("name") == "goose":
             provider_rounds = goose_stream_provider_observations(stdout)
@@ -898,10 +952,14 @@ def main() -> int:
             ),
             "observation": {
                 "success": success,
+                "artifact_valid": artifact_valid,
+                "candidate_completed": candidate_completed,
+                "within_wall_budget": within_wall_budget,
+                "admitted_completion": admitted_completion,
                 "termination_class": termination_class,
                 "failure_class": failure_class,
                 "wall_seconds": round(wall_seconds, 6),
-                "human_interventions": 0,
+                "human_interventions": None,
                 "candidate_exit_code": candidate_exit,
                 "verifier_exit_code": verifier.returncode,
                 "timed_out": timed_out,

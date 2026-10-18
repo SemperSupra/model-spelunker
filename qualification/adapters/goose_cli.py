@@ -3,24 +3,27 @@
 
 from __future__ import annotations
 
-import ipaddress
 import os
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-def is_private_or_local_url(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
-        if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
-            return True
-        ip = ipaddress.ip_address(hostname)
-        return ip.is_private or ip.is_loopback
-    except ValueError:
-        return False
+try:
+    from qualification.endpoint_policy import (
+        validate_sovereign_endpoint,
+        resolve_sovereign_api_key,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
+except ImportError:
+    from endpoint_policy import (
+        validate_sovereign_endpoint,
+        resolve_sovereign_api_key,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
 
 
 def main() -> int:
@@ -41,13 +44,7 @@ def main() -> int:
     provider = os.environ.get("GOOSE_PROVIDER", "ollama")
     env = dict(os.environ)
 
-    forbidden_cloud = (
-        "OPENROUTER_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "GEMINI_API_KEY",
-        "GOOGLE_API_KEY",
-    )
-    present_cloud = [name for name in forbidden_cloud if os.environ.get(name)]
+    present_cloud = [name for name in FORBIDDEN_CLOUD_CREDENTIALS if os.environ.get(name)]
     if present_cloud:
         print(
             "cloud credentials forbidden in sovereign Goose run: "
@@ -73,17 +70,25 @@ def main() -> int:
             )
             return 2
         if "GOOSE_OLLAMA_HOST" in env:
-            env["OLLAMA_HOST"] = env["GOOSE_OLLAMA_HOST"]
+            ollama_host = env["GOOSE_OLLAMA_HOST"]
+            try:
+                validate_sovereign_endpoint(ollama_host)
+            except ValueError as exc:
+                print(f"fail-closed: GOOSE_OLLAMA_HOST must target a local/private network: {exc}", file=sys.stderr)
+                return 2
+            env["OLLAMA_HOST"] = ollama_host
     elif provider == "openai":
         base_url = env.get("GOOSE_OPENAI_BASE_URL") or env.get("OPENAI_BASE_URL") or ""
         if not base_url:
             print("OPENAI_BASE_URL or GOOSE_OPENAI_BASE_URL required for openai provider", file=sys.stderr)
             return 2
-        if not is_private_or_local_url(base_url):
-            print(f"fail-closed: OPENAI_BASE_URL must target a local/private network: {base_url}", file=sys.stderr)
+        try:
+            validate_sovereign_endpoint(base_url)
+        except ValueError as exc:
+            print(f"fail-closed: OPENAI_BASE_URL must target a local/private network: {exc}", file=sys.stderr)
             return 2
         env["OPENAI_BASE_URL"] = base_url
-        api_key = env.get("GOOSE_OPENAI_API_KEY") or env.get("OPENAI_API_KEY") or ""
+        api_key = resolve_sovereign_api_key(("GOOSE_OPENAI_API_KEY",))
         if api_key:
             env["OPENAI_API_KEY"] = api_key
     else:
@@ -93,8 +98,6 @@ def main() -> int:
     env.update(
         {
             "GOOSE_MODE": "auto",
-            "GOOSE_THINKING_EFFORT": "off",
-            "GOOSE_TELEMETRY_OFF": "true",
             "GOOSE_TELEMETRY_ENABLED": "false",
             "GOOSE_RANDOM_THINKING_MESSAGES": "false",
             "CONFIGURE": "false",

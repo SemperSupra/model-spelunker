@@ -3,11 +3,27 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+try:
+    from qualification.endpoint_policy import (
+        validate_sovereign_endpoint,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
+except ImportError:
+    from endpoint_policy import (
+        validate_sovereign_endpoint,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
 
 
 def resolve_node_and_cli() -> tuple[str, str]:
@@ -31,13 +47,7 @@ def main() -> int:
         print("missing task instruction on stdin", file=sys.stderr)
         return 2
 
-    forbidden_cloud = (
-        "OPENROUTER_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "GEMINI_API_KEY",
-        "GOOGLE_API_KEY",
-    )
-    present = [name for name in forbidden_cloud if os.environ.get(name)]
+    present = [name for name in FORBIDDEN_CLOUD_CREDENTIALS if os.environ.get(name)]
     if present:
         print(
             "cloud credentials forbidden in sovereign Pi run: "
@@ -56,6 +66,20 @@ def main() -> int:
     model = os.environ.get("MODEL_SPELUNKER_MODEL", "qwen3-coder-30b")
     default_cfg = r"C:\Users\Mark\.local\sovereign-actors\config\pi"
     cfg_dir = os.environ.get("PI_CODING_AGENT_DIR") or (default_cfg if Path(default_cfg).is_dir() else "")
+
+    # Validate provider endpoint for the active provider only in models.json if present
+    if cfg_dir and Path(cfg_dir).is_dir():
+        models_json = Path(cfg_dir) / "models.json"
+        if models_json.is_file():
+            try:
+                models_data = json.loads(models_json.read_text(encoding="utf-8"))
+                active_cfg = models_data.get("providers", {}).get(provider, {})
+                base_url = active_cfg.get("baseUrl") or active_cfg.get("baseURL")
+                if base_url:
+                    validate_sovereign_endpoint(base_url)
+            except Exception as exc:
+                print(f"fail-closed: invalid sovereign provider endpoint in pi config: {exc}", file=sys.stderr)
+                return 2
 
     env = dict(os.environ)
     env.update(

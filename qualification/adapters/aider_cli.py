@@ -7,27 +7,24 @@ import os
 import shutil
 import subprocess
 import sys
-import urllib.parse
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-def is_private_or_local_url(url_string: str) -> bool:
-    try:
-        parsed = urllib.parse.urlparse(url_string)
-        host = parsed.hostname or ""
-        if host in {"127.0.0.1", "localhost", "::1"}:
-            return True
-        parts = [int(p) for p in host.split(".")]
-        if len(parts) == 4:
-            if parts[0] == 10:
-                return True
-            if parts[0] == 172 and 16 <= parts[1] <= 31:
-                return True
-            if parts[0] == 192 and parts[1] == 168:
-                return True
-        return False
-    except Exception:
-        return False
+try:
+    from qualification.endpoint_policy import (
+        validate_sovereign_endpoint,
+        resolve_sovereign_api_key,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
+except ImportError:
+    from endpoint_policy import (
+        validate_sovereign_endpoint,
+        resolve_sovereign_api_key,
+        FORBIDDEN_CLOUD_CREDENTIALS,
+    )
 
 
 def resolve_aider_bin() -> str:
@@ -44,13 +41,7 @@ def main() -> int:
         print("missing task instruction on stdin", file=sys.stderr)
         return 2
 
-    forbidden_cloud = (
-        "OPENROUTER_API_KEY",
-        "ANTHROPIC_API_KEY",
-        "GEMINI_API_KEY",
-        "GOOGLE_API_KEY",
-    )
-    present = [name for name in forbidden_cloud if os.environ.get(name)]
+    present = [name for name in FORBIDDEN_CLOUD_CREDENTIALS if os.environ.get(name)]
     if present:
         print(
             "cloud credentials forbidden in sovereign Aider run: "
@@ -71,26 +62,13 @@ def main() -> int:
         or os.environ.get("OPENAI_API_BASE")
         or "http://192.168.178.105:8080/v1"
     )
-    if not is_private_or_local_url(base_url):
-        print(f"fail-closed: target model base URL must be local/private: {base_url}", file=sys.stderr)
+    try:
+        validate_sovereign_endpoint(base_url)
+    except ValueError as exc:
+        print(f"fail-closed: target model base URL must be local/private: {exc}", file=sys.stderr)
         return 2
 
-    api_key = (
-        os.environ.get("AIDER_OPENAI_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("BIGMAC_API_KEY")
-    )
-    if not api_key:
-        endpoint_config = Path.home() / ".local" / "sovereign-actors" / "config" / "endpoint.json"
-        if endpoint_config.is_file():
-            try:
-                import json
-                data = json.loads(endpoint_config.read_text(encoding="utf-8"))
-                api_key = data.get("endpoints", {}).get("bigmac", {}).get("api_key")
-            except Exception:
-                pass
-    if not api_key:
-        api_key = "local-sovereign-dummy-key"
+    api_key = resolve_sovereign_api_key(("AIDER_OPENAI_API_KEY",))
 
     model_name = (
         os.environ.get("AIDER_MODEL")
@@ -100,14 +78,25 @@ def main() -> int:
     if not model_name.startswith("openai/"):
         model_name = f"openai/{model_name}"
 
+    edit_format = os.environ.get("AIDER_EDIT_FORMAT", "diff")
+
+    # Resolve target files from task environment so Aider has file context in headless mode
+    allowed_paths_raw = (
+        os.environ.get("MODEL_SPELUNKER_ALLOWED_WRITE_PATHS")
+        or os.environ.get("MODEL_SPELUNKER_WRITE_TARGET")
+        or ""
+    )
+    target_files = [p.strip() for p in allowed_paths_raw.split(",") if p.strip()]
+
+    # Omit API key from argv so argv and process logs never expose credentials
     command = [
         aider_bin,
         "--openai-api-base",
         base_url,
-        "--openai-api-key",
-        api_key,
         "--model",
         model_name,
+        "--edit-format",
+        edit_format,
         "--no-git",
         "--yes-always",
         "--no-auto-commits",
@@ -116,6 +105,8 @@ def main() -> int:
         "--message",
         instruction,
     ]
+    if target_files:
+        command.extend(target_files)
 
     if os.environ.get("AIDER_MOCK_DRY_RUN") == "1":
         print(" ".join(command))
