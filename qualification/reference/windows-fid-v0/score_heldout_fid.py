@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from verify_bundled_crt_fid import LINE, MATCH, TIE_CLASS, CRT
+CRT_FAMILIES = set(CRT) | {"libcmtd", "libucrtd", "libvcruntimed"}
 
 def _read(path: Path) -> str:
     if not path.is_file() or path.stat().st_size > 12_000_000:
@@ -19,7 +20,7 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
-    if treatment not in {"static", "static_heldout", "dynamic"}:
+    if treatment not in {"static", "static_heldout", "static_debug", "dynamic"}:
         raise ValueError("unadmitted treatment")
     truth = {}
     for line in mapping.splitlines():
@@ -67,7 +68,7 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
     metrics = {"unique":0, "same_name_consensus":0, "conflicting_abstain":0,
                "unique_exact_crt":0, "unique_wrong_crt":0, "unique_unknown":0,
                "consensus_exact_crt":0, "consensus_wrong_crt":0, "consensus_unknown":0,
-               "known_crt_map_symbols":sum(any(lib in CRT for _,lib in symbols) for symbols in truth.values()),
+               "known_crt_map_symbols":sum(any(lib in CRT_FAMILIES for _,lib in symbols) for symbols in truth.values()),
                "map_alias_abstain":0}
     for key, m in matches.items():
         if m["ties"] == 1:
@@ -78,7 +79,7 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
             metrics["conflicting_abstain"] += 1
             continue
         metrics[label] += 1
-        identities = {(sym, lib) for sym, lib in truth.get(key, set()) if lib in CRT}
+        identities = {(sym, lib) for sym, lib in truth.get(key, set()) if lib in CRT_FAMILIES}
         # Linker MAP can retain several aliases at one address. An arbitrary
         # last-wins symbol would manufacture wrong/correct labels.
         if len(identities)>1:
@@ -101,7 +102,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--map", type=Path, required=True)
     ap.add_argument("--query-log", type=Path, required=True)
-    ap.add_argument("--treatment", choices=("static","static_heldout","dynamic"), required=True)
+    ap.add_argument("--treatment", choices=("static","static_heldout","static_debug","dynamic"), required=True)
     ap.add_argument("--output", type=Path, required=True)
     args=ap.parse_args()
     result=evaluate(_read(args.map), _read(args.query_log), args.treatment)
