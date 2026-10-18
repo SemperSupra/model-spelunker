@@ -159,30 +159,3 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
-
-
-  w4c-coff-native-one-shot:
-    name: W4c one-shot native optimizer code-section control
-    runs-on: windows-2025
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Build author-owned native CRT images, never execute them
-        shell: pwsh
-        run: |
-          ./qualification/reference/windows-fid-v0/build_crt_linkage.ps1
-          ./qualification/reference/windows-fid-v0/build_heldout_crt.ps1
-      - name: Independent native COFF code-section optimizer witness
-        shell: pwsh
-        run: |
-          python ./qualification/reference/windows-fid-v0/verify_optimizer_distinct.py --root "$env:RUNNER_TEMP/re-msvc-crt-linkage-v0"
-      - name: Retain only producer-side digest summary
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: w4c-coff-digest-${{ github.run_id }}
-          path: ${{ runner.temp }}/re-msvc-crt-linkage-v0/w4c-optimizer-fingerprint.json
-          if-no-files-found: warn
-          retention-days: 14
