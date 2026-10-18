@@ -1,7 +1,9 @@
 /* Public-safe, source-known Windows x64 FID/BSim reference and false-match control.
  * No CRT, dynamic imports, secrets, or third-party/vendored binary input.
  */
-#if defined(__clang__)
+#if defined(_MSC_VER)
+#define KEEP __declspec(noinline)
+#elif defined(__clang__) || defined(__GNUC__)
 #define KEEP __attribute__((noinline, used))
 #else
 #define KEEP
