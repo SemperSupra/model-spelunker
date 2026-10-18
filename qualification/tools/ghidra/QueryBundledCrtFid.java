@@ -22,7 +22,7 @@ public class QueryBundledCrtFid extends GhidraScript {
     public void run() throws Exception {
         if (currentProgram == null) throw new IllegalStateException("program missing");
         String[] args = getScriptArgs();
-        if (args.length != 1 || !("static".equals(args[0]) || "dynamic".equals(args[0]) || "static_heldout".equals(args[0]) || "static_debug".equals(args[0]))) {
+        if (args.length != 1 || !("static".equals(args[0]) || "dynamic".equals(args[0]) || "static_heldout".equals(args[0]) || "debug".equals(args[0]))) {
             throw new IllegalArgumentException("expected admitted static, dynamic, or static_heldout label");
         }
         FidFileManager fm = FidFileManager.getInstance();
