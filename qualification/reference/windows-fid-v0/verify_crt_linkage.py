@@ -31,7 +31,12 @@ def main():
             "qsort_imported":bool(re.search(r"\bqsort\b",imp)),
             "strtoui64_imported":bool(re.search(r"\b_strtoui64\b",imp)),
             "linked_libs":sorted(set(re.findall(r"(?i)\b((?:libucrt|libcmt|libvcruntime|ucrt|vcruntime|msvcrt)\.lib)\b",log))),
-            "loaded_static_crt_members":len(re.findall(r"(?i)Loaded[^\r\n]*\b(?:libucrt|libcmt|libvcruntime)\.lib\s*\([^\r\n)]+\)",log)),
+            # MSVC 14.51 /MAP provenance: "LIBCMT:utility.obj" or "libucrt:argv_data.obj".
+            # Modern /VERBOSE:LIB may emit Searching only; do not infer member inclusion from it.
+            "linked_crt_member_references":len(set(re.findall(
+                r"(?i)\b(?:libucrt|libcmt|libvcruntime):[\w.$-]+\.obj\b", mapping))),
+            "has_static_ucrt_map_member":bool(re.search(r"(?i)\blibucrt:[\w.$-]+\.obj\b",mapping)),
+            "has_static_msvc_crt_map_member":bool(re.search(r"(?i)\bLIBCMT:[\w.$-]+\.obj\b",mapping)),
             "link_log_sha256":sha(root/("crt_"+flavor+"-link.log")),
             "map_sha256":sha(root/("crt_"+flavor+".map")),
             "map_mentions_export":("re_crt_dispatch" in mapping),
@@ -41,21 +46,10 @@ def main():
         raise ValueError("static and dynamic PE equal")
     if a["qsort_imported"] or not b["qsort_imported"]:
         raise ValueError("expected qsort statically resolved only for /MT")
-    if a["loaded_static_crt_members"] < 1:
-        # Diagnosis is bounded to provenance lines only; no SDK source/member data.
-        lines=text(root/"crt_static-link.log").splitlines()
-        sample=[row.strip()[:220] for row in lines
-                if any(k in row.lower() for k in ("libucrt", "libcmt", "loaded", "qsort", "strtoui"))]
-        link_counts={t:sum(t.lower() in row.lower() for row in lines)
-                     for t in ("Searching","Found","Referenced","Loaded","libucrt","LIBCMT")}
-        mapped=text(root/"crt_static.map").splitlines()
-        map_sample=[row.strip()[:240] for row in mapped
-                    if any(t in row.lower() for t in ("qsort","strtoui64","libucrt","libcmt"))]
-        print(json.dumps({"diagnostic":"NO_MATCHING_STATIC_MEMBER_LOADED_PATTERN",
-                          "candidate_lines":sample[:12],
-                          "link_counts":link_counts,
-                          "map_sample":map_sample[:20]},sort_keys=True))
-        raise ValueError("no linker evidence of actual static CRT member inclusion")
+    if not a["has_static_ucrt_map_member"] or not a["has_static_msvc_crt_map_member"]:
+        raise ValueError("static /MT MAP lacks actual UCRT and MSVC CRT member attribution")
+    if a["linked_crt_member_references"] < 2:
+        raise ValueError("insufficient archive-member provenance in static PE map")
     if not a["map_mentions_export"] or not b["map_mentions_export"]:
         raise ValueError("source-known exported function absent in map")
     receipt={"schema_version":1,"status":"NATIVE_MSVC_STATIC_VS_DYNAMIC_CRT_PROVENANCE_PASS",
@@ -66,7 +60,7 @@ def main():
     (root/"crt-linkage-receipt.json").write_text(json.dumps(receipt,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     print(json.dumps({"status":receipt["status"],"summary":{k:{
         "size":v["size"],"qsort_imported":v["qsort_imported"],
-        "loaded_static_crt_members":v["loaded_static_crt_members"],
+        "linked_crt_member_references":v["linked_crt_member_references"],
         "dll_dependencies":v["dll_dependencies"],
         "linked_libs":v["linked_libs"]} for k,v in files.items()}},sort_keys=True))
 
