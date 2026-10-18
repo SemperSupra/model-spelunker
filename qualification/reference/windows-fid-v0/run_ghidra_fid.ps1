@@ -79,7 +79,7 @@ Invoke-Headless -Label 'import-target' -Arguments @(
 Invoke-Headless -Label 'query-fid' -Arguments @(
   '-process','target_stripped.dll','-readOnly','-noanalysis','-max-cpu','2',
   '-scriptPath',$scriptPath,
-  '-postScript','QuerySourceKnownFid.java',$family,
+  '-postScript','QuerySourceKnownFid.java',$family,$db,
   '-log',(Join-Path $ghidraLog 'query-fid.log'),
   '-scriptlog',(Join-Path $ghidraLog 'query-fid-scripts.log')
 )
