@@ -132,6 +132,8 @@ jobs:
           assert a["tool_versions"] == b["tool_versions"]
           print("PASS source-known stripped ELF re-build + 8 negative oracle controls")
           PY
+          # One-factor compiler control: tail-call JMP versus ordinary CALL.
+          python3 qualification/reference/portable-dispatch-v0/test_tailcall_control.py
 
       - name: Validate raw p-code evidence negative controls
         shell: bash
