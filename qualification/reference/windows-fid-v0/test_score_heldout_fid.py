@@ -16,6 +16,8 @@ RE_SHIPPED_FID_TIE_GROUP=140001020|2|2|2
 RE_SHIPPED_FID_TIE_CONSENSUS=1
 RE_SHIPPED_FID_TIE_CONFLICT=1
 RE_SHIPPED_FID_MATCH_COUNT=3
+RE_SHIPPED_FID_EMITTED_COUNT=3
+RE_SHIPPED_FID_TRUNCATED_COUNT=0
 RE_SHIPPED_FID_AMBIGUOUS_COUNT=2
 """
 
@@ -43,6 +45,15 @@ class HeldoutOracle(unittest.TestCase):
     def test_conflicting_group_cannot_be_relabelled_consensus(self):
         with self.assertRaises(ValueError):
             evaluate(MAP, query().replace("140001020|2|2|2", "140001020|2|1|2"), "static")
+
+    def test_forged_truncation_fails(self):
+        with self.assertRaises(ValueError):
+            evaluate(MAP, query().replace("TRUNCATED_COUNT=0","TRUNCATED_COUNT=1"), "static")
+
+    def test_debug_crt_correct_from_source_MAP(self):
+        debug_map=MAP.replace("libcmt:","libcmtd:")
+        m=evaluate(debug_map,query(),"debug")["metrics"]
+        self.assertEqual(m["consensus_exact_crt"],1)
 
     def test_duplicate_address_fails(self):
         with self.assertRaises(ValueError):
