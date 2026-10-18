@@ -35,8 +35,11 @@ timeout --signal=TERM 240 \
   -readOnly -deleteProject -max-cpu 2 -analysisTimeoutPerFile 120 \
   -scriptPath "$repo/qualification/tools/ghidra" \
   -postScript ExportREFunctions.java "$work/output/ghidra-export.json" \
+  -postScript ExportRawPcode.java "$work/output/ghidra-pcode.json" \
   -log "$work/output/headless.log" \
   -scriptlog "$work/output/scripts.log"
 python3 "$repo/qualification/tools/ghidra/verify_export.py" \
   "$work/output/ghidra-export.json"
-sha256sum "$work/output/ghidra-export.json"
+python3 "$repo/qualification/tools/ghidra/verify_pcode.py" \
+  "$work/output/ghidra-export.json" "$work/output/ghidra-pcode.json"
+sha256sum "$work/output/ghidra-export.json" "$work/output/ghidra-pcode.json"
