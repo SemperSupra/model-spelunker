@@ -1,0 +1,22 @@
+{
+  "harness": {
+    "name": "goose",
+    "version": "1.55.0"
+  },
+  "model": {
+    "provider": "llama-server",
+    "id": "qwen3-coder-30b",
+    "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0"
+  },
+  "toolset": [
+    "developer"
+  ],
+  "build": {
+    "kind": "user-local-binary",
+    "profile": "windows-x64",
+    "source_revision": "v1.55.0",
+    "toolchain": "rust",
+    "default_features": false,
+    "features": []
+  }
+}

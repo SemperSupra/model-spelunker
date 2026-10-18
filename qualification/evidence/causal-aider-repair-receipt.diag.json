@@ -1,0 +1,8 @@
+{
+  "candidate_stderr_chars": 0,
+  "candidate_stderr_tail": "",
+  "candidate_stdout_chars": 496,
+  "candidate_stdout_tail": "Can't initialize prompt toolkit: No Windows console found. Are you running \ncmd.exe?\nCan't initialize prompt toolkit: No Windows console found. Are you running \ncmd.exe?\nTerminal does not support pretty output (UnicodeDecodeError)\nAider v0.86.2\nModel: openai/qwen3-coder-30b with diff edit format\nGit repo: none\nRepo-map: disabled\nAdded value.txt to the chat.\n\nvalue.txt\n```python\n<<<<<<< SEARCH\nBROKEN\n=======\nREADY\n\n>>>>>>> REPLACE\n```\nTokens: 2.4k sent, 20 received.\nApplied edit to value.txt\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": "PASS ok\n"
+}

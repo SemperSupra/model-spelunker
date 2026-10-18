@@ -66,6 +66,7 @@ print('MODEL_SPELUNKER_PROVIDER_OBSERVATIONS=[{"requested_model":"fixture","reso
             "--task-commit","a"*40,
             "--substrate-profile-id","persistent-hygiene-fixture",
             "--substrate-profile-commit","b"*40,
+            "--pass-env","HYGIENE_CWD_LOG",
             str(task),str(meta),str(receipt),
             "--",sys.executable,str(candidate),
         ],text=True,capture_output=True,env=env)

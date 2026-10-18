@@ -1,0 +1,73 @@
+{
+  "candidate": {
+    "build": {
+      "default_features": false,
+      "features": [],
+      "kind": "user-local-binary",
+      "profile": "windows-x64",
+      "source_revision": "v1.55.0",
+      "toolchain": "rust"
+    },
+    "configuration_digest": "sha256:09f9321afa19308c90e261b401ec7c5e8a132badc44b3f0016074a83513d901a",
+    "harness": {
+      "name": "goose",
+      "version": "1.55.0"
+    },
+    "model": {
+      "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+      "id": "qwen3-coder-30b",
+      "provider": "llama-server"
+    },
+    "toolset": [
+      "developer"
+    ]
+  },
+  "evidence_digest": "sha256:e904d56263062c89853864b46dc7d8c0604a9f346b232559416ced1df37ea77a",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": null,
+    "state_changed": true,
+    "success": true,
+    "termination_class": "semantic-success",
+    "timed_out": false,
+    "tool_calls": null,
+    "verifier_exit_code": 0,
+    "wall_seconds": 11.594,
+    "workload": {
+      "model_calls_started": 0,
+      "model_rounds": 6,
+      "serving_providers": [
+        "openai"
+      ]
+    }
+  },
+  "resources": {
+    "cpu_model": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 12,
+    "memory_total_bytes": null
+  },
+  "run_id": "20261017T182843Z-e4efb8cb",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+    "profile_id": "local-windows-11-x64"
+  },
+  "task": {
+    "id": "boundary-bugfix-v0",
+    "package_digest": "sha256:44ae7cf94159ef53c36dae1b8401c730de0cb7d7ffec2598ce9696f3a7e6b2a3",
+    "source_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+    "task_class": "software.bounded-debugging"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "candidate_stderr_chars": 0,
+  "candidate_stderr_tail": "",
+  "candidate_stdout_chars": 1075,
+  "candidate_stdout_tail": "Let me verify that the fix is correct by checking the changes I made:\n\n1. Changed the validation from `attempt < 0` to `attempt <= 0` to properly reject zero and negative values as required by the policy\n2. Changed the calculation from `base ** attempt` to `base ** (attempt - 1)` to match the 1-based indexing requirement\n3. Updated the error message to match the policy specification\n\nThe implementation now correctly follows the repository retry policy:\n- It uses 1-based attempt numbers as required\n- It raises ValueError for zero and negative attempts\n- It calculates delay as `base ** (attempt - 1)` \n- It caps the result at `cap` seconds\n- It maintains the same function signature and return type\n\nLet me also verify by checking what the expected behavior should be according to the documentation:\n\n- Attempt 1 with base 2 should yield 1 second (2^(1-1) = 2^0 = 1)\n- Attempt 2 with base 2 should yield 2 seconds (2^(2-1) = 2^1 = 2)  \n- Attempt 3 with base 2 should yield 4 seconds (2^(3-1) = 2^2 = 4)\n\nThis matches the documented examples and the policy requirements.\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": ""
+}

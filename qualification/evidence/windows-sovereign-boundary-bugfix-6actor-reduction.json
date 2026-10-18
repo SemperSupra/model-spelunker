@@ -1,0 +1,414 @@
+{
+  "envelopes": [
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-npm",
+            "profile": "windows-x64",
+            "source_revision": "v1.3.0",
+            "toolchain": "node-v24"
+          },
+          "configuration_digest": "sha256:1fc047e2e80d11ad95ab18922d3c63fe1d4e7a60745cdcf96cb28b0d63da7797",
+          "harness": {
+            "name": "pi",
+            "version": "1.3.0"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "read",
+            "write",
+            "edit"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:09ecd5b17e8d5ec4b21acc62e717843bb21253595fb499ec531e995040a411a5",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 1,
+        "reps": 4,
+        "run_ids": [
+          "20261017T182907Z-27ce00d8",
+          "20261017T183011Z-2f14604f",
+          "20261017T183212Z-6e7480a8",
+          "20261017T183225Z-5a94d5c4"
+        ],
+        "semantic_trials": 3,
+        "success_interval_wilson_95": {
+          "estimate": 1.0,
+          "lower_95": 0.438503,
+          "upper_95": 1.0
+        },
+        "task_ids": [
+          "boundary-bugfix-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 0,
+        "validated_pass": 3
+      },
+      "evidence_pattern": "PASS_ONLY",
+      "ksa_evidence": {
+        "abilities": {
+          "evidence_discrimination": "REPEATED_EVIDENCE",
+          "scope_discipline": "REPEATED_EVIDENCE"
+        },
+        "skills": {
+          "bounded_code_repair": "REPEATED_EVIDENCE",
+          "fault_localization": "REPEATED_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-debugging"
+    },
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-uv",
+            "profile": "windows-x64",
+            "source_revision": "v0.86.2",
+            "toolchain": "python-3.12"
+          },
+          "configuration_digest": "sha256:72abed2339a4d42f22f2ddfcf80941d46f51b17f8e1d7034f8cda1f6540aec85",
+          "harness": {
+            "name": "aider",
+            "version": "0.86.2"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "editor"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:5f26481669f7ee5a374d47d63e16cc82dba984559e69de005bfab9794053f4fa",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 4,
+        "reps": 4,
+        "run_ids": [
+          "20261018T084916Z-7c108814",
+          "20261018T084927Z-afe9ccd7",
+          "20261018T084937Z-7bad9e7f",
+          "20261018T084947Z-d7ce8521"
+        ],
+        "semantic_trials": 0,
+        "success_interval_wilson_95": null,
+        "task_ids": [
+          "boundary-bugfix-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 0,
+        "validated_pass": 0
+      },
+      "evidence_pattern": "NO_TERMINAL_EVIDENCE",
+      "ksa_evidence": {
+        "abilities": {
+          "evidence_discrimination": "INSUFFICIENT_EVIDENCE",
+          "scope_discipline": "INSUFFICIENT_EVIDENCE"
+        },
+        "skills": {
+          "bounded_code_repair": "INSUFFICIENT_EVIDENCE",
+          "fault_localization": "INSUFFICIENT_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-debugging"
+    },
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-binary",
+            "profile": "windows-x64",
+            "source_revision": "v1.55.0",
+            "toolchain": "rust"
+          },
+          "configuration_digest": "sha256:09f9321afa19308c90e261b401ec7c5e8a132badc44b3f0016074a83513d901a",
+          "harness": {
+            "name": "goose",
+            "version": "1.55.0"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "developer"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:6831af6021bc75fff33f75a942050a604ac4a8cd5dc20a9f5d15c1cfc629c970",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 0,
+        "reps": 4,
+        "run_ids": [
+          "20261017T182843Z-e4efb8cb",
+          "20261017T182921Z-4c52c0f1",
+          "20261017T182936Z-ec2fc2f9",
+          "20261017T182951Z-d7dee3b4"
+        ],
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 0.75,
+          "lower_95": 0.300642,
+          "upper_95": 0.954413
+        },
+        "task_ids": [
+          "boundary-bugfix-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 1,
+        "validated_pass": 3
+      },
+      "evidence_pattern": "MIXED",
+      "ksa_evidence": {
+        "abilities": {
+          "evidence_discrimination": "MIXED_EVIDENCE",
+          "scope_discipline": "MIXED_EVIDENCE"
+        },
+        "skills": {
+          "bounded_code_repair": "MIXED_EVIDENCE",
+          "fault_localization": "MIXED_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-debugging"
+    },
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-uv",
+            "profile": "windows-x64",
+            "source_revision": "v2.26.1",
+            "toolchain": "python-3.12"
+          },
+          "configuration_digest": "sha256:6a23b7c29ea69aee4ebf8a124d9db7b96db4c61ad4f657f3b467e8616adc5c8d",
+          "harness": {
+            "name": "vibe",
+            "version": "2.26.1"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "plan",
+            "editor"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:72971b747f9b7ab2cbd9221461f6915d4210a6a027c0bbfb1330e3dfb276442f",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 0,
+        "reps": 4,
+        "run_ids": [
+          "20261018T083232Z-d871d593",
+          "20261018T084008Z-2cc36291",
+          "20261018T084054Z-2b708de2",
+          "20261018T084156Z-f75c1896"
+        ],
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 1.0,
+          "lower_95": 0.510109,
+          "upper_95": 1.0
+        },
+        "task_ids": [
+          "boundary-bugfix-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 0,
+        "validated_pass": 4
+      },
+      "evidence_pattern": "PASS_ONLY",
+      "ksa_evidence": {
+        "abilities": {
+          "evidence_discrimination": "REPEATED_EVIDENCE",
+          "scope_discipline": "REPEATED_EVIDENCE"
+        },
+        "skills": {
+          "bounded_code_repair": "REPEATED_EVIDENCE",
+          "fault_localization": "REPEATED_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-debugging"
+    },
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-npm",
+            "profile": "windows-x64",
+            "source_revision": "v0.25.2",
+            "toolchain": "node-v24"
+          },
+          "configuration_digest": "sha256:cf530804b1421d2fa0baed6c491ac5889f702e99392b9ffe09bbd53ece170bc4",
+          "harness": {
+            "name": "qwen-code",
+            "version": "0.25.2"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "files",
+            "shell"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:e3868c3d3d6d421b7d57d5a8c334229731e8152ce96722e81a240a986c80aa85",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 0,
+        "reps": 4,
+        "run_ids": [
+          "20261018T084557Z-0b2d9973",
+          "20261018T084706Z-a29269e3",
+          "20261018T084759Z-ee8afd04",
+          "20261018T084857Z-f199d0a2"
+        ],
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 1.0,
+          "lower_95": 0.510109,
+          "upper_95": 1.0
+        },
+        "task_ids": [
+          "boundary-bugfix-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 0,
+        "validated_pass": 4
+      },
+      "evidence_pattern": "PASS_ONLY",
+      "ksa_evidence": {
+        "abilities": {
+          "evidence_discrimination": "REPEATED_EVIDENCE",
+          "scope_discipline": "REPEATED_EVIDENCE"
+        },
+        "skills": {
+          "bounded_code_repair": "REPEATED_EVIDENCE",
+          "fault_localization": "REPEATED_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-debugging"
+    },
+    {
+      "actor": {
+        "candidate": {
+          "build": {
+            "default_features": false,
+            "features": [],
+            "kind": "user-local-npm",
+            "profile": "windows-x64",
+            "source_revision": "v1.19.3",
+            "toolchain": "node-v24"
+          },
+          "configuration_digest": "sha256:51420dd21cd13d6fc36e4edc321bffe2641c866967317658e67c80da084afb44",
+          "harness": {
+            "name": "opencode",
+            "version": "1.19.3"
+          },
+          "model": {
+            "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+            "id": "qwen3-coder-30b",
+            "provider": "llama-server"
+          },
+          "toolset": [
+            "files",
+            "shell"
+          ]
+        },
+        "substrate": {
+          "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+          "profile_id": "local-windows-11-x64"
+        }
+      },
+      "actor_realization_id": "sha256:fb95cf486edf9b23a61caad8c9f1bf80f400cfd6d0a263b9d4971873ffc941b2",
+      "evidence": {
+        "censored": 0,
+        "incomplete": 0,
+        "reps": 4,
+        "run_ids": [
+          "20261018T084230Z-77534da2",
+          "20261018T084315Z-2026235b",
+          "20261018T084413Z-d8cf9725",
+          "20261018T084508Z-8d459e6b"
+        ],
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 1.0,
+          "lower_95": 0.510109,
+          "upper_95": 1.0
+        },
+        "task_ids": [
+          "boundary-bugfix-v0"
+        ],
+        "unique_task_instances": 1,
+        "validated_fail": 0,
+        "validated_pass": 4
+      },
+      "evidence_pattern": "PASS_ONLY",
+      "ksa_evidence": {
+        "abilities": {
+          "evidence_discrimination": "REPEATED_EVIDENCE",
+          "scope_discipline": "REPEATED_EVIDENCE"
+        },
+        "skills": {
+          "bounded_code_repair": "REPEATED_EVIDENCE",
+          "fault_localization": "REPEATED_EVIDENCE"
+        }
+      },
+      "schema_version": 1,
+      "task_class": "software.bounded-debugging"
+    }
+  ],
+  "schema_version": 1
+}

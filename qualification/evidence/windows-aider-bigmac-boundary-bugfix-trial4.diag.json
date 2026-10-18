@@ -1,0 +1,8 @@
+{
+  "candidate_stderr_chars": 0,
+  "candidate_stderr_tail": "",
+  "candidate_stdout_chars": 558,
+  "candidate_stdout_tail": "Can't initialize prompt toolkit: No Windows console found. Are you running \ncmd.exe?\nCan't initialize prompt toolkit: No Windows console found. Are you running \ncmd.exe?\nTerminal does not support pretty output (UnicodeDecodeError)\nAider v0.86.2\nModel: openai/qwen3-coder-30b with whole edit format\nGit repo: none\nRepo-map: disabled\n\nI need to see the content of `src/retry.py` to understand the current implementation and repair it according to the repository's retry policy. Could you please share the contents of this file?\n\nTokens: 641 sent, 39 received.\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": ""
+}

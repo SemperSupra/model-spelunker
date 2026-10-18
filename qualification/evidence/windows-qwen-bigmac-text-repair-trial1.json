@@ -1,0 +1,71 @@
+{
+  "candidate": {
+    "build": {
+      "default_features": false,
+      "features": [],
+      "kind": "user-local-npm",
+      "profile": "windows-x64",
+      "source_revision": "v0.25.2",
+      "toolchain": "node-v24"
+    },
+    "configuration_digest": "sha256:cf530804b1421d2fa0baed6c491ac5889f702e99392b9ffe09bbd53ece170bc4",
+    "harness": {
+      "name": "qwen-code",
+      "version": "0.25.2"
+    },
+    "model": {
+      "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+      "id": "qwen3-coder-30b",
+      "provider": "llama-server"
+    },
+    "toolset": [
+      "files",
+      "shell"
+    ]
+  },
+  "evidence_digest": "sha256:de7a73aa8cb9a9b4f35df1017f156299383ffbe8bc45b8762931c1273e1546d0",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": null,
+    "state_changed": true,
+    "success": true,
+    "termination_class": "semantic-success",
+    "timed_out": false,
+    "tool_calls": null,
+    "verifier_exit_code": 0,
+    "wall_seconds": 36.328,
+    "workload": {
+      "model_calls_started": 0,
+      "model_rounds": 0
+    }
+  },
+  "resources": {
+    "cpu_model": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 12,
+    "memory_total_bytes": null
+  },
+  "run_id": "20261018T082658Z-7cd06d33",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+    "profile_id": "local-windows-11-x64"
+  },
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:072f1a521e979b8c9ea76f3a680f59c62ee5d11518171d82a9f4626e2d6c2884",
+    "source_commit": "bcd773176a0402881613e820c1b4602f01e3263b",
+    "task_class": "software.bounded-repair"
+  }
+}

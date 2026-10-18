@@ -1,0 +1,74 @@
+{
+  "candidate": {
+    "build": {
+      "default_features": false,
+      "features": [],
+      "kind": "user-local-uv",
+      "profile": "windows-x64",
+      "source_revision": "v0.86.2",
+      "toolchain": "python-3.12"
+    },
+    "configuration_digest": "sha256:72abed2339a4d42f22f2ddfcf80941d46f51b17f8e1d7034f8cda1f6540aec85",
+    "harness": {
+      "name": "aider",
+      "version": "0.86.2"
+    },
+    "model": {
+      "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+      "id": "qwen3-coder-30b",
+      "provider": "llama-server"
+    },
+    "toolset": [
+      "editor"
+    ]
+  },
+  "evidence_digest": "sha256:fe5cdeaf693915823764b961777ef4f8c2732e8874974554bbc7fc6a4b5cf878",
+  "observation": {
+    "admitted_completion": true,
+    "artifact_valid": true,
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_completed": true,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": null,
+    "input_tokens": null,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": null,
+    "state_changed": true,
+    "success": true,
+    "termination_class": "semantic-success",
+    "timed_out": false,
+    "tool_calls": null,
+    "verifier_exit_code": 0,
+    "wall_seconds": 10.281,
+    "within_wall_budget": true,
+    "workload": {
+      "model_calls_started": 0,
+      "model_rounds": null
+    }
+  },
+  "resources": {
+    "cpu_model": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 12,
+    "memory_total_bytes": null
+  },
+  "run_id": "20261018T093616Z-7d23711c",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "bcd7731",
+    "profile_id": "local-windows-11-x64"
+  },
+  "task": {
+    "id": "text-repair-v0",
+    "package_digest": "sha256:072f1a521e979b8c9ea76f3a680f59c62ee5d11518171d82a9f4626e2d6c2884",
+    "source_commit": "bcd7731",
+    "task_class": "software.bounded-repair"
+  }
+}

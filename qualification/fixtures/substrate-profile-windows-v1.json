@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "id": "local-windows-11-x64",
+  "venue": {
+    "kind": "local-workstation",
+    "persistence": "durable"
+  },
+  "platform": {
+    "os": "windows-11",
+    "arch": "x64"
+  },
+  "isolation": {
+    "process_scope": "host-taskkill-tree",
+    "filesystem_scope": "ephemeral-workspace",
+    "network_scope": "lan-only"
+  },
+  "artifact_consumption": {
+    "oci_registry_pull": false,
+    "digest_verification": true,
+    "hydrate_methods": [
+      "user-local-shims"
+    ]
+  },
+  "capabilities": [
+    "git",
+    "network-lan",
+    "powershell",
+    "python",
+    "node",
+    "ephemeral-filesystem",
+    "local-process-execution"
+  ],
+  "resources": {
+    "cpu_arch": "x64",
+    "accelerators": []
+  },
+  "notes": "Observed Windows 11 host with local sovereign LAN execution boundary."
+}

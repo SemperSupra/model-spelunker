@@ -70,7 +70,16 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     obs = receipt["observation"]
     if bool(obs.get("success")):
         return "pass"
+
     termination = obs.get("termination_class")
+    # If candidate completed with semantic failure or changed state with verifier exit 1,
+    # it is a validated operational failure (e.g. false completion, formatting defect), NOT incomplete
+    if obs.get("verifier_exit_code") == 1 and (
+        termination == "semantic-failure"
+        or (obs.get("candidate_exit_code") == 0 and obs.get("state_changed") and not obs.get("timed_out"))
+    ):
+        return "fail"
+
     workload = obs.get("workload") or {}
     signals = set(obs.get("failure_signals") or [])
     no_completed_rounds = (
@@ -85,12 +94,19 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     )
     if timeout_observed and isinstance(started_calls, int) and started_calls > 0:
         return "censored"
+    if timeout_observed and obs.get("verifier_exit_code") == 0:
+        return "censored"
     if no_completed_rounds:
         return "incomplete"
     if timeout_observed:
         return "censored"
     engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
-    validator_error = "validator-error" in signals or obs.get("failure_class") == "validator-error"
+    verifier_exit = obs.get("verifier_exit_code")
+    validator_error = (
+        "validator-error" in signals
+        or obs.get("failure_class") == "validator-error"
+        or (verifier_exit is not None and verifier_exit not in {0, 1})
+    )
     return "incomplete" if engine_error or validator_error else "fail"
 
 
@@ -135,10 +151,42 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     envelopes = []
     for (actor_id, task_class), rows in sorted(groups.items()):
         outcomes = [terminal_outcome(r) for r in rows]
+        reps = len(rows)
         successes = outcomes.count("pass")
         failures = outcomes.count("fail")
         incomplete = outcomes.count("incomplete")
         censored = outcomes.count("censored")
+
+        # Operational estimand: across all attempted trials
+        operational_interval = wilson_interval(successes, reps)
+
+        # Attribute failure types
+        protocol_failures = 0
+        turn_budget_failures = 0
+        validator_invalid = 0
+        for r, out in zip(rows, outcomes):
+            obs = r.get("observation", {})
+            verifier_exit = obs.get("verifier_exit_code")
+            signals = set(obs.get("failure_signals") or [])
+            if verifier_exit is not None and verifier_exit not in {0, 1}:
+                validator_invalid += 1
+            elif "validator-error" in signals or obs.get("failure_class") == "validator-error":
+                validator_invalid += 1
+
+            if out == "fail":
+                harness = (r.get("candidate", {}).get("harness", {}) or {}).get("name")
+                if harness == "aider":
+                    protocol_failures += 1
+                elif harness == "goose" and "false-completion" in signals:
+                    turn_budget_failures += 1
+
+        semantic_failures = max(0, failures - protocol_failures)
+        semantic_evaluations = successes + semantic_failures
+
+        # Conditional semantic estimand: evaluated only when fair semantic opportunity existed
+        conditional_interval = wilson_interval(successes, semantic_evaluations) if semantic_evaluations > 0 else None
+        conditional_status = "ESTIMABLE" if semantic_evaluations > 0 else "NOT_ESTIMABLE"
+
         semantic_trials = successes + failures
         task_ids = sorted({r["task"]["id"] for r in rows})
         mapping = KSA_BY_TASK_CLASS.get(task_class, {})
@@ -155,11 +203,30 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "task_class": task_class,
                 "evidence_pattern": evidence_pattern(successes, failures),
                 "evidence": {
-                    "reps": len(rows),
+                    "reps": reps,
                     "validated_pass": successes,
                     "validated_fail": failures,
                     "incomplete": incomplete,
                     "censored": censored,
+                    "operational_success_rate": {
+                        "passes": successes,
+                        "trials": reps,
+                        "wilson_95": operational_interval,
+                    },
+                    "conditional_semantic_rate": {
+                        "passes": successes,
+                        "evaluations": semantic_evaluations,
+                        "status": conditional_status,
+                        "wilson_95": conditional_interval,
+                    },
+                    "failure_taxonomy": {
+                        "protocol_failures": protocol_failures,
+                        "protocol_cause_inferred": (protocol_failures > 0),
+                        "turn_budget_failures": turn_budget_failures,
+                        "semantic_failures": semantic_failures,
+                        "timeout_censored": censored,
+                        "validator_invalid": validator_invalid,
+                    },
                     "semantic_trials": semantic_trials,
                     "success_interval_wilson_95": wilson_interval(successes, semantic_trials),
                     "unique_task_instances": len(task_ids),
@@ -178,8 +245,23 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
-    rows = [json.loads(path.read_text(encoding="utf-8")) for path in args.receipts]
-    result = {"schema_version": 1, "envelopes": reduce_receipts(rows)}
+    raw_paths: list[Path] = []
+    for p in args.receipts:
+        s = str(p)
+        if "*" in s or "?" in s:
+            import glob
+            expanded = glob.glob(s)
+            raw_paths.extend(Path(x) for x in expanded)
+        else:
+            raw_paths.append(p)
+
+    # Only include raw run receipts (exclude prior reductions)
+    rows = []
+    for path in raw_paths:
+        if "reduction" in path.name or path.name.endswith(".diag.json"):
+            continue
+        rows.append(json.loads(path.read_text(encoding="utf-8")))
+    result = {"schema_version": 2, "envelopes": reduce_receipts(rows)}
     payload = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.write_text(payload, encoding="utf-8")
