@@ -10,6 +10,7 @@ import ghidra.feature.fid.service.FidMatch;
 import ghidra.feature.fid.service.FidSearchResult;
 import ghidra.feature.fid.service.FidService;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Locale;
 
 public class QueryBundledCrtFid extends GhidraScript {
@@ -39,6 +40,7 @@ public class QueryBundledCrtFid extends GhidraScript {
         println("RE_SHIPPED_FID_DB_COUNT=" + dbs.size());
         println("RE_SHIPPED_FID_ELIGIBLE_COUNT=" + active);
         int candidateRows = 0, matches = 0, ambiguous = 0, outputLimit = 500;
+        int tieConsensus = 0, tieConflict = 0;
         FidService service = new FidService();
         try (FidQueryService query = service.openFidQueryService(currentProgram.getLanguage(), false)) {
             List<FidSearchResult> rows = service.processProgram(
@@ -50,14 +52,21 @@ public class QueryBundledCrtFid extends GhidraScript {
                 FidMatch best = null;
                 float bestScore = -1.0f;
                 int ties = 0;
+                HashSet<String> topNames = new HashSet<String>();
+                HashSet<String> topVersions = new HashSet<String>();
                 for (FidMatch candidate : row.matches) {
                     if (candidate.getLibraryRecord() == null ||
                         candidate.getFunctionRecord() == null) continue;
                     float score = candidate.getOverallScore();
                     if (score > bestScore) {
                         bestScore = score; best = candidate; ties = 1;
+                        topNames.clear(); topVersions.clear();
+                        topNames.add(field(candidate.getFunctionRecord().getName()));
+                        topVersions.add(field(candidate.getLibraryRecord().toString()));
                     } else if (score == bestScore) {
                         ties++;
+                        topNames.add(field(candidate.getFunctionRecord().getName()));
+                        topVersions.add(field(candidate.getLibraryRecord().toString()));
                     }
                 }
                 if (best == null) continue;
@@ -72,8 +81,19 @@ public class QueryBundledCrtFid extends GhidraScript {
                     + "|" + field(best.getLibraryRecord().getLibraryVersion())
                     + "|" + field(best.getLibraryRecord().getLibraryVariant())
                     + "|" + ties);
+                if (ties > 1) {
+                    if (topNames.size() == 1) tieConsensus++;
+                    else tieConflict++;
+                    // Omit individual alternative names: only bounded
+                    // equivalence-class cardinalities cross into the logs.
+                    println("RE_SHIPPED_FID_TIE_GROUP=" +
+                        Long.toHexString(row.function.getEntryPoint().getOffset()).toLowerCase(Locale.ROOT)
+                        + "|" + ties + "|" + topNames.size() + "|" + topVersions.size());
+                }
             }
         }
+        println("RE_SHIPPED_FID_TIE_CONSENSUS=" + tieConsensus);
+        println("RE_SHIPPED_FID_TIE_CONFLICT=" + tieConflict);
         println("RE_SHIPPED_FID_CANDIDATE_ROWS=" + candidateRows);
         println("RE_SHIPPED_FID_MATCH_COUNT=" + matches);
         println("RE_SHIPPED_FID_AMBIGUOUS_COUNT=" + ambiguous);
