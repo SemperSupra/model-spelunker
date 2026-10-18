@@ -1,0 +1,1 @@
+Public authored Kotlin 2.0.21 / AGP 8.7.3 R8 configuration measurements from AAR run #39100419641 and PR39. File counts and JADX exit statuses only; no mapping, source recovery ground truth or original R8 DEX behavior supplied. This is a source-known evidence-interpretation interview, NOT an Android recovered-APK task. Write classification.json at task workspace root.
