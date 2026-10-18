@@ -64,6 +64,10 @@ def validate(candidate: Path) -> bool:
         for name in ("target.bin", "disassembly.txt"):
             if sha256((candidate / name).read_bytes()) != manifest["sha256"][name]:
                 return False
+        allowed = {"target.bin", "disassembly.txt", "recovered.json"}
+        observed_files = {p.relative_to(candidate).as_posix() for p in candidate.rglob("*") if p.is_file() or p.is_symlink()}
+        if observed_files != allowed or any((candidate / name).is_symlink() for name in allowed):
+            return False
         answer = json.loads((candidate / "recovered.json").read_text(encoding="utf-8"))
         if set(answer) != {"schema_version", "width", "commands", "default"}:
             return False
@@ -103,7 +107,7 @@ def self_test() -> None:
         path = Path(d)
         if not (P / "oracle_manifest.json").is_file():
             print("SKIP: work sample not materialized; use prepare_work_sample.py")
-            return
+            raise SystemExit(77)
         for name in ("target.bin", "disassembly.txt"):
             (path / name).write_bytes((P / "fixture" / name).read_bytes())
         def write(obj: dict) -> None:
@@ -125,7 +129,14 @@ def self_test() -> None:
         with (path / "target.bin").open("ab") as f:
             f.write(b"change")
         assert not validate(path), "binary mutation accepted"
-    print("PASS portable-dispatch semantics: known-good + six negative controls, 320 held-out vectors")
+        (path / "target.bin").write_bytes((P / "fixture" / "target.bin").read_bytes())
+        (path / "unexpected.txt").write_text("bad", encoding="utf-8")
+        assert not validate(path), "undeclared output accepted"
+        (path / "unexpected.txt").unlink()
+        (path / "target.bin").unlink()
+        (path / "target.bin").symlink_to(P / "fixture" / "target.bin")
+        assert not validate(path), "symlinked fixture accepted"
+    print("PASS portable-dispatch semantics: known-good + eight negative controls, 320 held-out vectors")
 
 
 if __name__ == "__main__":
