@@ -65,3 +65,36 @@ Under AAR-private #82 and public AAR draft PR #39, [public GHA #39118512769](htt
 The temporary `windows-crt-linkage-one-shot` job was removed from routine GitHub PR CI immediately after the successful run at cleanup commit `ffde9be524d6275e3c528fa4b4b1a1a4f02c15ac`. Code stays available for admitted narrow one-shot Windows workcells through the existing Agent Dispatch execution system; no new scheduler or default heavyweight CI was created.
 
 **Next W-3b:** Use one of these *actual* source-known `/MT` PEs with verified `libucrt`/`libcmt` member provenance as the target for Ghidra's **shipped Visual Studio FID** reference database, then compare locally produced FID only if packaged coverage is absent. Require independently confirmed library-function identity, calibration against `/MD` import-only negative controls, mismatched CRT version/optimization decoys, and per-function TP/FP/FN/UNKNOWN. Do not score the presence of a library filename as a correct function match. Keep AAR NDK/JNI native RE under #82.
+
+## W-3b built-in Ghidra Visual Studio FID on REAL static MSVC CRT code (2026-10-18)
+
+This experiment advances the reference corpus from custom authored `.fidb` to the **ten Microsoft Visual Studio `.fidbf` files shipped with official Ghidra 12.1.4**, without downloading or generating new vendor signatures.
+
+**Instrument:** Source-known `/MT` and `/MD` PE files from W-3a, each compiled with Microsoft's actual MSVC **14.51**. Windows GHA uses JDK21 and checksum-pinned official Ghidra 12.1.4. The read-only `QueryBundledCrtFid.java` enumerates eligible packaged FID databases and emits bounded best-score candidates; `verify_bundled_crt_fid.py` compares each candidate's exact address/name to producer-side `link.exe /MAP` library/object metadata, kept outside the Ghidra query. No PE is executed, no source/PDB or MAP passed to the signature evaluator, no auto-renaming.
+
+**Packaged Ghidra references observed**: `vs2012_x86/x64`, `vs2015_x86/x64`, `vs2017_x86/x64`, `vs2019_x86/x64`, `vsOlder_x86/x64`; x64 analysis admitted exactly **five** matching-architecture databases. Exact `.fidbf` SHA-256 digests and sizes are recorded in [bounded metadata artifact #12136880097](https://github.com/SemperSupra/model-spelunker/actions/runs/39127085635/artifacts/12136880097).
+
+**Actual matched experimental outcome:** [public standard Windows GHA **#39127085635**](https://github.com/SemperSupra/model-spelunker/actions/runs/39127085635) **SUCCESS** end-to-end, including external MAP oracle.
+
+| Independent metric | `/MT` static CRT | `/MD` dynamically imported CRT |
+| --- | ---: | ---: |
+| Ghidra analyzed functions | 468 | 99 |
+| Candidate FID matches | 82 | 2 |
+| Exact candidate name/address agreements with linker CRT labels | 63 | 0 |
+| Wrong candidate name at known CRT address | 15 | 0 |
+| Unattributed/non-CRT candidate addresses | 4 | 2 |
+| Ambiguous candidate rows, best-score ties > 1 | **70** | **2** |
+| Known CRT address-bearing MAP symbol rows | 388 | 0 |
+
+**Critical validity warning:** Of 82 static candidates, only **12** had a unique highest-scoring FID candidate; the other **70 were tied**. Even though **63 candidates**' *selected name* exactly agrees with a linker-verified CRT symbol, **this is not 63 independently unique identifications**. Dynamic `/MD` produced two ambiguous `_RTC_Terminate` candidates with no corresponding linker-labelled CRT symbol, demonstrating potential false attribution on import-only controls. Score those `UNKNOWN/AMBIGUOUS`, not successful detection. The independently attributed same-address wrong-name rows are **actual candidate errors**, not random noise. Version mismatch (MSVC 14.51 vs latest shipped Visual Studio 2019 databases) materially limits expected specificity; match scores are not probabilities. A machine count of 82 is not precision.
+
+From the bounded first 60 static candidate records retained in the JSON artifact, **9 have both exact linker CRT name agreement and a unique best-score**. The full run had 12 unique candidates, but the artifact intentionally truncates records after 60; do not assert full-corpus exact-unique counts without another data projection. The [full GitHub Actions execution log](https://github.com/SemperSupra/model-spelunker/actions/runs/39127085635) retains all matched candidate rows and tie counts for review.
+
+**Failure corrections preserved:**
+- [First W-3b #39126719132](https://github.com/SemperSupra/model-spelunker/actions/runs/39126719132) FAILED *before Ghidra* because PowerShell `$home` is a read-only automatic variable (case-insensitive); renamed `$ghidraHome`.
+- [Second W-3b #39126858630](https://github.com/SemperSupra/model-spelunker/actions/runs/39126858630) successfully invoked both Ghidra queries, observing 82/2 matches, but **failed** the independent oracle due a mistaken parser prefix `RE_SHIPPED_FID_FUNCTIONS_ANALYZED` rather than the actual `RE_FID_FUNCTIONS_ANALYZED`.
+- [Corrected #39127085635](https://github.com/SemperSupra/model-spelunker/actions/runs/39127085635) PASSED independent structural and MAP-oracle data collection; no acceptance thresholds reduced to force a result.
+
+**Next gated test W-4:** Freeze two separate consumers: (a) an *assisted analyst* gets only **unique** shipped-FID candidates with source-confirmed reliability evidence from held-out versions; (b) investigate why tied matches are common (identical hashes, parent/child relations, version family collisions) from open Ghidra FID source, before considering BSim or new signature generation. Add deliberate one-bit, optimization, absent-library and import-thunk negatives. No auto-apply of tied FID names.
+
+The one-shot Windows JDK/Ghidra hosted job was **removed from routine PR CI** in `41d1b2fb8aa2a24abcdb76603dd43b0b9005fbbf`. Subsequent cheap standard PR CI **3/3 PASS** (GHA runs 39127406880, 39127406867 and 39127406893). Source and metadata remain on draft PR #184.
