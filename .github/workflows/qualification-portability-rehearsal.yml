@@ -139,6 +139,12 @@ jobs:
         shell: bash
         run: python3 qualification/tools/ghidra/test_verify_pcode.py
 
+      - name: Verify W4 FID ambiguity abstention and independent receipt controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/reference/windows-fid-v0/test_triage_bundled_crt_fid.py
+
       - name: Upload bounded rehearsal evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
