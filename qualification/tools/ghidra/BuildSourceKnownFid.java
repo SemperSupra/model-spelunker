@@ -19,7 +19,9 @@ public class BuildSourceKnownFid extends GhidraScript {
     protected void run() throws Exception {
         if (currentProgram == null) throw new IllegalArgumentException("missing reference program");
         String[] args = getScriptArgs();
-        if (args.length != 1) throw new IllegalArgumentException("provide output .fidb path");
+        if (args.length != 1 && args.length != 2) throw new IllegalArgumentException("provide output .fidb path and optional reference family");
+        String family = args.length == 2 ? args[1] : "source-known-dispatcher";
+        if (!family.matches("[A-Za-z0-9_-]{3,60}")) throw new IllegalArgumentException("invalid reference family");
         Path out = Paths.get(args[0]).toAbsolutePath().normalize();
         if (!Files.isDirectory(out.getParent()) || Files.exists(out) || !out.toString().endsWith(".fidb")) {
             throw new IllegalArgumentException("invalid output target");
@@ -33,7 +35,7 @@ public class BuildSourceKnownFid extends GhidraScript {
         FidService service = new FidService();
         try (FidDB db = file.getFidDB(true)) {
             FidPopulateResult result = service.createNewLibraryFromPrograms(
-                db, "source-known-dispatcher", "v0", "clang-O1", List.of(df),
+                db, family, "v0", "clang-O1", List.of(df),
                 null, currentProgram.getLanguageID(), null, null, monitor);
             if (result == null) throw new IllegalStateException("FID population returned null");
             println("RE_FID_ATTEMPTED=" + result.getTotalAttempted());
