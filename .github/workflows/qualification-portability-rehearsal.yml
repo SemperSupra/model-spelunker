@@ -159,3 +159,25 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
+
+  w5-debug-crt-native-one-shot:
+    name: W5a native MSVC debug CRT provenance one-shot
+    runs-on: windows-2025
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build release and distinct debug CRT only; no PE execution
+        shell: pwsh
+        run: |
+          ./qualification/reference/windows-fid-v0/build_crt_linkage.ps1
+          ./qualification/reference/windows-fid-v0/build_debug_crt.ps1
+      - name: Publish only bounded provenance and digest metadata
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: w5-debug-crt-${{ github.run_id }}
+          path: ${{ runner.temp }}/re-msvc-crt-linkage-v0/w5-debug-crt-preflight.json
+          if-no-files-found: ignore
+          retention-days: 14
