@@ -9,8 +9,8 @@ if (-not (Test-Path (Join-Path $OutputDir 'crt-linkage-receipt.json'))) {
 }
 $asset=Join-Path $OutputDir 'ghidra_12.1.4_PUBLIC_20260921.zip'
 $expected='ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db'
-$home=Join-Path $OutputDir 'ghidra_12.1.4_PUBLIC'
-$headless=Join-Path $home 'support\analyzeHeadless.bat'
+$ghidraHome=Join-Path $OutputDir 'ghidra_12.1.4_PUBLIC'
+$headless=Join-Path $ghidraHome 'support\analyzeHeadless.bat'
 if (-not (Test-Path $headless)) {
   Invoke-WebRequest -Uri 'https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip' -OutFile $asset -TimeoutSec 270
   $digest=(Get-FileHash $asset -Algorithm SHA256).Hash.ToLower()
@@ -24,7 +24,7 @@ $logdir=Join-Path $OutputDir 'ghidra-fid'
 New-Item -ItemType Directory -Path $project,$logdir -Force | Out-Null
 $scripts=(Resolve-Path (Join-Path $PSScriptRoot '..\..\tools\ghidra')).Path
 $env:GHIDRA_HEADLESS_MAXMEM='2G'
-$records=@(Get-ChildItem (Join-Path $home 'Ghidra\Features\FunctionID\data') -Recurse -File |
+$records=@(Get-ChildItem (Join-Path $ghidraHome 'Ghidra\Features\FunctionID\data') -Recurse -File |
     Where-Object { $_.Extension -in '.fidbf','.fidb' } |
     ForEach-Object { @{
       name=$_.Name
