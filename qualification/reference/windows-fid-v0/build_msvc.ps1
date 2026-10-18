@@ -17,7 +17,6 @@ $lib = Join-Path $OutputDir 'reference_static.lib'
 $refdll = Join-Path $OutputDir 'reference_labeled.dll'
 $targdll = Join-Path $OutputDir 'target_stripped.dll'
 $refpdb = Join-Path $OutputDir 'reference_labeled.pdb'
-$targpdb = Join-Path $OutputDir 'target_stripped.pdb'
 $batch = @"
 @echo off
 call "$vsdev" -no_logo -arch=amd64 -host_arch=amd64 >nul
@@ -39,7 +38,7 @@ lib /nologo /OUT:"$lib" "$obj"
 if errorlevel 1 exit /b 22
 link /nologo /DLL /NOENTRY /NODEFAULTLIB /MACHINE:X64 /INCREMENTAL:NO /OPT:REF /OPT:ICF /DEBUG:FULL /PDB:"$refpdb" /OUT:"$refdll" /EXPORT:re_lib_mix /EXPORT:re_lib_crc /EXPORT:re_lib_scramble /EXPORT:re_lib_unrelated "$obj"
 if errorlevel 1 exit /b 23
-link /nologo /DLL /NOENTRY /NODEFAULTLIB /MACHINE:X64 /INCREMENTAL:NO /OPT:REF /OPT:ICF /DEBUG:FULL /PDB:"$targpdb" /OUT:"$targdll" "$obj"
+link /nologo /DLL /NOENTRY /NODEFAULTLIB /MACHINE:X64 /INCREMENTAL:NO /OPT:REF /OPT:ICF /OUT:"$targdll" "$obj"
 if errorlevel 1 exit /b 24
 dumpbin /nologo /exports "$refdll" > "$OutputDir\reference-exports.txt"
 if errorlevel 1 exit /b 25
