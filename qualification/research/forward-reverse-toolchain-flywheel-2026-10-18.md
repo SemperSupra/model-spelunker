@@ -1,5 +1,8 @@
 # Forward → reverse build-provenance and library-signature flywheel
 
+> **Active scope change — October 18, 2026:** Windows native PE/Visual C++ runtimes and Android APK/DEX/JNI/NDK are the only active platform families. This document remains a broad source/reference atlas, **not** an active parallel implementation roadmap for macOS, iOS, firmware, FPGA or other ecosystems. Current priorities, gates and owners: [Windows/Android active scope](windows-android-active-scope-2026-10-18.md). The Ghidra ELF control is only calibration. Reuse existing assets before rebuilding signatures.
+
+
 **RDT&E checkpoint: 2026-10-18.** Existing authority: Model Spelunker #139 and Agent Dispatch #104; Android source/optimizer experiments: AAR-private #82; private router/firmware investigations retain their project-native ownership. **This is a source-verified design and next experiment, NOT a completed FID/BSim trial, installed external plugin, or admitted autonomous new workload.** Reuse approved public GHA execution and existing PR #184 reference corpus.
 
 ## Ghidra's FLIRT-like machinery: source-grounded findings
