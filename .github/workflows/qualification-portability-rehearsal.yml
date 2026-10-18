@@ -158,3 +158,35 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
+
+  w4c-heldout-native-ghidra:
+    name: W4c one-shot native held-out FID observation
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Native /O2 baseline and /O1 held-out PE without execution
+        shell: pwsh
+        run: |
+          ./qualification/reference/windows-fid-v0/build_crt_linkage.ps1
+          ./qualification/reference/windows-fid-v0/build_heldout_crt.ps1
+      - name: Official pinned Ghidra bundled FID read-only held-out comparison
+        shell: pwsh
+        run: |
+          ./qualification/reference/windows-fid-v0/run_bundled_crt_fid.ps1 -IncludeHeldout
+      - name: Publish only bounded aggregate metadata, never binaries or MAP
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: w4c-heldout-aggregate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/re-msvc-crt-linkage-v0/w4c-score-*.json
+            ${{ runner.temp }}/re-msvc-crt-linkage-v0/ghidra-shipped-fid-census.json
+          if-no-files-found: warn
+          retention-days: 14
