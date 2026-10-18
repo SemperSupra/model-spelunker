@@ -18,13 +18,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-try:
-    from qualification.windows_containment import WindowsJobObject
-except ImportError:
+if os.name == "nt":
     try:
-        from windows_containment import WindowsJobObject
+        from qualification.windows_containment import WindowsJobObject, SuspendedJobPopen
     except ImportError:
-        WindowsJobObject = None
+        try:
+            from windows_containment import WindowsJobObject, SuspendedJobPopen
+        except ImportError as e:
+            raise RuntimeError(
+                f"fail-closed: Windows Job Object containment required on Windows substrate: {e}"
+            )
+else:
+    WindowsJobObject = None  # type: ignore[assignment]
+    SuspendedJobPopen = subprocess.Popen  # type: ignore[assignment,misc]
 
 try:
     from qualification.endpoint_policy import sanitize_candidate_env
@@ -292,25 +298,35 @@ def run_candidate_process(
         mode="w+", encoding="utf-8"
     ) as stderr_file:
         job = None
-        if os.name == "nt" and WindowsJobObject is not None:
+        if os.name == "nt":
             job = WindowsJobObject()
 
         proc = None
         timed_out = False
         return_code = 1
         try:
-            proc = subprocess.Popen(
-                command,
-                cwd=cwd,
-                text=True,
-                stdin=subprocess.PIPE,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                env=env,
-                start_new_session=(os.name == "posix"),
-            )
-            if job is not None:
-                job.assign_process(int(proc._handle))
+            if os.name == "nt":
+                proc = SuspendedJobPopen(
+                    command,
+                    cwd=cwd,
+                    text=True,
+                    stdin=subprocess.PIPE,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    env=env,
+                    job=job,
+                )
+            else:
+                proc = subprocess.Popen(
+                    command,
+                    cwd=cwd,
+                    text=True,
+                    stdin=subprocess.PIPE,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    env=env,
+                    start_new_session=True,
+                )
 
             if proc.stdin is not None:
                 try:
@@ -718,8 +734,8 @@ def main() -> int:
     parser.add_argument(
         "--candidate-env-mode",
         choices=["inherit", "minimal"],
-        default="inherit",
-        help="Environment policy for the candidate process. Portable/local launches should prefer minimal.",
+        default="minimal",
+        help="Environment policy for the candidate process. Defaults to least-privilege minimal.",
     )
     parser.add_argument(
         "--pass-env",

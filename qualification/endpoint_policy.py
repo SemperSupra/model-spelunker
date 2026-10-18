@@ -53,6 +53,11 @@ PROHIBITED_NETWORKS = (
 )
 
 
+# Boundary attestation status labels reflecting actual enforcement depth
+APP_ENDPOINT_PREFLIGHT = "PARTIAL"
+EGRESS_BOUNDARY_ATTESTED = "NO"
+
+
 def validate_sovereign_endpoint(url_string: str) -> None:
     """Validate that target model URL strictly resolves to an authorized RFC1918 or loopback route.
 
@@ -63,7 +68,7 @@ def validate_sovereign_endpoint(url_string: str) -> None:
     - IANA documentation addresses (203.0.113.x, etc.)
     - Carrier-grade NAT / shared address space (100.64.x.x)
     - Public / internet routable IP addresses
-    - Unresolved or non-local hostnames
+    - Unresolved hostnames or domains resolving to non-RFC1918 destinations
     """
     if not url_string or not isinstance(url_string, str):
         raise ValueError("endpoint URL must be a non-empty string")
@@ -80,39 +85,42 @@ def validate_sovereign_endpoint(url_string: str) -> None:
     if not hostname:
         raise ValueError(f"fail-closed: invalid or missing hostname in endpoint URL: {url_string}")
 
-    # Allow loopback names directly
-    if hostname in {"127.0.0.1", "localhost", "::1"}:
-        return
-
-    # Check if hostname is an IP address
+    # Check if hostname is an IP address or resolve DNS to attest actual destination
+    ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
     try:
         ip = ipaddress.ip_address(hostname)
+        ips.append(ip)
     except ValueError:
-        # Not a raw IP literal. Allow known local mDNS/hostnames only if strictly local
-        if hostname.endswith(".local"):
-            return
-        raise ValueError(
-            f"fail-closed: public DNS names or non-local hostnames are prohibited for sovereign inference: {hostname}"
-        )
+        # Not a raw IP literal. Resolve hostname to attest actual IP destination (fail-closed if unresolvable)
+        import socket
+        try:
+            addr_info = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
+            for item in addr_info:
+                ips.append(ipaddress.ip_address(item[4][0]))
+        except (socket.gaierror, OSError) as e:
+            raise ValueError(
+                f"fail-closed: cannot resolve hostname '{hostname}' to verify sovereign route: {e}"
+            )
 
-    # IPv6 loopback is allowed
-    if ip.is_loopback:
-        return
+    if not ips:
+        raise ValueError(f"fail-closed: hostname '{hostname}' did not resolve to any IP address")
 
-    if ip.version != 4:
-        raise ValueError(f"fail-closed: only IPv4 RFC1918 and loopback are permitted; got IPv6 {ip}")
+    for resolved_ip in ips:
+        # IPv4/IPv6 loopback is allowed
+        if resolved_ip.is_loopback:
+            continue
 
-    # Check against prohibited networks (metadata, doc, cgnat, multicast)
-    for prohibited in PROHIBITED_NETWORKS:
-        if ip in prohibited:
-            raise ValueError(f"fail-closed: prohibited network address {ip} in {prohibited}")
+        if resolved_ip.version != 4:
+            raise ValueError(f"fail-closed: only IPv4 RFC1918 and loopback are permitted; got {resolved_ip}")
 
-    # Check against authorized RFC1918 networks
-    for rfc1918 in RFC1918_NETWORKS:
-        if ip in rfc1918:
-            return
+        # Check against prohibited networks (metadata, doc, cgnat, multicast)
+        for prohibited in PROHIBITED_NETWORKS:
+            if resolved_ip in prohibited:
+                raise ValueError(f"fail-closed: prohibited network address {resolved_ip} in {prohibited}")
 
-    raise ValueError(f"fail-closed: target model IP address {ip} is not in RFC1918 or loopback space")
+        # Check against authorized RFC1918 networks
+        if not any(resolved_ip in rfc1918 for rfc1918 in RFC1918_NETWORKS):
+            raise ValueError(f"fail-closed: target model IP address {resolved_ip} is not in RFC1918 or loopback space")
 
 
 def is_private_or_local_url(url_string: str) -> bool:
@@ -126,14 +134,15 @@ def is_private_or_local_url(url_string: str) -> bool:
 
 def sanitize_candidate_env(
     base_env: dict[str, str],
-    mode: str = "inherit",
+    mode: str = "minimal",
     pass_env: list[str] | None = None,
 ) -> dict[str, str]:
     """Sanitize environment variables for candidate execution.
 
+    - Defaults to least-privilege 'minimal' mode.
     - Strips all known cloud provider API credentials.
     - Strips network proxy variables to prevent routing diversion.
-    - If mode == 'minimal', restricts to essential system variables + pass_env.
+    - Restricts to essential system variables + pass_env in minimal mode.
     """
     pass_keys = set(pass_env or [])
 
@@ -142,6 +151,7 @@ def sanitize_candidate_env(
             allowed_baseline = {
                 "PATH",
                 "SYSTEMROOT",
+                "SYSTEMDRIVE",
                 "COMSPEC",
                 "PATHEXT",
                 "TEMP",
@@ -150,6 +160,8 @@ def sanitize_candidate_env(
                 "USERPROFILE",
                 "LOCALAPPDATA",
                 "APPDATA",
+                "NODE_PATH",
+                "PYTHONPATH",
             }
         else:
             allowed_baseline = {

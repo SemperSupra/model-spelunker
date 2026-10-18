@@ -167,8 +167,88 @@ def test_stat_03_aider_operational_failures_and_semantic_status() -> None:
     print("PASS: STAT-03 Aider operational failures and NOT_ESTIMABLE semantic status")
 
 
+def test_stat_hist_historical_portfolio_invariants() -> None:
+    """STAT-HIST: Verify byte-level digests and taxonomy invariants across 48 historical receipts."""
+    import glob
+    import hashlib
+    import json
+    import re
+
+    evidence_dir = ROOT / "qualification" / "evidence"
+    files = sorted([
+        f for f in evidence_dir.glob("windows-*.json")
+        if "reduction" not in f.name and not f.name.endswith(".diag.json")
+    ])
+
+    assert len(files) == 48, f"Expected exactly 48 historical receipts, got {len(files)}"
+
+    # 1. Byte-level digest invariant across raw receipts
+    h = hashlib.sha256()
+    digest_re = re.compile(r"^sha256:[0-9a-f]{64}$")
+    rows = []
+    for f in files:
+        data_bytes = f.read_bytes()
+        h.update(data_bytes)
+        row = json.loads(data_bytes.decode("utf-8"))
+        assert digest_re.match(row["evidence_digest"]), f"Invalid digest in {f.name}"
+        rows.append(row)
+
+    expected_combined_sha256 = "aba4e93fabba6868c5668f455aa03f6ea9a5da25bfa886286058dede021a4ab3"
+    assert h.hexdigest() == expected_combined_sha256, (
+        f"Byte-level historical receipt integrity violated: {h.hexdigest()} != {expected_combined_sha256}"
+    )
+
+    # 2. Portfolio reduction assertions
+    envelopes = reduce_receipts(rows)
+    assert len(envelopes) == 12, f"Expected 12 envelopes (6 actors x 2 tasks), got {len(envelopes)}"
+
+    by_actor_task = {
+        (env["actor"]["candidate"]["harness"]["name"], env["task_class"]): env
+        for env in envelopes
+    }
+
+    # Aider assertions: validated_fail=4, incomplete=0, validator_invalid=0, protocol_failures=4
+    for task_class in ("software.bounded-repair", "software.bounded-debugging"):
+        aider_env = by_actor_task[("aider", task_class)]
+        ev = aider_env["evidence"]
+        assert ev["validated_pass"] == 0
+        assert ev["validated_fail"] == 4
+        assert ev["incomplete"] == 0
+        assert ev["censored"] == 0
+        assert ev["failure_taxonomy"]["protocol_failures"] == 4
+        assert ev["failure_taxonomy"]["validator_invalid"] == 0
+        assert ev["operational_success_rate"]["passes"] == 0
+        assert ev["operational_success_rate"]["trials"] == 4
+        assert ev["conditional_semantic_rate"]["status"] == "NOT_ESTIMABLE"
+        assert ev["conditional_semantic_rate"]["wilson_95"] is None
+
+    # Pi assertions
+    pi_repair = by_actor_task[("pi", "software.bounded-repair")]["evidence"]
+    assert pi_repair["validated_pass"] == 4
+    assert pi_repair["validated_fail"] == 0
+
+    pi_debug = by_actor_task[("pi", "software.bounded-debugging")]["evidence"]
+    assert pi_debug["validated_pass"] == 3
+    assert pi_debug["validated_fail"] == 0
+    assert pi_debug["censored"] == 1
+    assert pi_debug["failure_taxonomy"]["timeout_censored"] == 1
+
+    # Goose assertions
+    goose_repair = by_actor_task[("goose", "software.bounded-repair")]["evidence"]
+    assert goose_repair["validated_pass"] == 4
+    assert goose_repair["validated_fail"] == 0
+
+    goose_debug = by_actor_task[("goose", "software.bounded-debugging")]["evidence"]
+    assert goose_debug["validated_pass"] == 3
+    assert goose_debug["validated_fail"] == 1
+    assert goose_debug["failure_taxonomy"]["semantic_failures"] == 1
+
+    print("PASS: STAT-HIST 48-trial historical portfolio byte digests and reduction invariants")
+
+
 if __name__ == "__main__":
     test_stat_01_wilson_denominators_and_null_telemetry()
     test_stat_02_verifier_success_with_timeout_censoring()
     test_stat_03_aider_operational_failures_and_semantic_status()
-    print("ALL P0 Statistical Soundness tests PASS (STAT-01..STAT-03)")
+    test_stat_hist_historical_portfolio_invariants()
+    print("ALL P0 Statistical Soundness tests PASS (STAT-01..STAT-03, STAT-HIST)")

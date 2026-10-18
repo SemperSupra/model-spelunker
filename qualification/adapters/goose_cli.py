@@ -69,14 +69,13 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 2
-        if "GOOSE_OLLAMA_HOST" in env:
-            ollama_host = env["GOOSE_OLLAMA_HOST"]
-            try:
-                validate_sovereign_endpoint(ollama_host)
-            except ValueError as exc:
-                print(f"fail-closed: GOOSE_OLLAMA_HOST must target a local/private network: {exc}", file=sys.stderr)
-                return 2
-            env["OLLAMA_HOST"] = ollama_host
+        ollama_host = env.get("GOOSE_OLLAMA_HOST") or env.get("OLLAMA_HOST") or "http://127.0.0.1:11434"
+        try:
+            validate_sovereign_endpoint(ollama_host)
+        except ValueError as exc:
+            print(f"fail-closed: GOOSE_OLLAMA_HOST must target a local/private network: {exc}", file=sys.stderr)
+            return 2
+        env["OLLAMA_HOST"] = ollama_host
     elif provider == "openai":
         base_url = env.get("GOOSE_OPENAI_BASE_URL") or env.get("OPENAI_BASE_URL") or ""
         if not base_url:

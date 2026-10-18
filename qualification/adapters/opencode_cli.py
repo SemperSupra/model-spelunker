@@ -59,22 +59,31 @@ def main() -> int:
     if not Path(cfg_file).is_file():
         cfg_file = str(Path.home() / ".config" / "opencode" / "opencode.json")
 
-    # Validate provider endpoint in opencode config if present
+    model = os.environ.get("OPENCODE_MODEL") or os.environ.get("MODEL_SPELUNKER_MODEL") or "bigmac/qwen3-coder-30b"
+    if "/" not in model:
+        model = f"bigmac/{model}"
+    active_provider = model.split("/")[0]
+
+    # Validate provider endpoint in opencode config for the active provider
     if Path(cfg_file).is_file():
         try:
             cfg_data = json.loads(Path(cfg_file).read_text(encoding="utf-8"))
             providers = cfg_data.get("providers", {})
-            for p_name, p_val in providers.items():
-                base_url = p_val.get("baseURL") or p_val.get("baseUrl")
-                if base_url:
-                    validate_sovereign_endpoint(base_url)
+            active_cfg = providers.get(active_provider)
+            if active_cfg:
+                base_url = active_cfg.get("baseURL") or active_cfg.get("baseUrl")
+                if not base_url:
+                    print(f"fail-closed: missing baseURL for active provider '{active_provider}' in {cfg_file}", file=sys.stderr)
+                    return 2
+                validate_sovereign_endpoint(base_url)
+            else:
+                for p_name, p_val in providers.items():
+                    base_url = p_val.get("baseURL") or p_val.get("baseUrl")
+                    if base_url:
+                        validate_sovereign_endpoint(base_url)
         except Exception as exc:
             print(f"fail-closed: invalid sovereign provider endpoint in opencode config: {exc}", file=sys.stderr)
             return 2
-
-    model = os.environ.get("OPENCODE_MODEL") or os.environ.get("MODEL_SPELUNKER_MODEL") or "bigmac/qwen3-coder-30b"
-    if "/" not in model:
-        model = f"bigmac/{model}"
 
     env = dict(os.environ)
     env["OPENCODE_CONFIG"] = cfg_file

@@ -67,7 +67,7 @@ def main() -> int:
     default_cfg = r"C:\Users\Mark\.local\sovereign-actors\config\pi"
     cfg_dir = os.environ.get("PI_CODING_AGENT_DIR") or (default_cfg if Path(default_cfg).is_dir() else "")
 
-    # Validate provider endpoint for the active provider only in models.json if present
+    # Validate provider endpoint for the active provider in models.json
     if cfg_dir and Path(cfg_dir).is_dir():
         models_json = Path(cfg_dir) / "models.json"
         if models_json.is_file():
@@ -75,8 +75,10 @@ def main() -> int:
                 models_data = json.loads(models_json.read_text(encoding="utf-8"))
                 active_cfg = models_data.get("providers", {}).get(provider, {})
                 base_url = active_cfg.get("baseUrl") or active_cfg.get("baseURL")
-                if base_url:
-                    validate_sovereign_endpoint(base_url)
+                if not base_url:
+                    print(f"fail-closed: missing baseUrl for active provider '{provider}' in {models_json}", file=sys.stderr)
+                    return 2
+                validate_sovereign_endpoint(base_url)
             except Exception as exc:
                 print(f"fail-closed: invalid sovereign provider endpoint in pi config: {exc}", file=sys.stderr)
                 return 2

@@ -176,9 +176,75 @@ def test_proc_04_job_object_lifecycle_and_diagnostics() -> None:
     print("PASS: PROC-04 Job Object lifecycle and diagnostics")
 
 
+def test_proc_boot_instruction_zero_spawn_containment() -> None:
+    """PROC-BOOT: Child spawns a background grandchild at line 1 before doing any work.
+    With SuspendedJobPopen, child is assigned to Job Object while suspended before instruction 0.
+    Grandchild is automatically inherited into Job Object and killed when Job terminates.
+    """
+    if os.name != "nt":
+        print("SKIP: PROC-BOOT requires Windows NT")
+        return
+
+    with tempfile.TemporaryDirectory() as td:
+        pid_file = Path(td) / "grandchild.pid"
+        grandchild_code = f"import os, time; open({repr(str(pid_file))}, 'w').write(str(os.getpid())); time.sleep(60)"
+        child_code = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {repr(grandchild_code)}]); time.sleep(30)"
+
+        exit_code, stdout, stderr, timed_out = run_candidate_process(
+            [sys.executable, "-c", child_code],
+            cwd=Path(td),
+            input_text="",
+            timeout=2,  # Force timeout
+            env=dict(os.environ),
+        )
+
+        assert timed_out, "Run should time out"
+        assert pid_file.exists(), "Grandchild PID file not written"
+        grandchild_pid = int(pid_file.read_text().strip())
+
+        time.sleep(1.0)
+        check = subprocess.run(["tasklist", "/FI", f"PID eq {grandchild_pid}"], capture_output=True, text=True)
+        assert str(grandchild_pid) not in check.stdout, f"Grandchild PID {grandchild_pid} survived Job Object termination!"
+
+    print("PASS: PROC-BOOT Instruction-zero grandchild spawn containment")
+
+
+def test_proc_abi_64bit_typing_and_error_handling() -> None:
+    """PROC-ABI: Verify 64-bit pointer-sized HANDLE ABI types and invalid handle error handling."""
+    if os.name != "nt":
+        print("SKIP: PROC-ABI requires Windows NT")
+        return
+
+    import ctypes
+    from ctypes import wintypes
+    from qualification.windows_containment import kernel32
+
+    # Check 64-bit ABI width
+    assert ctypes.sizeof(wintypes.HANDLE) == ctypes.sizeof(ctypes.c_void_p), (
+        f"Expected pointer-sized HANDLE, got {ctypes.sizeof(wintypes.HANDLE)}"
+    )
+    assert kernel32.CreateJobObjectW.restype == wintypes.HANDLE
+    assert kernel32.AssignProcessToJobObject.restype == wintypes.BOOL
+    assert kernel32.AssignProcessToJobObject.argtypes == [wintypes.HANDLE, wintypes.HANDLE]
+    assert kernel32.SetInformationJobObject.restype == wintypes.BOOL
+    assert kernel32.TerminateJobObject.restype == wintypes.BOOL
+
+    # Test error handling on invalid handle
+    with WindowsJobObject() as job:
+        try:
+            job.assign_process(0)
+            raise AssertionError("Assigning invalid handle 0 should raise RuntimeError")
+        except RuntimeError as exc:
+            assert "fail-closed" in str(exc) or "AssignProcessToJobObject failed" in str(exc)
+
+    print("PASS: PROC-ABI 64-bit HANDLE typing and error handling")
+
+
 if __name__ == "__main__":
     test_proc_01_parent_exits_while_descendants_live()
     test_proc_02_nested_runtime_breakaway_attempt()
     test_proc_03_stdin_write_and_close_failure()
     test_proc_04_job_object_lifecycle_and_diagnostics()
-    print("ALL P0 Process Containment tests PASS (PROC-01..PROC-04)")
+    test_proc_boot_instruction_zero_spawn_containment()
+    test_proc_abi_64bit_typing_and_error_handling()
+    print("ALL P0 Process Containment tests PASS (PROC-01..PROC-04, PROC-BOOT, PROC-ABI)")

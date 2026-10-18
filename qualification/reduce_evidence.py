@@ -70,7 +70,16 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     obs = receipt["observation"]
     if bool(obs.get("success")):
         return "pass"
+
     termination = obs.get("termination_class")
+    # If candidate completed with semantic failure or changed state with verifier exit 1,
+    # it is a validated operational failure (e.g. false completion, formatting defect), NOT incomplete
+    if obs.get("verifier_exit_code") == 1 and (
+        termination == "semantic-failure"
+        or (obs.get("candidate_exit_code") == 0 and obs.get("state_changed") and not obs.get("timed_out"))
+    ):
+        return "fail"
+
     workload = obs.get("workload") or {}
     signals = set(obs.get("failure_signals") or [])
     no_completed_rounds = (
@@ -154,12 +163,18 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # Attribute failure types
         protocol_failures = 0
         turn_budget_failures = 0
+        validator_invalid = 0
         for r, out in zip(rows, outcomes):
+            obs = r.get("observation", {})
+            verifier_exit = obs.get("verifier_exit_code")
+            signals = set(obs.get("failure_signals") or [])
+            if verifier_exit is not None and verifier_exit not in {0, 1}:
+                validator_invalid += 1
+            elif "validator-error" in signals or obs.get("failure_class") == "validator-error":
+                validator_invalid += 1
+
             if out == "fail":
                 harness = (r.get("candidate", {}).get("harness", {}) or {}).get("name")
-                stdout = ""
-                # Check diagnostics or failure signals
-                signals = set(r.get("observation", {}).get("failure_signals") or [])
                 if harness == "aider":
                     protocol_failures += 1
                 elif harness == "goose" and "false-completion" in signals:
@@ -209,7 +224,7 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         "turn_budget_failures": turn_budget_failures,
                         "semantic_failures": semantic_failures,
                         "timeout_censored": censored,
-                        "validator_invalid": incomplete,
+                        "validator_invalid": validator_invalid,
                     },
                     "semantic_trials": semantic_trials,
                     "success_interval_wilson_95": wilson_interval(successes, semantic_trials),

@@ -231,13 +231,13 @@
           "wilson_95": null
         },
         "failure_taxonomy": {
-          "protocol_failures": 0,
+          "protocol_failures": 4,
           "semantic_failures": 0,
           "timeout_censored": 0,
           "turn_budget_failures": 0,
-          "validator_invalid": 4
+          "validator_invalid": 0
         },
-        "incomplete": 4,
+        "incomplete": 0,
         "operational_success_rate": {
           "passes": 0,
           "trials": 4,
@@ -254,24 +254,28 @@
           "20261018T084937Z-7bad9e7f",
           "20261018T084947Z-d7ce8521"
         ],
-        "semantic_trials": 0,
-        "success_interval_wilson_95": null,
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 0.0,
+          "lower_95": 0.0,
+          "upper_95": 0.489891
+        },
         "task_ids": [
           "boundary-bugfix-v0"
         ],
         "unique_task_instances": 1,
-        "validated_fail": 0,
+        "validated_fail": 4,
         "validated_pass": 0
       },
-      "evidence_pattern": "NO_TERMINAL_EVIDENCE",
+      "evidence_pattern": "FAIL_ONLY",
       "ksa_evidence": {
         "abilities": {
-          "evidence_discrimination": "INSUFFICIENT_EVIDENCE",
-          "scope_discipline": "INSUFFICIENT_EVIDENCE"
+          "evidence_discrimination": "NEGATIVE_BOUNDARY_OBSERVED",
+          "scope_discipline": "NEGATIVE_BOUNDARY_OBSERVED"
         },
         "skills": {
-          "bounded_code_repair": "INSUFFICIENT_EVIDENCE",
-          "fault_localization": "INSUFFICIENT_EVIDENCE"
+          "bounded_code_repair": "NEGATIVE_BOUNDARY_OBSERVED",
+          "fault_localization": "NEGATIVE_BOUNDARY_OBSERVED"
         }
       },
       "schema_version": 1,
@@ -317,13 +321,13 @@
           "wilson_95": null
         },
         "failure_taxonomy": {
-          "protocol_failures": 0,
+          "protocol_failures": 4,
           "semantic_failures": 0,
           "timeout_censored": 0,
           "turn_budget_failures": 0,
-          "validator_invalid": 4
+          "validator_invalid": 0
         },
-        "incomplete": 4,
+        "incomplete": 0,
         "operational_success_rate": {
           "passes": 0,
           "trials": 4,
@@ -340,23 +344,27 @@
           "20261018T082732Z-49cb7399",
           "20261018T082747Z-d58bc4fc"
         ],
-        "semantic_trials": 0,
-        "success_interval_wilson_95": null,
+        "semantic_trials": 4,
+        "success_interval_wilson_95": {
+          "estimate": 0.0,
+          "lower_95": 0.0,
+          "upper_95": 0.489891
+        },
         "task_ids": [
           "text-repair-v0"
         ],
         "unique_task_instances": 1,
-        "validated_fail": 0,
+        "validated_fail": 4,
         "validated_pass": 0
       },
-      "evidence_pattern": "NO_TERMINAL_EVIDENCE",
+      "evidence_pattern": "FAIL_ONLY",
       "ksa_evidence": {
         "abilities": {
-          "scope_discipline": "INSUFFICIENT_EVIDENCE"
+          "scope_discipline": "NEGATIVE_BOUNDARY_OBSERVED"
         },
         "skills": {
-          "bounded_change_execution": "INSUFFICIENT_EVIDENCE",
-          "governed_file_tool_use": "INSUFFICIENT_EVIDENCE"
+          "bounded_change_execution": "NEGATIVE_BOUNDARY_OBSERVED",
+          "governed_file_tool_use": "NEGATIVE_BOUNDARY_OBSERVED"
         }
       },
       "schema_version": 1,
