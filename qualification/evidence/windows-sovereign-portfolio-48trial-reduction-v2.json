@@ -71,9 +71,9 @@
         ],
         "semantic_trials": 3,
         "success_interval_wilson_95": {
-          "estimate": 0.75,
-          "lower_95": 0.300642,
-          "upper_95": 0.954413
+          "estimate": 1.0,
+          "lower_95": 0.438503,
+          "upper_95": 1.0
         },
         "task_ids": [
           "boundary-bugfix-v0"
@@ -82,7 +82,7 @@
         "validated_fail": 0,
         "validated_pass": 3
       },
-      "evidence_pattern": "MIXED",
+      "evidence_pattern": "PASS_ONLY",
       "ksa_evidence": {
         "abilities": {
           "evidence_discrimination": "REPEATED_EVIDENCE",
@@ -93,7 +93,7 @@
           "fault_localization": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-debugging"
     },
     {
@@ -188,7 +188,7 @@
           "governed_file_tool_use": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-repair"
     },
     {
@@ -231,13 +231,13 @@
           "wilson_95": null
         },
         "failure_taxonomy": {
-          "protocol_failures": 4,
+          "protocol_failures": 0,
           "semantic_failures": 0,
           "timeout_censored": 0,
           "turn_budget_failures": 0,
-          "validator_invalid": 0
+          "validator_invalid": 4
         },
-        "incomplete": 0,
+        "incomplete": 4,
         "operational_success_rate": {
           "passes": 0,
           "trials": 4,
@@ -254,31 +254,27 @@
           "20261018T084937Z-7bad9e7f",
           "20261018T084947Z-d7ce8521"
         ],
-        "semantic_trials": 4,
-        "success_interval_wilson_95": {
-          "estimate": 0.0,
-          "lower_95": 0.0,
-          "upper_95": 0.489891
-        },
+        "semantic_trials": 0,
+        "success_interval_wilson_95": null,
         "task_ids": [
           "boundary-bugfix-v0"
         ],
         "unique_task_instances": 1,
-        "validated_fail": 4,
+        "validated_fail": 0,
         "validated_pass": 0
       },
-      "evidence_pattern": "FAIL_ONLY",
+      "evidence_pattern": "NO_TERMINAL_EVIDENCE",
       "ksa_evidence": {
         "abilities": {
-          "evidence_discrimination": "NEGATIVE_BOUNDARY_OBSERVED",
-          "scope_discipline": "NEGATIVE_BOUNDARY_OBSERVED"
+          "evidence_discrimination": "INSUFFICIENT_EVIDENCE",
+          "scope_discipline": "INSUFFICIENT_EVIDENCE"
         },
         "skills": {
-          "bounded_code_repair": "NEGATIVE_BOUNDARY_OBSERVED",
-          "fault_localization": "NEGATIVE_BOUNDARY_OBSERVED"
+          "bounded_code_repair": "INSUFFICIENT_EVIDENCE",
+          "fault_localization": "INSUFFICIENT_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-debugging"
     },
     {
@@ -321,13 +317,13 @@
           "wilson_95": null
         },
         "failure_taxonomy": {
-          "protocol_failures": 4,
+          "protocol_failures": 0,
           "semantic_failures": 0,
           "timeout_censored": 0,
           "turn_budget_failures": 0,
-          "validator_invalid": 0
+          "validator_invalid": 4
         },
-        "incomplete": 0,
+        "incomplete": 4,
         "operational_success_rate": {
           "passes": 0,
           "trials": 4,
@@ -344,30 +340,26 @@
           "20261018T082732Z-49cb7399",
           "20261018T082747Z-d58bc4fc"
         ],
-        "semantic_trials": 4,
-        "success_interval_wilson_95": {
-          "estimate": 0.0,
-          "lower_95": 0.0,
-          "upper_95": 0.489891
-        },
+        "semantic_trials": 0,
+        "success_interval_wilson_95": null,
         "task_ids": [
           "text-repair-v0"
         ],
         "unique_task_instances": 1,
-        "validated_fail": 4,
+        "validated_fail": 0,
         "validated_pass": 0
       },
-      "evidence_pattern": "FAIL_ONLY",
+      "evidence_pattern": "NO_TERMINAL_EVIDENCE",
       "ksa_evidence": {
         "abilities": {
-          "scope_discipline": "NEGATIVE_BOUNDARY_OBSERVED"
+          "scope_discipline": "INSUFFICIENT_EVIDENCE"
         },
         "skills": {
-          "bounded_change_execution": "NEGATIVE_BOUNDARY_OBSERVED",
-          "governed_file_tool_use": "NEGATIVE_BOUNDARY_OBSERVED"
+          "bounded_change_execution": "INSUFFICIENT_EVIDENCE",
+          "governed_file_tool_use": "INSUFFICIENT_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-repair"
     },
     {
@@ -461,7 +453,7 @@
           "fault_localization": "MIXED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-debugging"
     },
     {
@@ -556,7 +548,7 @@
           "fault_localization": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-debugging"
     },
     {
@@ -650,7 +642,7 @@
           "governed_file_tool_use": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-repair"
     },
     {
@@ -743,7 +735,7 @@
           "governed_file_tool_use": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-repair"
     },
     {
@@ -838,7 +830,7 @@
           "fault_localization": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-debugging"
     },
     {
@@ -932,7 +924,7 @@
           "governed_file_tool_use": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-repair"
     },
     {
@@ -1027,7 +1019,7 @@
           "fault_localization": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-debugging"
     },
     {
@@ -1121,7 +1113,7 @@
           "governed_file_tool_use": "REPEATED_EVIDENCE"
         }
       },
-      "schema_version": 2,
+      "schema_version": 1,
       "task_class": "software.bounded-repair"
     }
   ],

@@ -44,12 +44,12 @@ def actor_realization(receipt: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def evidence_pattern(successes: int, failures: int, censored: int = 0) -> str:
-    if successes and (failures or censored):
+def evidence_pattern(successes: int, failures: int) -> str:
+    if successes and failures:
         return "MIXED"
     if successes:
         return "PASS_ONLY"
-    if failures or censored:
+    if failures:
         return "FAIL_ONLY"
     return "NO_TERMINAL_EVIDENCE"
 
@@ -68,24 +68,29 @@ def ksa_state(successes: int, failures: int) -> str:
 
 def terminal_outcome(receipt: dict[str, Any]) -> str:
     obs = receipt["observation"]
-
-    # Admitted completion requires both valid artifact and candidate completion within budget
-    admitted = obs.get("admitted_completion")
-    if admitted is True:
+    if bool(obs.get("success")):
         return "pass"
-    if admitted is False and "admitted_completion" in obs:
-        pass
-    elif bool(obs.get("success")) and obs.get("candidate_exit_code") == 0 and not obs.get("timed_out"):
-        return "pass"
-
-    signals = set(obs.get("failure_signals") or [])
     termination = obs.get("termination_class")
-
-    # Timeout / censorship check: always classified as censored
-    if obs.get("timed_out") or termination == "timeout-censored" or "timeout" in signals:
+    workload = obs.get("workload") or {}
+    signals = set(obs.get("failure_signals") or [])
+    no_completed_rounds = (
+        not obs.get("success", False)
+        and workload.get("model_rounds") == 0
+    )
+    started_calls = workload.get("model_calls_started")
+    timeout_observed = (
+        termination == "timeout-censored"
+        or obs.get("timed_out")
+        or "timeout" in signals
+    )
+    if timeout_observed and isinstance(started_calls, int) and started_calls > 0:
         return "censored"
-
-    # Validator crash (exit not in {0, 1}) or harness engine failure: classified as incomplete
+    if timeout_observed and (obs.get("state_changed") or obs.get("verifier_exit_code") == 0):
+        return "censored"
+    if no_completed_rounds:
+        return "incomplete"
+    if timeout_observed:
+        return "censored"
     engine_error = bool(obs.get("engine_error_types")) or "engine-error-event" in signals
     verifier_exit = obs.get("verifier_exit_code")
     validator_error = (
@@ -93,11 +98,7 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
         or obs.get("failure_class") == "validator-error"
         or (verifier_exit is not None and verifier_exit not in {0, 1})
     )
-    if engine_error or validator_error:
-        return "incomplete"
-
-    # All other outcomes (false completion, protocol error, nonzero exit, test fail) are operational failures
-    return "fail"
+    return "incomplete" if engine_error or validator_error else "fail"
 
 
 def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -> dict[str, float] | None:
@@ -181,11 +182,11 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
         envelopes.append(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "actor_realization_id": actor_id,
                 "actor": actor_records[actor_id],
                 "task_class": task_class,
-                "evidence_pattern": evidence_pattern(successes, failures, censored=censored),
+                "evidence_pattern": evidence_pattern(successes, failures),
                 "evidence": {
                     "reps": reps,
                     "validated_pass": successes,
@@ -211,7 +212,7 @@ def reduce_receipts(receipts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         "validator_invalid": incomplete,
                     },
                     "semantic_trials": semantic_trials,
-                    "success_interval_wilson_95": operational_interval,
+                    "success_interval_wilson_95": wilson_interval(successes, semantic_trials),
                     "unique_task_instances": len(task_ids),
                     "task_ids": task_ids,
                     "run_ids": sorted(r["run_id"] for r in rows),

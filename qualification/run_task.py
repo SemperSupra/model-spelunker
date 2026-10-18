@@ -524,9 +524,6 @@ def workload_summary(observations: list[dict[str, object]]) -> dict[str, object]
         "tool_argument_bytes",
         "client_wall_seconds",
     )
-    if not observations:
-        return {"model_rounds": None}
-
     summary: dict[str, object] = {"model_rounds": len(observations)}
     for field in numeric_fields:
         values = [
@@ -905,6 +902,10 @@ def main() -> int:
         }
 
         diagnostics = {
+            "artifact_valid": artifact_valid,
+            "candidate_completed": candidate_completed,
+            "within_wall_budget": within_wall_budget,
+            "admitted_completion": admitted_completion,
             "candidate_stdout_chars": len(stdout),
             "candidate_stderr_chars": len(stderr),
             "candidate_stdout_tail": stdout[-8192:],
@@ -952,14 +953,10 @@ def main() -> int:
             ),
             "observation": {
                 "success": success,
-                "artifact_valid": artifact_valid,
-                "candidate_completed": candidate_completed,
-                "within_wall_budget": within_wall_budget,
-                "admitted_completion": admitted_completion,
                 "termination_class": termination_class,
                 "failure_class": failure_class,
                 "wall_seconds": round(wall_seconds, 6),
-                "human_interventions": None,
+                "human_interventions": 0,
                 "candidate_exit_code": candidate_exit,
                 "verifier_exit_code": verifier.returncode,
                 "timed_out": timed_out,
