@@ -59,7 +59,7 @@ def main() -> int:
     def tool_version(executable: str) -> str:
         proc = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=10, check=True)
         lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-        return next((line for line in lines if "version" in line.lower()), lines[0] if lines else "UNKNOWN")
+        return (lines[1] if len(lines) > 1 and lines[0].startswith("LLVM (") else lines[0]) if lines else "UNKNOWN"
 
     manifest = {"schema_version": 1, "source_sha256": digest(source),
                 "tool_versions": {"compiler": tool_version(args.cc),
