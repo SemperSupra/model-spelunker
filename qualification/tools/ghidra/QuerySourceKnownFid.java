@@ -3,6 +3,9 @@
 // Deliberately prints one line per candidate; no automatic function renaming.
 import ghidra.app.script.GhidraScript;
 import ghidra.feature.fid.db.FidQueryService;
+import ghidra.feature.fid.db.FidFile;
+import ghidra.feature.fid.db.FidFileManager;
+import java.io.File;
 import ghidra.feature.fid.db.FunctionRecord;
 import ghidra.feature.fid.service.FidMatch;
 import ghidra.feature.fid.service.FidSearchResult;
@@ -14,17 +17,31 @@ public class QuerySourceKnownFid extends GhidraScript {
     public void run() throws Exception {
         if (currentProgram == null) throw new IllegalArgumentException("no target program");
         String[] args = getScriptArgs();
-        if (args.length != 1 || !args[0].matches("[A-Za-z0-9_-]{3,60}"))
-            throw new IllegalArgumentException("one expected family argument");
+        if (args.length != 2 || !args[0].matches("[A-Za-z0-9_-]{3,60}"))
+            throw new IllegalArgumentException("expected family and exact .fidb path");
         String family = args[0];
+        FidFileManager manager = FidFileManager.getInstance();
+        File reference = new File(args[1]);
+        if (!reference.isFile() || !reference.getName().endsWith(".fidb")) {
+            throw new IllegalArgumentException("FID file not found");
+        }
+        FidFile fidFile = manager.addUserFidFile(reference);
+        if (fidFile == null || !fidFile.isActive() ||
+            !fidFile.canProcessLanguage(currentProgram.getLanguage())) {
+            throw new IllegalStateException("FID database unavailable for target language");
+        }
+        println("RE_FID_ATTACHED=" + fidFile.getName());
+        println("RE_FID_PROGRAM_FUNCTIONS=" +
+                currentProgram.getFunctionManager().getFunctionCount());
+        println("RE_FID_AVAILABLE_DATABASES=" + manager.getFidFiles().size());
         FidService service = new FidService();
-        int scanned = 0, recognized = 0, decoy = 0, ambiguous = 0;
+        int candidates = 0, recognized = 0, decoy = 0, ambiguous = 0;
         try (FidQueryService query = service.openFidQueryService(currentProgram.getLanguage(), false)) {
             List<FidSearchResult> rows = service.processProgram(
                 currentProgram, query, service.getDefaultScoreThreshold(), monitor);
             for (FidSearchResult row : rows) {
                 if (monitor.isCancelled()) throw new IllegalStateException("cancelled");
-                scanned++;
+                candidates++;
                 String matchName = null;
                 float best = -1.0f;
                 int ties = 0;
@@ -51,7 +68,7 @@ public class QuerySourceKnownFid extends GhidraScript {
                         matchName + "," + best + "," + ties);
             }
         }
-        println("RE_FID_TARGET_SCANNED=" + scanned);
+        println("RE_FID_TARGET_CANDIDATE_ROWS=" + candidates);
         println("RE_FID_TARGET_MATCHES=" + recognized);
         println("RE_FID_TARGET_AMBIGUOUS=" + ambiguous);
         println("RE_FID_TARGET_DECOY=" + decoy);
