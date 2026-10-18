@@ -17,15 +17,22 @@ cache_dir.mkdir(parents=True, exist_ok=True)
 
 with tempfile.TemporaryDirectory(prefix="goose-adapter-stream-test-", dir=str(cache_dir)) as temp:
     temp = Path(temp)
-    fake = temp / "fake-goose"
-    fake.write_text(
-        "#!/usr/bin/env python3\n"
-        "import time\n"
-        "print('GOOSE_STREAM_MARKER=before-timeout', flush=True)\n"
-        "time.sleep(10)\n",
-        encoding="utf-8",
-    )
-    fake.chmod(0o755)
+    if os.name == "nt":
+        fake = temp / "fake-goose.cmd"
+        fake.write_text(
+            f'@"{sys.executable}" -c "import time; print(\'GOOSE_STREAM_MARKER=before-timeout\', flush=True); time.sleep(10)" %*\n',
+            encoding="utf-8",
+        )
+    else:
+        fake = temp / "fake-goose"
+        fake.write_text(
+            "#!/usr/bin/env python3\n"
+            "import time\n"
+            "print('GOOSE_STREAM_MARKER=before-timeout', flush=True)\n"
+            "time.sleep(10)\n",
+            encoding="utf-8",
+        )
+        fake.chmod(0o755)
 
     env = dict(os.environ)
     for key in (
@@ -65,14 +72,21 @@ with tempfile.TemporaryDirectory(prefix="goose-adapter-stream-test-", dir=str(ca
     else:
         raise AssertionError("fake Goose unexpectedly exited before timeout")
 
-    arg_goose = temp / "arg-goose"
-    arg_goose.write_text(
-        "#!/usr/bin/env python3\n"
-        "import json, sys\n"
-        "print('GOOSE_ARGV=' + json.dumps(sys.argv[1:]), flush=True)\n",
-        encoding="utf-8",
-    )
-    arg_goose.chmod(0o755)
+    if os.name == "nt":
+        arg_goose = temp / "arg-goose.cmd"
+        arg_goose.write_text(
+            f'@"{sys.executable}" -c "import json, sys; print(\'GOOSE_ARGV=\' + json.dumps(sys.argv[1:]), flush=True)" %*\n',
+            encoding="utf-8",
+        )
+    else:
+        arg_goose = temp / "arg-goose"
+        arg_goose.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            "print('GOOSE_ARGV=' + json.dumps(sys.argv[1:]), flush=True)\n",
+            encoding="utf-8",
+        )
+        arg_goose.chmod(0o755)
     env["GOOSE_BIN"] = str(arg_goose)
     env["MODEL_SPELUNKER_MAX_ITERATIONS"] = "8"
     completed = subprocess.run(

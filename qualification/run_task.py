@@ -31,6 +31,8 @@ def canonical_json_digest(value: object) -> str:
 def observed_resources() -> dict[str, object]:
     """Capture cheap execution-resource facts without turning every rep into a profiler."""
     cpu_model = None
+    if os.name == "nt":
+        cpu_model = os.environ.get("PROCESSOR_IDENTIFIER")
     cpuinfo = Path("/proc/cpuinfo")
     if cpuinfo.exists():
         for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -218,6 +220,19 @@ def detect_failure_signals(
 
 
 def _terminate_candidate_group(proc: subprocess.Popen[str]) -> None:
+    if os.name == "nt":
+        if proc.poll() is None:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+            except Exception:
+                if proc.poll() is None:
+                    proc.terminate()
+        return
     if os.name != "posix":
         if proc.poll() is None:
             proc.terminate()
@@ -760,6 +775,8 @@ def main() -> int:
             text=True,
             capture_output=True,
             check=False,
+            encoding="utf-8",
+            errors="replace",
         )
         wall_seconds = time.monotonic() - started
 

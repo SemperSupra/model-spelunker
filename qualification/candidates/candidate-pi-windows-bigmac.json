@@ -1,0 +1,24 @@
+{
+  "harness": {
+    "name": "pi",
+    "version": "1.3.0"
+  },
+  "model": {
+    "provider": "llama-server",
+    "id": "qwen3-coder-30b",
+    "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0"
+  },
+  "toolset": [
+    "read",
+    "write",
+    "edit"
+  ],
+  "build": {
+    "kind": "user-local-npm",
+    "profile": "windows-x64",
+    "source_revision": "v1.3.0",
+    "toolchain": "node-v24",
+    "default_features": false,
+    "features": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "harness": {
+    "name": "vibe",
+    "version": "2.26.1"
+  },
+  "model": {
+    "provider": "llama-server",
+    "id": "qwen3-coder-30b",
+    "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0"
+  },
+  "toolset": [
+    "plan",
+    "editor"
+  ],
+  "build": {
+    "kind": "user-local-uv",
+    "profile": "windows-x64",
+    "source_revision": "v2.26.1",
+    "toolchain": "python-3.12",
+    "default_features": false,
+    "features": []
+  }
+}

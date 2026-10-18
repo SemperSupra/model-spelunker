@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "id": "goose-qwen3-coder-30b-windows-bigmac",
+  "harness": {
+    "name": "goose",
+    "version": "1.55.0",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "llama-server",
+    "id": "qwen3-coder-30b",
+    "realization": "local-artifact",
+    "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+    "foundry_ref": null
+  },
+  "execution_environment": {
+    "venue": "local-workstation/windows-x64",
+    "inference_route": "local:llama-server-openai-v1",
+    "substrate_profile": "local-windows-11-x64"
+  },
+  "toolset": [
+    "developer"
+  ],
+  "configuration": {
+    "thinking_effort": "off",
+    "mode": "auto",
+    "no_session": true,
+    "no_profile": true,
+    "builtins": [
+      "developer"
+    ],
+    "max_turns": 4,
+    "max_tool_repetitions": 2,
+    "output_format": "stream-json",
+    "harness_delivery": "user-local-binary"
+  },
+  "authority_profile": "task-scoped-workcell"
+}
