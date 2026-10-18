@@ -46,8 +46,15 @@ def main():
         lines=text(root/"crt_static-link.log").splitlines()
         sample=[row.strip()[:220] for row in lines
                 if any(k in row.lower() for k in ("libucrt", "libcmt", "loaded", "qsort", "strtoui"))]
+        link_counts={t:sum(t.lower() in row.lower() for row in lines)
+                     for t in ("Searching","Found","Referenced","Loaded","libucrt","LIBCMT")}
+        mapped=text(root/"crt_static.map").splitlines()
+        map_sample=[row.strip()[:240] for row in mapped
+                    if any(t in row.lower() for t in ("qsort","strtoui64","libucrt","libcmt"))]
         print(json.dumps({"diagnostic":"NO_MATCHING_STATIC_MEMBER_LOADED_PATTERN",
-                          "candidate_lines":sample[:25]},sort_keys=True))
+                          "candidate_lines":sample[:12],
+                          "link_counts":link_counts,
+                          "map_sample":map_sample[:20]},sort_keys=True))
         raise ValueError("no linker evidence of actual static CRT member inclusion")
     if not a["map_mentions_export"] or not b["map_mentions_export"]:
         raise ValueError("source-known exported function absent in map")
