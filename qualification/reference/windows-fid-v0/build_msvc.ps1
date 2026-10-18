@@ -73,9 +73,9 @@ $metadata = @{
   windows_sdk_version = $toolEnv['WindowsSDKVersion']
   host_image_os = $env:ImageOS
   runner_arch = $env:RUNNER_ARCH
-  vc_archives_x64 = Get-ArchiveCount $vcLibPath
-  ucrt_archives_x64 = Get-ArchiveCount $ucrtLibPath
-  windows_sdk_import_archives_x64 = Get-ArchiveCount $winLibPath
+  vc_archives_x64 = (Get-ArchiveCount $vcLibPath)
+  ucrt_archives_x64 = (Get-ArchiveCount $ucrtLibPath)
+  windows_sdk_import_archives_x64 = (Get-ArchiveCount $winLibPath)
   vc_static_archive_samples = @((Get-ChildItem -LiteralPath $vcLibPath -Filter '*.lib' -File -ErrorAction SilentlyContinue | Select-Object -First 20 -ExpandProperty Name))
   status = 'COMPILATION_ONLY_NO_FID_MATCH_CLAIM'
 }
