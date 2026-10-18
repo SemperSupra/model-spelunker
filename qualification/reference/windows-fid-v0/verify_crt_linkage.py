@@ -42,6 +42,12 @@ def main():
     if a["qsort_imported"] or not b["qsort_imported"]:
         raise ValueError("expected qsort statically resolved only for /MT")
     if a["loaded_static_crt_members"] < 1:
+        # Diagnosis is bounded to provenance lines only; no SDK source/member data.
+        lines=text(root/"crt_static-link.log").splitlines()
+        sample=[row.strip()[:220] for row in lines
+                if any(k in row.lower() for k in ("libucrt", "libcmt", "loaded", "qsort", "strtoui"))]
+        print(json.dumps({"diagnostic":"NO_MATCHING_STATIC_MEMBER_LOADED_PATTERN",
+                          "candidate_lines":sample[:25]},sort_keys=True))
         raise ValueError("no linker evidence of actual static CRT member inclusion")
     if not a["map_mentions_export"] or not b["map_mentions_export"]:
         raise ValueError("source-known exported function absent in map")
