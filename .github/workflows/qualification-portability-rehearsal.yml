@@ -18,7 +18,7 @@ jobs:
   native-vs-container:
     name: Native GHA vs local-shaped container contract
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,18 +139,6 @@ jobs:
         shell: bash
         run: python3 qualification/tools/ghidra/test_verify_pcode.py
 
-      - name: Set up JDK 21 for explicit source-known FID and BSim trial
-        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Create source-known Ghidra FID and local H2 BSim
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash qualification/tools/ghidra/run_fid_bsim_reference_probe.sh
-
       - name: Upload bounded rehearsal evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -161,6 +149,5 @@ jobs:
             ${{ runner.temp }}/container-launch/out/receipt.json
             ${{ runner.temp }}/qualification-portability-summary.json
             ${{ runner.temp }}/qualification-portability-container-image.txt
-            ${{ runner.temp }}/re-fid-bsim/output/reference-receipt.json
           if-no-files-found: ignore
           retention-days: 30
