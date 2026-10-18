@@ -45,3 +45,23 @@ Bounded metadata-only [GHA artifact #12133596525](https://github.com/SemperSupra
 
 ## Parallel Android A-0
 Under AAR-private #82 and public AAR draft PR #39, [public GHA #39118512769](https://github.com/SemperSupra/android-artifact-recovery/actions/runs/39118512769) **PASS** for installed NDK **27.3.13750724**, ARM64, libc++_static archive 53 members, compiler-rt builtins 279 members, and libunwind not present at tested NDK path. Reference metadata SHA-256 retained in [AAR artifact #12132839720](https://github.com/SemperSupra/android-artifact-recovery/actions/runs/39118512769/artifacts/12132839720), no library bytes uploaded. This is an *inventory only*, not Ghidra FID/native JNI matching. The temporary AAR workflow job was removed. Do not duplicate Android goldens/recovery logic in Model Spelunker.
+
+## W-3a actual CRT linkage provenance: native MSVC /MT versus /MD (2026-10-18)
+
+[Successful public GHA Windows 2025 **#39119408362**](https://github.com/SemperSupra/model-spelunker/actions/runs/39119408362), independent metadata-only [receipt artifact **#12133577825**](https://github.com/SemperSupra/model-spelunker/actions/runs/39119408362/artifacts/12133577825). Source-controlled `windows_crt_consumer.c`, `build_crt_linkage.ps1` and `verify_crt_linkage.py` produce two **nonexecuted** PE32+ x64 images from the same C source, identical optimization and installed Microsoft compiler, changing only `/MT` versus `/MD`. The fixture calls `qsort`, `_strtoui64`, and `strlen`. The independent oracle examines PE headers, `dumpbin /imports` and `/dependents`, and exact linker `/MAP` library-member attribution. No PDB, PE or CRT library is uploaded.
+
+| Factor | MSVC `/MT` | MSVC `/MD` |
+| --- | --- | --- |
+| Output PE size | **110080** bytes | **10240** bytes |
+| Distinct `LIBCMT:object.obj` / `libucrt:object.obj` / `libvcruntime:object.obj` references in linker MAP | **167** | **0** |
+| `qsort` present in PE import table | **No** | **Yes** |
+| Linked runtime archives observed | LIBCMT.lib, libucrt.lib, libvcruntime.lib | MSVCRT.lib, ucrt.lib, vcruntime.lib |
+| Imported system DLL names | KERNEL32.dll | KERNEL32.dll, VCRUNTIME140.dll, UCRT API-set DLLs |
+
+**Failure trace retained rather than discarded:** Initial one-shot [#39119126939](https://github.com/SemperSupra/model-spelunker/actions/runs/39119126939) FAILED the independent provenance oracle because it expected obsolete `Loaded archive(member)` lines from `/VERBOSE:LIB`. Diagnostic rerun [#39119223154](https://github.com/SemperSupra/model-spelunker/actions/runs/39119223154) also FAILED but showed source-grounded MAP entries such as `LIBCMT:utility.obj` and `libucrt:argv_data.obj`; 52 verbose `Searching` lines, no `Loaded` / `Found` lines. Corrected oracle scores the actual Microsoft linker MAP, **not** a guessed verbose grammar. Final [#39119408362](https://github.com/SemperSupra/model-spelunker/actions/runs/39119408362) PASS with distinct static member and dynamic import evidence.
+
+**Scientific limit:** This qualifies **real CRT code inclusion provenance**, not semantic behavior of unexecuted PEs, not named per-function CRT FID matches, not use on unknown binaries, not BSim, and not configured actor improvement. MAP symbol names are trusted *producer evidence*, not accessible to a future blinded actor.
+
+The temporary `windows-crt-linkage-one-shot` job was removed from routine GitHub PR CI immediately after the successful run at cleanup commit `ffde9be524d6275e3c528fa4b4b1a1a4f02c15ac`. Code stays available for admitted narrow one-shot Windows workcells through the existing Agent Dispatch execution system; no new scheduler or default heavyweight CI was created.
+
+**Next W-3b:** Use one of these *actual* source-known `/MT` PEs with verified `libucrt`/`libcmt` member provenance as the target for Ghidra's **shipped Visual Studio FID** reference database, then compare locally produced FID only if packaged coverage is absent. Require independently confirmed library-function identity, calibration against `/MD` import-only negative controls, mismatched CRT version/optimization decoys, and per-function TP/FP/FN/UNKNOWN. Do not score the presence of a library filename as a correct function match. Keep AAR NDK/JNI native RE under #82.
