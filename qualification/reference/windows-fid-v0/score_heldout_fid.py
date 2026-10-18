@@ -52,19 +52,27 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
         if values[0] < 2 or not 1 <= values[1] <= values[0] or not 1 <= values[2] <= values[0]:
             raise ValueError("impossible tie group")
         groups[key] = values
-    if len(matches) != count("MATCH_COUNT") or len(matches) > 500:
-        raise ValueError("match count or boundedness failure")
-    if sum(m["ties"] > 1 for m in matches.values()) != count("AMBIGUOUS_COUNT"):
+    population=count("MATCH_COUNT")
+    emitted=count("EMITTED_COUNT")
+    truncated=count("TRUNCATED_COUNT")
+    if (emitted!=len(matches) or emitted!=min(population,500)
+            or truncated!=population-emitted or population<0):
+        raise ValueError("match census/emission/truncation accounting failure")
+    observed_ties=sum(m["ties"] > 1 for m in matches.values())
+    if (observed_ties>count("AMBIGUOUS_COUNT") or
+            (not truncated and observed_ties!=count("AMBIGUOUS_COUNT"))):
         raise ValueError("ambiguous counter mismatch")
     if set(groups) != {key for key, m in matches.items() if m["ties"] > 1}:
         raise ValueError("missing or extra tie classification")
     for key, g in groups.items():
         if g[0] != matches[key]["ties"]:
             raise ValueError("tie multiplicity mismatch")
-    if sum(g[1] == 1 for g in groups.values()) != count("TIE_CONSENSUS"):
-        raise ValueError("consensus count mismatch")
-    if sum(g[1] > 1 for g in groups.values()) != count("TIE_CONFLICT"):
-        raise ValueError("conflict count mismatch")
+    if sum(g[1] == 1 for g in groups.values()) > count("TIE_CONSENSUS"):
+        raise ValueError("consensus total inconsistent")
+    if sum(g[1] > 1 for g in groups.values()) > count("TIE_CONFLICT"):
+        raise ValueError("conflict total inconsistent")
+    if count("TIE_CONSENSUS")+count("TIE_CONFLICT")!=count("AMBIGUOUS_COUNT"):
+        raise ValueError("global tie categories inconsistent")
     metrics = {"unique":0, "same_name_consensus":0, "conflicting_abstain":0,
                "unique_exact_crt":0, "unique_wrong_crt":0, "unique_unknown":0,
                "consensus_exact_crt":0, "consensus_wrong_crt":0, "consensus_unknown":0,
@@ -93,7 +101,11 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
         prefix = "consensus" if label == "same_name_consensus" else "unique"
         metrics[prefix + "_" + verdict] += 1
     return {"schema":1, "treatment":treatment,
-            "match_count":len(matches), "metrics":metrics,
+            "population_match_count":population,
+            "bounded_match_count":len(matches),
+            "excluded_from_sample":truncated,
+            "sample_not_generalizable":bool(truncated),
+            "metrics":metrics,
             "source_map_excluded_from_ghidra":True,
             "automatic_naming_permitted":False,
             "heldout_policy_promoted":False}
