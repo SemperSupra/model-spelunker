@@ -47,7 +47,7 @@ if ($IncludeHeldout) {
 }
 if ($IncludeDebug) {
   if (-not (Test-Path (Join-Path $OutputDir 'w5-debug-crt-preflight.json'))) {throw 'W5_DEBUG_CRT_PRODUCER_ORACLE_REQUIRED'}
-  $variants += 'static_debug'
+  $variants += 'debug'
 }
 foreach($flavor in $variants) {
   $image=Join-Path $OutputDir ("crt_"+$flavor+".exe")
