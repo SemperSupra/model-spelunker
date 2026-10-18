@@ -27,9 +27,7 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
         if m:
             symbol, address, library, obj = m.groups()
             key = address.lower().lstrip("0") or "0"
-            if key in truth and truth[key] != (symbol, library.lower()):
-                raise ValueError("duplicate inconsistent MAP symbol address")
-            truth[key] = (symbol, library.lower())
+            truth.setdefault(key, set()).add((symbol, library.lower()))
     if not truth:
         raise ValueError("no independent MAP symbols")
     def count(tag):
@@ -69,7 +67,8 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
     metrics = {"unique":0, "same_name_consensus":0, "conflicting_abstain":0,
                "unique_exact_crt":0, "unique_wrong_crt":0, "unique_unknown":0,
                "consensus_exact_crt":0, "consensus_wrong_crt":0, "consensus_unknown":0,
-               "known_crt_map_symbols":sum(lib in CRT for _,lib in truth.values())}
+               "known_crt_map_symbols":sum(any(lib in CRT for _,lib in symbols) for symbols in truth.values()),
+               "map_alias_abstain":0}
     for key, m in matches.items():
         if m["ties"] == 1:
             label = "unique"
@@ -79,9 +78,17 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
             metrics["conflicting_abstain"] += 1
             continue
         metrics[label] += 1
-        oracle = truth.get(key)
-        verdict = ("unknown" if oracle is None or oracle[1] not in CRT else
-                   "exact_crt" if oracle[0] == m["name"] else "wrong_crt")
+        identities = {(sym, lib) for sym, lib in truth.get(key, set()) if lib in CRT}
+        # Linker MAP can retain several aliases at one address. An arbitrary
+        # last-wins symbol would manufacture wrong/correct labels.
+        if len(identities)>1:
+            metrics["map_alias_abstain"] += 1
+            verdict="unknown"
+        elif not identities:
+            verdict="unknown"
+        else:
+            sym,lib = next(iter(identities))
+            verdict="exact_crt" if sym == m["name"] else "wrong_crt"
         prefix = "consensus" if label == "same_name_consensus" else "unique"
         metrics[prefix + "_" + verdict] += 1
     return {"schema":1, "treatment":treatment,
