@@ -85,7 +85,7 @@ def terminal_outcome(receipt: dict[str, Any]) -> str:
     )
     if timeout_observed and isinstance(started_calls, int) and started_calls > 0:
         return "censored"
-    if timeout_observed and (obs.get("state_changed") or obs.get("verifier_exit_code") == 0):
+    if timeout_observed and obs.get("verifier_exit_code") == 0:
         return "censored"
     if no_completed_rounds:
         return "incomplete"
