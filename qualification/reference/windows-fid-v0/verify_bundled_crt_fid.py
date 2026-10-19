@@ -12,6 +12,23 @@ MATCH = re.compile(r"RE_SHIPPED_FID_MATCH=([0-9a-f]+)\|([^|\r\n]+)\|([^|\r\n]+)\
 TIE_CLASS = re.compile(r"RE_SHIPPED_FID_TIE_GROUP=([0-9a-f]+)\|(\d+)\|(\d+)\|(\d+)")
 CRT = ("libcmt", "libucrt", "libvcruntime")
 
+def classify_linker_match(symbols: set[tuple[str, str, str]], candidate: str) -> tuple[str, bool]:
+    """Independent MAP truth: multiple identities at one address must abstain.
+
+    Use sets rather than the arbitrary last-seen MAP entry. Non-CRT aliases
+    invalidate a CRT label just as conflicting CRT names do.
+    """
+    identities = {(symbol, library.lower()) for symbol, library, _ in symbols}
+    if len(identities) > 1:
+        return "MAP_ALIAS_ABSTAIN", True
+    if len(identities) == 0:
+        return "UNATTRIBUTED_OR_NONCRT", False
+    symbol, library = next(iter(identities))
+    if library not in CRT:
+        return "UNATTRIBUTED_OR_NONCRT", False
+    return ("TP_EXACT_CRT" if symbol == candidate else "MISMATCH_CRT"), False
+
+
 def read(p: Path) -> str:
     if not p.is_file() or p.stat().st_size > 12_000_000:
         raise ValueError("missing or oversized experiment log " + p.name)
@@ -28,7 +45,7 @@ def run(root: Path) -> dict:
             if not m: continue
             symbol,address,lib,obj=m.groups()
             address=address.lower().lstrip("0") or "0"
-            source_truth[address]={"symbol":symbol,"library":lib,"object":obj}
+            source_truth.setdefault(address, set()).add((symbol, lib.lower(), obj))
         if not source_truth:
             raise ValueError("no source-known map truth")
         def tagged(k):
@@ -42,16 +59,12 @@ def run(root: Path) -> dict:
         entries=[]
         for m in MATCH.finditer(diagnostic):
             address,name,score,family,version,variant,ties=m.groups()
-            source=source_truth.get(address.lstrip("0") or "0")
-            is_crt=source is not None and source["library"].lower() in CRT
-            exact=is_crt and name==source["symbol"]
-            verdict=("TP_EXACT_CRT" if exact else
-                     "MISMATCH_CRT" if is_crt else
-                     "UNATTRIBUTED_OR_NONCRT")
+            source=source_truth.get(address.lstrip("0") or "0", set())
+            verdict, has_alias = classify_linker_match(source, name)
             entries.append({"address":address,"candidate":name,
                             "score":float(score),"family":family,
                             "version":version,"ties":int(ties),"classification":verdict,
-                            "linker_truth":source})
+                            "linker_map_alias_abstain":has_alias})
         if observed != len(entries) or observed > analyzed or eligible<1:
             raise ValueError("FID candidate count incompatible with analyzed functions or no eligible DB")
         tie_groups={}
@@ -81,18 +94,23 @@ def run(root: Path) -> dict:
         conflict_crt_error=sum(e["classification"]=="MISMATCH_CRT" for e in entries
                                if e["address"] in tie_groups and
                                tie_groups[e["address"]][1]>1)
-        known=sum(v["library"].lower() in CRT for v in source_truth.values())
+        known=sum(any(lib in CRT for _,lib,_ in v) for v in source_truth.values())
         tp=sum(x["classification"]=="TP_EXACT_CRT" for x in entries)
         wrong=sum(x["classification"]=="MISMATCH_CRT" for x in entries)
         unattributed=sum(x["classification"]=="UNATTRIBUTED_OR_NONCRT" for x in entries)
+        alias_abstain=sum(x["classification"]=="MAP_ALIAS_ABSTAIN" for x in entries)
         findings[flavor]={"target_functions_analyzed":analyzed,
                           "linker_map_named_symbols":len(source_truth),
+                          "linker_map_multi_identity_addresses":sum(
+                              len({(sym,lib) for sym,lib,_ in values})>1
+                              for values in source_truth.values()),
                           "known_crt_map_symbols":known,
                           "eligible_bundled_databases":eligible,
                           "fid_matches":observed,
                           "exact_crt_matches":tp,
                           "wrong_name_on_crt_address":wrong,
                           "non_crt_or_unattributed_candidates":unattributed,
+                          "map_alias_abstentions":alias_abstain,
                           "ambiguous_matches":ambiguous,
                           "tie_consensus_name_groups":consensus,
                           "tie_conflicting_name_groups":conflicts,
