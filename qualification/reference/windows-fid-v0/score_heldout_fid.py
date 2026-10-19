@@ -42,7 +42,7 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
         key = address.lower().lstrip("0") or "0"
         if key in matches or int(ties) < 1 or not re.fullmatch(r"\d+(?:\.\d+)?", score):
             raise ValueError("duplicate address / invalid tie or score")
-        matches[key] = {"name": name, "ties": int(ties)}
+        matches[key] = {"name": name, "ties": int(ties), "score": float(score), "variant": variant}
     groups = {}
     for addr, total, names, versions in TIE_CLASS.findall(ghidra):
         key = addr.lower().lstrip("0") or "0"
@@ -100,7 +100,30 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
             verdict="exact_crt" if sym == m["name"] else "wrong_crt"
         prefix = "consensus" if label == "same_name_consensus" else "unique"
         metrics[prefix + "_" + verdict] += 1
+    # Pre-registered, strictly observational production-visible features.
+    # No source MAP addresses, names, or truth enter the candidate predicate.
+    threshold_buckets = []
+    for label in ("unique", "same_name_consensus"):
+        for threshold in (0, 25, 50, 100, 150, 200, 300):
+            accepted = {"known_correct": 0, "known_wrong": 0, "unknown_or_alias": 0}
+            for key, m in matches.items():
+                kind = ("unique" if m["ties"] == 1 else
+                        "same_name_consensus" if groups[key][1] == 1 else "conflicting_abstain")
+                if kind != label or m["score"] < threshold:
+                    continue
+                identities = {(sym, lib) for sym, lib in truth.get(key, set()) if lib in CRT_FAMILIES}
+                if len(identities) != 1:
+                    accepted["unknown_or_alias"] += 1
+                elif next(iter(identities))[0] == m["name"]:
+                    accepted["known_correct"] += 1
+                else:
+                    accepted["known_wrong"] += 1
+            threshold_buckets.append({"class": label, "minimum_score": threshold,
+                  "observed_first_n_only": len(matches), **accepted,
+                  "accepted_total": sum(accepted.values()),
+                  "candidate_policy_qualified": False})
     return {"schema":1, "treatment":treatment,
+            "threshold_buckets_exploratory": threshold_buckets,
             "population_match_count":population,
             "bounded_match_count":len(matches),
             "excluded_from_sample":truncated,
