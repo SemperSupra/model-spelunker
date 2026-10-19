@@ -87,16 +87,17 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
             metrics["conflicting_abstain"] += 1
             continue
         metrics[label] += 1
-        identities = {(sym, lib) for sym, lib in truth.get(key, set()) if lib in CRT_FAMILIES}
+        identities = truth.get(key, set())
+        crt_identities = {(sym, lib) for sym, lib in identities if lib in CRT_FAMILIES}
         # Linker MAP can retain several aliases at one address. An arbitrary
         # last-wins symbol would manufacture wrong/correct labels.
         if len(identities)>1:
             metrics["map_alias_abstain"] += 1
             verdict="unknown"
-        elif not identities:
+        elif len(crt_identities)!=1:
             verdict="unknown"
         else:
-            sym,lib = next(iter(identities))
+            sym,lib = next(iter(crt_identities))
             verdict="exact_crt" if sym == m["name"] else "wrong_crt"
         prefix = "consensus" if label == "same_name_consensus" else "unique"
         metrics[prefix + "_" + verdict] += 1
@@ -111,10 +112,11 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
                         "same_name_consensus" if groups[key][1] == 1 else "conflicting_abstain")
                 if kind != label or m["score"] < threshold:
                     continue
-                identities = {(sym, lib) for sym, lib in truth.get(key, set()) if lib in CRT_FAMILIES}
-                if len(identities) != 1:
+                identities = truth.get(key, set())
+        crt_identities = {(sym, lib) for sym, lib in identities if lib in CRT_FAMILIES}
+                if len(identities) != 1 or len(crt_identities)!=1:
                     accepted["unknown_or_alias"] += 1
-                elif next(iter(identities))[0] == m["name"]:
+                elif next(iter(crt_identities))[0] == m["name"]:
                     accepted["known_correct"] += 1
                 else:
                     accepted["known_wrong"] += 1
