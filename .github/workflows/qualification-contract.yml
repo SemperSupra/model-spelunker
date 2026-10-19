@@ -166,6 +166,9 @@ jobs:
       - name: Self-test rootless sovereign OpenWorker producer
         run: PYTHONPATH=. python qualification/test_sovereign_foundry_openworker.py
 
+      - name: Self-test explicit local OpenAI model route
+        run: python -m unittest discover -s qualification/tests -p 'test_local_openai_route.py' -v
+
       - name: Self-test free OpenRouter coding model cohort
         run: PYTHONPATH=. python qualification/test_openrouter_free_model_cohort.py
 
