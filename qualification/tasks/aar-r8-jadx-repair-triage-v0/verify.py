@@ -123,6 +123,9 @@ def self_test() -> int:
     source=(Path(__file__).parent/"fixture"/"evidence.json").read_text()
     with tempfile.TemporaryDirectory() as d:
         root=Path(d)
+        # Mirror run_task.py: materialize the complete flat fixture, not only JSON.
+        (root/"README.txt").write_bytes(
+            (Path(__file__).parent/"fixture"/"README.txt").read_bytes())
         (root/"evidence.json").write_text(source)
         e=json.loads(source)
         def try_result(row,valid):
