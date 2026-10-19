@@ -70,6 +70,20 @@ class HeldoutOracle(unittest.TestCase):
         self.assertEqual(sample["known_wrong"], 1)
         self.assertFalse(sample["candidate_policy_qualified"])
 
+    def test_mixed_crt_noncrt_map_alias_is_unknown_not_a_proven_true_positive(self):
+        # Two source symbols at one code address: the CRT and non-CRT alias
+        # must both abstain, even when the Ghidra name equals the CRT entry.
+        extra = " 0001:00000000 _decoy 0000000140001000 f userlib:fake.obj\n"
+        for mapping in (MAP + extra, extra + MAP):
+            result = evaluate(mapping, query(), "static")
+            self.assertEqual(result["metrics"]["consensus_unknown"], 1)
+            self.assertEqual(result["metrics"]["consensus_exact_crt"], 0)
+            self.assertEqual(result["metrics"]["map_alias_abstain"], 1)
+            row = next(x for x in result["threshold_buckets_exploratory"]
+                       if x["class"] == "same_name_consensus"
+                       and x["minimum_score"] == 0)
+            self.assertEqual((row["known_correct"],row["unknown_or_alias"]),(0,1))
+
     def test_duplicate_address_fails(self):
         with self.assertRaises(ValueError):
             evaluate(MAP, query().replace("RE_SHIPPED_FID_TIE_GROUP=140001000",
