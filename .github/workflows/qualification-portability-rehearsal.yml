@@ -145,6 +145,7 @@ jobs:
           set -euo pipefail
           python3 qualification/reference/windows-fid-v0/test_triage_bundled_crt_fid.py
           python3 qualification/reference/windows-fid-v0/test_score_heldout_fid.py
+          python3 qualification/reference/windows-fid-v0/test_verify_bundled_crt_fid.py
           python3 qualification/reference/windows-fid-v0/test_verify_optimizer_distinct.py
 
       - name: Upload bounded rehearsal evidence
