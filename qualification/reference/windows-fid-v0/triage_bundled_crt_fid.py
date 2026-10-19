@@ -29,7 +29,7 @@ def assess(record:dict) -> dict:
             raise ValueError("unscorable tie count")
         named_exact=[x for x in unique if x["classification"]=="TP_EXACT_CRT"]
         known_errors=[x for x in unique if x["classification"]=="MISMATCH_CRT"]
-        unverified=[x for x in unique if x["classification"]=="UNATTRIBUTED_OR_NONCRT"]
+        unverified=[x for x in unique if x["classification"] in ("UNATTRIBUTED_OR_NONCRT", "MAP_ALIAS_ABSTAIN")]
         if len(unique)!=len(named_exact)+len(known_errors)+len(unverified):
             raise ValueError("unknown oracle classification")
         outcome[flavor]={
@@ -39,6 +39,7 @@ def assess(record:dict) -> dict:
             "exact_unique_calibration_only":len(named_exact),
             "wrong_name_unique":len(known_errors),
             "unattributed_unique":len(unverified),
+            "linker_map_alias_abstain_unique":sum(x["classification"]=="MAP_ALIAS_ABSTAIN" for x in unique),
             "unobserved_rows":section["fid_matches"]-len(candidates),
             "precision_on_known_unique":round(
                 len(named_exact)/(len(named_exact)+len(known_errors)),5
