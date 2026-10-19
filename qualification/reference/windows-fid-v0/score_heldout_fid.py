@@ -88,7 +88,7 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
             continue
         metrics[label] += 1
         identities = truth.get(key, set())
-                crt_identities = {(sym, lib) for sym, lib in identities if lib in CRT_FAMILIES}
+        crt_identities = {(sym, lib) for sym, lib in identities if lib in CRT_FAMILIES}
         # Linker MAP can retain several aliases at one address. An arbitrary
         # last-wins symbol would manufacture wrong/correct labels.
         if len(identities)>1:
@@ -113,7 +113,7 @@ def evaluate(mapping: str, ghidra: str, treatment: str) -> dict:
                 if kind != label or m["score"] < threshold:
                     continue
                 identities = truth.get(key, set())
-        crt_identities = {(sym, lib) for sym, lib in identities if lib in CRT_FAMILIES}
+                crt_identities = {(sym, lib) for sym, lib in identities if lib in CRT_FAMILIES}
                 if len(identities) != 1 or len(crt_identities)!=1:
                     accepted["unknown_or_alias"] += 1
                 elif next(iter(crt_identities))[0] == m["name"]:
