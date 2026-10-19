@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "source_class": "source-known-public-synthetic-binary-header-observations",
+  "artifacts": {
+    "a01": {
+      "header_hex": "4d5a",
+      "pe_signature_hex": "50450000",
+      "coff_machine_hex": "6486",
+      "optional_header_magic_hex": "0b02"
+    },
+    "a02": {
+      "header_hex": "cffaedfe",
+      "mach_cpu_type_hex": "0c000001"
+    },
+    "a03": {
+      "header_hex": "7f454c46",
+      "elf_class_hex": "02",
+      "elf_data_hex": "01",
+      "elf_machine_hex": "b700"
+    },
+    "a04": {
+      "header_hex": "504b0304",
+      "archive_entries": [
+        "AndroidManifest.xml",
+        "classes.dex",
+        "resources.arsc"
+      ]
+    },
+    "a05": {
+      "header_hex": "504b0304",
+      "archive_entries": [
+        "Payload/Demo.app/Info.plist",
+        "Payload/Demo.app/Demo"
+      ]
+    },
+    "a06": {
+      "header_hex": "00100020",
+      "bytes_after_header_hex": "e1000008",
+      "other_metadata": "none available; raw dump origin unverified"
+    },
+    "a07": {
+      "header_hex": "6465780a30333900"
+    },
+    "a08": {
+      "header_hex": "0061736d01000000"
+    }
+  }
+}

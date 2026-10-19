@@ -106,6 +106,48 @@ jobs:
       - name: Run fail-closed portability unit controls
         run: PYTHONPATH=. python qualification/test_compare_portable_receipts.py
 
+      - name: Verify source-known binary RE fixture and independent oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Test the explicit unmaterialized guard: this must not be a false green.
+          set +e
+          python3 qualification/tasks/portable-dispatch-semantics-v0/verify.py --self-test
+          unprepared_exit=$?
+          set -e
+          test "$unprepared_exit" -eq 77
+
+          # Rebuild twice to test hash stability inside the same pinned hosted image.
+          python3 qualification/reference/portable-dispatch-v0/prepare_work_sample.py \
+            --destination "$RUNNER_TEMP/re-probe-a"
+          python3 "$RUNNER_TEMP/re-probe-a/verify.py" --self-test
+          python3 qualification/reference/portable-dispatch-v0/prepare_work_sample.py \
+            --destination "$RUNNER_TEMP/re-probe-b"
+          python3 "$RUNNER_TEMP/re-probe-b/verify.py" --self-test
+          python3 - "$RUNNER_TEMP/re-probe-a/oracle_manifest.json" "$RUNNER_TEMP/re-probe-b/oracle_manifest.json" <<'PY'
+          import json, sys
+          a, b = (json.load(open(p, encoding="utf-8")) for p in sys.argv[1:])
+          assert a["source_sha256"] == b["source_sha256"]
+          assert a["sha256"] == b["sha256"], "repeated binary/disassembly hashes differ"
+          assert a["tool_versions"] == b["tool_versions"]
+          print("PASS source-known stripped ELF re-build + 8 negative oracle controls")
+          PY
+          # One-factor compiler control: tail-call JMP versus ordinary CALL.
+          python3 qualification/reference/portable-dispatch-v0/test_tailcall_control.py
+
+      - name: Validate raw p-code evidence negative controls
+        shell: bash
+        run: python3 qualification/tools/ghidra/test_verify_pcode.py
+
+      - name: Verify W4 FID ambiguity abstention and independent receipt controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/reference/windows-fid-v0/test_triage_bundled_crt_fid.py
+          python3 qualification/reference/windows-fid-v0/test_score_heldout_fid.py
+          python3 qualification/reference/windows-fid-v0/test_verify_bundled_crt_fid.py
+          python3 qualification/reference/windows-fid-v0/test_verify_optimizer_distinct.py
+
       - name: Upload bounded rehearsal evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -118,3 +160,32 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
+
+  w7-alias-native-one-shot:
+    name: W7 aliased-MAP native read-only FID rescoring
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Producer-only release and debug CRT preflight
+        shell: pwsh
+        run: |
+          ./qualification/reference/windows-fid-v0/build_crt_linkage.ps1
+          ./qualification/reference/windows-fid-v0/build_debug_crt.ps1
+      - name: Pinned shipped Ghidra read-only FID with corrected MAP alias evaluator
+        shell: pwsh
+        run: ./qualification/reference/windows-fid-v0/run_bundled_crt_fid.ps1 -IncludeDebug
+      - name: Publish numeric oracle aggregate only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: w7-alias-requalified-${{ github.run_id }}
+          path: ${{ runner.temp }}/re-msvc-crt-linkage-v0/w4c-score-*.json
+          if-no-files-found: ignore
+          retention-days: 14
