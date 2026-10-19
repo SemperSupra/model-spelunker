@@ -29,6 +29,11 @@ class HeldoutOracle(unittest.TestCase):
         self.assertEqual(m["unique_exact_crt"], 1)
         self.assertEqual(m["conflicting_abstain"], 1)
         self.assertFalse(result["automatic_naming_permitted"])
+        zero = [x for x in result["threshold_buckets_exploratory"]
+                if x["class"]=="same_name_consensus" and x["minimum_score"]==0][0]
+        self.assertEqual(zero["accepted_total"],1)
+        self.assertEqual(zero["known_correct"],1)
+        self.assertFalse(zero["candidate_policy_qualified"])
 
     def test_consensus_wrong_name_is_not_silently_accepted(self):
         m=evaluate(MAP.replace("_good ", "_other "), query(), "static_heldout")["metrics"]
