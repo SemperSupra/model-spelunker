@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from aar_source_known_task import bounded_json, check_refs, pointer
+from aar_source_known_task import bounded_json, check_refs, pointer, pristine_task_workspace
 
 SOURCE_REVISION="721756d2ff725cd02a9439a9fffac28fab3b2c0a"
 EXPECTED = {
@@ -95,6 +95,8 @@ def good_result(e: dict) -> dict:
 
 def check(root: Path) -> bool:
     try:
+        if not pristine_task_workspace(root, Path(__file__).parent, "triage.json"):
+            return False
         e=bounded_json(root,"evidence.json")
         got=bounded_json(root,"triage.json")
         if not fixture_ok(e) or set(got)!={"schema_version","cases","global"}:
@@ -121,6 +123,9 @@ def self_test() -> int:
     source=(Path(__file__).parent/"fixture"/"evidence.json").read_text()
     with tempfile.TemporaryDirectory() as d:
         root=Path(d)
+        # Mirror run_task.py: materialize the complete flat fixture, not only JSON.
+        (root/"README.txt").write_bytes(
+            (Path(__file__).parent/"fixture"/"README.txt").read_bytes())
         (root/"evidence.json").write_text(source)
         e=json.loads(source)
         def try_result(row,valid):
@@ -155,7 +160,31 @@ def self_test() -> int:
         (root/"evidence.json").write_text(source.replace('"visibility": 4',
                                                          '"visibility": 40'))
         try_result(original,False)
-    print("PASS aar-r8-jadx-repair-triage verifier / 8 negative controls")
+        # Re-establish a known-good state before integrity/ambiguity negative controls.
+        (root/"evidence.json").write_text(source)
+        try_result(original,True)
+        clean_output=(root/"triage.json").read_text()
+        member="\"generalized_recovery_proven\": false"
+        assert member in clean_output
+        (root/"triage.json").write_text(
+            clean_output.replace(member, "\"generalized_recovery_proven\": true, \"generalized_recovery_proven\": false", 1))
+        assert check(root) is False  # conflicting nested member must not be parsed
+        (root/"triage.json").write_text(clean_output)
+        provenance="\"workflow_run\": \"https://github.com/SemperSupra/android-artifact-recovery/actions/runs/39101587693\""
+        assert provenance in source
+        (root/"evidence.json").write_text(source.replace(
+            provenance, "\"workflow_run\": \"https://github.com/SemperSupra/android-artifact-recovery/actions/runs/99999999999\"", 1))
+        assert check(root) is False  # changing unscored source metadata is forbidden
+        (root/"evidence.json").write_text(source)
+        (root/"extra.txt").write_text("unexpected additional actor artifact")
+        assert check(root) is False  # undeclared writes cannot be accepted
+        (root/"extra.txt").unlink()
+        (root/"triage.json").write_text(
+            clean_output.replace('"schema_version": 1', '"schema_version": NaN', 1))
+        assert check(root) is False  # reject non-finite JSON before semantic checks
+        (root/"triage.json").write_text(clean_output)
+        assert check(root) is True
+    print("PASS aar-r8-jadx-repair-triage verifier / 12 negative controls")
     return 0
 
 if __name__=="__main__":
