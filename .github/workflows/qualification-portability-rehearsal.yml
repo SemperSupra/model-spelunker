@@ -159,3 +159,32 @@ jobs:
             ${{ runner.temp }}/qualification-portability-container-image.txt
           if-no-files-found: ignore
           retention-days: 30
+
+  w6-fid-score-gate-one-shot:
+    name: W6 pre-registered FID score-gate negative challenge
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Producer-only release and debug CRT build
+        shell: pwsh
+        run: |
+          ./qualification/reference/windows-fid-v0/build_crt_linkage.ps1
+          ./qualification/reference/windows-fid-v0/build_debug_crt.ps1
+      - name: Pinned shipped Ghidra FID plus independent MAP-score evaluation
+        shell: pwsh
+        run: ./qualification/reference/windows-fid-v0/run_bundled_crt_fid.ps1 -IncludeDebug
+      - name: Publish bounded score buckets only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: w6-score-buckets-${{ github.run_id }}
+          path: ${{ runner.temp }}/re-msvc-crt-linkage-v0/w4c-score-*.json
+          if-no-files-found: warn
+          retention-days: 14
