@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "aar-r8-jadx-repair-triage-v0",
+  "task_class": "reverse-engineering.kotlin-r8-repair-triage",
+  "instruction": "Inspect evidence.json, an evaluator-sanitized record of the actual source-known Kotlin/R8/JADX 1.5.6 raw-Java and bounded-repair experiments. Write triage.json with exactly schema_version, cases, global. schema_version=1. cases must contain exactly release, shrink-only, shrink-optimize, rename-only, full-r8. Each case must contain exactly classification, behavior, next_probe, evidence_refs. Choose classification only from BOUNDED_REPAIR_BEHAVIOR_MATCH, UNCLASSIFIED_JAVAC_FAILURE, VISIBILITY_OVERLOAD_JAVAC_FAILURE, RENAMED_NOT_EVALUATED. Choose behavior only from SOURCE_KNOWN_10_OF_10, UNKNOWN_UNCOMPILED, UNKNOWN_NOT_EVALUATED. Choose next_probe only from DISJOINT_HOLDOUT, INSPECT_COMPILER_DIAGNOSTIC, COMPARE_DEX_JADX_ACCESS_OVERLOAD, SEALED_POST_RECOVERY_IDENTIFIER_ADAPTER. Do not treat raw JVM Java failing compilation as 10 behavior mismatches. Do not use an R8 mapping with a blind actor. R8 shrink/optimization can legitimately remove or restructure classes; cleaner JADX exit does not prove recovery. Cite sorted unique RFC6901 evidence.json#/... pointers; each case must cite two relevant fields from that variant (for renamed variants cite status and the global map-absence control); shrink-optimize must cite visibility, wrong_overload and failed strict repair status. global must contain exactly generalized_recovery_proven (false), r8_dex_behavior_qualified (false), auto_repair_all_variants (false). Only supplied observable evidence is admissible: no invented compiler source lines, private app or device access. Do not modify evidence.json.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-source-known-javac-repair-triage"
+  },
+  "allowed_write_paths": [
+    "triage.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "high",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "source-known-independent-JVM-oracle-negative-controls"
+  }
+}

@@ -44,6 +44,8 @@ jobs:
           method_ir_task = json.loads(Path("qualification/tasks/method-ir-siglip2-b16-256-v0/task.json").read_text())
           api_boundary_task_v1 = json.loads(Path("qualification/tasks/api-boundary-classification-v1/task.json").read_text())
           method_ir_task_v1 = json.loads(Path("qualification/tasks/method-ir-siglip2-b16-256-v1/task.json").read_text())
+          aar_factor_task = json.loads(Path("qualification/tasks/aar-r8-factor-contrast-v0/task.json").read_text())
+          aar_triage_task = json.loads(Path("qualification/tasks/aar-r8-jadx-repair-triage-v0/task.json").read_text())
           json.loads(Path("qualification/test-candidate.json").read_text())
           hosted = json.loads(Path("qualification/models/hosted-api.json").read_text())
           schema = json.loads(Path("qualification/run-receipt.schema.json").read_text())
@@ -132,6 +134,12 @@ jobs:
           jsonschema.validate(method_ir_task, task_schema)
           jsonschema.validate(api_boundary_task_v1, task_schema)
           jsonschema.validate(method_ir_task_v1, task_schema)
+          jsonschema.validate(aar_factor_task, task_schema)
+          jsonschema.validate(aar_triage_task, task_schema)
+          assert aar_factor_task["task_class"] == "reverse-engineering.kotlin-r8-observation"
+          assert aar_triage_task["task_class"] == "reverse-engineering.kotlin-r8-repair-triage"
+          assert aar_factor_task["allowed_write_paths"] == ["classification.json"]
+          assert aar_triage_task["allowed_write_paths"] == ["triage.json"]
           actor_ids = set()
           for path in sorted(Path("qualification/actors").glob("*.json")):
               actor = json.loads(path.read_text())
@@ -148,6 +156,8 @@ jobs:
               method_ir_task["id"]: method_ir_task["task_class"],
               api_boundary_task_v1["id"]: api_boundary_task_v1["task_class"],
               method_ir_task_v1["id"]: method_ir_task_v1["task_class"],
+              aar_factor_task["id"]: aar_factor_task["task_class"],
+              aar_triage_task["id"]: aar_triage_task["task_class"],
           }
           for path in sorted(Path("qualification/experiments").glob("*.json")):
               experiment = json.loads(path.read_text())
@@ -185,6 +195,8 @@ jobs:
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v1/verify.py --self-test
+          python qualification/tasks/aar-r8-factor-contrast-v0/verify.py --self-test
+          python qualification/tasks/aar-r8-jadx-repair-triage-v0/verify.py --self-test
 
       - name: Enforce task workspace layout contract
         run: python qualification/test_task_workspace_layout.py

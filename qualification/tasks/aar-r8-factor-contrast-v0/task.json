@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "aar-r8-factor-contrast-v0",
+  "task_class": "reverse-engineering.kotlin-r8-observation",
+  "instruction": "Examine evidence.json, which reports measured JADX results from five source-known Kotlin 2.0.21 / R8 build configurations. Write classification.json with EXACT keys schema_version, comparisons, controls. schema_version is 1. comparisons is an object keyed exactly rename-vs-release, shrink-vs-release, optimize-given-shrink, rename-given-shrink-and-optimize. For each comparison write EXACT keys lhs, rhs, delta_java_files, exit_change, observation, evidence_refs. Use profile IDs as lhs/rhs. delta_java_files = RHS java_files minus LHS java_files; exit_change is \"SAME\" or \"CHANGED\" from the measured JADX exit codes. observation must be one of RENAMING_NO_SHRINK_SMALLER, SHRINK_ENABLED_MUCH_FEWER, OPTIMIZE_AFTER_SHRINK_FEWER, RENAME_AFTER_OPTIMIZE_MORE. Include sorted unique evidence_refs as evidence.json#/... RFC6901 pointers that resolve in evidence.json; each comparison must cite both participating java_files counts and the global nonorthogonality control. controls must contain EXACT boolean keys independent_causal_claim, restored_original_source, proven_semantic_recovery (all false). This task assesses *observed configuration contrasts*, NOT recovery of original source or fully independent R8 factors. In particular, R8 -dontshrink also affects optimization; file-count/exit improvements prove nothing about correctness. Do not modify evidence.json, run a tool that changes a device, or claim knowledge of evaluator-only source mappings.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-source-known-factor-contrast"
+  },
+  "allowed_write_paths": [
+    "classification.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "high",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "none",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "sealed-source-known-R8-observation"
+  }
+}

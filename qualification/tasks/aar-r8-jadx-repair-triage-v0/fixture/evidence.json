@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "source_class": "public-authored-kotlin-r8-jadx-compiler-triage",
+  "source": {
+    "repository": "SemperSupra/android-artifact-recovery",
+    "source_revision": "721756d2ff725cd02a9439a9fffac28fab3b2c0a",
+    "workflow_run": "https://github.com/SemperSupra/android-artifact-recovery/actions/runs/39101587693",
+    "source_kotlin": "2.0.21",
+    "jadx": "1.5.6",
+    "ground_truth_mapping_supplied_to_actor": false
+  },
+  "variants": {
+    "release": {
+      "raw": {
+        "javac": "FAIL",
+        "javac_categories": {
+          "duplicate_definition": 4,
+          "missing_symbol": 6
+        },
+        "executed_vectors": 0
+      },
+      "repair": {
+        "status": "APPLIED_STRICT_EXISTING_RULES",
+        "compiled": true,
+        "behavior_vectors_matched": 10,
+        "vector_count": 10
+      }
+    },
+    "shrink-only": {
+      "raw": {
+        "javac": "FAIL",
+        "javac_categories": {
+          "unclassified_javac_diagnostic": 1
+        },
+        "executed_vectors": 0
+      },
+      "repair": {
+        "status": "REJECTED_UNSUPPORTED_PATTERN",
+        "compiled": false,
+        "behavior_vectors_matched": null,
+        "vector_count": 10
+      }
+    },
+    "shrink-optimize": {
+      "raw": {
+        "javac": "FAIL",
+        "javac_categories": {
+          "missing_symbol": 2,
+          "visibility": 4,
+          "wrong_overload": 2
+        },
+        "executed_vectors": 0
+      },
+      "repair": {
+        "status": "REJECTED_UNSUPPORTED_PATTERN",
+        "compiled": false,
+        "behavior_vectors_matched": null,
+        "vector_count": 10
+      }
+    },
+    "rename-only": {
+      "score": {
+        "status": "NOT_EVALUATED_RENAMED_NO_ADAPTER",
+        "behavior_vectors_matched": null,
+        "vector_count": 10
+      }
+    },
+    "full-r8": {
+      "score": {
+        "status": "NOT_EVALUATED_RENAMED_NO_ADAPTER",
+        "behavior_vectors_matched": null,
+        "vector_count": 10
+      }
+    }
+  },
+  "controls": {
+    "reference_jvm_harness": "PASS_10_SOURCE_KNOWN_VECTORS",
+    "r8_transformed_dex_behavior": "NOT_TESTED",
+    "raw_compile_failure_is_not_semantic_mismatch": true,
+    "bounded_repair_must_not_relax_expected_counts": true,
+    "r8_mapping_fed_to_recoverer": false,
+    "recovered_original_source_equivalence": "UNKNOWN",
+    "green_jadx_exit_is_not_java_compile_oracle": true
+  }
+}
