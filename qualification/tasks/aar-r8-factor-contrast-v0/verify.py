@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from aar_source_known_task import bounded_json, check_refs, pointer
+from aar_source_known_task import bounded_json, check_refs, pointer, pristine_task_workspace
 
 PAIRS = {
     "rename-vs-release": ("release","rename-only","RENAMING_NO_SHRINK_SMALLER"),
@@ -65,6 +65,8 @@ def good_result(doc: dict) -> dict:
 
 def check(root: Path) -> bool:
     try:
+        if not pristine_task_workspace(root, Path(__file__).parent, "classification.json"):
+            return False
         evidence=bounded_json(root,"evidence.json")
         result=bounded_json(root,"classification.json")
         if not fixture_ok(evidence):
@@ -127,7 +129,31 @@ def self_test() -> int:
         (root/"evidence.json").write_text(original.replace('"java_files": 688',
                                                            '"java_files": 689'))
         try_result(result,False)
-    print("PASS aar-r8-factor-contrast verifier / 7 negative controls")
+        # Re-establish a known-good state before integrity/ambiguity negative controls.
+        (root/"evidence.json").write_text(original)
+        try_result(result,True)
+        clean_output=(root/"classification.json").read_text()
+        member="\"proven_semantic_recovery\": false"
+        assert member in clean_output
+        (root/"classification.json").write_text(
+            clean_output.replace(member, "\"proven_semantic_recovery\": true, \"proven_semantic_recovery\": false", 1))
+        assert check(root) is False  # conflicting nested member must not be parsed
+        (root/"classification.json").write_text(clean_output)
+        provenance="\"run_url\": \"https://github.com/SemperSupra/android-artifact-recovery/actions/runs/39100419641\""
+        assert provenance in original
+        (root/"evidence.json").write_text(original.replace(
+            provenance, "\"run_url\": \"https://github.com/SemperSupra/android-artifact-recovery/actions/runs/99999999999\"", 1))
+        assert check(root) is False  # changing unscored source metadata is forbidden
+        (root/"evidence.json").write_text(original)
+        (root/"extra.txt").write_text("unexpected additional actor artifact")
+        assert check(root) is False  # undeclared writes cannot be accepted
+        (root/"extra.txt").unlink()
+        (root/"classification.json").write_text(
+            clean_output.replace('"schema_version": 1', '"schema_version": NaN', 1))
+        assert check(root) is False  # reject non-finite JSON before semantic checks
+        (root/"classification.json").write_text(clean_output)
+        assert check(root) is True
+    print("PASS aar-r8-factor-contrast verifier / 11 negative controls")
     return 0
 
 if __name__=="__main__":
