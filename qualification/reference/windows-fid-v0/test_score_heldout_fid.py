@@ -60,6 +60,16 @@ class HeldoutOracle(unittest.TestCase):
         m=evaluate(debug_map,query(),"debug")["metrics"]
         self.assertEqual(m["consensus_exact_crt"],1)
 
+    def test_high_score_consensus_can_still_be_wrong(self):
+        # Score is observable to a candidate; oracle truth is independent.
+        high = query().replace("140001000|_good|10.0", "140001000|_good|350.0")
+        wrong = MAP.replace("_good ", "_other ")
+        rows = evaluate(wrong, high, "debug")["threshold_buckets_exploratory"]
+        sample = next(x for x in rows if x["class"] == "same_name_consensus"
+                      and x["minimum_score"] == 300)
+        self.assertEqual(sample["known_wrong"], 1)
+        self.assertFalse(sample["candidate_policy_qualified"])
+
     def test_duplicate_address_fails(self):
         with self.assertRaises(ValueError):
             evaluate(MAP, query().replace("RE_SHIPPED_FID_TIE_GROUP=140001000",
