@@ -1,0 +1,12 @@
+{
+  "selection_rule": "Select the first central empirical quantitative claim associated with a primary results table in Section 4 (Table 1: Agent Refining Performance), demonstrating the core method advantage of RICE refining over baseline refining methods across representative environments.",
+  "claim_id": "CLAIM_1_AGENT_REFINING_PERFORMANCE",
+  "experiment_id": "EXP_II_AGENT_REFINING_EFFECTIVENESS",
+  "claim_text": "RICE refining method brings the largest improvement for the target agent in performance (measured by final reward) after refining compared to baseline refining methods (PPO fine-tuning, JSRL, StateMask-R) across representative environments when using the same explanation method.",
+  "source_locator": {
+    "artifact": "paper.md",
+    "section": "Section 4.2 Experiment II / Section 4 Table 1",
+    "table": "Table 1"
+  },
+  "scope_notes": "Out-of-scope per ordinary addendum: Malware Mutation environment, Sparse-Walker2d game, hyper-parameter sensitivity of sparse MuJoCo games, qualitative analysis of autonomous driving, and claimed performance difference between Ours and StateMask explanation methods in Table 1."
+}

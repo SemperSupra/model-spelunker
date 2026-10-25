@@ -1,0 +1,27 @@
+{
+  "upstream_repository": "openai/frontier-evals",
+  "upstream_revision": "51052cede8cc608f95bb00346635e03759013e5a",
+  "paper_id": "rice",
+  "paper_title": "RICE: Breaking Through the Training Bottlenecks of Reinforcement Learning with Explanation",
+  "official_directory": "project/paperbench/data/papers/rice/",
+  "inputs": {
+    "paper.md": {
+      "git_blob": "ca33c55d0b53ad0d6e1784fe3841069612fd3308",
+      "sha256": "e69c502c0c16f860160da8368e5b4fc5ee3da36275fe0571350bdd03b3477e03",
+      "size_bytes": 106169,
+      "local_path": "paperbench_rice_rep0/inputs/paper.md"
+    },
+    "addendum.md": {
+      "git_blob": "7bfaefe5517e512641375af84b74d05e87343b5c",
+      "sha256": "d62c727e9aaac69165d0bbeb2b1c4df7f1c8a183c5906d9b0e44cf9401153b43",
+      "size_bytes": 5102,
+      "local_path": "paperbench_rice_rep0/inputs/addendum.md"
+    },
+    "config.yaml": {
+      "git_blob": "1d6e0818a9ba1f2c671865ba9dad1f5b2faade4c",
+      "sha256": "d1c4d2e713877c647f97a6bb323814175ffc8bd604b9b136afc2a328282732e1",
+      "size_bytes": 109,
+      "local_path": "paperbench_rice_rep0/inputs/config.yaml"
+    }
+  }
+}
