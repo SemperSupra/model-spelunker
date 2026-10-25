@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://semper-supra.example/model-spelunker/probe-case.schema.json",
+  "title": "ProbeCase",
+  "type": "object",
+  "required": ["id", "stimulus", "objective", "access_tier", "controls"],
+  "properties": {
+    "id": {"type": "string"},
+    "objective": {"type": "string"},
+    "hypotheses": {"type": "array", "items": {"type": "string"}},
+    "stimulus": {"type": "object", "additionalProperties": true},
+    "contrasts": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "expected_invariances": {"type": "array", "items": {"type": "string"}},
+    "expected_changes": {"type": "array", "items": {"type": "string"}},
+    "access_tier": {"enum": ["A0", "A1", "A2", "A3", "A4"]},
+    "controls": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "holdout_group": {"type": ["string", "null"]},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "metadata": {"type": "object", "additionalProperties": true}
+  },
+  "additionalProperties": false
+}
