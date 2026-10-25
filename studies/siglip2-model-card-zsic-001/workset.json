@@ -1,0 +1,130 @@
+{
+  "workset_id": "model-spelunker-siglip2-reproduction-001",
+  "locator": "github-file:SemperSupra/model-spelunker@rep/siglip2-reproduction-001:studies/siglip2-model-card-zsic-001/workset.json",
+  "intent": "Execute and observe one overt-public computational reproduction of the published SigLIP2 model-card zero-shot image-classification example using the existing Agent Dispatch sealed public-execution lane.",
+  "state": {
+    "study-declared": "The public study declaration fixes the evidence class, exact model revision, stimulus source, dimensions, and bounded acceptance conditions.",
+    "runner-present": "The study runner verifies the Foundry-recorded model file hashes, records stimulus and realization hashes, and emits bounded vision-layer activation summaries.",
+    "capsule-builder-present": "The deterministic capsule builder packages only the public-safe study payload for the existing Agent Dispatch sealed worker.",
+    "execution-not-yet-observed": "No live public sealed run for this study has yet been accepted as evidence."
+  },
+  "unknowns": {
+    "public-runtime": "Whether the exact declared study completes successfully on the public GitHub-hosted runner and produces a sealed result receipt.",
+    "scientific-disposition": "Whether the documented parrot image scores the candidate label 'animals' highest under the exact pinned model revision."
+  },
+  "bounds": {
+    "scope_allowed": [
+      "read repository state",
+      "dispatch approved proof workflow"
+    ],
+    "scope_prohibited": [
+      "read private repositories",
+      "modify repository secrets",
+      "publish private research state",
+      "promote findings to canonical concept authority"
+    ],
+    "authority_delegable": [
+      "read repository",
+      "dispatch approved workflow"
+    ],
+    "authority_reserved": [
+      "merge",
+      "publish release",
+      "change secrets",
+      "promote canonical concepts",
+      "expand research scope"
+    ]
+  },
+  "delegations": {
+    "sealed-public-rep": {
+      "responsibilities": [
+        "dispatch at most one bounded public-safe study capsule through the existing Agent Dispatch sealed worker",
+        "observe the correlated native GitHub Actions run",
+        "return execution evidence without treating workflow success as scientific support"
+      ],
+      "state_refs": [
+        "study-declared",
+        "runner-present",
+        "capsule-builder-present",
+        "execution-not-yet-observed"
+      ],
+      "unknown_refs": [
+        "public-runtime",
+        "scientific-disposition"
+      ],
+      "scope": {
+        "allowed": [
+          "read repository state",
+          "dispatch approved proof workflow"
+        ],
+        "prohibited": [
+          "read private repositories",
+          "modify repository secrets",
+          "publish private research state",
+          "promote findings to canonical concept authority"
+        ]
+      },
+      "authority": {
+        "grants": [
+          "read repository",
+          "dispatch approved workflow"
+        ],
+        "reserved": [
+          "merge",
+          "publish release",
+          "change secrets",
+          "promote canonical concepts",
+          "expand research scope"
+        ]
+      },
+      "capabilities": {
+        "required": [
+          "python",
+          "github-actions",
+          "repository-read",
+          "sealed-public-execution"
+        ],
+        "may_acquire_free_tools": true,
+        "may_build_tools": false,
+        "may_delegate": false
+      },
+      "resources": [
+        {
+          "kind": "workflow-dispatches",
+          "limit": 1,
+          "unit": "dispatch",
+          "enforcement": "hard"
+        },
+        {
+          "kind": "money",
+          "limit": 0,
+          "unit": "USD",
+          "enforcement": "hard"
+        }
+      ],
+      "constraints": [
+        "The capsule and every input consumed by the public runner must already be public-safe.",
+        "Do not provide private-repository read credentials, private concept vocabularies, private hypotheses, or private evaluator state to the public worker.",
+        "The age recipient is a public key only; the public runner must not possess a result-decryption identity.",
+        "Workflow success is execution evidence only; scientific disposition must be read from the study result separately.",
+        "Do not create another scheduler, queue, or project-local Actions compute hub to execute this study."
+      ],
+      "acceptance": {
+        "criteria": [
+          "The sidecar binds only the configured github-actions-sealed-public target.",
+          "GitHub accepts at most one correlated sealed workflow dispatch for the assignment.",
+          "The correlated run can be rediscovered by its deterministic sealed run title.",
+          "The public worker emits a sealed result artifact and minimal receipt when execution reaches the sealing phase.",
+          "Execution and scientific dispositions remain distinct."
+        ],
+        "evidence_refs": [
+          "studies/siglip2-model-card-zsic-001/study.json",
+          "studies/siglip2-model-card-zsic-001/run_reproduction.py",
+          "tools/build_sealed_capsule.py",
+          "SemperSupra/agent-dispatch:.github/workflows/sealed-public-execution.yml"
+        ]
+      },
+      "frontier": "Build the deterministic capsule, dispatch it once through the existing sealed public worker, observe the correlated run, and reconcile the sealed evidence."
+    }
+  }
+}
