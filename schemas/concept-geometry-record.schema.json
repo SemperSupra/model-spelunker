@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/model-spelunker/concept-geometry-record.schema.json",
+  "title": "Concept Geometry Record",
+  "type": "object",
+  "required": ["schema_version", "concept_id", "concept_version", "model", "probe", "run", "behavior", "evidence_grade"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "0.1.0"},
+    "concept_id": {"type": "string", "minLength": 1},
+    "concept_version": {"type": "string", "minLength": 1},
+    "model": {
+      "type": "object",
+      "required": ["artifact_id", "revision", "tokenizer_revision"],
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "tokenizer_revision": {"type": "string", "minLength": 1},
+        "artifact_digest": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "probe": {
+      "type": "object",
+      "required": ["probe_id", "surface_id", "class", "language", "formulation_type", "source"],
+      "properties": {
+        "probe_id": {"type": "string", "minLength": 1},
+        "surface_id": {"type": "string", "minLength": 1},
+        "class": {"enum": ["P", "N", "B", "D"]},
+        "language": {"type": "string", "minLength": 2},
+        "formulation_type": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "translation_path": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "run": {
+      "type": "object",
+      "required": ["seed", "prompt_template_version", "input_tokens", "output_tokens", "wall_time_ms"],
+      "properties": {
+        "seed": {"type": "integer"},
+        "prompt_template_version": {"type": "string", "minLength": 1},
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "wall_time_ms": {"type": "number", "minimum": 0},
+        "tokenizer_fragmentation": {"type": ["number", "null"], "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "behavior": {
+      "type": "object",
+      "required": ["raw_output_ref"],
+      "properties": {
+        "raw_output_ref": {"type": "string", "minLength": 1},
+        "score": {"type": ["number", "null"]},
+        "selected_option": {"type": ["string", "null"]},
+        "option_scores": {
+          "type": ["object", "null"],
+          "additionalProperties": {"type": "number"}
+        },
+        "consistency_group": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "representation": {
+      "type": ["object", "null"],
+      "properties": {
+        "observer": {"type": ["string", "null"]},
+        "layer": {"type": ["integer", "null"]},
+        "artifact_ref": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "evidence_grade": {"enum": ["G0", "G1", "G2", "G3", "G4", "G5"]}
+  },
+  "additionalProperties": false
+}

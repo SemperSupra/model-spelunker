@@ -1,0 +1,75 @@
+name: experiment-0001-smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reference-repeatability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: 'false'
+      TORCH_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      PIP_NO_CACHE_DIR: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pinned CPU PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch==2.14.0+cpu'
+
+      - name: Install pinned experiment dependencies
+        run: python -m pip install -r requirements-experiment-0001.txt
+
+      - name: Run affirmative reference repeatability gate
+        run: |
+          python tools/run_reference_robustness.py \
+            --model EleutherAI/pythia-70m \
+            --revision a39f36b100fe8a5377810d56c3f4789b9c53ac42 \
+            --fixture fixtures/experiment-0001/reciprocity-affirmative-heldout.jsonl \
+            --repeats 2 \
+            --output-dir artifacts/experiment-0001-affirmative-reference
+
+      - name: Summarize reference evidence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path('artifacts/experiment-0001-affirmative-reference/summary.json').read_text(encoding='utf-8'))
+          primary = summary['primary']
+          repeat = summary['intra_runner_repeatability']
+          print('fixture=', summary['fixture'])
+          print('numeric_mode=', summary['numeric_mode'])
+          print('cpu_model=', summary['runtime']['cpu_model'])
+          print('torch_version=', summary['runtime']['torch_version'])
+          print(f'reference_accuracy={primary["accuracy"]:.3f}')
+          print(f'reference_stem_unanimous_rate={primary["stem_unanimous_rate"]:.3f}')
+          print(f'reference_cross_language_unanimous_rate={primary["cross_language_unanimous_rate"]:.3f}')
+          print(f'intra_runner_selection_agreement={repeat["selection_agreement_rate"]:.3f}')
+          print(f'intra_runner_max_margin_drift={repeat["max_margin_drift"]:.12g}')
+          print(f'intra_runner_mean_margin_drift={repeat["mean_margin_drift"]:.12g}')
+          for language, stats in primary['by_language'].items():
+              print(f'reference_{language}={json.dumps(stats, ensure_ascii=False, sort_keys=True)}')
+          PY
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-0001-affirmative-reference-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts
+          if-no-files-found: error
+          retention-days: 14

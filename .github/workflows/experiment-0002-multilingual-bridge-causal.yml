@@ -1,0 +1,101 @@
+name: experiment-0002-multilingual-bridge-causal
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  multilingual-bridge-causal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: 'false'
+      TORCH_NUM_THREADS: '2'
+      HF_HUB_DISABLE_XET: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check one-shot arm
+        id: arm
+        run: |
+          if [ -f .ci/run-experiment-0002-multilingual-bridge-causal ]; then
+            echo 'armed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'armed=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python
+        if: steps.arm.outputs.armed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Syntax check harness
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python -m py_compile tools/jspace_interventions.py
+          python -m py_compile tools/run_multilingual_bridge_cloze.py
+          python -m py_compile tools/run_qwen35_4b_cross_task_causal.py
+          python -m py_compile tools/run_qwen35_4b_context_invariance.py
+
+      - name: Install CPU PyTorch
+        if: steps.arm.outputs.armed == 'true'
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu 'torch>=2.4,<3'
+
+      - name: Install causal dependencies
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python -m pip install -r requirements-experiment-0001.txt
+          python -m pip install 'git+https://github.com/anthropics/jacobian-lens.git@581d398613e5602a5af361e1c34d3a92ea82ba8e'
+
+      - name: Reclaim package-cache disk
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          rm -rf ~/.cache/pip
+          df -h .
+          free -h
+
+      - name: Run R18 held-out context invariance
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python tools/run_qwen35_4b_context_invariance.py \
+            --output-dir artifacts/experiment-0002-qwen35-4b-context-invariance
+
+      - name: Summarize R18 context evidence
+        if: steps.arm.outputs.armed == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path(
+              'artifacts/experiment-0002-qwen35-4b-context-invariance/summary.json'
+          ).read_text())
+          print('model', s['model'], s['resolved_model_revision'])
+          print('baseline_valid_cases', s['baseline_valid_cases'])
+          print('causal_executed', s['causal_executed'])
+          if s['causal_executed']:
+              print('seeds', s['seeds'])
+              print('intervention_layers', s['intervention_layers'])
+              print('jspace_target_specificity_hits', s['jspace_target_specificity_hits'])
+              print('jspace_strong_switches', s['jspace_strong_switches'])
+              print('casewise_jspace_gain_exceeds_max_random', s['casewise_jspace_gain_exceeds_max_random'])
+              print('jspace_mean_target_gain', s['jspace_mean_target_gain'])
+              print('max_seed_mean_random_target_gain', s['max_seed_mean_random_target_gain'])
+              print('seed_summary', s['seed_summary'])
+          print('context_invariance_pass', s['context_invariance_pass'])
+          PY
+
+      - name: Upload evidence
+        if: always() && steps.arm.outputs.armed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-0002-qwen35-4b-context-invariance-${{ github.run_id }}
+          path: artifacts/experiment-0002-qwen35-4b-context-invariance
+          if-no-files-found: error
+          retention-days: 14
