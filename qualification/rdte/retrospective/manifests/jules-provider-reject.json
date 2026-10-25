@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "rep_id": "rta-jules-provider-reject",
+  "actor_family": "jules",
+  "trace_quality": "complete",
+  "sources": [
+    {
+      "ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161",
+      "kind": "github-issue",
+      "access_class": "connector-authenticated"
+    },
+    {
+      "ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161#issuecomment-5586288628",
+      "kind": "github-comment",
+      "access_class": "connector-authenticated"
+    },
+    {
+      "ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161#issuecomment-5586348219",
+      "kind": "github-comment",
+      "access_class": "connector-authenticated"
+    }
+  ],
+  "events": [
+    {
+      "type": "DISPATCH",
+      "at": "2026-09-08T13:56:39Z",
+      "source_ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161"
+    },
+    {
+      "type": "PROVIDER_REJECT",
+      "at": "2026-09-08T13:56:44Z",
+      "source_ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161#issuecomment-5586288628",
+      "status": "error"
+    },
+    {
+      "type": "PROVIDER_REJECT",
+      "at": "2026-09-08T14:00:52Z",
+      "source_ref": "https://github.com/SemperSupra/mcp-projection-dev/issues/161#issuecomment-5586348219",
+      "status": "error"
+    }
+  ]
+}

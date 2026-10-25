@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "rep_id": "rta-goose-censored-historical",
+  "actor_family": "goose",
+  "trace_quality": "censored",
+  "sources": [
+    {
+      "ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/goose-minimal-ollama-2026-09-19.json",
+      "kind": "reduced-evidence"
+    },
+    {
+      "ref": "github-actions:SemperSupra/model-spelunker/run/35558196878/job/106205856308",
+      "kind": "actions-job-log"
+    }
+  ],
+  "events": [
+    {
+      "type": "MODEL_CALL",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/goose-minimal-ollama-2026-09-19.json"
+    },
+    {
+      "type": "MODEL_CALL",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/goose-minimal-ollama-2026-09-19.json"
+    },
+    {
+      "type": "UNKNOWN_GAP",
+      "at": null,
+      "source_ref": "github-actions:SemperSupra/model-spelunker/run/35558196878/job/106205856308"
+    },
+    {
+      "type": "FAIL",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/goose-minimal-ollama-2026-09-19.json",
+      "status": "timeout",
+      "exit_code": 124
+    },
+    {
+      "type": "VALIDATE",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/goose-minimal-ollama-2026-09-19.json",
+      "status": "fail",
+      "exit_code": 1
+    }
+  ]
+}

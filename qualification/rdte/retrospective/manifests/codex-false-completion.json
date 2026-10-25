@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "rep_id": "rta-codex-false-completion",
+  "actor_family": "codex",
+  "trace_quality": "partial",
+  "sources": [
+    {
+      "ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/codex-ollama-2026-09-19.json",
+      "kind": "reduced-evidence"
+    }
+  ],
+  "events": [
+    {
+      "type": "TOOL_CALL",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/codex-ollama-2026-09-19.json"
+    },
+    {
+      "type": "TOOL_RESULT",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/codex-ollama-2026-09-19.json",
+      "status": "error"
+    },
+    {
+      "type": "COMPLETE",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/codex-ollama-2026-09-19.json",
+      "status": "success",
+      "exit_code": 0
+    },
+    {
+      "type": "VALIDATE",
+      "at": null,
+      "source_ref": "https://github.com/SemperSupra/model-spelunker/blob/main/qualification/evidence/codex-ollama-2026-09-19.json",
+      "status": "fail",
+      "exit_code": 1
+    }
+  ]
+}
