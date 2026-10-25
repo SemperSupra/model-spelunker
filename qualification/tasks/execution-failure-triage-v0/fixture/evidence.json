@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "source_class": "sanitized-derived-execution-failure-evidence",
+  "cases": {
+    "c01": {
+      "stage": "qemu_launch",
+      "command": [
+        "qemu-system-x86_64",
+        "-enable-kvm",
+        "-nographic",
+        "-daemonize"
+      ],
+      "stderr": "qemu-system-x86_64: -nographic cannot be used with -daemonize",
+      "guest_process_started": false,
+      "environment_entry_gates": {
+        "kvm_device_present": true,
+        "passwordless_sudo_kvm": true,
+        "prerequisites_present": true
+      }
+    },
+    "c02": {
+      "stage": "runner_package_extract",
+      "package_checksum_verified": true,
+      "package_download_completed": true,
+      "archive_bytes": 226000000,
+      "root_available_bytes_before_extract": 410000000,
+      "stderr": "tar: write error: No space left on device",
+      "runner_process_started": false
+    },
+    "c03": {
+      "stage": "jit_configuration_generation",
+      "desired_operation": "generate one-shot self-hosted-runner JIT configuration",
+      "connected_control_actions": [
+        "read repository",
+        "write branch",
+        "inspect workflow runs"
+      ],
+      "required_permission": "organization self-hosted runners: write",
+      "required_action_available": false,
+      "guest_bootstrap_ready": true,
+      "long_lived_admin_credential_policy": "must not be placed in guest"
+    },
+    "c04": {
+      "stage": "hosted_model_inference",
+      "provider_admission": {
+        "authenticated": true,
+        "model_visible": true
+      },
+      "engine_error": "InternalServerError",
+      "model_rounds": 0,
+      "tool_calls": 0,
+      "candidate_output_present": false,
+      "verifier_ran": false
+    },
+    "c05": {
+      "stage": "configured_actor_task",
+      "provider_admission": {
+        "authenticated": true,
+        "model_visible": true
+      },
+      "model_rounds": 3,
+      "tool_calls": 2,
+      "candidate_exit_code": 0,
+      "required_output_present": false,
+      "verifier_self_test": "PASS",
+      "source_integrity": "PASS",
+      "timed_out": false,
+      "engine_error": null
+    },
+    "c06": {
+      "stage": "validation",
+      "candidate_output_present": true,
+      "candidate_output_schema_valid": true,
+      "verifier_self_test": "FAIL_EXCEPTION",
+      "verifier_error": "KeyError while evaluating known-good fixture",
+      "actor_process_exit_code": 0,
+      "provider_engine_error": null
+    },
+    "c07": {
+      "stage": "post_execution_reconciliation",
+      "remote_registration_exists": true,
+      "remote_registration_status": "offline",
+      "backing_host_exists": false,
+      "provider_inventory_query_completed": true,
+      "cleanup_attempted": false
+    },
+    "c08": {
+      "stage": "configured_actor_task",
+      "provider_admission": {
+        "authenticated": true,
+        "model_visible": true
+      },
+      "observed_events": [
+        "provider returned HTTP 500 during one request",
+        "harness parser also raised on a malformed partial response"
+      ],
+      "event_order_known": false,
+      "model_rounds": null,
+      "candidate_output_present": false,
+      "verifier_ran": false,
+      "retry_observation_available": false
+    }
+  }
+}
