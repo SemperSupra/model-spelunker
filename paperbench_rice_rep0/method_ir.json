@@ -1,0 +1,259 @@
+{
+  "ir_schema_version": "1.0",
+  "paper_id": "rice",
+  "paper_title": "RICE: Breaking Through the Training Bottlenecks of Reinforcement Learning with Explanation",
+  "claim_id": "CLAIM_1_AGENT_REFINING_PERFORMANCE",
+  "experiment_id": "EXP_II_AGENT_REFINING_EFFECTIVENESS",
+  "claim_selection_path": "paperbench_rice_rep0/claim_selection.json",
+  "source_manifest_path": "paperbench_rice_rep0/source_manifest.json",
+  "method_fields": {
+    "target_policy_class": {
+      "value": "Reinforcement learning agent policy network for complex tasks in simulator-based environments.",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 1 Introduction",
+          "excerpt": "In this paper, we propose RICE, an innovative refining scheme for reinforcement learning that incorporates explanation methods to break through the training bottlenecks.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "72917c31847fbb9251603665f8bd0e08a7b72640b0db2d223cc095be48c9219b"
+        }
+      ]
+    },
+    "baseline_refining_methods": {
+      "value": "PPO fine-tuning (Schulman et al., 2017), StateMask's fine-tuning from critical steps (StateMask-R) (Cheng et al., 2023), and Jump-Start Reinforcement Learning (JSRL) (Uchendu et al., 2023).",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4.2 Experiment II",
+          "excerpt": "PPO fine-tuning (Schulman et al., 2017), StateMask's fine-tuning from critical steps (Cheng et al., 2023), and Jump-Start Reinforcement Learning (Uchendu et al., 2023).",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "a7720f1928857ab1d5be032fb7554b26300aecc5cab266774b2e7f5ab451281c"
+        }
+      ]
+    },
+    "treatment_factors": {
+      "value": "Refining methods: [RICE (Ours), PPO fine-tuning, JSRL, StateMask-R]. Fixed explanation method: Ours (mask network).",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4 Table 1",
+          "excerpt": "For the first group of experiments (left), we fixed the explanation method to our method (mask network) and varied the refining methods.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "1bc5ab7c19690623d457aebe38bde074ea1453e46226e37208876f4f4933280a"
+        }
+      ]
+    },
+    "environments_eval_set": {
+      "value": "Eight representative environments selected in paper: MuJoCo games (Hopper, Walker2d, Reacher, HalfCheetah) and real-world security applications (selfish mining, network defense/Cage Challenge 2, autonomous driving, malware mutation). Note that per ordinary addendum, Malware Mutation is out of scope for reproduction.",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4.1 Environment Selection",
+          "excerpt": "We select eight representative environments to demonstrate the effectiveness of RICE across two categories: simulated games (Hopper, Walker2d, Reacher, and HalfCheetah of the MuJoCo games) and realworld applications (selfish mining, network defense, autonomous driving, and malware mutation) ${ }^{2}$",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "d13326fbb3e1816e7f1645b59e31a9fb8ec4cfa7e4f0a41f0fb90605f9992ecc"
+        },
+        {
+          "artifact": "addendum.md",
+          "locator": "Out of scope for reproduction section",
+          "excerpt": "Experiments directly concerned with the Malware Mutation environment are out of\nscope for the reproduction of this paper and can therefore be ignored.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "08af42368162082a362fd1b9a851b4f736646513b9e68a5edff2e8dccc6acd94"
+        }
+      ]
+    },
+    "policy_architecture_default": {
+      "value": "Specific policy network architecture is omitted from paper reproduction as a generic RL agent policy compatible with environments suffices. Addendum provides author-supplied settings: Stable Baselines 3 'MlpPolicy' for MuJoCo tasks, MLP [128,128,128,128] for selfish mining, MLP [64,64,64] for cage challenge, and DI-engine VAC default for autonomous driving.",
+      "status": "EXPLICIT_ADDENDUM",
+      "evidence_spans": [
+        {
+          "artifact": "addendum.md",
+          "locator": "Useful details / Focus on overall results section",
+          "excerpt": "The paper does not go into depth about the architecture of the agent used. The\nmain focus is on optimizations and the learning algorithms employed. The\nspecific architecture is therefore omitted from the reproduction -- the results\nshould hold with any generic RL agent policy compatible with the environments\nused.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "509ff92e502ab58b427063a7a08c8fd7e46874a39af7286aea6cafaa41df76d3"
+        },
+        {
+          "artifact": "addendum.md",
+          "locator": "Useful details / Architectures section",
+          "excerpt": "We utilized the default setting ('MlpPolicy') in stable baselines 3 library\n> for the policy network and SAC networks in dense/sparse MuJoCo tasks.\n> (https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html#policy-networks)\n\n> We utilized an MLP for the policy network in the selfish mining task. The\n> hidden sizes are [128, 128, 128, 128].\n\n> We utilized an MLP for the policy network in the cage challenge task. The\n> hidden sizes are [64,64,64].\n\n> We utilized the default network structure (see\n> https://di-engine-docs.readthedocs.io/en/latest/_modules/ding/model/template/vac.html#VAC)\n> for the policy network in the autonomous driving task.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "9d4a0d6a9ec28eba2c3e3107db8f33d46606e27f1e15733f1136207bcb83806c"
+        }
+      ]
+    },
+    "pre_trained_agent_weights_and_checkpoint_states": {
+      "value": "Pre-trained target policies/checkpoints for each environment before refining.",
+      "status": "MISSING",
+      "absence_assessment": {
+        "search_scope": [
+          "paper.md",
+          "addendum.md"
+        ],
+        "notes": "No exact pre-trained target agent checkpoint binaries, exact seeds, or initial policy weights provided in paper or addendum."
+      },
+      "evidence_spans": []
+    },
+    "explanation_mask_network_training_protocol": {
+      "value": "Mask network trained to identify critical states/steps using step-level explanation reformulation with reward bonus for blinding.",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 3.3 StateMask Redesign",
+          "excerpt": "We reformulate the objective function and add a new reward bonus for encouraging blinding when training-this significantly simplifies the implementation without sacrificing the theoretical guarantee.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "879b38e3c865c1abe82db74202ecc799d3b8b0dfdd7e0ee7ea2a448fad932753"
+        }
+      ]
+    },
+    "explanation_mask_network_hyperparameters": {
+      "value": "Exact network architecture, optimizer, learning rate, training epochs, number of trajectory samples, and loss weights for training the mask network.",
+      "status": "MISSING",
+      "absence_assessment": {
+        "search_scope": [
+          "paper.md",
+          "addendum.md"
+        ],
+        "notes": "Specific architecture, learning rate, and epoch count for training the explanation mask network across each task are omitted in paper and addendum."
+      },
+      "evidence_spans": []
+    },
+    "mixed_initial_state_distribution_parameter_p": {
+      "value": "Parameter $p$ controlling mixture ratio between default initial states and critical states. Section 4.3 notes general preference for $p=0.25$ or $p=0.5$, and addendum Figure 8 plots $p \\in \\{0, 0.25, 0.5, 0.75, 1\\}$. Exact default $p$ choice per task in Table 1 is omitted.",
+      "status": "AMBIGUOUS",
+      "absence_assessment": {
+        "search_scope": [
+          "paper.md",
+          "addendum.md"
+        ],
+        "notes": "Exact default per-task selection of p for Table 1 primary claims is not explicitly specified in paper text or addendum."
+      },
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4.3 Sensitivity Analysis",
+          "excerpt": "We observe that in general, a mixture probability of $p=0.25$ or $p=0.5$ is a better choice.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "0a3c9badae8051177c7fcb5a656d8b0436005ea662ffa7523fe685084d7c0445"
+        },
+        {
+          "artifact": "addendum.md",
+          "locator": "Hyperparameter figures section",
+          "excerpt": "- Figure 8 is plotting $p$ for $p \\in \\{0, 0.25, 0.5, 0.75, 1\\}",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "c065175d681d236bcfd3680adbe164f3a098e3f96a457664513d5899c1d02632"
+        }
+      ]
+    },
+    "exploration_bonus_parameter_lambda": {
+      "value": "Exploration bonus coefficient $\\lambda$. Section 4.3 notes $\\lambda=0.01$ yields good performance, while addendum Figure 7 plots $\\lambda \\in \\{0, 0.1, 0.01, 0.001\\}$. Exact default $\\lambda$ choice per task in Table 1 is omitted.",
+      "status": "AMBIGUOUS",
+      "absence_assessment": {
+        "search_scope": [
+          "paper.md",
+          "addendum.md"
+        ],
+        "notes": "Exact default per-task selection of lambda for Table 1 primary claims is not explicitly specified in paper text or addendum."
+      },
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4.3 Sensitivity Analysis",
+          "excerpt": "In general, a $\\lambda$ value of 0.01 yields good performance across all four applications.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "2a42ed60cc6a27e8314218530378fb6acd27122986943098e7b8f4da1157b3f1"
+        },
+        {
+          "artifact": "addendum.md",
+          "locator": "Hyperparameter figures section",
+          "excerpt": "- Figure 7 is plotting $\\lambda$ for $\\lambda \\in \\{0, 0.1, 0.01, 0.001\\}",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "27a56935a36fbef1f6218c1771b77d1e646f644eba2801d58ca91cec29188a5f"
+        }
+      ]
+    },
+    "refining_training_steps_and_optimizer": {
+      "value": "Total training timesteps, batch size, learning rate, entropy coefficient, and discount factor $\\gamma$ during RICE refining for each environment.",
+      "status": "MISSING",
+      "absence_assessment": {
+        "search_scope": [
+          "paper.md",
+          "addendum.md"
+        ],
+        "notes": "Refining hyper-parameter specifics (timesteps, learning rate, PPO hyperparameters) per environment are omitted in paper and addendum."
+      },
+      "evidence_spans": []
+    },
+    "evaluation_metric": {
+      "value": "Final mean reward (and standard deviation) of the refined agent evaluated after refining.",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4 Table 1 caption",
+          "excerpt": "We report the mean value (standard deviations) of the final reward after refining. A higher value is better.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "d804df2fc77326526c10faee19a41c3fb1430b7d3353975e2fac8423500dd186"
+        }
+      ]
+    },
+    "evaluation_trials_and_random_seeds": {
+      "value": "3 independent runs with various random seeds reported as mean (standard deviation).",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4.2 Experiment I & Table 1",
+          "excerpt": "We repeat each experiment 3 times with various random seeds and report the mean and standard deviation.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "8e5aee3f5a89a8d83a8dd6608793c4bf84949156f1f71398ff2bc6bca77b0d6d"
+        }
+      ]
+    },
+    "fidelity_score_formula_details": {
+      "value": "Fidelity score calculated as $\\log(d/d_{\\max}) - \\log(l/L)$ with sliding window $l = L \\times K$.",
+      "status": "EXPLICIT_PAPER",
+      "evidence_spans": [
+        {
+          "artifact": "paper.md",
+          "locator": "Section 4.1 Evaluation Metrics",
+          "excerpt": "The width of the sliding window is $l$ while the whole trajectory length is $L$. Then we randomize the action(s) at the selected critical step(s) in the selected window (i.e., masking) and measure the average reward change as $d$. Additionally, we denote the maximum possible reward change as $d_{\\text {max }}$. Therefore, the fidelity score is calculated as $\\log \\left(d / d_{\\max }\\right)-\\log (l / L)$.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "b432f44350b02808fabcca29222903f327b58381c4f3c47ce837183ba3212fd4"
+        },
+        {
+          "artifact": "addendum.md",
+          "locator": "Clarifying the Fidelity Score and Top-K Critical Steps section",
+          "excerpt": "- A **sliding window** of size $l = L \\times K$ (where $L$ is the total\n  trajectory length and $K$ is a fraction) is applied to find the **most\n  critical segment** of consecutive steps.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "6a1bb3cc52563da43a8deee5701fc5c44ebfaf96c954053ea532e40fab2a77a8"
+        },
+        {
+          "artifact": "addendum.md",
+          "locator": "Clarifying the Fidelity Score and Top-K Critical Steps section",
+          "excerpt": "- The **fidelity score** is calculated using the formula:\n  $$\n  \\text{Fidelity Score} = \\log \\left( \\frac{d}{d_{\\text{max}}} \\right) - \\log \\left( \\frac{l}{L} \\right).\n  $$",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "37e100bd69e57ca7de5a7fc8a5bd42f75502dd12a90727b191cab0eb6796c640"
+        }
+      ]
+    },
+    "theoretical_suboptimality_bound_section3_4": {
+      "value": "Section 3.4 theoretical sub-optimality analysis.",
+      "status": "NOT_APPLICABLE",
+      "evidence_spans": [
+        {
+          "artifact": "addendum.md",
+          "locator": "Out of scope for reproduction section",
+          "excerpt": "Section 3.4 is out of scope for the reproduction of this paper.",
+          "normalization": "exact_literal",
+          "excerpt_sha256": "a0ed36fbe2217997162fefe7dd8f065312155d9bff3a525ac82744adb647113f"
+        }
+      ]
+    }
+  }
+}
