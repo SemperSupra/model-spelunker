@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "binary-artifact-triage-v0",
+  "task_class": "reverse-engineering.binary-container-triage",
+  "instruction": "Inspect observations.json and write classification.json. For each artifact ID, classify the most specific binary format and architecture warranted by the available bytes and container-entry observations, without inventing missing evidence. Use only the following class values: PE32_PLUS_X86_64, MACH_O_ARM64, ELF_AARCH64, ANDROID_APK_CANDIDATE, IOS_IPA_CANDIDATE, DEX, WASM, UNKNOWN_RAW. Select one next_action per item from GHIDRA_STATIC, VERIFY_CONTAINER, DEX_ANALYSIS, WASM_ANALYSIS, RECOVER_CONTEXT. Produce a JSON object with exactly schema_version=1 and artifacts; each artifacts entry has exactly class, next_action and evidence_refs. evidence_refs must be a nonempty array of distinct RFC 6901 references to actual fields in observations.json, in the form observations.json#/artifacts/<artifact_id>/<field>. Do not edit observations.json. A ZIP signature plus an entry listing supports a package candidate, not a validated device-runnable application. An unverified raw dump must remain unknown unless metadata proves its architecture.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-held-out-binary-observation-classification"
+  },
+  "allowed_write_paths": [
+    "classification.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "hidden-input-evidence-grounding"
+  }
+}
