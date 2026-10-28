@@ -1,0 +1,208 @@
+name: OpenWorker macOS ARM Build Characterization
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  characterize:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        runner:
+          - macos-26
+          - xcode-27
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      OPENWORKER_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OPENWORKER_VERSION: '0.0.0'
+      RECIPE_ID: 'openworker-wheelhouse-macos-arm64-v1'
+    steps:
+      - name: Checkout characterization contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Build pinned offline wheelhouse
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/openworker-src"
+          wheelhouse="$RUNNER_TEMP/openworker-wheelhouse"
+          buildvenv="$RUNNER_TEMP/openworker-build-venv"
+
+          git clone --quiet --filter=blob:none https://github.com/andrewyng/openworker.git "$src"
+          git -C "$src" checkout --quiet --detach "$OPENWORKER_SHA"
+          test "$(git -C "$src" rev-parse HEAD)" = "$OPENWORKER_SHA"
+
+          python3 -m venv "$buildvenv"
+          "$buildvenv/bin/python" -m pip install --disable-pip-version-check --upgrade pip wheel build
+          mkdir -p "$wheelhouse"
+          "$buildvenv/bin/python" -m pip wheel             --disable-pip-version-check             --wheel-dir "$wheelhouse"             "$src"
+
+          echo "OPENWORKER_WHEELHOUSE=$wheelhouse" >> "$GITHUB_ENV"
+          echo "OPENWORKER_TOOLCHAIN=$("$buildvenv/bin/python" --version 2>&1); pip $("$buildvenv/bin/python" -m pip --version | awk '{print $2}')" >> "$GITHUB_ENV"
+
+      - name: Offline install and mechanical checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/openworker-admit-venv"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install             --disable-pip-version-check             --no-index             --no-deps             "$OPENWORKER_WHEELHOUSE"/*.whl
+          "$venv/bin/python" -c 'import coworker; import coworker.engine; import coworker.providers; print("PASS import surface")'
+          "$venv/bin/openworker" --help >/dev/null
+          echo "OPENWORKER_OFFLINE_CHECK=PASS" >> "$GITHUB_ENV"
+
+      - name: Emit build-characterization receipt
+        shell: bash
+        env:
+          REQUESTED_LABEL: ${{ matrix.runner }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/openworker-macos-build-receipt.json"
+          RECEIPT="$receipt" python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          import zipfile
+          from pathlib import Path
+
+          root=Path(os.environ["OPENWORKER_WHEELHOUSE"])
+
+          def wheel_content_digest(path):
+              h=hashlib.sha256()
+              with zipfile.ZipFile(path) as whl:
+                  for name in sorted(whl.namelist()):
+                      data=whl.read(name)
+                      h.update(name.encode())
+                      h.update(b"\\0")
+                      h.update(str(len(data)).encode())
+                      h.update(b"\\0")
+                      h.update(hashlib.sha256(data).digest())
+              return h.hexdigest()
+
+          files=[]
+          payload_hash=hashlib.sha256()
+          for path in sorted(root.glob("*.whl")):
+              data=path.read_bytes()
+              content_sha=wheel_content_digest(path)
+              files.append({
+                  "path":path.name,
+                  "sha256":hashlib.sha256(data).hexdigest(),
+                  "content_sha256":content_sha,
+                  "bytes":len(data),
+              })
+              payload_hash.update(path.name.encode())
+              payload_hash.update(b"\\0")
+              payload_hash.update(bytes.fromhex(content_sha))
+          if not files:
+              raise SystemExit("empty wheelhouse")
+
+          value={
+              "schema":"openworker-macos-arm-build-characterization/v1",
+              "classification":"SUPPORTED" if os.environ.get("OPENWORKER_OFFLINE_CHECK")=="PASS" else "ORACLE_FAILURE",
+              "source":{
+                  "repository":"https://github.com/andrewyng/openworker",
+                  "revision":os.environ["OPENWORKER_SHA"],
+              },
+              "build":{
+                  "recipe_id":os.environ["RECIPE_ID"],
+                  "target":"macos-arm64-python3",
+                  "builder_class":"github-hosted/"+os.environ["REQUESTED_LABEL"],
+                  "toolchain":os.environ["OPENWORKER_TOOLCHAIN"],
+                  "configuration":{
+                      "packaging":"offline-wheelhouse",
+                      "pip_wheel":"dependency-closed-at-build-time",
+                      "offline_admission_install":"--no-index --no-deps",
+                  },
+              },
+              "runner":{
+                  "system":platform.system(),
+                  "machine":platform.machine(),
+                  "image_os":os.environ.get("ImageOS"),
+                  "image_version":os.environ.get("ImageVersion"),
+              },
+              "provenance":{
+                  "run_id":os.environ.get("GITHUB_RUN_ID"),
+                  "run_attempt":os.environ.get("GITHUB_RUN_ATTEMPT"),
+                  "workflow_sha":os.environ.get("GITHUB_SHA"),
+                  "requested_label":os.environ["REQUESTED_LABEL"],
+              },
+              "checks":{
+                  "source_revision":"PASS",
+                  "offline_wheel_install_no_resolve":"PASS",
+                  "coworker_import_surface":"PASS",
+                  "openworker_cli_help":"PASS",
+              },
+              "payload":{
+                  "kind":"python-wheelhouse",
+                  "normalized_content_digest":"sha256:"+payload_hash.hexdigest(),
+                  "files":files,
+              },
+          }
+          Path(os.environ["RECEIPT"]).write_text(json.dumps(value,indent=2,sort_keys=True)+"\n")
+          print("OPENWORKER_MACOS_BUILD_RECEIPT="+json.dumps(value,sort_keys=True))
+          PY
+          echo "OPENWORKER_MACOS_BUILD_RECEIPT=$receipt" >> "$GITHUB_ENV"
+
+      - name: Upload characterization payload
+        id: payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: openworker-macos-arm64-${{ matrix.runner }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.OPENWORKER_WHEELHOUSE }}/*.whl
+            ${{ env.OPENWORKER_MACOS_BUILD_RECEIPT }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record artifact digest
+        shell: bash
+        run: |
+          printf 'OPENWORKER_MACOS_ARTIFACT_DIGEST=%s\n' '${{ steps.payload.outputs.artifact-digest }}'
+
+
+  compare-content:
+    name: Compare normalized ARM wheelhouse content
+    needs: characterize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download both characterization artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          pattern: openworker-macos-arm64-*
+          path: ${{ runner.temp }}/openworker-macos-compare
+
+      - name: Require one portable normalized payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${RUNNER_TEMP}/openworker-macos-compare" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root=Path(os.environ["ROOT"])
+          receipts=sorted(root.rglob("openworker-macos-build-receipt.json"))
+          if len(receipts) != 2:
+              raise SystemExit(f"expected 2 receipts, found {len(receipts)}")
+          rows=[json.loads(path.read_text()) for path in receipts]
+          digests={row["payload"]["normalized_content_digest"] for row in rows}
+          revisions={row["source"]["revision"] for row in rows}
+          toolchains={row["build"]["toolchain"] for row in rows}
+          if len(digests) != 1:
+              raise SystemExit(f"normalized payload drift: {sorted(digests)}")
+          if len(revisions) != 1:
+              raise SystemExit(f"source revision drift: {sorted(revisions)}")
+          if len(toolchains) != 1:
+              raise SystemExit(f"toolchain drift: {sorted(toolchains)}")
+          print("OPENWORKER_MACOS_PORTABLE_CONTENT=PASS")
+          print("NORMALIZED_CONTENT_DIGEST="+next(iter(digests)))
+          PY
