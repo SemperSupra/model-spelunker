@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qualification"))
-from heretic_pair_preflight import PAIRS, main, pair_report
+from heretic_pair_preflight import MAX_METADATA_BYTES, PAIRS, main, pair_report, read_metadata_json
 
 SHA_A = "a" * 40
 SHA_B = "b" * 40
@@ -93,6 +93,22 @@ class HereticPairSourcePreflightTests(unittest.TestCase):
     def test_cli_missing_snapshot_fails_closed(self):
         with self.assertRaises(SystemExit):
             main(["--pair", "qwen-4b-instruct", "--base-json", "/tmp/only-one.json"])
+
+    def test_duplicate_json_keys_denied(self):
+        with self.assertRaisesRegex(ValueError, "duplicate metadata"):
+            read_metadata_json(b'{"id":"first","id":"second"}')
+
+    def test_nonfinite_json_value_denied(self):
+        with self.assertRaisesRegex(ValueError, "nonfinite"):
+            read_metadata_json(b'{"downloads":NaN}')
+
+    def test_oversized_metadata_denied_before_parse(self):
+        with self.assertRaisesRegex(ValueError, "exceeds bound"):
+            read_metadata_json(b" " * (MAX_METADATA_BYTES + 1))
+
+    def test_truncated_metadata_denied(self):
+        with self.assertRaises(ValueError):
+            read_metadata_json(b'{"id":"incomplete"')
 
     def test_lfm_is_licensed_separately(self):
         base_id, modified_id, license_name = PAIRS["lfm-2.6b"]
