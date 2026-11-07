@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qualification"))
 from heretic_pair_preflight import (MAX_METADATA_BYTES, MAX_TEMPLATE_BYTES, PAIRS, main,
+                                    approved_template_redirect,
                                     pair_report, public_api_metadata, public_chat_template,
                                     read_metadata_json,
                                     read_template_bytes, safe_failure_code)
@@ -254,6 +255,55 @@ class HereticPairSourcePreflightTests(unittest.TestCase):
                 receipt = json.loads(out.getvalue())
                 self.assertEqual(receipt["failure_code"], "METADATA_REDIRECT_DENIED")
                 self.assertEqual(receipt["actor_qualification"], "UNKNOWN_NOT_EXECUTED")
+
+    def test_hf_pinned_template_resolve_cache_approved(self):
+        source = ("https://huggingface.co/heretic-org/Qwen3-4B-Instruct-2507-heretic/"
+                  "resolve/" + SHA_A + "/chat_template.jinja")
+        cached = ("https://huggingface.co/api/resolve-cache/models/"
+                  "heretic-org/Qwen3-4B-Instruct-2507-heretic/" + SHA_A +
+                  "/chat_template.jinja?source=verified")
+        self.assertTrue(approved_template_redirect(source, source))
+        self.assertTrue(approved_template_redirect(source, cached))
+        self.assertFalse(approved_template_redirect(source, cached.replace(SHA_A, SHA_B)))
+        self.assertFalse(approved_template_redirect(source, "https://attacker.example/template.jinja"))
+        self.assertFalse(approved_template_redirect(source, "http://huggingface.co/api/resolve-cache"))
+        self.assertFalse(approved_template_redirect(source, "https://huggingface.co/attacker/other"))
+        self.assertFalse(approved_template_redirect(source, "https://user:secret@huggingface.co/"))
+
+    def test_hf_pinned_template_delivery_cdn_allowlist_only(self):
+        source = ("https://huggingface.co/LiquidAI/LFM2.5-2.6B/"
+                  "resolve/" + SHA_A + "/chat_template.jinja")
+        self.assertTrue(approved_template_redirect(
+            source, "https://cas-bridge.xethub.hf.co/signed/pinned-object?opaque=1"))
+        self.assertTrue(approved_template_redirect(
+            source, "https://cdn-lfs.huggingface.co/signed/pinned-object"))
+        self.assertFalse(approved_template_redirect(
+            source, "https://cas-bridge.attacker.example/"))
+        self.assertFalse(approved_template_redirect(
+            source, "https://cas-bridge.xethub.hf.co:8443/object"))
+
+    def test_pinned_template_live_fetch_accepts_verified_cache(self):
+        model = "heretic-org/Qwen3-4B-Instruct-2507-heretic"
+        request_url = "https://huggingface.co/" + model + "/resolve/" + SHA_A + "/chat_template.jinja"
+        cache_url = ("https://huggingface.co/api/resolve-cache/models/" + model + "/"
+                     + SHA_A + "/chat_template.jinja")
+        urls = []
+        class Response:
+            url = cache_url
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc, tb):
+                return False
+            def read(self, limit):
+                return b"{{ messages }}"
+        class Opener:
+            def open(self, req, timeout=12):
+                urls.append((req.full_url, timeout))
+                return Response()
+        with patch("heretic_pair_preflight.urllib.request.build_opener", return_value=Opener()):
+            fetched = public_chat_template(model, SHA_A)
+        self.assertEqual(urls, [(request_url, 12)])
+        self.assertEqual(fetched, "{{ messages }}")
 
     def test_lfm_is_licensed_separately(self):
         base_id, modified_id, license_name = PAIRS["lfm-2.6b"]
