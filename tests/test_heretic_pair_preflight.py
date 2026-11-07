@@ -4,10 +4,12 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qualification"))
 from heretic_pair_preflight import (MAX_METADATA_BYTES, MAX_TEMPLATE_BYTES, PAIRS, main,
-                                    pair_report, public_chat_template, read_metadata_json,
+                                    pair_report, public_api_metadata, public_chat_template,
+                                    read_metadata_json,
                                     read_template_bytes)
 
 SHA_A = "a" * 40
@@ -175,6 +177,55 @@ class HereticPairSourcePreflightTests(unittest.TestCase):
             public_chat_template("attacker/unknown", SHA_A)
         with self.assertRaisesRegex(ValueError, "unpinned"):
             public_chat_template("Qwen/Qwen3-4B-Instruct-2507", "main")
+
+    def test_pinned_hf_metadata_request_uses_exact_revision(self):
+        model_id = "Qwen/Qwen3-4B-Instruct-2507"
+        expected_url = ("https://huggingface.co/api/models/" + model_id +
+                        "/revision/" + SHA_A)
+        metadata = fixture(model_id, SHA_A)
+        seen = []
+        class Response:
+            url = expected_url
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc, tb):
+                return False
+            def read(self, n):
+                self.limit = n
+                return json.dumps(metadata).encode("utf-8")
+        def fake_urlopen(req, timeout):
+            seen.append((req.full_url, timeout))
+            return Response()
+        with patch("heretic_pair_preflight.urllib.request.urlopen",
+                   side_effect=fake_urlopen):
+            received = public_api_metadata(model_id, SHA_A)
+        self.assertEqual(seen, [(expected_url, 12)])
+        self.assertEqual(received["sha"], SHA_A)
+
+    def test_hf_metadata_requires_pinned_known_source(self):
+        with self.assertRaisesRegex(ValueError, "unpinned metadata"):
+            public_api_metadata("Qwen/Qwen3-4B-Instruct-2507", "main")
+        with self.assertRaisesRegex(ValueError, "unknown model"):
+            public_api_metadata("untrusted/model", SHA_A)
+
+    def test_hf_metadata_redirect_denied(self):
+        model_id = "Qwen/Qwen3-4B-Instruct-2507"
+        class Response:
+            url = "https://other-host.example/api/models"
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc, tb):
+                return False
+            def read(self, n):
+                return b"{}"
+        with patch("heretic_pair_preflight.urllib.request.urlopen",
+                   return_value=Response()):
+            with self.assertRaisesRegex(ValueError, "metadata redirect denied"):
+                public_api_metadata(model_id, SHA_A)
+
+    def test_online_mode_cannot_use_floating_revisions(self):
+        with self.assertRaises(SystemExit):
+            main(["--pair", "qwen-4b-instruct", "--fetch-public-metadata"])
 
     def test_lfm_is_licensed_separately(self):
         base_id, modified_id, license_name = PAIRS["lfm-2.6b"]
