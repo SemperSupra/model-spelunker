@@ -28,6 +28,33 @@ def sha256(value: str) -> str:
 def canonical_hash(value: object) -> str:
     return sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
 
+def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate metadata field denied")
+        result[key] = value
+    return result
+
+
+def reject_nonfinite(value: str) -> None:
+    raise ValueError("nonfinite JSON metadata denied")
+
+
+def read_metadata_json(data: bytes) -> dict:
+    if len(data) > MAX_METADATA_BYTES:
+        raise ValueError("metadata exceeds bound")
+    parsed = json.loads(data, object_pairs_hook=reject_duplicate_keys, parse_constant=reject_nonfinite)
+    if not isinstance(parsed, dict):
+        raise ValueError("model metadata is not an object")
+    return parsed
+
+
+def read_offline_metadata(path: Path) -> dict:
+    with path.open("rb") as handle:
+        return read_metadata_json(handle.read(MAX_METADATA_BYTES + 1))
+
+
 def public_api_metadata(model_id: str) -> dict:
     # model_id only comes from the local, constant PAIRS table.
     url = "https://huggingface.co/api/models/" + model_id
@@ -36,12 +63,7 @@ def public_api_metadata(model_id: str) -> dict:
         if response.url != url:
             raise ValueError("metadata redirect denied")
         data = response.read(MAX_METADATA_BYTES + 1)
-    if len(data) > MAX_METADATA_BYTES:
-        raise ValueError("metadata exceeds bound")
-    parsed = json.loads(data)
-    if not isinstance(parsed, dict):
-        raise ValueError("model metadata is not an object")
-    return parsed
+    return read_metadata_json(data)
 
 def license_name(meta: dict) -> str:
     card = meta.get("cardData") or {}
@@ -145,8 +167,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.fetch_public_metadata:
             base_meta, mod_meta = public_api_metadata(ids[0]), public_api_metadata(ids[1])
         else:
-            base_meta = json.loads(args.base_json.read_text(encoding="utf-8"))
-            mod_meta = json.loads(args.modified_json.read_text(encoding="utf-8"))
+            base_meta = read_offline_metadata(args.base_json)
+            mod_meta = read_offline_metadata(args.modified_json)
         if not isinstance(base_meta, dict) or not isinstance(mod_meta, dict):
             raise ValueError("metadata snapshots must be objects")
         result = pair_report(args.pair, base_meta, mod_meta, args.base_sha, args.modified_sha)
