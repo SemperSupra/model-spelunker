@@ -305,6 +305,45 @@ class HereticPairSourcePreflightTests(unittest.TestCase):
         self.assertEqual(urls, [(request_url, 12)])
         self.assertEqual(fetched, "{{ messages }}")
 
+    def test_native_source_observation_is_immutable_and_metadata_only(self):
+        receipt_path = (Path(__file__).resolve().parents[1] / "qualification" /
+                        "source-observations" / "heretic-h1-h2-20261107.json")
+        report = json.loads(receipt_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["schema"], "heretic-source-observation/v1")
+        self.assertEqual(report["campaign"], "model-spelunker-189")
+        native = report["native_evidence"]
+        self.assertEqual(native["source_commit"], "3077bd6fba2ec80618ddbe1266b92e8596745d63")
+        self.assertEqual(native["workflow_run_id"], 42376716940)
+        self.assertEqual(native["workflow_job_id"], 128415692552)
+        for key, value in report["scope_limits"].items():
+            if key == "source_only":
+                self.assertTrue(value)
+            else:
+                self.assertFalse(value, key)
+        self.assertEqual(len(report["pair_reports"]), 2)
+        rows = report["publisher_file_manifests"]
+        self.assertEqual(len(rows), 4)
+        manifest_by_model = {row["model"]: row for row in rows}
+        self.assertEqual(len(manifest_by_model), 4)
+        for pair in report["pair_reports"]:
+            self.assertIn(pair["experiment_pair"], PAIRS)
+            self.assertEqual(pair["source_gate"], "METADATA_READY_ONLY")
+            self.assertEqual(pair["actor_qualification"], "UNKNOWN_NOT_EXECUTED")
+            self.assertEqual(pair["inference_calls"], 0)
+            self.assertEqual(pair["cross_checks"], [])
+            self.assertEqual(pair["base"]["chat_template_digest"],
+                             pair["modified"]["chat_template_digest"])
+            for variant in [pair["base"], pair["modified"]]:
+                self.assertEqual(variant["holds"], [])
+                row = manifest_by_model[variant["id"]]
+                self.assertEqual(row["revision"], variant["observed_revision"])
+                self.assertEqual(len(row["weights"]), variant["safetensors_file_count"])
+                for shard in row["weights"]:
+                    self.assertTrue(shard["path"].endswith(".safetensors"))
+                    self.assertRegex(shard["oid_sha256"], r"^[a-f0-9]{64}$")
+                    self.assertGreater(shard["size"], 0)
+        self.assertIn("HOLD_INFERENCE", report["decision"])
+
     def test_lfm_is_licensed_separately(self):
         base_id, modified_id, license_name = PAIRS["lfm-2.6b"]
         self.assertEqual(license_name, "lfm1.0")
