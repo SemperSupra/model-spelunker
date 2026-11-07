@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qualification"))
-from heretic_pair_preflight import MAX_METADATA_BYTES, PAIRS, main, pair_report, read_metadata_json
+from heretic_pair_preflight import (MAX_METADATA_BYTES, MAX_TEMPLATE_BYTES, PAIRS, main,
+                                    pair_report, public_chat_template, read_metadata_json,
+                                    read_template_bytes)
 
 SHA_A = "a" * 40
 SHA_B = "b" * 40
@@ -109,6 +111,70 @@ class HereticPairSourcePreflightTests(unittest.TestCase):
     def test_truncated_metadata_denied(self):
         with self.assertRaises(ValueError):
             read_metadata_json(b'{"id":"incomplete"')
+
+    def test_standalone_template_requires_pinned_bytes(self):
+        self.base["siblings"].append({"rfilename": "chat_template.jinja"})
+        self.modified["siblings"].append({"rfilename": "chat_template.jinja"})
+        report = self.report()
+        self.assertEqual(report["source_gate"], "HOLD")
+        self.assertIn("PINNED_TEMPLATE_FILE_NOT_VERIFIED", report["base"]["holds"])
+        self.assertIn("PINNED_TEMPLATE_FILE_NOT_VERIFIED", report["modified"]["holds"])
+
+    def test_same_standalone_templates_can_pass_metadata_gate_only(self):
+        self.base["siblings"].append({"rfilename": "chat_template.jinja"})
+        self.modified["siblings"].append({"rfilename": "chat_template.jinja"})
+        report = pair_report("qwen-4b-instruct", self.base, self.modified, SHA_A, SHA_B,
+                             base_template="verified", modified_template="verified")
+        self.assertEqual(report["source_gate"], "METADATA_READY_ONLY")
+        self.assertEqual(report["base"]["chat_template_source"], "pinned_file")
+        self.assertEqual(report["actor_qualification"], "UNKNOWN_NOT_EXECUTED")
+
+    def test_different_standalone_templates_confounded(self):
+        self.base["siblings"].append({"rfilename": "chat_template.jinja"})
+        self.modified["siblings"].append({"rfilename": "chat_template.jinja"})
+        report = pair_report("qwen-4b-instruct", self.base, self.modified, SHA_A, SHA_B,
+                             base_template="verified", modified_template="different")
+        self.assertIn("CHAT_TEMPLATE_DIFFERS_REQUIRES_EXPERIMENT_CONTROL", report["cross_checks"])
+
+    def test_unexpected_offline_template_file_holds(self):
+        report = pair_report("qwen-4b-instruct", self.base, self.modified, SHA_A, SHA_B,
+                             base_template="out-of-band")
+        self.assertIn("UNEXPECTED_TEMPLATE_FILE", report["base"]["holds"])
+
+    def test_standalone_template_size_and_encoding_guards(self):
+        with self.assertRaisesRegex(ValueError, "exceeds bound"):
+            read_template_bytes(b"x" * (MAX_TEMPLATE_BYTES + 1))
+        with self.assertRaisesRegex(ValueError, "empty chat template"):
+            read_template_bytes(b"   ")
+        with self.assertRaises(UnicodeDecodeError):
+            read_template_bytes(b"\xff")
+
+    def test_offline_cli_pins_both_template_files(self):
+        self.base["siblings"].append({"rfilename": "chat_template.jinja"})
+        self.modified["siblings"].append({"rfilename": "chat_template.jinja"})
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "base.json").write_text(json.dumps(self.base), encoding="utf-8")
+            (root / "mod.json").write_text(json.dumps(self.modified), encoding="utf-8")
+            (root / "base.jinja").write_text("template", encoding="utf-8")
+            (root / "mod.jinja").write_text("template", encoding="utf-8")
+            rc = main(["--pair", "qwen-4b-instruct",
+                       "--base-json", str(root / "base.json"),
+                       "--modified-json", str(root / "mod.json"),
+                       "--base-template-file", str(root / "base.jinja"),
+                       "--modified-template-file", str(root / "mod.jinja"),
+                       "--base-sha", SHA_A, "--modified-sha", SHA_B,
+                       "--output", str(root / "report.json")])
+            self.assertEqual(rc, 0)
+            receipt = json.loads((root / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(receipt["base"]["chat_template_source"], "pinned_file")
+            self.assertEqual(receipt["runtime_gate"].startswith("HOLD"), True)
+
+    def test_live_template_path_requires_known_model_and_exact_sha(self):
+        with self.assertRaisesRegex(ValueError, "unknown model"):
+            public_chat_template("attacker/unknown", SHA_A)
+        with self.assertRaisesRegex(ValueError, "unpinned"):
+            public_chat_template("Qwen/Qwen3-4B-Instruct-2507", "main")
 
     def test_lfm_is_licensed_separately(self):
         base_id, modified_id, license_name = PAIRS["lfm-2.6b"]
