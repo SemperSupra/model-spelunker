@@ -193,6 +193,38 @@ def pair_report(pair: str, base_meta: dict, mod_meta: dict, base_sha: str | None
         "inference_calls": 0,
     }
 
+SAFE_VALUE_FAILURES = {
+    "metadata redirect denied": "METADATA_REDIRECT_DENIED",
+    "chat template redirect denied": "TEMPLATE_REDIRECT_DENIED",
+    "duplicate metadata field denied": "DUPLICATE_METADATA_FIELD",
+    "nonfinite JSON metadata denied": "NONFINITE_METADATA",
+    "metadata exceeds bound": "METADATA_OVERSIZED",
+    "chat template exceeds bound": "TEMPLATE_OVERSIZED",
+    "empty chat template": "TEMPLATE_EMPTY",
+    "unpinned template revision": "TEMPLATE_REVISION_UNPINNED",
+    "unpinned metadata revision": "METADATA_REVISION_UNPINNED",
+    "unknown model id": "MODEL_ID_NOT_ALLOWLISTED",
+    "model metadata is not an object": "METADATA_NOT_OBJECT",
+}
+
+
+def safe_failure_code(exc: Exception) -> str:
+    # Never publish untrusted provider error text, URL, token, or response body.
+    if isinstance(exc, urllib.error.HTTPError):
+        return "HTTP_" + str(exc.code) if isinstance(exc.code, int) and 100 <= exc.code <= 599 else "HTTP_ERROR"
+    if isinstance(exc, UnicodeError):
+        return "SOURCE_INVALID_UTF8"
+    if isinstance(exc, json.JSONDecodeError):
+        return "SOURCE_INVALID_JSON"
+    if isinstance(exc, ValueError):
+        return SAFE_VALUE_FAILURES.get(str(exc), "SOURCE_VALUE_ERROR")
+    if isinstance(exc, urllib.error.URLError):
+        return "SOURCE_TRANSPORT_ERROR"
+    if isinstance(exc, (OSError, TypeError)):
+        return "SOURCE_INPUT_OR_IO_ERROR"
+    return "SOURCE_UNKNOWN_ERROR"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pair", required=True, choices=sorted(PAIRS))
@@ -241,8 +273,10 @@ def main(argv: list[str] | None = None) -> int:
                 templates.append(None)
         result = pair_report(args.pair, base_meta, mod_meta, args.base_sha, args.modified_sha,
                              base_template=templates[0], modified_template=templates[1])
-    except (ValueError, OSError, urllib.error.URLError) as exc:
-        print(json.dumps({"source_gate": "HOLD", "failure": type(exc).__name__, "actor_qualification": "UNKNOWN_NOT_EXECUTED"}))
+    except (ValueError, OSError, TypeError, urllib.error.URLError) as exc:
+        print(json.dumps({"source_gate": "HOLD", "failure": type(exc).__name__,
+                          "failure_code": safe_failure_code(exc),
+                          "actor_qualification": "UNKNOWN_NOT_EXECUTED"}))
         return 2
     output = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is not None:
