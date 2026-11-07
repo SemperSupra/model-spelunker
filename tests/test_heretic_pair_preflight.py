@@ -3,6 +3,7 @@ import json
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "qualification"))
 from heretic_pair_preflight import (MAX_METADATA_BYTES, MAX_TEMPLATE_BYTES, PAIRS, main,
                                     pair_report, public_api_metadata, public_chat_template,
                                     read_metadata_json,
-                                    read_template_bytes)
+                                    read_template_bytes, safe_failure_code)
 
 SHA_A = "a" * 40
 SHA_B = "b" * 40
@@ -226,6 +227,33 @@ class HereticPairSourcePreflightTests(unittest.TestCase):
     def test_online_mode_cannot_use_floating_revisions(self):
         with self.assertRaises(SystemExit):
             main(["--pair", "qwen-4b-instruct", "--fetch-public-metadata"])
+
+    def test_safe_failure_code_does_not_leak_provider_details(self):
+        self.assertEqual(safe_failure_code(ValueError("metadata redirect denied")),
+                         "METADATA_REDIRECT_DENIED")
+        self.assertEqual(safe_failure_code(ValueError("Bearer secretXYZ https://private.local")),
+                         "SOURCE_VALUE_ERROR")
+        self.assertEqual(safe_failure_code(urllib.error.URLError("http://private.local token")),
+                         "SOURCE_TRANSPORT_ERROR")
+        self.assertEqual(safe_failure_code(urllib.error.HTTPError(
+            "https://secret.example", 404, "secret response", {}, None)), "HTTP_404")
+        self.assertEqual(safe_failure_code(TypeError("token=secret")), "SOURCE_INPUT_OR_IO_ERROR")
+
+    def test_hf_online_failure_receipt_is_classified(self):
+        with patch("heretic_pair_preflight.public_api_metadata",
+                   side_effect=ValueError("metadata redirect denied")):
+            with tempfile.TemporaryDirectory() as directory:
+                # Non-public errors are reported in JSON, without provider detail.
+                from contextlib import redirect_stdout
+                from io import StringIO
+                out = StringIO()
+                with redirect_stdout(out):
+                    rc = main(["--pair", "qwen-4b-instruct", "--fetch-public-metadata",
+                               "--base-sha", SHA_A, "--modified-sha", SHA_B])
+                self.assertEqual(rc, 2)
+                receipt = json.loads(out.getvalue())
+                self.assertEqual(receipt["failure_code"], "METADATA_REDIRECT_DENIED")
+                self.assertEqual(receipt["actor_qualification"], "UNKNOWN_NOT_EXECUTED")
 
     def test_lfm_is_licensed_separately(self):
         base_id, modified_id, license_name = PAIRS["lfm-2.6b"]
