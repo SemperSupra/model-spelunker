@@ -1,0 +1,175 @@
+{
+  "schema": "heretic-source-observation/v1",
+  "campaign": "model-spelunker-189",
+  "observation_kind": "public-repository-metadata-and-hf-lfs-oids-only",
+  "native_evidence": {
+    "repository": "SemperSupra/model-spelunker",
+    "workflow_run_id": 42376716940,
+    "workflow_job_id": 128415692552,
+    "source_commit": "3077bd6fba2ec80618ddbe1266b92e8596745d63",
+    "run_url": "https://github.com/SemperSupra/model-spelunker/actions/runs/42376716940",
+    "observed_at_utc": "2026-11-07T13:23:15Z",
+    "native_result": "QUALIFICATION_CONTRACT_CHECK_SUCCESS"
+  },
+  "pair_reports": [
+    {
+      "actor_qualification": "UNKNOWN_NOT_EXECUTED",
+      "base": {
+        "chat_template_digest": "sha256:ea663864491de7ade391839479860ca95541f892f72665c73251fbd4643b1bef",
+        "chat_template_source": "pinned_file",
+        "expected_revision": "7141b56cd4650af95c7c7b86983443aed050c96a",
+        "holds": [],
+        "id": "LiquidAI/LFM2.5-2.6B",
+        "license": "lfm1.0",
+        "metadata_digest": "sha256:8951613d16ab01f16e56428419c53b3a42fe12956eaf43a97f2240aea170c294",
+        "model_files_count": 11,
+        "model_type": "lfm2",
+        "observed_revision": "7141b56cd4650af95c7c7b86983443aed050c96a",
+        "safetensors_file_count": 2
+      },
+      "campaign": "model-spelunker-189",
+      "cross_checks": [],
+      "experiment_pair": "lfm-2.6b",
+      "inference_calls": 0,
+      "modified": {
+        "chat_template_digest": "sha256:ea663864491de7ade391839479860ca95541f892f72665c73251fbd4643b1bef",
+        "chat_template_source": "pinned_file",
+        "expected_revision": "134ab5b145771c6b33c148b8d0f95496282e223e",
+        "holds": [],
+        "id": "heretic-org/LFM-2.5-2.6B-heretic",
+        "license": "lfm1.0",
+        "metadata_digest": "sha256:99cad8c829f72d8696cd3b735d285a7001101c30935e1edb884ce3eef78942b0",
+        "model_files_count": 17,
+        "model_type": "lfm2",
+        "observed_revision": "134ab5b145771c6b33c148b8d0f95496282e223e",
+        "safetensors_file_count": 2
+      },
+      "runtime_gate": "HOLD_UNTIL_WEIGHT_HASH_QUANTIZATION_AND_VENUE_GRANT_VERIFIED",
+      "schema_version": 1,
+      "source_gate": "METADATA_READY_ONLY"
+    },
+    {
+      "actor_qualification": "UNKNOWN_NOT_EXECUTED",
+      "base": {
+        "chat_template_digest": "sha256:64f85b198065d0fba2a81f37e10ed68161ce2c19a754c7100e67e0ca2ee9c326",
+        "chat_template_source": "embedded_metadata",
+        "expected_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "holds": [],
+        "id": "Qwen/Qwen3-4B-Instruct-2507",
+        "license": "apache-2.0",
+        "metadata_digest": "sha256:777e7a097e41ef3a4e93451e0c8d89e76e4d1da3ac2c6508ffea1a16cc83dca9",
+        "model_files_count": 13,
+        "model_type": "qwen3",
+        "observed_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+        "safetensors_file_count": 3
+      },
+      "campaign": "model-spelunker-189",
+      "cross_checks": [],
+      "experiment_pair": "qwen-4b-instruct",
+      "inference_calls": 0,
+      "modified": {
+        "chat_template_digest": "sha256:64f85b198065d0fba2a81f37e10ed68161ce2c19a754c7100e67e0ca2ee9c326",
+        "chat_template_source": "pinned_file",
+        "expected_revision": "2e474f6e1048f03db438120c61e2a8f46abe09e8",
+        "holds": [],
+        "id": "heretic-org/Qwen3-4B-Instruct-2507-heretic",
+        "license": "apache-2.0",
+        "metadata_digest": "sha256:d9df847eedab50af6c776e5b1ce25c5c9a907e146fa05c0cc423a92152f349f8",
+        "model_files_count": 16,
+        "model_type": "qwen3",
+        "observed_revision": "2e474f6e1048f03db438120c61e2a8f46abe09e8",
+        "safetensors_file_count": 2
+      },
+      "runtime_gate": "HOLD_UNTIL_WEIGHT_HASH_QUANTIZATION_AND_VENUE_GRANT_VERIFIED",
+      "schema_version": 1,
+      "source_gate": "METADATA_READY_ONLY"
+    }
+  ],
+  "publisher_file_manifests": [
+    {
+      "model": "LiquidAI/LFM2.5-2.6B",
+      "revision": "7141b56cd4650af95c7c7b86983443aed050c96a",
+      "status": "SOURCE_TREE_OBSERVED",
+      "weights": [
+        {
+          "oid_sha256": "05be188e6570a7642b4690545ab22ebf4d0a6068775dd776a452eebf738854cc",
+          "path": "model-00001-of-00002.safetensors",
+          "size": 5329406264
+        },
+        {
+          "oid_sha256": "532f803a9e6f127adc124d977503b438d8cc9c18f96e0862bf6835e38867bca8",
+          "path": "model-00002-of-00002.safetensors",
+          "size": 65021192
+        }
+      ]
+    },
+    {
+      "model": "heretic-org/LFM-2.5-2.6B-heretic",
+      "revision": "134ab5b145771c6b33c148b8d0f95496282e223e",
+      "status": "SOURCE_TREE_OBSERVED",
+      "weights": [
+        {
+          "oid_sha256": "f66afa5894823304733c510ef855e8eaf85fe436422104778e353ebee0c97ea9",
+          "path": "model-00001-of-00002.safetensors",
+          "size": 4998013464
+        },
+        {
+          "oid_sha256": "7a8de95039bb9d0655d97280492f11c90cba47ee59856b9e4a60bc78c079a9ca",
+          "path": "model-00002-of-00002.safetensors",
+          "size": 396413952
+        }
+      ]
+    },
+    {
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+      "status": "SOURCE_TREE_OBSERVED",
+      "weights": [
+        {
+          "oid_sha256": "75311d91bb08cf0b882913da464a1e722a31fb44db35208663487efb7a3d8ed6",
+          "path": "model-00001-of-00003.safetensors",
+          "size": 3957900840
+        },
+        {
+          "oid_sha256": "0b48adbb1f60e901153d91907ba11ce63bd4b8b584482e730f48808d055dfba1",
+          "path": "model-00002-of-00003.safetensors",
+          "size": 3987450520
+        },
+        {
+          "oid_sha256": "7dd39ccca5e4de123c74c14af44c9bf2eb75df33b4614382af0134528e060d5d",
+          "path": "model-00003-of-00003.safetensors",
+          "size": 99630640
+        }
+      ]
+    },
+    {
+      "model": "heretic-org/Qwen3-4B-Instruct-2507-heretic",
+      "revision": "2e474f6e1048f03db438120c61e2a8f46abe09e8",
+      "status": "SOURCE_TREE_OBSERVED",
+      "weights": [
+        {
+          "oid_sha256": "807818dca512d84dc20fb6250a67dfa24d6a8e82c8a7797a6e2932ba98fbbeec",
+          "path": "model-00001-of-00002.safetensors",
+          "size": 4967215360
+        },
+        {
+          "oid_sha256": "abed26158f0f30bbf980d77ff3db633cc17644200f3b2995420ad88d0667655c",
+          "path": "model-00002-of-00002.safetensors",
+          "size": 3077766632
+        }
+      ]
+    }
+  ],
+  "scope_limits": {
+    "source_only": true,
+    "downloaded_weight_byte_attestation": false,
+    "model_loaded": false,
+    "gpu_observed": false,
+    "actor_interview_executed": false,
+    "model_qualified": false,
+    "quota_verified": false,
+    "typed_assignment_admitted": false
+  },
+  "decision": "SOURCE_METADATA_READY_ONLY; HOLD_INFERENCE_UNTIL_ADMITTED_EXECUTOR_AND_VERIFIED_WEIGHT_BYTES",
+  "integrity_note": "LFS object IDs and sizes originate from public Hugging Face revision-pinned repository tree API. They were NOT independently verified against downloaded artifact bytes; native log proves HTTP observation only."
+}
