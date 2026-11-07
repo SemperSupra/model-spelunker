@@ -102,6 +102,13 @@ def _cases(oracle: dict) -> dict:
     return cases
 
 def _observations(doc: dict, treatment: str, model_id: str, revision: str, cases: dict) -> tuple[dict, dict]:
+    allowed = {"schema", "campaign", "treatment", "model_id", "model_revision",
+               "runtime_id", "sampler_sha256", "preprocessing_sha256",
+               "vision_route_declared", "outputs"}
+    if set(doc) != allowed:
+        # The observation producer must not carry the sealed independent oracle,
+        # arbitrary model/private data or a second hidden scoring channel.
+        raise Denied("OUTPUT_RECEIPT_FIELDS_OR_ORACLE_LEAK")
     if (doc.get("schema") != "vlm-observation/v1" or doc.get("campaign") != "model-spelunker-191" or
         doc.get("treatment") != treatment or doc.get("model_id") != model_id or
         doc.get("model_revision") != revision or
