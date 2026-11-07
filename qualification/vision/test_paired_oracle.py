@@ -82,6 +82,15 @@ class PairedVisionOracleTests(unittest.TestCase):
         with self.assertRaisesRegex(Denied, "MODEL_PAIR_OR_REVISION"):
             assess("qwen3-vl-2b", self.oracle, self.base, self.modified, "main", B, "3"*64, "4"*64, "5"*64)
 
+    def test_output_receipt_cannot_carry_sealed_oracle_or_extra_metadata(self):
+        self.modified["oracle_expected"] = {"img-count-01": 2}
+        with self.assertRaisesRegex(Denied, "ORACLE_LEAK"):
+            score(self.oracle, self.base, self.modified)
+        del self.modified["oracle_expected"]
+        self.base["extra_public_claim"] = "self-evaluated-pass"
+        with self.assertRaisesRegex(Denied, "ORACLE_LEAK"):
+            score(self.oracle, self.base, self.modified)
+
     def test_text_only_or_missing_vision_route(self):
         self.modified["vision_route_declared"] = False
         with self.assertRaisesRegex(Denied, "VISION_ROUTE"):
