@@ -172,6 +172,28 @@ jobs:
       - name: Self-test Heretic paired source-gate offline negatives
         run: python -m unittest discover -s tests -p 'test_heretic_pair_preflight.py' -v
 
+      # Source-observation treatment only: no weight download, GPU, token, or inference.
+      # Restricted to #189's research branch and never gates ordinary PRs.
+      - name: Observe pinned Heretic source metadata (research branch, non-gating)
+        if: github.event_name == 'pull_request' && github.head_ref == 'research/189-heretic-source-preflight-20261107'
+        timeout-minutes: 3
+        run: |
+          set +e
+          python qualification/heretic_pair_preflight.py \
+            --pair lfm-2.6b --fetch-public-metadata \
+            --base-sha 7141b56cd4650af95c7c7b86983443aed050c96a \
+            --modified-sha 134ab5b145771c6b33c148b8d0f95496282e223e \
+            --output "$RUNNER_TEMP/heretic-h1-source.json"
+          echo "HERETIC_H1_PUBLIC_SOURCE_RC=$?"
+          python qualification/heretic_pair_preflight.py \
+            --pair qwen-4b-instruct --fetch-public-metadata \
+            --base-sha cdbee75f17c01a7cc42f958dc650907174af0554 \
+            --modified-sha 2e474f6e1048f03db438120c61e2a8f46abe09e8 \
+            --output "$RUNNER_TEMP/heretic-h2-source.json"
+          echo "HERETIC_H2_PUBLIC_SOURCE_RC=$?"
+          # Non-gating: transport/provider/metadata HOLD is useful experiment evidence.
+          exit 0
+
       - name: Self-test free OpenRouter coding model cohort
         run: PYTHONPATH=. python qualification/test_openrouter_free_model_cohort.py
 
