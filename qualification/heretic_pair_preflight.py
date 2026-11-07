@@ -87,9 +87,14 @@ def public_chat_template(model_id: str, revision: str) -> str:
     return read_template_bytes(data)
 
 
-def public_api_metadata(model_id: str) -> dict:
+def public_api_metadata(model_id: str, revision: str) -> dict:
     # model_id only comes from the local, constant PAIRS table.
-    url = "https://huggingface.co/api/models/" + model_id
+    if model_id not in {name for pair in PAIRS.values() for name in pair[:2]}:
+        raise ValueError("unknown model id")
+    if not HEX40.fullmatch(revision):
+        raise ValueError("unpinned metadata revision")
+    # See Hugging Face model_info(revision=...) API. Never read drifting main.
+    url = "https://huggingface.co/api/models/" + model_id + "/revision/" + revision
     req = urllib.request.Request(url, headers={"User-Agent": "model-spelunker-source-preflight/1"})
     with urllib.request.urlopen(req, timeout=12) as response:
         if response.url != url:
@@ -206,13 +211,16 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("offline mode requires both JSON files")
     if args.fetch_public_metadata and (args.base_template_file or args.modified_template_file):
         parser.error("public API mode fetches pinned templates; local template paths are offline-only")
+    if args.fetch_public_metadata and (args.base_sha is None or args.modified_sha is None):
+        parser.error("public API mode requires exact revision pins for both models")
     for revision in [args.base_sha, args.modified_sha]:
         if revision is not None and HEX40.fullmatch(revision) is None:
             parser.error("expected commit must be a 40-character lowercase hex SHA")
     try:
         ids = PAIRS[args.pair]
         if args.fetch_public_metadata:
-            base_meta, mod_meta = public_api_metadata(ids[0]), public_api_metadata(ids[1])
+            base_meta = public_api_metadata(ids[0], args.base_sha)
+            mod_meta = public_api_metadata(ids[1], args.modified_sha)
         else:
             base_meta = read_offline_metadata(args.base_json)
             mod_meta = read_offline_metadata(args.modified_json)
