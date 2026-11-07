@@ -21,6 +21,7 @@ PAIRS = {
 }
 HEX40 = re.compile(r"^[a-f0-9]{40}$")
 MAX_METADATA_BYTES = 4 * 1024 * 1024
+MAX_TEMPLATE_BYTES = 256 * 1024
 
 def sha256(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -55,6 +56,37 @@ def read_offline_metadata(path: Path) -> dict:
         return read_metadata_json(handle.read(MAX_METADATA_BYTES + 1))
 
 
+def read_template_bytes(data: bytes) -> str:
+    if len(data) > MAX_TEMPLATE_BYTES:
+        raise ValueError("chat template exceeds bound")
+    template = data.decode("utf-8")
+    if not template or not template.strip():
+        raise ValueError("empty chat template")
+    return template
+
+
+def metadata_files(meta: dict) -> list[str]:
+    siblings = meta.get("siblings") or []
+    if not isinstance(siblings, list):
+        return []
+    return [file["rfilename"] for file in siblings
+            if isinstance(file, dict) and isinstance(file.get("rfilename"), str)]
+
+
+def public_chat_template(model_id: str, revision: str) -> str:
+    if not HEX40.fullmatch(revision):
+        raise ValueError("unpinned template revision")
+    if model_id not in {name for pair in PAIRS.values() for name in pair[:2]}:
+        raise ValueError("unknown model id")
+    url = "https://huggingface.co/" + model_id + "/resolve/" + revision + "/chat_template.jinja"
+    req = urllib.request.Request(url, headers={"User-Agent": "model-spelunker-source-preflight/1"})
+    with urllib.request.urlopen(req, timeout=12) as response:
+        if response.url != url:
+            raise ValueError("chat template redirect denied")
+        data = response.read(MAX_TEMPLATE_BYTES + 1)
+    return read_template_bytes(data)
+
+
 def public_api_metadata(model_id: str) -> dict:
     # model_id only comes from the local, constant PAIRS table.
     url = "https://huggingface.co/api/models/" + model_id
@@ -71,7 +103,8 @@ def license_name(meta: dict) -> str:
         return "unknown"
     return str(card.get("license_name") or card.get("license") or "unknown").lower()
 
-def assess_one(meta: dict, expected_id: str, license_required: str, expected_sha: str | None) -> dict:
+def assess_one(meta: dict, expected_id: str, license_required: str,
+               expected_sha: str | None, template_file: str | None = None) -> dict:
     holds = []
     if meta.get("id") != expected_id:
         holds.append("MODEL_ID_MISMATCH")
@@ -96,11 +129,18 @@ def assess_one(meta: dict, expected_id: str, license_required: str, expected_sha
     tokenizer_cfg = config.get("tokenizer_config") or {}
     if not isinstance(tokenizer_cfg, dict):
         tokenizer_cfg = {}
-    template = tokenizer_cfg.get("chat_template") or config.get("chat_template_jinja")
+    names = metadata_files(meta)
+    has_standalone_template = "chat_template.jinja" in names
+    if has_standalone_template:
+        template = template_file
+        if template is None:
+            holds.append("PINNED_TEMPLATE_FILE_NOT_VERIFIED")
+    else:
+        template = tokenizer_cfg.get("chat_template") or config.get("chat_template_jinja")
+        if template_file is not None:
+            holds.append("UNEXPECTED_TEMPLATE_FILE")
     if not isinstance(template, str) or not template:
         holds.append("CHAT_TEMPLATE_UNVERIFIED")
-    siblings = meta.get("siblings") or []
-    names = [f.get("rfilename") for f in siblings if isinstance(f, dict)] if isinstance(siblings, list) else []
     if not any(isinstance(n, str) and n.endswith(".safetensors") for n in names):
         holds.append("SAFETENSORS_WEIGHTS_MISSING")
     if "config.json" not in names or "tokenizer_config.json" not in names:
@@ -115,13 +155,16 @@ def assess_one(meta: dict, expected_id: str, license_required: str, expected_sha
         "safetensors_file_count": sum(isinstance(n, str) and n.endswith(".safetensors") for n in names),
         "metadata_digest": canonical_hash(meta),
         "chat_template_digest": sha256(template) if isinstance(template, str) else None,
+        "chat_template_source": "pinned_file" if has_standalone_template and isinstance(template, str) else (
+            "embedded_metadata" if not has_standalone_template and isinstance(template, str) else None),
         "holds": sorted(set(holds)),
     }
 
-def pair_report(pair: str, base_meta: dict, mod_meta: dict, base_sha: str | None, mod_sha: str | None) -> dict:
+def pair_report(pair: str, base_meta: dict, mod_meta: dict, base_sha: str | None, mod_sha: str | None,
+                base_template: str | None = None, modified_template: str | None = None) -> dict:
     base_id, mod_id, required_license = PAIRS[pair]
-    base = assess_one(base_meta, base_id, required_license, base_sha)
-    modified = assess_one(mod_meta, mod_id, required_license, mod_sha)
+    base = assess_one(base_meta, base_id, required_license, base_sha, base_template)
+    modified = assess_one(mod_meta, mod_id, required_license, mod_sha, modified_template)
     holds = []
     if base["model_type"] != modified["model_type"]:
         holds.append("MODEL_ARCHITECTURE_NOT_MATCHED")
@@ -150,6 +193,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pair", required=True, choices=sorted(PAIRS))
     parser.add_argument("--base-json", type=Path, help="Offline public HF metadata")
     parser.add_argument("--modified-json", type=Path, help="Offline public HF metadata")
+    parser.add_argument("--base-template-file", type=Path, help="Offline pinned chat_template.jinja")
+    parser.add_argument("--modified-template-file", type=Path, help="Offline pinned chat_template.jinja")
     parser.add_argument("--base-sha", help="Expected exact upstream commit")
     parser.add_argument("--modified-sha", help="Expected exact Heretic commit")
     parser.add_argument("--fetch-public-metadata", action="store_true", help="Read-only public API, no model downloads")
@@ -159,6 +204,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("select --fetch-public-metadata or BOTH --base-json and --modified-json")
     if not args.fetch_public_metadata and not (args.base_json and args.modified_json):
         parser.error("offline mode requires both JSON files")
+    if args.fetch_public_metadata and (args.base_template_file or args.modified_template_file):
+        parser.error("public API mode fetches pinned templates; local template paths are offline-only")
     for revision in [args.base_sha, args.modified_sha]:
         if revision is not None and HEX40.fullmatch(revision) is None:
             parser.error("expected commit must be a 40-character lowercase hex SHA")
@@ -171,7 +218,21 @@ def main(argv: list[str] | None = None) -> int:
             mod_meta = read_offline_metadata(args.modified_json)
         if not isinstance(base_meta, dict) or not isinstance(mod_meta, dict):
             raise ValueError("metadata snapshots must be objects")
-        result = pair_report(args.pair, base_meta, mod_meta, args.base_sha, args.modified_sha)
+        templates = []
+        for model_id, meta, locked_sha, offline_file in zip(
+                ids[:2], (base_meta, mod_meta), (args.base_sha, args.modified_sha),
+                (args.base_template_file, args.modified_template_file)):
+            if "chat_template.jinja" not in metadata_files(meta):
+                templates.append(None)
+            elif args.fetch_public_metadata and meta.get("sha") == locked_sha and locked_sha:
+                templates.append(public_chat_template(model_id, locked_sha))
+            elif not args.fetch_public_metadata and offline_file is not None:
+                with offline_file.open("rb") as stream:
+                    templates.append(read_template_bytes(stream.read(MAX_TEMPLATE_BYTES + 1)))
+            else:
+                templates.append(None)
+        result = pair_report(args.pair, base_meta, mod_meta, args.base_sha, args.modified_sha,
+                             base_template=templates[0], modified_template=templates[1])
     except (ValueError, OSError, urllib.error.URLError) as exc:
         print(json.dumps({"source_gate": "HOLD", "failure": type(exc).__name__, "actor_qualification": "UNKNOWN_NOT_EXECUTED"}))
         return 2
