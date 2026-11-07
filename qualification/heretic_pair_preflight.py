@@ -12,6 +12,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from pathlib import Path
 
 PAIRS = {
@@ -73,6 +74,39 @@ def metadata_files(meta: dict) -> list[str]:
             if isinstance(file, dict) and isinstance(file.get("rfilename"), str)]
 
 
+ALLOWED_HF_ARTIFACT_HOSTS = frozenset({
+    "cdn-lfs.huggingface.co", "cas-bridge.xethub.hf.co", "cas-server.xethub.hf.co",
+    "cdn-lfs-us-1.hf.co", "cdn-lfs-eu-1.hf.co", "transfer.xethub.hf.co",
+})
+
+
+def approved_template_redirect(original_url: str, destination: str) -> bool:
+    requested, resolved = urlsplit(original_url), urlsplit(destination)
+    if (requested.scheme != "https" or requested.hostname != "huggingface.co"
+            or resolved.scheme != "https" or resolved.username or resolved.password
+            or resolved.fragment):
+        return False
+    if destination == original_url:
+        return True
+    if resolved.hostname == "huggingface.co" and not resolved.port:
+        # The Hub often resolves tiny template files through its pinned cache path.
+        parts = requested.path.split("/")
+        if len(parts) != 6 or parts[3] != "resolve" or parts[5] != "chat_template.jinja":
+            return False
+        repo_id = parts[1] + "/" + parts[2]
+        revision = parts[4]
+        expected_cache = "/api/resolve-cache/models/" + repo_id + "/" + revision + "/chat_template.jinja"
+        return resolved.path in {requested.path, expected_cache}
+    return resolved.hostname in ALLOWED_HF_ARTIFACT_HOSTS and resolved.port is None
+
+
+class PinnedHFRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not approved_template_redirect(req.full_url, newurl):
+            raise ValueError("chat template redirect denied")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def public_chat_template(model_id: str, revision: str) -> str:
     if not HEX40.fullmatch(revision):
         raise ValueError("unpinned template revision")
@@ -80,8 +114,9 @@ def public_chat_template(model_id: str, revision: str) -> str:
         raise ValueError("unknown model id")
     url = "https://huggingface.co/" + model_id + "/resolve/" + revision + "/chat_template.jinja"
     req = urllib.request.Request(url, headers={"User-Agent": "model-spelunker-source-preflight/1"})
-    with urllib.request.urlopen(req, timeout=12) as response:
-        if response.url != url:
+    opener = urllib.request.build_opener(PinnedHFRedirectHandler())
+    with opener.open(req, timeout=12) as response:
+        if not approved_template_redirect(url, response.url):
             raise ValueError("chat template redirect denied")
         data = response.read(MAX_TEMPLATE_BYTES + 1)
     return read_template_bytes(data)
