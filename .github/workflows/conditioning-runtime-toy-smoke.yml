@@ -32,7 +32,9 @@ jobs:
             local ref="$1"
             docker buildx imagetools inspect "$ref" | awk '/^Digest:/ {print $2; exit}'
           }
-          py='python:3.12-slim-bookworm'
+          # Docker Hub manifest negotiation returned exit 255 on hosted runner;
+          # use a public GHCR Python+uv base with exact digest resolution.
+          py='ghcr.io/astral-sh/uv:python3.12-bookworm-slim'
           oras='ghcr.io/oras-project/oras:v1.3.6'
           echo "Resolving public Python base image digest"
           pd="$(resolve "$py")"
