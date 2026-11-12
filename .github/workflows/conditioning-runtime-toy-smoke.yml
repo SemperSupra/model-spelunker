@@ -1,0 +1,76 @@
+name: Conditioning Runtime CPU Toy Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/conditioning/runtime/**'
+      - '.github/workflows/conditioning-runtime-toy-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conditioning-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpu-comfy-toy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout immutable run source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve exact public upstream CPU OCI digest (no floating runtime)
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          src='ghcr.io/romkey/comfyui-docker:0.38.0-cpu'
+          docker buildx imagetools inspect "$src" > "$RUNNER_TEMP/upstream-manifest.txt"
+          digest="$(awk '/^Digest:/ {print $2; exit}' "$RUNNER_TEMP/upstream-manifest.txt")"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo 'Missing immutable base image digest'; exit 2; }
+          echo "base=${src}@${digest}" >> "$GITHUB_OUTPUT"
+          echo "UPSTREAM_OCI_DIGEST=$digest"
+      - name: Build minimal immutable-source ComfyUI toy overlay (public CPU only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --pull --progress=plain \
+            --build-arg 'BASE_IMAGE=${{ steps.upstream.outputs.base }}' \
+            --tag local/comfy-conditioning-toy:pr \
+            qualification/conditioning/runtime
+          docker image inspect local/comfy-conditioning-toy:pr \
+            --format 'BUILT_IMAGE_ID={{.Id}}'
+      - name: Launch disposable no-host-GPU, loopback-only worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name conditioning-toy-ci \
+            --user 1000:1000 --cap-drop ALL --security-opt no-new-privileges \
+            --memory 6g --cpus 3 \
+            --tmpfs '/data:rw,noexec,nosuid,nodev,uid=1000,gid=1000,size=1024m' \
+            --tmpfs '/tmp:rw,nosuid,nodev,uid=1000,gid=1000,size=512m' \
+            --publish '127.0.0.1:8188:8188' \
+            local/comfy-conditioning-toy:pr
+      - name: Native Python model-graph and queue integration proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/conditioning/runtime/smoke.py --deadline 160 \
+            | tee "$RUNNER_TEMP/toy-runtime-receipt.json"
+          python3 - "$RUNNER_TEMP/toy-runtime-receipt.json" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x['status']=='CPU_TOY_GRAPH_AND_QUEUE_PASS'
+          assert len(x['output_images'])==2
+          assert not x['real_generator_attested']
+          assert not x['gpu_inference_attested']
+          PY
+      - name: Postflight and dispose ephemeral worker
+        if: always()
+        shell: bash
+        run: |
+          docker logs conditioning-toy-ci --tail 120 2>&1 | tail -120 || true
+          docker rm --force conditioning-toy-ci || true
+          docker image rm local/comfy-conditioning-toy:pr || true
