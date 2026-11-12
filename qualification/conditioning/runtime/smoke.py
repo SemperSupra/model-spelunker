@@ -47,7 +47,7 @@ def run(base: str, deadline_seconds: int=100) -> dict:
             classes=json_request(base, "/object_info/TinyTorchConditionerFixture")
             if "TinyTorchConditionerFixture" in classes:
                 break
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        except (OSError, TimeoutError, json.JSONDecodeError):
             pass
         if time.monotonic() > deadline:
             raise SmokeError("COMFYUI_NODE_BOOT_TIMEOUT")
@@ -104,7 +104,7 @@ def main():
     opts=p.parse_args()
     try:
         result=run(opts.base,opts.deadline)
-    except (SmokeError, urllib.error.URLError, KeyError, TypeError, ValueError) as exc:
+    except (SmokeError, OSError, KeyError, TypeError, ValueError) as exc:
         reason=str(exc) if isinstance(exc,SmokeError) else "NATIVE_RUNTIME_UNEXPECTED_ERROR"
         print(json.dumps({"status":"HOLD","reason":reason,"real_generator_attested":False}))
         raise SystemExit(2)
