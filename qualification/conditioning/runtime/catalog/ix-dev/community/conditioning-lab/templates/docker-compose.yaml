@@ -89,6 +89,24 @@
   {% endif %}
 {% endif %}
 
+{# iX lib 2.3.18 injects global NVIDIA_VISIBLE_DEVICES into even the
+   non-GPU controller and permission helper when GPU selection is enabled.
+   remove_devices() clears reservations but not its generated environment.
+   Fail closed if the exact pinned library cannot remove these variables.
+   This internal container lookup is a VERSION-PINNED RDTE workaround pending
+   an official Foundry/upstream isolation adapter; not a promotion exemption. #}
+{% if values.worker.mode == "cuda" %}
+  {% for service_name in [values.consts.controller_name, values.consts.hydrate_name, "conditioning-permissions"] %}
+    {% if service_name in tpl.container_names() %}
+      {% set non_gpu = tpl._containers[service_name] %}
+      {% do non_gpu.remove_devices() %}
+      {% do non_gpu.environment.remove_auto_env("NVIDIA_VISIBLE_DEVICES") %}
+      {% do non_gpu.environment.remove_auto_env("NVIDIA_DRIVER_CAPABILITIES") %}
+      {% do non_gpu.environment.add_env("NVIDIA_VISIBLE_DEVICES", "void") %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
 {% do tpl.portals.add(values.network.web_port) %}
 {% do tpl.notes.set_body("Source-only Foundry catalog candidate. Install is BLOCKED until all OCI image digests are published and verified; approved CUDA target/hardware and model digests must be separately admitted.") %}
 {{ tpl.render() | tojson }}
