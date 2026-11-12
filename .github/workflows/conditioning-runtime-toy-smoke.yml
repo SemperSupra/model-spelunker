@@ -170,6 +170,21 @@ jobs:
           assert not x['real_generator_attested']
           assert not x['gpu_inference_attested']
           PY
+      - name: Verify real two-Torch-model conditioning tensor ABI through ComfyUI queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/conditioning/runtime/conditioned_smoke.py \
+            | tee "$RUNNER_TEMP/two-module-conditioning-receipt.json"
+          python3 - "$RUNNER_TEMP/two-module-conditioning-receipt.json" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x['status']=='NATIVE_TORCH_EMBEDDING_TO_IMAGE_MODULE_PASS'
+          assert len(x['paired_outputs'])==2
+          assert x['paired_outputs'][0]['sha256']!=x['paired_outputs'][1]['sha256']
+          assert not x['real_llm'] and not x['diffusion_generator']
+          assert not x['gpu_inference'] and not x['actual_heretic_or_flux']
+          PY
       - name: Build real stateless Go controller for integrated native test
         shell: bash
         run: |
