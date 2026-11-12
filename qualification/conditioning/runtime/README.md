@@ -21,9 +21,9 @@ State is *deliberately* durable: stateless/disposable **containers** do not mean
 
 ## Three audiences
 
-- **Human UI/UX/a11y:** semantic HTML on `GET /`; labeled seed, fieldset/radio selection, keyboard-native submit and status links; Basic authentication plus independent Origin/CSRF checks. This is a **functional accessibility baseline**, **not yet WCAG 2.2 AA qualified**. Screen-reader/keyboard journey, focus management, contrast, large text, error announcements and alternative-language review are future acceptance tests before production.
+- **Human UI/UX/a11y:** semantic HTML on `GET /`; labeled workflow selector, preset prompt selector, seed, fieldset/radio treatment selection, keyboard-native submit and status links; Basic authentication plus independent Origin/CSRF checks. This is a **functional accessibility baseline**, **not yet WCAG 2.2 AA qualified**. Screen-reader/keyboard journey, focus management, contrast, large text, error announcements and alternative-language review are future acceptance tests before production.
 - **Automation API/DX:** `Authorization: Bearer <token>`; `GET /api/v1/capabilities`, `POST /api/v1/batches`, `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/image`, `POST /api/v1/jobs/{id}/cancel`. `/healthz` confirms controller liveness only, **not GPU/worker readiness**. Job IDs are opaque. No raw graph ingestion allowed.
-- **Agents:** `/api/v1/capabilities` returns allowlisted workflow and bounds; job receipts include state/digests, not model self-scores. Agent cannot elevate model admission or invoke arbitrary tools by constructing JSON.
+- **Agents:** `/api/v1/capabilities` and `/api/v1/openapi.json` return two allowlisted toy workflows (`toy-cnn-v1`, `toy-conditioned-v1`), exact preset prompts (`red-square`, `blue-circle`), and bounds; job receipts include state/digests, not model self-scores. Agent cannot elevate model admission or invoke arbitrary tools by constructing JSON.
 
 For a bounded synthetic pair, an **authorized** client may submit (the token is provisioned via protected local file, never checked into Git):
 
@@ -34,6 +34,8 @@ curl --fail-with-body --silent --show-error \
   -d '{"request_id":"example-paired-0001","jobs":[{"workflow":"toy-cnn-v1","seed":31,"variant":"base","size":64},{"workflow":"toy-cnn-v1","seed":31,"variant":"modified","size":64}]}' \
   https://conditioning.example.invalid/api/v1/batches
 ```
+
+For the second **two-module synthetic conditioning** workflow, use the same API with `"workflow":"toy-conditioned-v1","prompt":"red-square","seed":71,"size":64` and paired `"variant":"base"` / `"variant":"modified"`. Only `red-square` and `blue-circle` are admitted. The baseline `toy-cnn-v1` must omit `prompt`. Both are deterministic, artificial fixtures, not arbitrary model/workflow execution.
 
 On restart after uncertain native queue acknowledgment, `UNKNOWN_NEEDS_RECONCILIATION` requires human/authorized agent observation; no blind rerun. Running-job cancellation is a request, not guaranteed termination of an already submitted image.
 
@@ -72,5 +74,5 @@ The official iX lib 2.3.18 creates `NVIDIA_VISIBLE_DEVICES=<selected UUID>` on *
 3. Model Artifact Foundry **approval of actual generator, original/Heretic text encoder and VAE** with rights, source revisions, real downloaded-byte SHA, role-specific Comfy model-path projection and no unapproved code execution.
 4. Explicit reviewed production role/workflow allowlists, per-user authorization, bounded retention/quota, independent human keyboard/screen-reader and WCAG audits, and model-quality evaluation. The current API accepts only synthetic toy jobs, and the original-versus-Heretic real generator campaign remains UNKNOWN_NOT_EXECUTED.
 
-**Current truth:** public CPU single-module and two-module synthetic execution PASS; actual Go controller-to-ComfyUI batches PASS; approved Tiny Foundry acquisition and four-file byte verification PASS; scratch controller and no-GPU CUDA wheel-image builds PASS; official TrueNAS baseline/MAF one-shot/CUDA policy **SOURCE RENDER PASS**; model-specific inference, actual GPU and native TrueNAS lifecycle **NOT EXECUTED**, product images **NOT PUBLISHED**.
+**Current truth:** public CPU single-module and two-module synthetic execution PASS; actual Go controller-to-ComfyUI CNN batches PASS; Go-to-two-module toy workflow contract/integration is subject to final native CI; approved Tiny Foundry acquisition and four-file byte verification PASS; scratch controller and no-GPU CUDA wheel-image builds PASS; official TrueNAS baseline/MAF one-shot/CUDA policy **SOURCE RENDER PASS**; model-specific inference, actual GPU and native TrueNAS lifecycle **NOT EXECUTED**, product images **NOT PUBLISHED**.
 
