@@ -3,6 +3,9 @@ ARG PYTHON_BASE_IMAGE
 ARG ORAS_IMAGE
 FROM ${ORAS_IMAGE} AS oras
 FROM ${PYTHON_BASE_IMAGE}
+ARG SOURCE_SHA=unqualified
+LABEL org.opencontainers.image.source="https://github.com/SemperSupra/model-spelunker" \
+      org.opencontainers.image.revision="${SOURCE_SHA}"
 ARG MAF_COMMIT=6bc5750dcd947cbbf8b3a11e80afbabd81c19ed6
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
