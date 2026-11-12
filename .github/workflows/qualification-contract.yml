@@ -185,6 +185,7 @@ jobs:
               "Tongyi-MAI/Z-Image-Turbo",
               "black-forest-labs/FLUX.2-klein-4B",
               "Comfy-Org/Flux-2-Klein-4B",
+              "Comfy-Org/Z-Image-Turbo",
           ]
           def get(url):
               req=urllib.request.Request(url,headers={"Accept":"application/json","User-Agent":"ModelSpelunker-SourceCensus/1.0"})
