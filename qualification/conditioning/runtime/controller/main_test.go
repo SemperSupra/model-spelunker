@@ -71,7 +71,7 @@ func TestAuthenticationAndAPIBounds(t *testing.T){
  req=httptest.NewRequest("GET","/api/v1/capabilities",nil)
  req.Header.Set("Authorization",bearer)
  w=httptest.NewRecorder();s.ServeHTTP(w,req)
- if w.Code!=200||!strings.Contains(w.Body.String(),"production_generator_admitted":false"){t.Fatalf("capabilities %d %s",w.Code,w.Body.String())}
+ if w.Code!=200||!strings.Contains(w.Body.String(),`production_generator_admitted":false`){t.Fatalf("capabilities %d %s",w.Code,w.Body.String())}
 }
 func TestPersistentCrashAmbiguityAndSingleLease(t *testing.T){
  dir:=t.TempDir()
