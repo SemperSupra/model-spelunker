@@ -169,6 +169,9 @@ jobs:
       - name: Self-test explicit local OpenAI model route
         run: python -m unittest discover -s qualification/tests -p 'test_local_openai_route.py' -v
 
+      - name: Self-test cross-model conditioning DOE contract
+        run: python -m unittest discover -s qualification/conditioning -p 'test_paired_protocol.py' -v
+
       - name: Self-test free OpenRouter coding model cohort
         run: PYTHONPATH=. python qualification/test_openrouter_free_model_cohort.py
 
