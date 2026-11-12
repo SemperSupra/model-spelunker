@@ -38,6 +38,7 @@ var slug=reMust("^[a-f0-9]{32}$")
 func reMust(s string)*regexp.Regexp{return regexp.MustCompile(s)}
 type JobInput struct{
  Workflow string `json:"workflow"`
+ Prompt string `json:"prompt,omitempty"`
  Seed int64 `json:"seed"`
  Variant string `json:"variant"`
  Size int `json:"size"`
@@ -123,8 +124,13 @@ func(s *Server)save()error {
  return d.Sync()
 }
 func valid(j JobInput)bool{
- return j.Workflow=="toy-cnn-v1"&&j.Seed>=0&&j.Seed<=2147483647&&
-  (j.Variant=="base"||j.Variant=="modified")&&j.Size>=32&&j.Size<=128&&j.Size%16==0
+ if j.Seed<0||j.Seed>2147483647||j.Size<32||j.Size>128||j.Size%16!=0||
+   (j.Variant!="base"&&j.Variant!="modified"){return false}
+ switch j.Workflow{
+ case "toy-cnn-v1":return j.Prompt==""
+ case "toy-conditioned-v1":return j.Prompt=="red-square"||j.Prompt=="blue-circle"
+ default:return false
+ }
 }
 func(s *Server)submit(batch BatchRequest)([]string,bool,error){
  if !requestID.MatchString(batch.RequestID)||len(batch.Jobs)<1||len(batch.Jobs)>16{return nil,false,errors.New("INVALID_BOUNDED_BATCH")}
@@ -202,8 +208,12 @@ func(s *Server)ServeHTTP(w http.ResponseWriter,r *http.Request){
   seed,err:=strconv.ParseInt(r.PostFormValue("seed"),10,64)
   if err!=nil {fail(w,400,"INVALID_SEED");return}
   key,err:=freshID();if err!=nil{fail(w,503,"RANDOMNESS_UNAVAILABLE");return}
+  workflow:=r.PostFormValue("workflow")
+  if workflow==""{workflow="toy-cnn-v1"}
+  prompt:=r.PostFormValue("prompt")
+  if workflow=="toy-cnn-v1"{prompt=""}
   ids,_,err:=s.submit(BatchRequest{RequestID:key,Jobs:[]JobInput{{
-   Workflow:"toy-cnn-v1",Seed:seed,Variant:r.PostFormValue("variant"),Size:64,
+   Workflow:workflow,Prompt:prompt,Seed:seed,Variant:r.PostFormValue("variant"),Size:64,
   }}})
   if err!=nil{fail(w,400,"INVALID_BOUNDED_JOB");return}
   http.Redirect(w,r,"/api/v1/jobs/"+ids[0],http.StatusSeeOther)
@@ -212,10 +222,10 @@ func(s *Server)ServeHTTP(w http.ResponseWriter,r *http.Request){
   _,_=w.Write(embeddedOpenAPI)
  case r.URL.Path=="/api/v1/capabilities"&&r.Method=="GET":
   jsonOut(w,200,map[string]any{"schema":"conditioning-capabilities/v1",
-   "allowed_workflows":[]string{"toy-cnn-v1"},"max_batch":16,
+   "allowed_workflows":[]string{"toy-cnn-v1","toy-conditioned-v1"},"max_batch":16,
    "production_generator_admitted":false,"model_acquisition":"MODEL_ARTIFACT_FOUNDRY_APPROVED_DIGEST_ONLY",
    "methods":[]string{"POST /api/v1/batches","GET /api/v1/jobs","GET /api/v1/jobs/{id}","GET /api/v1/jobs/{id}/image","POST /api/v1/jobs/{id}/cancel"},
-   "workflow_schema":map[string]any{"workflow":"toy-cnn-v1","seed":"integer 0..2147483647","variant":[]string{"base","modified"},"size":"multiple of 16, 32..128"}})
+   "workflow_schema":map[string]any{"workflow":[]string{"toy-cnn-v1","toy-conditioned-v1"},"seed":"integer 0..2147483647","variant":[]string{"base","modified"},"prompt":[]string{"red-square","blue-circle"},"size":"multiple of 16, 32..128"}})
  case r.URL.Path=="/api/v1/batches"&&r.Method=="POST":
   r.Body=http.MaxBytesReader(w,r.Body,maxBody)
   var b BatchRequest
@@ -286,6 +296,13 @@ var home=template.Must(template.New("home").Parse(`<!doctype html>
 <p>This is a synthetic model qualification queue. Production image-generation models are not admitted.</p>
 <h2>Submit a toy-model job</h2><form method="post" action="/ui/submit">
 <input type="hidden" name="csrf" value="{{.Token}}">
+<p><label for="workflow">Allowed toy workflow</label>
+<select id="workflow" name="workflow">
+<option value="toy-cnn-v1">Single small CNN</option>
+<option value="toy-conditioned-v1">Tiny embedding conditions separate image model</option>
+</select></p>
+<p><label for="prompt">Preset synthetic text prompt (for conditioned workflow)</label>
+<select id="prompt" name="prompt"><option value="red-square">red-square</option><option value="blue-circle">blue-circle</option></select></p>
 <p><label for="seed">Random seed</label> <input id="seed" name="seed" type="number" value="31" min="0" max="2147483647" required></p>
 <fieldset><legend>Model treatment</legend>
 <label><input type="radio" name="variant" value="base" checked> Original toy model</label>
@@ -372,10 +389,22 @@ func(s *Server)saveImage(id string,buf []byte)(string,error){
  sum:=sha256.Sum256(buf);return hex.EncodeToString(sum[:]),nil
 }
 func(s *Server)execute(job JobInput)([]byte,string,error){
+ if !valid(job){return nil,"",errors.New("WORKFLOW_NOT_ALLOWLISTED")}
  graph:=map[string]any{
   "1":map[string]any{"class_type":"TinyTorchConditionerFixture","inputs":map[string]any{
    "seed":job.Seed,"variant":job.Variant,"size":job.Size}},
   "2":map[string]any{"class_type":"SaveImage","inputs":map[string]any{"images":[]any{"1",0},"filename_prefix":"controller-toy"}},
+ }
+ outputID:="2"
+ if job.Workflow=="toy-conditioned-v1"{
+  graph=map[string]any{
+   "1":map[string]any{"class_type":"TinyTextEncoderFixture","inputs":map[string]any{
+    "prompt":job.Prompt,"variant":job.Variant}},
+   "2":map[string]any{"class_type":"TinyConditionedImageFixture","inputs":map[string]any{
+    "embedding":[]any{"1",0},"seed":job.Seed,"size":job.Size}},
+   "3":map[string]any{"class_type":"SaveImage","inputs":map[string]any{"images":[]any{"2",0},"filename_prefix":"controller-toy-conditioned"}},
+  }
+  outputID="3"
  }
  payload,_:=json.Marshal(map[string]any{"prompt":graph,"client_id":"conditioning-controller"})
  req,_:=http.NewRequest("POST",s.comfy+"/prompt",bytes.NewReader(payload));req.Header.Set("Content-Type","application/json")
@@ -404,7 +433,7 @@ func(s *Server)execute(job JobInput)([]byte,string,error){
   record,ok:=parsed[pid];if !ok{continue}
   if record.Status.StatusStr=="error"{return nil,pid,errors.New("NATIVE_WORKFLOW_ERROR")}
   if record.Status.StatusStr!="success"{continue}
-  images:=record.Outputs["2"].Images
+  images:=record.Outputs[outputID].Images
   if len(images)!=1{return nil,pid,errors.New("OUTPUT_IMAGE_CARDINALITY")}
   f:=images[0]
   if f.Filename==""||len(f.Filename)>128||f.Subfolder!=""||
