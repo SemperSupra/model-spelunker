@@ -75,30 +75,19 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Independent sidecar approval and no-download controls
         run: python3 -m unittest discover -s qualification/conditioning/runtime/sidecar -p 'test_gate.py' -v
-      - name: Resolve MAF hydration sidecar base and ORAS OCI digests
+      - name: Bind exact public Python and ORAS OCI image digests
         id: base
         shell: bash
         run: |
           set -euo pipefail
-          resolve() {
-            local ref="$1"
-            docker buildx imagetools inspect "$ref" | awk '/^Digest:/ {print $2; exit}'
-          }
-          # Docker Hub manifest negotiation returned exit 255 on hosted runner;
-          # use a public GHCR Python+uv base with exact digest resolution.
-          py='ghcr.io/astral-sh/uv:python3.12-bookworm-slim'
-          oras='ghcr.io/oras-project/oras:v1.3.6'
-          echo "Resolving public Python base image digest"
-          pd="$(resolve "$py")"
-          echo "Resolved Python: $pd"
-          echo "Resolving public ORAS versioned CLI image digest"
-          od="$(resolve "$oras")"
-          echo "Resolved ORAS: $od"
-          [[ "$pd" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
-          [[ "$od" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
-          echo "python=$py@$pd" >> "$GITHUB_OUTPUT"
-          echo "oras=$oras@$od" >> "$GITHUB_OUTPUT"
-          echo "MAF_SIDECAR_PYTHON_DIGEST=$pd ORAS_DIGEST=$od"
+          # Python digest independently observed from GHCR native 43198185925.
+          # ORAS v1.3.6 registry index digest published by oras-project GHCR.
+          # Docker build still pulls and verifies exact registry content.
+          python='ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58'
+          oras='ghcr.io/oras-project/oras:v1.3.6@sha256:9cfb578be975b762fd898b9d004243d8003aeb807a3e15b2ed212cdd1326c9eb'
+          echo "python=$python" >> "$GITHUB_OUTPUT"
+          echo "oras=$oras" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "PYTHON_PINNED=$python" "ORAS_PINNED=$oras"
       - name: Build and inspect disposable approved-digest hydration image
         shell: bash
         run: |
