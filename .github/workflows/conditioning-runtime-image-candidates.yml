@@ -1,0 +1,131 @@
+name: Conditioning Runtime OCI Candidate Builds (No Publish)
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/conditioning/runtime/**'
+      - '.github/workflows/conditioning-runtime-image-candidates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controller-oci:
+    name: Build and boot stateless scratch Go controller OCI
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve Go builder to immutable source digest and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='golang:1.26.10-bookworm'
+          manifest="$(docker buildx imagetools inspect "$base")"
+          digest="$(printf '%s\n' "$manifest" | awk '/^Digest:/ {print $2; exit}')"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
+          echo "GO_BUILDER_SOURCE=$base@$digest"
+          docker build --pull --progress=plain \
+            --build-arg "GO_BASE_IMAGE=$base@$digest" \
+            --build-arg "SOURCE_SHA=$(git rev-parse HEAD)" \
+            --tag local/conditioning-controller:candidate \
+            qualification/conditioning/runtime/controller
+          docker image inspect local/conditioning-controller:candidate \
+            --format 'LOCAL_CONTROLLER_IMAGE_ID={{.Id}} USER={{.Config.User}} LABEL_SHA={{index .Config.Labels "org.opencontainers.image.revision"}}'
+      - name: Boot actual scratch OCI on private loopback, verify bounded API
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 24)"
+          umask 077
+          printf '%s' "$token" > "$RUNNER_TEMP/controller.token"
+          sudo chown 10001:10001 "$RUNNER_TEMP/controller.token"
+          docker run --detach --name conditioning-controller-oci-ci \
+            --read-only --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges \
+            --network bridge --publish 127.0.0.1:8090:8090 \
+            --tmpfs '/state:rw,nosuid,nodev,uid=10001,gid=10001,size=32m' \
+            --mount "type=bind,src=$RUNNER_TEMP/controller.token,dst=/run/secrets/controller.token,readonly" \
+            --env CONTROLLER_TOKEN_FILE=/run/secrets/controller.token \
+            --env CONTROLLER_STATE_DIR=/state \
+            --env CONTROLLER_UI_ORIGIN=http://127.0.0.1:8090 \
+            --env CONTROLLER_COMFY_URL=http://127.0.0.1:8188 \
+            --env CONTROLLER_BIND=0.0.0.0:8090 \
+            local/conditioning-controller:candidate
+          for i in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:8090/healthz > "$RUNNER_TEMP/health.json"; then break; fi
+            sleep 1
+          done
+          python3 - "$RUNNER_TEMP/health.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert d['status']=='controller-alive-not-worker-admission'
+          PY
+          curl --silent --fail --show-error \
+            -H "Authorization: Bearer $token" \
+            http://127.0.0.1:8090/api/v1/capabilities > "$RUNNER_TEMP/capabilities.json"
+          python3 - "$RUNNER_TEMP/capabilities.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert d['production_generator_admitted'] is False
+          assert d['allowed_workflows']==['toy-cnn-v1']
+          print('SCRATCH_CONTROLLER_ACTUAL_OCI_BOOT_PASS')
+          PY
+      - name: Dispose isolated candidate
+        if: always()
+        run: |
+          docker logs conditioning-controller-oci-ci --tail 35 2>&1 || true
+          docker rm -f conditioning-controller-oci-ci || true
+          docker image rm local/conditioning-controller:candidate || true
+
+  cuda-source-build:
+    name: CUDA 12.8 ComfyUI candidate OCI build (no GPU inference)
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Enforce public runner disk budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          free_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+          echo "AVAILABLE_DISK_KB=$free_kb"
+          if (( free_kb < 10000000 )); then
+            echo 'CUDA_PACKAGING_HOLD_INSUFFICIENT_PUBLIC_RUNNER_DISK'
+            exit 2
+          fi
+      - name: Resolve upstream CUDA 12.8 OCI digest and build limited candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='ghcr.io/romkey/comfyui-docker:0.38.0-cu128'
+          manifest="$(docker buildx imagetools inspect "$base")"
+          digest="$(printf '%s\n' "$manifest" | awk '/^Digest:/ {print $2; exit}')"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
+          echo "CUDA_UPSTREAM_SOURCE=$base@$digest"
+          timeout 900 docker build --pull --progress=plain \
+            --build-arg "BASE_IMAGE=$base@$digest" \
+            --build-arg COMFYUI_CPU_MODE=false \
+            --build-arg "SOURCE_SHA=$(git rev-parse HEAD)" \
+            --tag local/conditioning-worker-cuda:candidate \
+            qualification/conditioning/runtime
+          docker image inspect local/conditioning-worker-cuda:candidate \
+            --format 'LOCAL_CUDA_CANDIDATE_IMAGE_ID={{.Id}} LABEL_SHA={{index .Config.Labels "org.opencontainers.image.revision"}}'
+      - name: CUDA wheel imports and built-in fixture only, no GPU used
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --read-only --network none --user 1000:1000 \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs '/tmp:rw,nosuid,nodev,uid=1000,gid=1000,size=64m' \
+            --env PYTHONDONTWRITEBYTECODE=1 \
+            --entrypoint /opt/venv/bin/python \
+            local/conditioning-worker-cuda:candidate \
+            -c 'import os,torch; assert torch.version.cuda is not None; assert os.environ["COMFYUI_CPU"]=="false"; print("CUDA_TORCH_WHEEL_IMPORT_SOURCE_BUILD_PASS_ONLY", torch.version.cuda)'
+          echo 'GPU_DEVICE_PRESENT=false GPU_KERNELS_EXECUTED=false GENERATOR_QUALIFIED=false'
+      - name: Dispose CUDA candidate
+        if: always()
+        run: |
+          docker image rm local/conditioning-worker-cuda:candidate || true
