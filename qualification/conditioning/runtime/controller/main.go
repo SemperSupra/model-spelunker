@@ -132,6 +132,9 @@ func(s *Server)submit(batch BatchRequest)([]string,bool,error){
   if old.Digest!=want{return nil,false,errors.New("IDEMPOTENCY_KEY_CONFLICT")}
   return append([]string(nil),old.JobIDs...),true,nil
  }
+ // Preserve in-memory authority if durable commit fails: no unlogged work may dispatch.
+ snapshot,marshalErr:=json.Marshal(s.ledger)
+ if marshalErr!=nil{return nil,false,errors.New("LEDGER_SNAPSHOT_UNAVAILABLE")}
  ids:=make([]string,0,len(batch.Jobs))
  for _,req:=range batch.Jobs{
   id,err:=freshID();if err!=nil{return nil,false,err}
@@ -140,7 +143,13 @@ func(s *Server)submit(batch BatchRequest)([]string,bool,error){
   s.ledger.Order=append(s.ledger.Order,id)
  }
  s.ledger.Batches[batch.RequestID]=Batch{Digest:want,JobIDs:ids}
- if err:=s.save();err!=nil{return nil,false,err}
+ if err:=s.save();err!=nil{
+  if rollbackErr:=json.Unmarshal(snapshot,&s.ledger);rollbackErr!=nil{
+   // Treat inability to restore authoritative ledger as a fatal condition.
+   panic("DURABLE_LEDGER_ROLLBACK_FAILED")
+  }
+  return nil,false,errors.New("LEDGER_PERSIST_FAILED")
+ }
  return ids,false,nil
 }
 func jsonOut(w http.ResponseWriter,status int,x any){
@@ -166,8 +175,10 @@ func(s *Server)ServeHTTP(w http.ResponseWriter,r *http.Request){
  case r.URL.Path=="/"&&r.Method=="GET":
   s.ui(w,r)
  case r.URL.Path=="/ui/submit"&&r.Method=="POST":
-  if !basic||!s.validCSRF(r){fail(w,403,"UI_ORIGIN_OR_CSRF_DENIED");return}
-  if err:=r.ParseForm();err!=nil{fail(w,400,"INVALID_FORM");return}
+  if !basic{fail(w,403,"UI_BASIC_AUTH_REQUIRED");return}
+  r.Body=http.MaxBytesReader(w,r.Body,maxBody)
+  if err:=r.ParseForm();err!=nil{fail(w,400,"INVALID_BOUNDED_FORM");return}
+  if !s.validCSRF(r){fail(w,403,"UI_ORIGIN_OR_CSRF_DENIED");return}
   seed,err:=strconv.ParseInt(r.PostFormValue("seed"),10,64)
   if err!=nil {fail(w,400,"INVALID_SEED");return}
   key,err:=freshID();if err!=nil{fail(w,503,"RANDOMNESS_UNAVAILABLE");return}
