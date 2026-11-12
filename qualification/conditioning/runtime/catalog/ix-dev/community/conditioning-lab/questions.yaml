@@ -150,35 +150,6 @@ questions:
                       schema:
                         type: boolean
                         default: false
-        - variable: worker_data
-          label: Disposable worker inputs/outputs
-          schema:
-            type: dict
-            attrs:
-              - variable: type
-                schema:
-                  type: string
-                  default: ix_volume
-                  required: true
-                  enum:
-                    - value: ix_volume
-                      description: TrueNAS-managed ixVolume
-              - variable: ix_volume_config
-                schema:
-                  type: dict
-                  $ref:
-                    - normalize/ix_volume
-                  attrs:
-                    - variable: dataset_name
-                      schema:
-                        type: string
-                        default: worker-data
-                        hidden: true
-                        required: true
-                    - variable: acl_enable
-                      schema:
-                        type: boolean
-                        default: false
         - variable: models
           label: Hydrated model store
           schema:
