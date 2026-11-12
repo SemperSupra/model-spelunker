@@ -133,6 +133,15 @@ func TestDurableCommitFailureNeverDispatchesOrRetainsInMemoryJob(t *testing.T){
  if err:=os.Remove(filepath.Join(dir,"ledger.json"));err!=nil{t.Fatal(err)}
  if ids,_,err:=s.submit(request);err!=nil||len(ids)!=1{t.Fatal("clean retry after valid rollback rejected",err)}
 }
+func TestAmbientBasicCredentialsCannotMutateAPI(t *testing.T){
+ s,_:=newTest(t)
+ ids,_,err:=s.submit(BatchRequest{RequestID:"csrf-api-test",Jobs:[]JobInput{fixtureJob()}})
+ if err!=nil{t.Fatal(err)}
+ basic:="Basic "+base64.StdEncoding.EncodeToString([]byte("operator:"+string(fixtureToken)))
+ code,_:=post(t,s,"/api/v1/jobs/"+ids[0]+"/cancel",basic,struct{}{})
+ if code!=403{t.Fatalf("CSRF-susceptible Basic API mutation permitted: %d",code)}
+ if s.ledger.Jobs[ids[0]].State!="QUEUED"{t.Fatal("forbidden Basic mutator changed state")}
+}
 func TestOpenAPIAndAccessibleQueueView(t *testing.T){
  s,_:=newTest(t)
  _,_,err:=s.submit(BatchRequest{RequestID:"accessible-queue-id",Jobs:[]JobInput{fixtureJob()}})
