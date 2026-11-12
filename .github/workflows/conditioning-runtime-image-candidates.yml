@@ -73,7 +73,7 @@ jobs:
           import json,sys
           d=json.load(open(sys.argv[1]))
           assert d['production_generator_admitted'] is False
-          assert d['allowed_workflows']==['toy-cnn-v1']
+          assert d['allowed_workflows']==['toy-cnn-v1','toy-conditioned-v1']
           print('SCRATCH_CONTROLLER_ACTUAL_OCI_BOOT_PASS')
           PY
       - name: Dispose isolated candidate
