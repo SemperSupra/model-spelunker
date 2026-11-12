@@ -39,12 +39,13 @@
 {% do worker.environment.add_env("COMFYUI_BUNDLED_NODES", "conditioning_toy_fixture") %}
 {% do worker.environment.add_env("COMFYUI_PRELOAD_NODES", "") %}
 {% do worker.environment.add_env("COMFYUI_INSTALL_NODE_REQUIREMENTS", "false") %}
-{% do worker.add_storage("/data", values.storage.worker_data) %}
+{# Entire ComfyUI scratch/input/output/cache is anonymous per runtime deployment,
+   not a retained model/application install or host-backed volume. #}
+{% do worker.add_storage("/data", {"type": "tmpfs",
+  "tmpfs_config": {"size": 1024, "uid": 1000, "gid": 1000}}) %}
 {% set models_ro = dict(values.storage.models, **{"read_only": true}) %}
 {% do worker.add_storage("/readonly-models", models_ro) %}
 {% do worker.healthcheck.set_test("http", {"port": values.consts.worker_port, "path": "/system_stats"}) %}
-{% do perms.add_or_skip_action("worker-data", values.storage.worker_data,
-  {"uid": 1000, "gid": 1000, "mode": "check"}) %}
 
 {# Model Foundry approved OCI bytes are hydrated by one-shot sidecar only when
    exact approved logical ID and digest are provided. Never runtime HF pulls. #}
