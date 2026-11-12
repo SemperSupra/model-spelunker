@@ -144,10 +144,12 @@ func(s *Server)submit(batch BatchRequest)([]string,bool,error){
  }
  s.ledger.Batches[batch.RequestID]=Batch{Digest:want,JobIDs:ids}
  if err:=s.save();err!=nil{
-  if rollbackErr:=json.Unmarshal(snapshot,&s.ledger);rollbackErr!=nil{
-   // Treat inability to restore authoritative ledger as a fatal condition.
+  var restored Ledger
+  if rollbackErr:=json.Unmarshal(snapshot,&restored);rollbackErr!=nil{
+   // Never continue dispatch from an uncertain in-memory ledger.
    panic("DURABLE_LEDGER_ROLLBACK_FAILED")
   }
+  s.ledger=restored
   return nil,false,errors.New("LEDGER_PERSIST_FAILED")
  }
  return ids,false,nil
