@@ -1,0 +1,82 @@
+{% set tpl = ix_lib.base.render.Render(values) %}
+{% set internal = tpl.networks.create_internal("conditioning-worker-net") %}
+{% set perms = tpl.deps.perms("conditioning-permissions") %}
+
+{# Only one authenticated controller port is published. Worker /prompt is internal. #}
+{% set ctl = tpl.add_container(values.consts.controller_name, "controller_image") %}
+{% do ctl.add_network(internal) %}
+{% do ctl.set_user(10001, 10001) %}
+{% do ctl.set_read_only(true) %}
+{% do ctl.remove_devices() %}
+{% do ctl.add_port(values.network.web_port) %}
+{% do ctl.add_storage("/state", values.storage.jobs) %}
+{% set token_mount = {"type": "host_path", "read_only": true,
+  "host_path_config": {"path": values.storage.secrets_dir, "acl_enable": false}} %}
+{% do ctl.add_storage("/run/secrets", token_mount) %}
+{% do ctl.environment.add_env("CONTROLLER_BIND", "0.0.0.0:%d"|format(values.network.web_port.port_number)) %}
+{% do ctl.environment.add_env("CONTROLLER_UI_ORIGIN", values.controller.ui_origin) %}
+{% do ctl.environment.add_env("CONTROLLER_TOKEN_FILE", "/run/secrets/controller.token") %}
+{% do ctl.environment.add_env("CONTROLLER_STATE_DIR", "/state") %}
+{% do ctl.environment.add_env("CONTROLLER_COMFY_URL",
+  "http://%s:%d"|format(values.consts.worker_name, values.consts.worker_port)) %}
+{% do ctl.healthcheck.set_test("http", {"port": values.network.web_port.port_number, "path": "/healthz"}) %}
+{% do perms.add_or_skip_action("jobs", values.storage.jobs, {"uid": 10001, "gid": 10001, "mode": "check"}) %}
+
+{# The worker can be replaced without losing the controller ledger.
+   It receives only the selected read-only content-addressed model store. #}
+{% set image_name = "worker_cpu_image" if values.worker.mode == "cpu" else "worker_cuda_image" %}
+{% set worker = tpl.add_container(values.consts.worker_name, image_name) %}
+{% do worker.add_network(internal) %}
+{% do worker.set_user(1000, 1000) %}
+{% if values.worker.mode == "cpu" %}
+  {% do worker.remove_devices() %}
+  {% do worker.environment.add_env("COMFYUI_CPU", "true") %}
+{% else %}
+  {% do worker.environment.add_env("COMFYUI_CPU", "false") %}
+  {% do worker.environment.add_env("COMFYUI_FORCE_FP32", "false") %}
+{% endif %}
+{% do worker.environment.add_env("COMFYUI_ENABLE_MANAGER", "false") %}
+{% do worker.environment.add_env("COMFYUI_BUNDLED_NODES", "conditioning_toy_fixture") %}
+{% do worker.environment.add_env("COMFYUI_PRELOAD_NODES", "") %}
+{% do worker.environment.add_env("COMFYUI_INSTALL_NODE_REQUIREMENTS", "false") %}
+{% do worker.add_storage("/data", values.storage.worker_data) %}
+{% set models_ro = dict(values.storage.models, **{"read_only": true}) %}
+{% do worker.add_storage("/readonly-models", models_ro) %}
+{% do worker.healthcheck.set_test("http", {"port": values.consts.worker_port, "path": "/system_stats"}) %}
+{% do perms.add_or_skip_action("worker-data", values.storage.worker_data,
+  {"uid": 1000, "gid": 1000, "mode": "check"}) %}
+
+{# Model Foundry approved OCI bytes are hydrated by one-shot sidecar only when
+   exact approved logical ID and digest are provided. Never runtime HF pulls. #}
+{% if values.models.enable_hydration %}
+  {% set hyd = tpl.add_container(values.consts.hydrate_name, "hydrator_image") %}
+  {% do hyd.remove_devices() %}
+  {% do hyd.set_user(10001, 10001) %}
+  {% do hyd.add_storage("/model-cache", values.storage.models) %}
+  {% set approval_mount = {"type": "host_path", "read_only": true,
+    "host_path_config": {"path": values.storage.approval_dir, "acl_enable": false}} %}
+  {% do hyd.add_storage("/approval", approval_mount) %}
+  {% do hyd.set_command([
+    "--catalog", "/approval/approved.json",
+    "--id", values.models.logical_id,
+    "--approved-digest", values.models.approved_digest,
+    "--cache-root", "/model-cache",
+    "--hydrate"
+  ]) %}
+  {% do worker.depends.add_dependency(values.consts.hydrate_name, "service_completed_successfully") %}
+  {% do perms.add_or_skip_action("models", values.storage.models,
+    {"uid": 10001, "gid": 10001, "mode": "check"}) %}
+{% endif %}
+
+{% if perms.has_actions() %}
+  {% do perms.activate() %}
+  {% do ctl.depends.add_dependency("conditioning-permissions", "service_completed_successfully") %}
+  {% do worker.depends.add_dependency("conditioning-permissions", "service_completed_successfully") %}
+  {% if values.models.enable_hydration %}
+    {% do hyd.depends.add_dependency("conditioning-permissions", "service_completed_successfully") %}
+  {% endif %}
+{% endif %}
+
+{% do tpl.portals.add(values.network.web_port) %}
+{% do tpl.notes.set_body("Source-only Foundry catalog candidate. Install is BLOCKED until all OCI image digests are published and verified; approved CUDA target/hardware and model digests must be separately admitted.") %}
+{{ tpl.render() | tojson }}
