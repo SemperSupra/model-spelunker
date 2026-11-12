@@ -34,7 +34,12 @@ jobs:
           }
           py='python:3.12-slim-bookworm'
           oras='ghcr.io/oras-project/oras:v1.3.6'
-          pd="$(resolve "$py")"; od="$(resolve "$oras")"
+          echo "Resolving public Python base image digest"
+          pd="$(resolve "$py")"
+          echo "Resolved Python: $pd"
+          echo "Resolving public ORAS versioned CLI image digest"
+          od="$(resolve "$oras")"
+          echo "Resolved ORAS: $od"
           [[ "$pd" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
           [[ "$od" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
           echo "python=$py@$pd" >> "$GITHUB_OUTPUT"
