@@ -117,7 +117,12 @@ jobs:
           c=s['conditioning-controller'];w=s['conditioning-worker']
           fake='GPU-00000000-0000-0000-0000-000000000000'
           assert fake in json.dumps(w),"selected GPU omitted from worker"
-          assert fake not in json.dumps(c),"controller gained GPU"
+          for name,svc in s.items():
+            if name=="conditioning-worker":
+              continue
+            assert fake not in json.dumps(svc),f"{name} gained selected GPU"
+            assert svc.get('environment',{}).get('NVIDIA_VISIBLE_DEVICES')=='void',f"{name} GPU visible via auto env"
+            assert not svc.get('deploy',{}).get('resources',{}).get('reservations',{}).get('devices'),f"{name} reserves GPU"
           assert not w.get('ports'),"native ComfyUI GPU endpoint published"
           assert 'cuda' not in s.get('conditioning-hydrator',{}).get('image','')
           print('OFFICIAL_IX_CUDA_POLICY_SOURCE_RENDER_PASS_HIL_NOT_RUN')
