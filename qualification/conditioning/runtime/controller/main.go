@@ -28,6 +28,11 @@ import (
 )
 
 const maxBody=8192
+// Bound the in-memory/file ledger: this preliminary single-worker queue is not
+// an unbounded production scheduler. Full retention/archiving is a separate gate.
+const maxTotalJobs=256
+const maxPendingJobs=64
+const maxResultBytes=8*1024*1024
 var requestID=reMust("^[a-zA-Z0-9._-]{8,80}$")
 var slug=reMust("^[a-f0-9]{32}$")
 func reMust(s string)*regexp.Regexp{return regexp.MustCompile(s)}
@@ -132,6 +137,14 @@ func(s *Server)submit(batch BatchRequest)([]string,bool,error){
   if old.Digest!=want{return nil,false,errors.New("IDEMPOTENCY_KEY_CONFLICT")}
   return append([]string(nil),old.JobIDs...),true,nil
  }
+ // Idempotent retries must remain available even when capacity is exhausted.
+ // Stop new work before admitting unbounded queue/storage growth.
+ if len(s.ledger.Jobs)+len(batch.Jobs)>maxTotalJobs{return nil,false,errors.New("LEDGER_CAPACITY_REACHED")}
+ outstanding:=0
+ for _,j:=range s.ledger.Jobs{
+  if j!=nil&&(j.State=="QUEUED"||j.State=="RUNNING"||j.State=="CANCEL_REQUESTED"){outstanding++}
+ }
+ if outstanding+len(batch.Jobs)>maxPendingJobs{return nil,false,errors.New("QUEUE_CAPACITY_REACHED")}
  // Preserve in-memory authority if durable commit fails: no unlogged work may dispatch.
  snapshot,marshalErr:=json.Marshal(s.ledger)
  if marshalErr!=nil{return nil,false,errors.New("LEDGER_SNAPSHOT_UNAVAILABLE")}
@@ -210,7 +223,10 @@ func(s *Server)ServeHTTP(w http.ResponseWriter,r *http.Request){
   if d.Decode(&b)!=nil||d.Decode(new(any))!=io.EOF{fail(w,400,"INVALID_REQUEST_JSON");return}
   ids,replay,err:=s.submit(b)
   if err!=nil{
-   if err.Error()=="IDEMPOTENCY_KEY_CONFLICT"{fail(w,409,err.Error())}else{fail(w,400,err.Error())}
+   if err.Error()=="IDEMPOTENCY_KEY_CONFLICT"{fail(w,409,err.Error())
+   }else if err.Error()=="LEDGER_CAPACITY_REACHED"||err.Error()=="QUEUE_CAPACITY_REACHED"{
+    fail(w,429,err.Error())
+   }else{fail(w,400,err.Error())}
    return
   }
   jsonOut(w,202,map[string]any{"status":"QUEUED_OR_EXISTING","job_ids":ids,"idempotent_replay":replay})
@@ -235,16 +251,30 @@ func(s *Server)jobRoute(w http.ResponseWriter,r *http.Request){
  if len(parts)==1&&r.Method=="GET"{jsonOut(w,200,snapshot);return}
  if len(parts)==2&&parts[1]=="image"&&r.Method=="GET"{
   if snapshot.ImageSHA256==""{fail(w,409,"IMAGE_NOT_AVAILABLE");return}
-  raw,err:=os.ReadFile(filepath.Join(s.dir,"results",id+".png"))
+  p:=filepath.Join(s.dir,"results",id+".png")
+  fh,err:=os.Open(p)
+  if err!=nil{fail(w,503,"RESULT_FILE_INTEGRITY_HOLD");return}
+  info,err:=fh.Stat()
+  if err!=nil||!info.Mode().IsRegular()||info.Size()<28||info.Size()>maxResultBytes{
+   fh.Close();fail(w,503,"RESULT_FILE_INTEGRITY_HOLD");return
+  }
+  raw,readErr:=io.ReadAll(io.LimitReader(fh,maxResultBytes+1))
+  fh.Close()
   sum:=sha256.Sum256(raw)
-  if err!=nil||hex.EncodeToString(sum[:])!=snapshot.ImageSHA256{fail(w,503,"RESULT_FILE_INTEGRITY_HOLD");return}
+  if readErr!=nil||len(raw)>maxResultBytes||hex.EncodeToString(sum[:])!=snapshot.ImageSHA256{
+   fail(w,503,"RESULT_FILE_INTEGRITY_HOLD");return
+  }
   w.Header().Set("Content-Type","image/png");w.Write(raw);return
  }
  if len(parts)==2&&parts[1]=="cancel"&&r.Method=="POST"{
   s.mu.Lock();defer s.mu.Unlock()
   if j=s.ledger.Jobs[id];j==nil{fail(w,404,"JOB_NOT_FOUND");return}
+  previous:=*j
   if j.State=="QUEUED"{j.State="CANCELLED"}else if j.State=="RUNNING"{j.State="CANCEL_REQUESTED"}
-  if err:=s.save();err!=nil{fail(w,503,"LEDGER_PERSIST_FAILED");return}
+  if err:=s.save();err!=nil{
+   *j=previous
+   fail(w,503,"LEDGER_PERSIST_FAILED");return
+  }
   jsonOut(w,200,map[string]string{"state":j.State});return
  }
  fail(w,404,"NOT_FOUND")
@@ -373,9 +403,15 @@ func(s *Server)execute(job JobInput)([]byte,string,error){
   if er!=nil{return nil,pid,er}
   record,ok:=parsed[pid];if !ok{continue}
   if record.Status.StatusStr=="error"{return nil,pid,errors.New("NATIVE_WORKFLOW_ERROR")}
+  if record.Status.StatusStr!="success"{continue}
   images:=record.Outputs["2"].Images
   if len(images)!=1{return nil,pid,errors.New("OUTPUT_IMAGE_CARDINALITY")}
-  f:=images[0];if len(f.Filename)>128||f.Type!="output"{return nil,pid,errors.New("OUTPUT_PATH_NOT_ALLOWED")}
+  f:=images[0]
+  if f.Filename==""||len(f.Filename)>128||f.Subfolder!=""||
+   strings.ContainsAny(f.Filename,"/\\")||strings.Contains(f.Filename,"..")||
+   !strings.HasSuffix(strings.ToLower(f.Filename),".png")||f.Type!="output"{
+   return nil,pid,errors.New("OUTPUT_PATH_NOT_ALLOWED")
+  }
   q:=url.Values{"filename":[]string{f.Filename},"subfolder":[]string{f.Subfolder},"type":[]string{"output"}}
   imgResp,er:=s.client.Get(s.comfy+"/view?"+q.Encode());if er!=nil{return nil,pid,er}
   if imgResp.StatusCode!=200{imgResp.Body.Close();return nil,pid,errors.New("IMAGE_NOT_FOUND")}
