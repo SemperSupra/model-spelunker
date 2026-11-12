@@ -39,7 +39,15 @@ class TinyTorchConditionerFixture:
             pixels = toy_model(noise).clamp(0, 1).permute(0, 2, 3, 1)
         return (pixels.contiguous(),)
 
-NODE_CLASS_MAPPINGS = {"TinyTorchConditionerFixture": TinyTorchConditionerFixture}
+from .conditioning_pair import TinyTextEncoderFixture, TinyConditionedImageFixture
+
+NODE_CLASS_MAPPINGS = {
+    "TinyTorchConditionerFixture": TinyTorchConditionerFixture,
+    "TinyTextEncoderFixture": TinyTextEncoderFixture,
+    "TinyConditionedImageFixture": TinyConditionedImageFixture,
+}
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "TinyTorchConditionerFixture": "Tiny Torch Conditioner (Build Fixture ONLY)"
+    "TinyTorchConditionerFixture": "Tiny Torch Conditioner (Build Fixture ONLY)",
+    "TinyTextEncoderFixture": "Tiny Torch Text Encoder (Toy ONLY)",
+    "TinyConditionedImageFixture": "Tiny Torch Conditioned Image (Toy ONLY)"
 }
