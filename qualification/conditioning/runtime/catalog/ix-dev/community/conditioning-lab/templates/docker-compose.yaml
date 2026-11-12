@@ -58,6 +58,9 @@
   {% set hyd = tpl.add_container(values.consts.hydrate_name, "hydrator_image") %}
   {% do hyd.remove_devices() %}
   {% do hyd.set_user(10001, 10001) %}
+  {# MAF content hydration is a one-shot, idempotent pre-worker job, not
+     a resident daemon or a restart-loop service. #}
+  {% do hyd.restart.set_policy("no") %}
   {% do hyd.add_storage("/model-cache", values.storage.models) %}
   {% set approval_mount = {"type": "host_path", "read_only": true,
     "host_path_config": {"path": values.storage.approval_dir, "acl_enable": false}} %}
