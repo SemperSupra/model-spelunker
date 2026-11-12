@@ -59,9 +59,13 @@ jobs:
           assert c.get("read_only") is True
           assert not w.get("ports"),"worker unexpectedly exposed publicly"
           assert not c.get("devices") and not w.get("devices")
-          for svc in services.values():
+          assert any("/data" in str(x) for x in w.get("tmpfs",[])),"worker scratch is not disposable tmpfs"
+          for name,svc in services.items():
             assert "/var/run/docker.sock" not in json.dumps(svc)
-            assert "0000000000000000000000000000000000000000000000000000000000000000" in svc.get("image",""),"unreleased digest became live unexpectedly"
+            if name=="conditioning-permissions":
+              assert "sha256:6ddfdc314af9d18cfacb836ad266ef0ed91fecaa3686b20be72e464972860c08" in svc.get("image","")
+            else:
+              assert "0000000000000000000000000000000000000000000000000000000000000000" in svc.get("image",""),"unreleased digest became live unexpectedly"
           print(json.dumps({"status":"SOURCE_RENDER_ONLY","services":sorted(services),
                 "upstream_ref":"827e1f004ff4efd307ae3609e4279f44ba6a2a58",
                 "real_images_pulled":False,"native_truenas_not_executed":True},sort_keys=True))
