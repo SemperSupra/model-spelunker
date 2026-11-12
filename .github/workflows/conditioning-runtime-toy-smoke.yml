@@ -267,6 +267,8 @@ jobs:
           trap 'kill "$ctl_pid" 2>/dev/null || true' EXIT
           CONDITIONING_TEST_TOKEN="$token" \
             python3 qualification/conditioning/runtime/controller/integration_smoke.py
+          CONDITIONING_TEST_TOKEN="$token" \
+            python3 qualification/conditioning/runtime/controller/integration_conditioned.py
           kill "$ctl_pid" 2>/dev/null || true
 
       - name: Postflight and dispose ephemeral worker
