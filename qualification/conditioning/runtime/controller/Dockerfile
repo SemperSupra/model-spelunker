@@ -2,7 +2,7 @@
 ARG GO_BASE_IMAGE
 FROM ${GO_BASE_IMAGE} AS build
 WORKDIR /src
-COPY go.mod main.go ./
+COPY go.mod main.go schema.go openapi.json ./
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags='-s -w' -o /out/conditioning-controller .
 
