@@ -133,6 +133,29 @@ func TestDurableCommitFailureNeverDispatchesOrRetainsInMemoryJob(t *testing.T){
  if err:=os.Remove(filepath.Join(dir,"ledger.json"));err!=nil{t.Fatal(err)}
  if ids,_,err:=s.submit(request);err!=nil||len(ids)!=1{t.Fatal("clean retry after valid rollback rejected",err)}
 }
+func TestOpenAPIAndAccessibleQueueView(t *testing.T){
+ s,_:=newTest(t)
+ _,_,err:=s.submit(BatchRequest{RequestID:"accessible-queue-id",Jobs:[]JobInput{fixtureJob()}})
+ if err!=nil{t.Fatal(err)}
+ token:="Bearer "+string(fixtureToken)
+ for _,v:=range []struct{Path,Expected string}{
+  {"/api/v1/openapi.json",`"openapi": "3.1.0"`},
+  {"/",`Recent submitted jobs`},
+ }{
+  req:=httptest.NewRequest("GET",v.Path,nil)
+  req.Header.Set("Authorization",token)
+  rec:=httptest.NewRecorder();s.ServeHTTP(rec,req)
+  if rec.Code!=200||!strings.Contains(rec.Body.String(),v.Expected){
+   t.Fatalf("%s status %d missing %q",v.Path,rec.Code,v.Expected)
+  }
+ }
+ req:=httptest.NewRequest("GET","/",nil)
+ req.Header.Set("Authorization",token)
+ rec:=httptest.NewRecorder();s.ServeHTTP(rec,req)
+ for _,marker:=range []string{`<th scope="col">Job</th>`,`<caption>`,`aria-labelledby="jobs-heading"`} {
+  if !strings.Contains(rec.Body.String(),marker){t.Fatalf("missing accessibility marker %q",marker)}
+ }
+}
 func TestUIRejectsOversizedForm(t *testing.T){
  s,_:=newTest(t)
  basic:="Basic "+base64.StdEncoding.EncodeToString([]byte("operator:"+string(fixtureToken)))
