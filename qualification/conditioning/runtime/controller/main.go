@@ -171,6 +171,11 @@ func(s *Server)ServeHTTP(w http.ResponseWriter,r *http.Request){
  if r.URL.Path=="/healthz"{jsonOut(w,200,map[string]string{"status":"controller-alive-not-worker-admission"});return}
  ok,basic:=s.authenticated(r)
  if !ok {w.Header().Set("WWW-Authenticate",`Basic realm="Conditioning Lab"`);fail(w,401,"AUTHENTICATION_REQUIRED");return}
+ // Browser Basic credentials are ambient browser authority.
+ // Mutating /api routes require explicit Bearer; UI POST has CSRF controls.
+ if basic && r.Method!="GET" && strings.HasPrefix(r.URL.Path,"/api/"){
+  fail(w,403,"BEARER_AUTH_REQUIRED_FOR_API_MUTATION");return
+ }
  switch {
  case r.URL.Path=="/"&&r.Method=="GET":
   s.ui(w,r)
