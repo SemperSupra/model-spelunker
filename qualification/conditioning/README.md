@@ -4,8 +4,8 @@ Authority: Model Spelunker #193 → #191 / #189 → existing #139 harness, Agent
 
 ## Adopt-before-build candidates
 
-1. Z-Image-Turbo (Tongyi-MAI/Z-Image-Turbo; Apache 2.0) uses Qwen3-family encoding. Compare original Qwen/Qwen3-4B to community CCSSNE/DreamFast-qwen3-4b-heretic, holding the generator, VAE, prompt, seed, sampling and environment fixed.
-2. FLUX.2 Klein 4B (black-forest-labs/FLUX.2-klein-4B; Apache 2.0). Comfy-Org repack lists qwen_3_4b.safetensors and flux2-vae.safetensors. Publisher also claims compatibility with the same Heretic encoder. Repeat as a separate generator block, preserving each generator's actual hidden-state interface; identical Qwen architecture is not equivalent to identical tapped features.
+1. Z-Image-Turbo (Tongyi-MAI/Z-Image-Turbo; Apache 2.0) uses Qwen3-family encoding. Compare the stock generator-native encoder from Comfy-Org/Z-Image-Turbo to community CCSSNE/DreamFast-qwen3-4b-heretic, holding the generator, VAE, prompt, seed, sampling and environment fixed.
+2. FLUX.2 Klein 4B (black-forest-labs/FLUX.2-klein-4B; Apache 2.0). Comfy-Org repack lists qwen_3_4b.safetensors and flux2-vae.safetensors. Publisher also claims compatibility with the same Heretic encoder. Compare against the native stock file from Comfy-Org/Flux-2-Klein-4B. The public source census proves that this stock Comfy encoder and Z-Image's stock Comfy encoder are the **same publisher-reported file OID**, saving one redundant baseline download. ComfyUI's Z-Image text path uses hidden layer -2, while Klein uses [9, 18, 27] and a different prompt template. Do not substitute one generator's tensor outputs for the other.
 3. Krea 2 with Qwen3-VL-4B is NOT interchangeable with Qwen3-4B. It taps twelve intermediate hidden-state layers and passes them to a model-specific adapter. Evaluate as a separate future treatment.
 4. Reasoning-based prompt rewrite and independent VLM critique are additional later factors, not evidence of a hidden-state encoder improvement.
 
@@ -13,8 +13,13 @@ Sources:
 - https://huggingface.co/Tongyi-MAI/Z-Image-Turbo
 - https://huggingface.co/black-forest-labs/FLUX.2-klein-4B
 - https://huggingface.co/Comfy-Org/Flux-2-Klein-4B
+- https://huggingface.co/Comfy-Org/Z-Image-Turbo
+- https://github.com/Comfy-Org/ComfyUI/blob/master/comfy/text_encoders/z_image.py
+- https://github.com/Comfy-Org/ComfyUI/blob/master/comfy/text_encoders/flux.py
 - https://huggingface.co/CCSSNE/DreamFast-qwen3-4b-heretic
 - https://github.com/Comfy-Org/ComfyUI/blob/master/comfy/text_encoders/krea2.py
+
+Native source evidence: qualification/conditioning/source-observations/conditioning-hf-20261112.json — six source repositories, 33 published Safetensors OIDs/sizes, exact repository commits, public GHA run 43190428793/job 131088046310; neither weights nor image outputs were downloaded or hashed. Stock Comfy encoder SHA256 published by BOTH repacks: 6c671498573ac2f7a5501502ccce8d2b08ea6ca2f661c458e708f36b36edfc5a. This is publisher-reported source identity, not local byte attestation. The bare Qwen/Qwen3-4B upstream shards do not share every published file OID with generator-packaged text-encoder shards, so never claim their underlying tensors are identical without verification.
 
 These are publisher/source claims, not independently completed local inference.
 
