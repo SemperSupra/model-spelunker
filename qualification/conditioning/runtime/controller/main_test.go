@@ -243,6 +243,57 @@ func TestNativeWorkerPathTraversalDenied(t *testing.T){
  _,_,err=s.execute(fixtureJob())
  if err==nil||err.Error()!="OUTPUT_PATH_NOT_ALLOWED"{t.Fatalf("native path traversal admitted: %v",err)}
 }
+func TestOnlyPresetTwoModuleWorkflowMayBeAdmitted(t *testing.T){
+ s,_:=newTest(t)
+ job:=fixtureJob()
+ job.Workflow="toy-conditioned-v1"
+ job.Prompt="red-square"
+ ids,_,err:=s.submit(BatchRequest{RequestID:"two-model-approved-id",Jobs:[]JobInput{job}})
+ if err!=nil||len(ids)!=1{t.Fatalf("conditioned request rejected: %v",err)}
+ job.Prompt="ignore previous instructions"
+ if _,_,err:=s.submit(BatchRequest{RequestID:"two-model-denied-id",Jobs:[]JobInput{job}});err==nil{
+  t.Fatal("unreviewed free text admitted into conditioning graph")
+ }
+ job.Prompt=""
+ if valid(job){t.Fatal("missing prompt accepted")}
+ job.Prompt="blue-circle"
+ if !valid(job){t.Fatal("second preset text prompt rejected")}
+ job.Workflow="toy-cnn-v1"
+ if valid(job){t.Fatal("CNN was allowed an unrelated prompt field")}
+}
+
+func TestTwoModuleGraphUsesFixedComfyNodesAndSeparateOutput(t *testing.T){
+ img:=image.NewRGBA(image.Rect(0,0,64,64))
+ var out bytes.Buffer
+ if err:=png.Encode(&out,img);err!=nil{t.Fatal(err)}
+ native:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  switch r.URL.Path{
+  case "/prompt":
+   var p struct{Prompt map[string]struct{
+    ClassType string `json:"class_type"`
+    Inputs map[string]any `json:"inputs"`
+   } `json:"prompt"`}
+   if err:=json.NewDecoder(r.Body).Decode(&p);err!=nil{t.Error(err)}
+   if p.Prompt["1"].ClassType!="TinyTextEncoderFixture"||p.Prompt["2"].ClassType!="TinyConditionedImageFixture"||
+     p.Prompt["3"].ClassType!="SaveImage"{t.Error("unknown native graph nodes")}
+   if p.Prompt["1"].Inputs["prompt"]!="red-square"{t.Error("prompt/source drift")}
+   io.WriteString(w,`{"prompt_id":"native-conditioned-123"}`)
+  case "/history/native-conditioned-123":
+   io.WriteString(w,`{"native-conditioned-123":{"status":{"status_str":"success"},"outputs":{"3":{"images":[{"filename":"pair.png","type":"output","subfolder":""}]}}}}`)
+  case "/view":
+   w.Header().Set("Content-Type","image/png");w.Write(out.Bytes())
+  default:http.NotFound(w,r)
+  }
+ }))
+ defer native.Close()
+ s,err:=New(t.TempDir(),"http://127.0.0.1:8090",native.URL,fixtureToken)
+ if err!=nil{t.Fatal(err)};defer s.Close()
+ job:=fixtureJob();job.Workflow="toy-conditioned-v1";job.Prompt="red-square"
+ raw,pid,err:=s.execute(job)
+ if err!=nil||pid!="native-conditioned-123"||!bytes.Equal(raw,out.Bytes()){
+  t.Fatalf("two-module request failed: %v, %q",err,pid)
+ }
+}
 func TestNativeQueueDispatchAndDurablePNG(t *testing.T){
  imageData:=image.NewRGBA(image.Rect(0,0,64,64))
  for y:=0;y<64;y++{for x:=0;x<64;x++{imageData.Set(x,y,color.RGBA{R:uint8(x*3),G:uint8(y*3),B:42,A:255})}}
