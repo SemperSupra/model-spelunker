@@ -1,0 +1,40 @@
+app_version: 0.38.0-candidate
+capabilities: []
+categories:
+  - productivity
+changelog_url: https://github.com/SemperSupra/model-spelunker/pull/196
+date_added: '2026-11-12'
+description: Foundry-managed disposable ComfyUI conditioning runtime with authenticated accessible job controller and optional approved-model hydration.
+home: https://github.com/SemperSupra/model-spelunker
+host_mounts: []
+icon: https://raw.githubusercontent.com/Comfy-Org/ComfyUI/master/web/favicon.ico
+keywords:
+  - ai
+  - images
+  - conditioning
+  - research
+lib_version: 2.3.18
+lib_version_hash: ed9839f681342ae8ca5f8c4c860ae22d0845a0919f472ba780d6edbc838f2633
+maintainers:
+  - name: SemperSupra
+    url: https://github.com/SemperSupra
+name: conditioning-lab
+run_as_context:
+  - description: Controller container runs as unprivileged user.
+    uid: 10001
+    gid: 10001
+    user_name: conditioning
+    group_name: conditioning
+  - description: ComfyUI worker container runs as unprivileged user.
+    uid: 1000
+    gid: 1000
+    user_name: comfy
+    group_name: comfy
+screenshots: []
+sources:
+  - https://github.com/SemperSupra/model-spelunker
+  - https://github.com/Comfy-Org/ComfyUI
+  - https://github.com/SemperSupra/model-artifact-foundry
+title: Conditioning Lab (Foundry Candidate)
+train: community
+version: 0.0.1

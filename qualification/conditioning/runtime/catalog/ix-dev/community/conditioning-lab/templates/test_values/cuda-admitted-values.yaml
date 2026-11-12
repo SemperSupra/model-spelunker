@@ -1,0 +1,41 @@
+# Upstream TrueNAS iX-lib source-render fixture only.
+# Source-only image digests in ix_values.yaml are deliberate non-pullable markers.
+resources:
+  limits:
+    cpus: 3.0
+    memory: 6144
+  gpus:
+    nvidia_gpu_selection:
+      "0000:65:00.0":
+        use_gpu: true
+        uuid: "GPU-00000000-0000-0000-0000-000000000000"
+controller:
+  ui_origin: https://conditioning.example.invalid
+worker:
+  mode: cuda
+models:
+  enable_hydration: false
+  logical_id: ""
+  approved_digest: ""
+network:
+  web_port:
+    bind_mode: exposed
+    port_number: 31095
+ix_volumes:
+  jobs: /opt/tests/mnt/conditioning-lab/jobs
+  approved-models: /opt/tests/mnt/conditioning-lab/approved-models
+storage:
+  jobs:
+    type: ix_volume
+    ix_volume_config:
+      dataset_name: jobs
+      create_host_path: true
+      acl_enable: false
+  models:
+    type: ix_volume
+    ix_volume_config:
+      dataset_name: approved-models
+      create_host_path: true
+      acl_enable: false
+  secrets_dir: /opt/tests/mnt/conditioning-lab/secrets
+  approval_dir: /opt/tests/mnt/conditioning-lab/approval

@@ -1,0 +1,193 @@
+groups:
+  - name: Controller and API
+    description: Accessible interface and authenticated batch queue
+  - name: Worker
+    description: Disposable ComfyUI execution mode
+  - name: Model Artifact Foundry
+    description: Reviewed OCI-digest hydration, never arbitrary downloads
+  - name: Network
+    description: Publish only behind an approved TLS ingress
+  - name: Storage
+    description: External durable state and read-only model selection
+  - name: Resources
+    description: CPU, memory and optional one-device NVIDIA admission
+
+questions:
+  - variable: controller
+    group: Controller and API
+    label: Controller
+    schema:
+      type: dict
+      attrs:
+        - variable: ui_origin
+          label: Canonical HTTPS origin
+          description: Exact origin used for UI CSRF checks. TLS proxy ingress required for non-loopback access.
+          schema:
+            type: string
+            default: "https://conditioning.example.invalid"
+            required: true
+
+  - variable: worker
+    group: Worker
+    label: Runtime
+    schema:
+      type: dict
+      attrs:
+        - variable: mode
+          label: Worker execution mode
+          description: CPU toy-model qualification by default. CUDA requires separately qualified GPU image and TrueNAS GPU passthrough.
+          schema:
+            type: string
+            required: true
+            default: cpu
+            enum:
+              - value: cpu
+                description: CPU-only synthetic Torch fixture
+              - value: cuda
+                description: NVIDIA CUDA (not yet qualified)
+
+  - variable: models
+    group: Model Artifact Foundry
+    label: Model acquisition
+    schema:
+      type: dict
+      attrs:
+        - variable: enable_hydration
+          label: Run approved model hydration before worker startup
+          schema:
+            type: boolean
+            default: false
+        - variable: logical_id
+          label: Approved model logical ID
+          schema:
+            type: string
+            default: ""
+            show_if: [[enable_hydration, "=", true]]
+        - variable: approved_digest
+          label: Approved immutable OCI digest
+          description: Must match the Model Artifact Foundry catalog, not a mutable tag.
+          schema:
+            type: string
+            default: ""
+            show_if: [[enable_hydration, "=", true]]
+
+  - variable: network
+    group: Network
+    label: Network
+    schema:
+      type: dict
+      attrs:
+        - variable: web_port
+          label: Authenticated Controller Port
+          schema:
+            type: dict
+            attrs:
+              - variable: bind_mode
+                label: Bind Mode
+                schema:
+                  type: string
+                  default: exposed
+                  enum:
+                    - value: exposed
+                      description: No direct host exposure (recommended)
+                    - value: published
+                      description: Publish to approved TLS ingress only
+              - variable: port_number
+                label: Controller port
+                schema:
+                  type: int
+                  default: 31095
+                  min: 1024
+                  max: 65535
+                  required: true
+              - variable: host_ips
+                label: Host IP bindings
+                schema:
+                  type: list
+                  default: []
+                  show_if: [[bind_mode, "=", published]]
+                  items:
+                    - variable: host_ip
+                      label: Bind address
+                      schema:
+                        type: string
+                        required: true
+                        $ref:
+                          - definitions/node_bind_ip
+
+  - variable: storage
+    group: Storage
+    label: Mounts
+    schema:
+      type: dict
+      attrs:
+        - variable: jobs
+          label: Durable controller queue/receipts
+          schema:
+            type: dict
+            attrs:
+              - variable: type
+                schema:
+                  type: string
+                  default: ix_volume
+                  required: true
+                  enum:
+                    - value: ix_volume
+                      description: TrueNAS-managed ixVolume
+              - variable: ix_volume_config
+                schema:
+                  type: dict
+                  $ref:
+                    - normalize/ix_volume
+                  attrs:
+                    - variable: dataset_name
+                      schema:
+                        type: string
+                        default: jobs
+                        hidden: true
+                        required: true
+                    - variable: acl_enable
+                      schema:
+                        type: boolean
+                        default: false
+        - variable: models
+          label: Hydrated model store
+          schema:
+            type: dict
+            attrs:
+              - variable: type
+                schema:
+                  type: string
+                  default: ix_volume
+                  required: true
+                  enum:
+                    - value: ix_volume
+                      description: TrueNAS-managed ixVolume
+              - variable: ix_volume_config
+                schema:
+                  type: dict
+                  $ref:
+                    - normalize/ix_volume
+                  attrs:
+                    - variable: dataset_name
+                      schema:
+                        type: string
+                        default: approved-models
+                        hidden: true
+                        required: true
+                    - variable: acl_enable
+                      schema:
+                        type: boolean
+                        default: false
+        - variable: secrets_dir
+          label: Pre-provisioned controller token directory
+          description: Contains controller.token; keep this outside Git and outside the worker.
+          schema:
+            type: hostpath
+            required: true
+        - variable: approval_dir
+          label: Approved model catalog directory
+          description: Read-only folder holding approved.json; never a self-created approval.
+          schema:
+            type: hostpath
+            required: true

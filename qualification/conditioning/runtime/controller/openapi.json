@@ -1,0 +1,265 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Conditioning Lab Bounded Job API",
+    "version": "0.0.1-source-only",
+    "description": "Experimental authenticated controller for single-CNN and two-module synthetic conditioning jobs. No GPU, TrueNAS, or real generative model admission."
+  },
+  "servers": [
+    {
+      "url": "https://conditioning.example.invalid",
+      "description": "Illustrative exact TLS origin; the site authority configures its own origin"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/capabilities": {
+      "get": {
+        "operationId": "getCapabilities",
+        "summary": "Read allowlisted capabilities, never promotion",
+        "responses": {
+          "200": {
+            "description": "Capabilities and currently admitted toy-only workflow",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/batches": {
+      "post": {
+        "operationId": "submitBatch",
+        "summary": "Submit 1–16 bounded toy jobs with idempotency key",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "request_id",
+                  "jobs"
+                ],
+                "properties": {
+                  "request_id": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9._-]{8,80}$"
+                  },
+                  "jobs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "items": {
+                      "$ref": "#/components/schemas/JobInput"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted or existing exact request replay; not evidence of execution"
+          },
+          "400": {
+            "description": "Invalid input or unauthorized workflow"
+          },
+          "409": {
+            "description": "Same request ID with a different payload"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "operationId": "listJobs",
+        "summary": "Read durable job records",
+        "responses": {
+          "200": {
+            "description": "Current bounded job ledger"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "operationId": "getJob",
+        "summary": "Read a durable job or ambiguity state",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job receipt"
+          },
+          "404": {
+            "description": "Unknown job"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/image": {
+      "get": {
+        "operationId": "getJobImage",
+        "summary": "Retrieve verified PNG output",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SHA256-verified PNG bytes",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not available yet"
+          },
+          "503": {
+            "description": "On-disk digest mismatch or unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{id}/cancel": {
+      "post": {
+        "operationId": "requestCancellation",
+        "summary": "Cancel queued or flag running job; not a native GPU kill guarantee",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted cancellation state"
+          },
+          "404": {
+            "description": "Unknown job"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "JobInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "seed",
+          "variant",
+          "size"
+        ],
+        "properties": {
+          "workflow": {
+            "type": "string",
+            "enum": [
+              "toy-cnn-v1",
+              "toy-conditioned-v1"
+            ],
+            "description": "Synthetic Torch fixture; not an image generation model"
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "base",
+              "modified"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 32,
+            "maximum": 128,
+            "multipleOf": 16
+          },
+          "prompt": {
+            "type": "string",
+            "enum": [
+              "red-square",
+              "blue-circle"
+            ],
+            "description": "Mandatory for toy-conditioned-v1; omitted for toy-cnn-v1. Synthetic fixed prompts only."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "workflow": {
+                  "const": "toy-conditioned-v1"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "prompt"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "workflow": {
+                  "const": "toy-cnn-v1"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "prompt"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "parameters": {
+      "JobID": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        },
+        "description": "Opaque job ID returned by submitBatch"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Site-managed token. Never expose over HTTP except strictly local loopback."
+      }
+    }
+  }
+}

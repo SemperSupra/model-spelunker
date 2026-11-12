@@ -1,0 +1,78 @@
+# Conditioning Lab — disposable ComfyUI runtime (RDT&E)
+
+This is the product-owned runtime under [Model Spelunker #195](https://github.com/SemperSupra/model-spelunker/issues/195), reusing DOE [#193](https://github.com/SemperSupra/model-spelunker/issues/193). It has **NOT** been installed on the owner’s TrueNAS, published as a released OCI product, qualified on NVIDIA CUDA, or used to generate a real FLUX/Z-Image asset.
+
+## Deployment authority
+
+Primary: an official TrueNAS Apps **community-source-shaped application** at `catalog/ix-dev/community/conditioning-lab`. The only authorized inventory, source renderer, materializer, deployment artifact and lifecycle manager is [TrueNAS App Foundry](https://github.com/SemperSupra/truenas-app-foundry), governed by private #274 (F0–F6), #290 (observe→plan→apply→verify), #328 (catalog UX/API) and exact target/version #267/#282. **OFFICIAL SOURCE SHAPE does not mean officially accepted/published in the TrueNAS catalog.** The current `ix_values.yaml` deliberately contains non-pullable `sha256:000…` placeholders until all candidate image digests are independently built, pulled back, reviewed, and accepted through Foundry. A human must not install the seed.
+
+Secondary target projections: ordinary OCI/Docker/KVM and future macOS Comfy MPS or MLX, using the same explicit workload/capability/state identities; each target separately qualified. Do **not** create a local Compose installer or second lifecycle controller.
+
+## Component separation
+
+| Component | Lifetime | Responsibility | Network and mounts |
+|---|---|---|---|
+| Go controller | Restartable, stateless process | Accessible UI, API/agent capabilities, bounded batches, idempotency, native Comfy queue adapter, immutable output hashes, restart ambiguity | Only published interface (behind approved TLS/auth ingress), durable TrueNAS-managed `/state`, token via protected read-only file. No GPU or model filesystem |
+| ComfyUI worker | Replaceable/disposable | Execute bounded allowed workflows on CPU or a specifically admitted single GPU. Built-in queue runs work | Private app network; never publish raw `/prompt`. Writable disposable `/data`, hydrated models mounted read-only, no provider credentials or auto-download |
+| MAF hydration sidecar | One-shot | Resolve approved OCI digest; delegate fetch/verify/promote to pinned **Model Artifact Foundry** `tools/hydrate.py` | Approved `approved.json` read-only, durable content-addressed model store. No GPU, no worker contact |
+| TrueNAS App Foundry | Existing external authority | Version-aware catalog source validation, immutable OCI materialization, inventory, host observe→plan→apply→verify and lifecycle | No site-specific host path or credential belongs in this public product repository |
+
+State is *deliberately* durable: stateless/disposable **containers** do not mean forgetting accepted user jobs or completed artifacts. A single Flock owner protects `ledger.json`; atomic file replace and fsync protect entries. On interrupted RUNNING work, controller marks `UNKNOWN_NEEDS_RECONCILIATION` and stops automatic duplication. The current queue is bounded (max 16 per batch, one active worker). Production-grade quota/capacity policies and user identities require authority review before exposing outside LAN/TLS boundary.
+
+## Three audiences
+
+- **Human UI/UX/a11y:** semantic HTML on `GET /`; labeled workflow selector, preset prompt selector, seed, fieldset/radio treatment selection, keyboard-native submit and status links; Basic authentication plus independent Origin/CSRF checks. This is a **functional accessibility baseline**, **not yet WCAG 2.2 AA qualified**. Screen-reader/keyboard journey, focus management, contrast, large text, error announcements and alternative-language review are future acceptance tests before production.
+- **Automation API/DX:** `Authorization: Bearer <token>`; `GET /api/v1/capabilities`, `POST /api/v1/batches`, `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/image`, `POST /api/v1/jobs/{id}/cancel`. `/healthz` confirms controller liveness only, **not GPU/worker readiness**. Job IDs are opaque. No raw graph ingestion allowed.
+- **Agents:** `/api/v1/capabilities` and `/api/v1/openapi.json` return two allowlisted toy workflows (`toy-cnn-v1`, `toy-conditioned-v1`), exact preset prompts (`red-square`, `blue-circle`), and bounds; job receipts include state/digests, not model self-scores. Agent cannot elevate model admission or invoke arbitrary tools by constructing JSON.
+
+For a bounded synthetic pair, an **authorized** client may submit (the token is provisioned via protected local file, never checked into Git):
+
+```bash
+curl --fail-with-body --silent --show-error \
+  -H "Authorization: Bearer $CONDITIONING_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"example-paired-0001","jobs":[{"workflow":"toy-cnn-v1","seed":31,"variant":"base","size":64},{"workflow":"toy-cnn-v1","seed":31,"variant":"modified","size":64}]}' \
+  https://conditioning.example.invalid/api/v1/batches
+```
+
+For the second **two-module synthetic conditioning** workflow, use the same API with `"workflow":"toy-conditioned-v1","prompt":"red-square","seed":71,"size":64` and paired `"variant":"base"` / `"variant":"modified"`. Only `red-square` and `blue-circle` are admitted. The baseline `toy-cnn-v1` must omit `prompt`. Both are deterministic, artificial fixtures, not arbitrary model/workflow execution.
+
+On restart after uncertain native queue acknowledgment, `UNKNOWN_NEEDS_RECONCILIATION` requires human/authorized agent observation; no blind rerun. Running-job cancellation is a request, not guaranteed termination of an already submitted image.
+
+## Reproducible build and public free CPU tests
+
+- `runtime/Dockerfile` overlays only the vetted tiny PyTorch CNN node on the upstream `romkey/comfyui-docker:0.38.0-cpu` **resolved by digest**. Disable manager, auto node downloads and partner API nodes. The CPU test uses ephemeral `/data`, non-root process, cap-drop, no new privileges, localhost-only mapped port.
+- `runtime/smoke.py` checks real Comfy `/object_info`, `/prompt`, `/queue`, `/history` and `/view`, and verifies two distinct 64×64 PNGs. **This proves only synthetic neural network / queue / output path**.
+- Go controller `go test -race -count=1 -v ./...` separately checks authentication, idempotency, browser CSRF, single-owner lock, durable ledger, restart ambiguity and native queue adapter using a fake Comfy API.
+- `runtime/sidecar/test_gate.py` tests strict MAF approval/digest rejection without any model downloads. Its container build must independently pass.
+- Native TrueNAS catalog source render runs against an **exact pin** of public `truenas/apps`; verifies normalized Compose structure/security without pulling candidate model or launching physical TrueNAS.
+
+## Model acquisition and future genuine generator runs
+
+Model Artifact Foundry approved v1 catalogue selects a logical ID and `ghcr.io/sempersupra/...@sha256:<exact>`. The short-lived sidecar invokes the pinned MAF `tools/hydrate.py` with pinned ORAS, which independently verifies bundle files, advances the content-addressed blob, and then atomically selects model. No arbitrary HF URL, secrets to ComfyUI, silent promotion or model bytes in Git.
+
+Only after verified digest-pinned worker/sidecar OCI images, Foundry-native F0–F6 source/render qualification, exact TrueNAS version/host GPU availability, actual model rights + data hashes, and local owner operation authority may the app run real generators. Inference success, scientific quality and human approval are different gates. The first proposed pairing remains FLUX.2 Klein original Qwen3-4B conditioner vs Heretic at fixed seed; do not auto-enable Z-Image/Krea, high-load video or paid cloud.
+
+## Native public cloud execution and source qualification (12 November 2026)
+
+The CI workflows use **public GitHub-hosted runners only**. They never publish a package, mutate a physical TrueNAS machine, consume private Actions minutes, allocate NVIDIA hardware or approve a model.
+
+- **Real CPU image and controller:** [public run #43199770751](https://github.com/SemperSupra/model-spelunker/actions/runs/43199770751) built a digest-resolved ComfyUI CPU overlay and exercised the native prompt queue, then sent authenticated two-job batches through the independently implemented Go controller to real ComfyUI and rehashed 64×64 PNGs. Browser/API security, idempotency, rollback, native PNG path checks and bounded admission are part of the Go race/contract tests. Current research ledger bounds: 64 outstanding jobs and 256 retained job records; use actual production quota and retention approval before wider access.
+- **Two-model tensor ABI:** [public run #43204223627](https://github.com/SemperSupra/model-spelunker/actions/runs/43204223627), CPU job, passed `NATIVE_TORCH_EMBEDDING_TO_IMAGE_MODULE_PASS`: separately instantiated tiny Torch `nn.Embedding` and `nn.Conv2d` models connected by a strict `TOY_EMBED` tensor interface. Original and modified toy conditioners used identical preset prompt, seed and untrained image model, and produced different verified PNG hashes. This is a **source/runtime interop control**, not an LLM, diffusion inference or measured output quality.
+- **Buildable separate OCI images:** [public run #43202437000](https://github.com/SemperSupra/model-spelunker/actions/runs/43202437000) successfully built and booted the nonroot scratch Go controller image, and built a ComfyUI CUDA-12.8 image from immutable `ghcr.io/romkey/comfyui-docker:0.38.0-cu128@sha256:0cb186782b6a333270ecde36a121b9949a9f9052325b886c754240a2c1b14ada`; PyTorch imported with CUDA 12.8 in **no-GPU** mode. Image IDs printed in CI are **local build identities, not published registry/manifest digests**.
+- **Real approved Foundry hydration:** [public run #43203031893](https://github.com/SemperSupra/model-spelunker/actions/runs/43203031893) used a separately built MAF + ORAS sidecar to pull the public already-approved `asr/faster-whisper/tiny` OCI artifact at exact digest `sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42`. A separate host verifier checked the approved selection, verified manifest, and the exact sizes and SHA-256s of all **four files**. Whisper Tiny does **not** supply a ComfyUI text-conditioning model, is not approved for this generator, and is never passed into the ComfyUI worker.
+- **Three native catalog source shapes:** [public CI #43205243752](https://github.com/SemperSupra/model-spelunker/actions/runs/43205243752), exact upstream `truenas/apps@827e1f004ff4efd307ae3609e4279f44ba6a2a58`, iX lib 2.3.18: CPU app source normalized; hydration sidecar source has `restart:no`, healthcheck disabled, private approved input and `service_completed_successfully` worker dependency; CUDA without an explicit NVIDIA selector fails rendering; synthetic selected CUDA device exists only in worker, never controller/hydration/permissions service. This is **source rendering**, not a native TrueNAS target-profile/F2–F6 runtime acceptance.
+
+### Version-pinned TrueNAS NVIDIA isolation caution
+
+The official iX lib 2.3.18 creates `NVIDIA_VISIBLE_DEVICES=<selected UUID>` on **every container**, including non-GPU controller and permissions-helper services, even after `remove_devices()` clears GPU reservations. This was identified and proven by the initial failed negative native source test. This product draft removes auto-NVIDIA env from nonworker containers and explicitly sets `NVIDIA_VISIBLE_DEVICES=void`, using an exact-version **private library container lookup**. The mitigation has passed public source-render checks only. TrueNAS App Foundry [intake #351](https://github.com/SemperSupra/truenas-app-foundry-private/issues/351) owns upstream/native isolation hardening, promotion and HIL; do **not** treat this version-bound workaround as a fully accepted production interface.
+
+### Outstanding controlled transition
+
+1. Owner-reviewed OCI release and independent GHCR **registry** digest verification for every product image; replace nonpullable zero-digest catalog placeholders only after Foundry promotion authority.
+2. TrueNAS Foundry F0–F6 on an admitted **disposable, exact-version TrueNAS guest** before any physical TrueNAS installation. CUDA driver, device passthrough, memory and coexistence with Ollama must be separately observed on the target.
+3. Model Artifact Foundry **approval of actual generator, original/Heretic text encoder and VAE** with rights, source revisions, real downloaded-byte SHA, role-specific Comfy model-path projection and no unapproved code execution.
+4. Explicit reviewed production role/workflow allowlists, per-user authorization, bounded retention/quota, independent human keyboard/screen-reader and WCAG audits, and model-quality evaluation. The current API accepts only synthetic toy jobs, and the original-versus-Heretic real generator campaign remains UNKNOWN_NOT_EXECUTED.
+
+**Current truth:** public CPU single-module and two-module synthetic execution PASS; actual Go controller-to-ComfyUI CNN batches PASS; Go-to-two-module toy workflow contract/integration is subject to final native CI; approved Tiny Foundry acquisition and four-file byte verification PASS; scratch controller and no-GPU CUDA wheel-image builds PASS; official TrueNAS baseline/MAF one-shot/CUDA policy **SOURCE RENDER PASS**; model-specific inference, actual GPU and native TrueNAS lifecycle **NOT EXECUTED**, product images **NOT PUBLISHED**.
+
