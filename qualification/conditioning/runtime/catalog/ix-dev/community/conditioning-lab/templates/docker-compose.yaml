@@ -1,4 +1,9 @@
 {% set tpl = ix_lib.base.render.Render(values) %}
+{# Fail before composing any service if CUDA is selected without explicit
+   NVIDIA GPU selection. CPU source controls never claim GPU execution. #}
+{% if values.worker.mode == "cuda" and not tpl.funcs.has_nvidia_gpu() %}
+  {% do tpl.funcs.fail("CUDA_MODE_REQUIRES_EXPLICIT_NVIDIA_GPU_ADMISSION") %}
+{% endif %}
 {% set internal = tpl.networks.create_internal("conditioning-worker-net") %}
 {% set perms = tpl.deps.perms("conditioning-permissions") %}
 
