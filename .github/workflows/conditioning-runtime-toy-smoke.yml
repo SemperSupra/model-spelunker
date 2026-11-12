@@ -170,6 +170,33 @@ jobs:
           assert not x['real_generator_attested']
           assert not x['gpu_inference_attested']
           PY
+      - name: Build real stateless Go controller for integrated native test
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd qualification/conditioning/runtime/controller &&
+            go build -trimpath -buildvcs=false -o "$RUNNER_TEMP/conditioning-controller" .)
+          test -x "$RUNNER_TEMP/conditioning-controller"
+      - name: Authenticated API → durable queue → real ComfyUI worker → PNG evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          token="$(openssl rand -hex 24)"
+          printf '%s' "$token" > "$RUNNER_TEMP/conditioning-controller.token"
+          mkdir -m 0700 "$RUNNER_TEMP/conditioning-ledger"
+          CONTROLLER_TOKEN_FILE="$RUNNER_TEMP/conditioning-controller.token" \
+          CONTROLLER_STATE_DIR="$RUNNER_TEMP/conditioning-ledger" \
+          CONTROLLER_UI_ORIGIN='http://127.0.0.1:8090' \
+          CONTROLLER_COMFY_URL='http://127.0.0.1:8188' \
+          CONTROLLER_BIND='127.0.0.1:8090' \
+            "$RUNNER_TEMP/conditioning-controller" > "$RUNNER_TEMP/controller.log" 2>&1 &
+          ctl_pid=$!
+          trap 'kill "$ctl_pid" 2>/dev/null || true' EXIT
+          CONDITIONING_TEST_TOKEN="$token" \
+            python3 qualification/conditioning/runtime/controller/integration_smoke.py
+          kill "$ctl_pid" 2>/dev/null || true
+
       - name: Postflight and dispose ephemeral worker
         if: always()
         shell: bash
