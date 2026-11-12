@@ -23,10 +23,12 @@ GENERATORS = {
     "z-image-turbo": "Tongyi-MAI/Z-Image-Turbo",
     "flux2-klein-4b": "black-forest-labs/FLUX.2-klein-4B",
 }
-ENCODERS = {
-    "base": "Qwen/Qwen3-4B",
-    "heretic": "CCSSNE/DreamFast-qwen3-4b-heretic",
+BASE_BY_GENERATOR = {
+    "z-image-turbo": "Comfy-Org/Z-Image-Turbo",
+    "flux2-klein-4b": "Comfy-Org/Flux-2-Klein-4B",
 }
+ENCODERS = {"base", "heretic"}
+HERETIC_REPO = "CCSSNE/DreamFast-qwen3-4b-heretic"
 PLAN_FIELDS = {"schema", "campaign", "generator", "generator_repo", "generator_revision",
                "generator_weights_sha256", "vae_sha256", "workflow_sha256",
                "runtime_image_sha256", "comfyui_commit", "preprocess_sha256",
@@ -120,8 +122,9 @@ def validate_plan(plan: dict) -> list[tuple[str, str, int]]:
         if not isinstance(entry, dict) or set(entry) != ENCODER_FIELDS:
             raise Denied("ENCODER_FIELDS")
         variant = entry["variant"]
+        expected_repo = BASE_BY_GENERATOR[generator] if variant == "base" else HERETIC_REPO
         if (variant not in ENCODERS or variant in seen
-            or entry["repository"] != ENCODERS[variant]
+            or entry["repository"] != expected_repo
             or not _revision(entry["revision"]) or not _hash(entry["weights_sha256"])
             or entry["quantization"] != plan["quantization"]):
             raise Denied("ENCODER_IDENTITY_OR_QUANTIZATION_DRIFT")
@@ -155,6 +158,7 @@ def inspect_observations(doc: dict, plan: dict, plan_sha256: str) -> dict:
     control = controls_digest(plan)
     expected_set = set(expected)
     seen = set()
+    native_refs = set()
     for run in doc["runs"]:
         if not isinstance(run, dict) or set(run) != RUN_FIELDS:
             raise Denied("RUN_FIELDS_OR_SELF_SCORING")
@@ -170,6 +174,9 @@ def inspect_observations(doc: dict, plan: dict, plan_sha256: str) -> dict:
             raise Denied("RUN_MODEL_OR_CONTROLS_DRIFT")
         if (not _hash(run["image_sha256"]) or not _slug(run["native_run_ref"])):
             raise Denied("OUTPUT_PROVENANCE_INCOMPLETE")
+        if run["native_run_ref"] in native_refs:
+            raise Denied("NATIVE_RUN_REF_REUSED")
+        native_refs.add(run["native_run_ref"])
     return {
         "schema": "conditioning-doe-structure-result/v1",
         "campaign": "model-spelunker-193",
