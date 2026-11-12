@@ -70,6 +70,58 @@ jobs:
                 "upstream_ref":"827e1f004ff4efd307ae3609e4279f44ba6a2a58",
                 "real_images_pulled":False,"native_truenas_not_executed":True},sort_keys=True))
           PY
+      - name: Official TrueNAS sidecar-enabled one-shot source render
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/truenas-apps"
+          cd "$src"
+          python3 .github/scripts/ci.py --app conditioning-lab --train community \
+            --test-file hydration-values.yaml --skip-metadata --render-only=true
+          rendered="$src/ix-dev/community/conditioning-lab/templates/rendered/docker-compose.yaml"
+          docker compose -f "$rendered" config --format json > "$RUNNER_TEMP/maf-native-source.json"
+          python3 - "$RUNNER_TEMP/maf-native-source.json" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))['services']
+          assert 'conditioning-hydrator' in s
+          h=s['conditioning-hydrator']
+          assert h['user']=='10001:10001'
+          assert h['restart']=='no',"hydrator was misrepresented as a resident service"
+          assert not h.get('ports') and not h.get('devices')
+          assert '--hydrate' in h.get('command',[])
+          assert 'asr/faster-whisper/tiny' in h.get('command',[])
+          assert 'sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42' in h.get('command',[])
+          assert s['conditioning-worker']['depends_on']['conditioning-hydrator']['condition']=='service_completed_successfully'
+          print('OFFICIAL_IX_MAF_ONE_SHOT_SOURCE_RENDER_PASS_NO_DOWNLOAD')
+          PY
+      - name: Official TrueNAS CUDA admission requires explicit GPU selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/truenas-apps"
+          cd "$src"
+          if python3 .github/scripts/ci.py --app conditioning-lab --train community \
+            --test-file cuda-denied-values.yaml --skip-metadata --render-only=true \
+            > "$RUNNER_TEMP/cuda-denied.log" 2>&1; then
+            echo 'HOLD: CUDA rendered without explicit GPU selection'
+            exit 2
+          fi
+          grep -q 'CUDA_MODE_REQUIRES_EXPLICIT_NVIDIA_GPU_ADMISSION' "$RUNNER_TEMP/cuda-denied.log"
+          python3 .github/scripts/ci.py --app conditioning-lab --train community \
+            --test-file cuda-admitted-values.yaml --skip-metadata --render-only=true
+          rendered="$src/ix-dev/community/conditioning-lab/templates/rendered/docker-compose.yaml"
+          docker compose -f "$rendered" config --format json > "$RUNNER_TEMP/cuda-admitted.json"
+          python3 - "$RUNNER_TEMP/cuda-admitted.json" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))['services']
+          c=s['conditioning-controller'];w=s['conditioning-worker']
+          fake='GPU-00000000-0000-0000-0000-000000000000'
+          assert fake in json.dumps(w),"selected GPU omitted from worker"
+          assert fake not in json.dumps(c),"controller gained GPU"
+          assert not w.get('ports'),"native ComfyUI GPU endpoint published"
+          assert 'cuda' not in s.get('conditioning-hydrator',{}).get('image','')
+          print('OFFICIAL_IX_CUDA_POLICY_SOURCE_RENDER_PASS_HIL_NOT_RUN')
+          PY
 
   model-hydration-sidecar:
     runs-on: ubuntu-latest
