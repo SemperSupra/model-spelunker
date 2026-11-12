@@ -175,6 +175,74 @@ func TestUIRejectsOversizedForm(t *testing.T){
  w:=httptest.NewRecorder();s.ServeHTTP(w,req)
  if w.Code!=400{t.Fatalf("oversized UI body accepted: %d",w.Code)}
 }
+func TestBoundedAdmissionAndIdempotentReplayWhenFull(t *testing.T){
+ s,_:=newTest(t)
+ req:=BatchRequest{RequestID:"limit-existing-key",Jobs:[]JobInput{fixtureJob()}}
+ ids,_,err:=s.submit(req)
+ if err!=nil||len(ids)!=1{t.Fatal("initial job",err)}
+ for i:=0;i<maxPendingJobs-1;i++{
+  key:=fmt.Sprintf("%032x",i+10000)
+  s.ledger.Jobs[key]=&Job{ID:key,State:"QUEUED",Request:fixtureJob()}
+ }
+ if _,_,err:=s.submit(BatchRequest{RequestID:"limit-new-batch",Jobs:[]JobInput{fixtureJob()}});err==nil||err.Error()!="QUEUE_CAPACITY_REACHED"{
+  t.Fatalf("pending cap failed: %v",err)
+ }
+ again,replay,err:=s.submit(req)
+ if err!=nil||!replay||again[0]!=ids[0]{t.Fatalf("retry blocked after capacity: %v",err)}
+ for i:=0;len(s.ledger.Jobs)<maxTotalJobs;i++{
+  key:=fmt.Sprintf("%032x",i+20000)
+  s.ledger.Jobs[key]=&Job{ID:key,State:"COMPLETED",Request:fixtureJob()}
+ }
+ if _,_,err:=s.submit(BatchRequest{RequestID:"limit-total-new",Jobs:[]JobInput{fixtureJob()}});err==nil||err.Error()!="LEDGER_CAPACITY_REACHED"{
+  t.Fatalf("total cap failed: %v",err)
+ }
+}
+func TestCancellationWriteFailureRollsBackInMemory(t *testing.T){
+ s,dir:=newTest(t)
+ ids,_,err:=s.submit(BatchRequest{RequestID:"cancel-persist-key",Jobs:[]JobInput{fixtureJob()}})
+ if err!=nil{t.Fatal(err)}
+ original:=filepath.Join(dir,"ledger.json")
+ backup:=filepath.Join(dir,"ledger.backup")
+ if err=os.Rename(original,backup);err!=nil{t.Fatal(err)}
+ if err=os.Mkdir(original,0700);err!=nil{t.Fatal(err)}
+ code,_:=post(t,s,"/api/v1/jobs/"+ids[0]+"/cancel","Bearer "+string(fixtureToken),struct{}{})
+ if code!=503{t.Fatalf("cancel write failure returned %d",code)}
+ if s.ledger.Jobs[ids[0]].State!="QUEUED"{t.Fatal("uncommitted cancellation changed in-memory authority")}
+ if err=os.Remove(original);err!=nil{t.Fatal(err)}
+ if err=os.Rename(backup,original);err!=nil{t.Fatal(err)}
+}
+func TestOversizedImageDeniedBeforeRead(t *testing.T){
+ s,dir:=newTest(t)
+ ids,_,err:=s.submit(BatchRequest{RequestID:"oversize-result-key",Jobs:[]JobInput{fixtureJob()}})
+ if err!=nil{t.Fatal(err)}
+ s.ledger.Jobs[ids[0]].ImageSHA256=strings.Repeat("a",64)
+ d:=filepath.Join(dir,"results")
+ if err=os.MkdirAll(d,0700);err!=nil{t.Fatal(err)}
+ p:=filepath.Join(d,ids[0]+".png")
+ f,err:=os.Create(p);if err!=nil{t.Fatal(err)}
+ if err=f.Truncate(maxResultBytes+1);err!=nil{t.Fatal(err)}
+ f.Close()
+ req:=httptest.NewRequest("GET","/api/v1/jobs/"+ids[0]+"/image",nil)
+ req.Header.Set("Authorization","Bearer "+string(fixtureToken))
+ w:=httptest.NewRecorder();s.ServeHTTP(w,req)
+ if w.Code!=503{t.Fatalf("oversized image read and served: %d",w.Code)}
+}
+func TestNativeWorkerPathTraversalDenied(t *testing.T){
+ fake:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  switch {
+  case r.URL.Path=="/prompt":io.WriteString(w,`{"prompt_id":"native-prompt-evil"}`)
+  case r.URL.Path=="/history/native-prompt-evil":
+   io.WriteString(w,`{"native-prompt-evil":{"status":{"status_str":"success"},"outputs":{"2":{"images":[{"filename":"../../config.ini","type":"output","subfolder":""}]}}}}`)
+  case r.URL.Path=="/view": t.Error("unsafe output requested through view")
+  default:http.NotFound(w,r)
+  }
+ }))
+ defer fake.Close()
+ s,err:=New(t.TempDir(),"http://127.0.0.1:8090",fake.URL,fixtureToken)
+ if err!=nil{t.Fatal(err)};defer s.Close()
+ _,_,err=s.execute(fixtureJob())
+ if err==nil||err.Error()!="OUTPUT_PATH_NOT_ALLOWED"{t.Fatalf("native path traversal admitted: %v",err)}
+}
 func TestNativeQueueDispatchAndDurablePNG(t *testing.T){
  imageData:=image.NewRGBA(image.Rect(0,0,64,64))
  for y:=0;y<64;y++{for x:=0;x<64;x++{imageData.Set(x,y,color.RGBA{R:uint8(x*3),G:uint8(y*3),B:42,A:255})}}
