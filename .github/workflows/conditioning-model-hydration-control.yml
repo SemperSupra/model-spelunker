@@ -7,6 +7,10 @@ on:
       - '.github/workflows/conditioning-model-hydration-control.yml'
   workflow_dispatch:
 
+concurrency:
+  group: conditioning-maf-hydration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
