@@ -18,19 +18,12 @@ network:
     port_number: 31095
 ix_volumes:
   jobs: /opt/tests/mnt/conditioning-lab/jobs
-  worker-data: /opt/tests/mnt/conditioning-lab/worker-data
   approved-models: /opt/tests/mnt/conditioning-lab/approved-models
 storage:
   jobs:
     type: ix_volume
     ix_volume_config:
       dataset_name: jobs
-      create_host_path: true
-      acl_enable: false
-  worker_data:
-    type: ix_volume
-    ix_volume_config:
-      dataset_name: worker-data
       create_host_path: true
       acl_enable: false
   models:
