@@ -1,0 +1,105 @@
+name: Conditioning MAF Approved Tiny Artifact Hydration (Public One Shot)
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/conditioning/runtime/sidecar/**'
+      - '.github/workflows/conditioning-model-hydration-control.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  maf-approved-tiny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build pinned public Model Artifact Foundry hydration container
+        shell: bash
+        run: |
+          set -euo pipefail
+          python='ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58'
+          oras='ghcr.io/oras-project/oras:v1.3.6@sha256:9cfb578be975b762fd898b9d004243d8003aeb807a3e15b2ed212cdd1326c9eb'
+          docker build --pull --progress=plain \
+            --build-arg "PYTHON_BASE_IMAGE=$python" \
+            --build-arg "ORAS_IMAGE=$oras" \
+            --build-arg "SOURCE_SHA=$(git rev-parse HEAD)" \
+            -t local/conditioning-maf-verified:pr \
+            qualification/conditioning/runtime/sidecar
+          docker image inspect local/conditioning-maf-verified:pr \
+            --format 'LOCAL_SIDECAR_IMAGE_ID={{.Id}}'
+      - name: Extract exactly pinned official MAF approval catalog from container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker create --name maf-catalog-extraction local/conditioning-maf-verified:pr >/dev/null
+          docker cp maf-catalog-extraction:/opt/maf/catalog/approved.json "$RUNNER_TEMP/approved.json"
+          docker rm maf-catalog-extraction >/dev/null
+          python3 - "$RUNNER_TEMP/approved.json" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          e=data['artifacts']['asr/faster-whisper/tiny']
+          assert e['oci_repository']=='ghcr.io/sempersupra/model-artifact-foundry'
+          assert e['approved_digest']=='sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42'
+          assert e['license_spdx_id']=='MIT'
+          print('MAF_EXISTING_TINY_APPROVAL_EXACT_PIN_CONFIRMED')
+          PY
+      - name: Bounded real public ORAS hydration using existing approved Tiny model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -m 0700 "$RUNNER_TEMP/maf-cache"
+          sudo chown 10001:10001 "$RUNNER_TEMP/maf-cache"
+          timeout 240 docker run --rm \
+            --read-only --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges \
+            --cpus 2 --memory 2g --network bridge \
+            --env HOME=/tmp \
+            --tmpfs '/tmp:rw,nosuid,nodev,uid=10001,gid=10001,size=256m' \
+            --mount "type=bind,src=$RUNNER_TEMP/approved.json,dst=/approval/approved.json,readonly" \
+            --mount "type=bind,src=$RUNNER_TEMP/maf-cache,dst=/model-cache" \
+            local/conditioning-maf-verified:pr \
+            --catalog /approval/approved.json \
+            --id asr/faster-whisper/tiny \
+            --approved-digest sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42 \
+            --cache-root /model-cache --hydrate
+      - name: Independently rehash selected file bytes and immutable MAF manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP/maf-cache" <<'PY'
+          import hashlib,json,pathlib,sys
+          root=pathlib.Path(sys.argv[1])
+          logical='asr/faster-whisper/tiny'
+          approved='sha256:f2d664ae986b0b0598037a9f0b929fd0b0b748871474a06c84658c1f2a1a4b42'
+          selected=root/'selected'/'asr__faster-whisper__tiny.json'
+          data=json.loads(selected.read_text())
+          assert data['logical_id']==logical and data['digest']==approved
+          blob=root/'blobs'/approved.replace(':','-')
+          verified=json.loads((blob/'.verified.json').read_text())
+          assert verified['logical_id']==logical and verified['digest']==approved
+          manifest=json.loads((blob/'bundle-manifest.json').read_text())
+          assert manifest['logical_id']==logical
+          actual={p.name for p in (blob/'model').iterdir()}
+          expected={entry['path'] for entry in manifest['files']}
+          assert actual==expected and len(actual)>0
+          for entry in manifest['files']:
+            p=blob/'model'/entry['path']
+            assert p.is_file() and not p.is_symlink()
+            assert p.stat().st_size==entry['size_bytes']
+            h=hashlib.sha256()
+            with p.open('rb') as f:
+              for block in iter(lambda:f.read(1024*1024),b''):h.update(block)
+            assert h.hexdigest()==entry['sha256']
+          print(json.dumps({'status':'MAF_APPROVED_TINY_NATIVE_HYDRATION_FILE_HASH_PASS',
+              'logical_id':logical,'approved_oci_digest':approved,
+              'file_count':len(actual),'quality_qualified':False,
+              'comfy_compatible':False,'no_gpu':True},sort_keys=True))
+          PY
+      - name: Cleanup ephemeral model artifacts and sidecar
+        if: always()
+        run: |
+          docker rm -f maf-catalog-extraction || true
+          docker image rm local/conditioning-maf-verified:pr || true
