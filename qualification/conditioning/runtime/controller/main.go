@@ -187,6 +187,9 @@ func(s *Server)ServeHTTP(w http.ResponseWriter,r *http.Request){
   }}})
   if err!=nil{fail(w,400,"INVALID_BOUNDED_JOB");return}
   http.Redirect(w,r,"/api/v1/jobs/"+ids[0],http.StatusSeeOther)
+ case r.URL.Path=="/api/v1/openapi.json"&&r.Method=="GET":
+  w.Header().Set("Content-Type","application/json; charset=utf-8")
+  _,_=w.Write(embeddedOpenAPI)
  case r.URL.Path=="/api/v1/capabilities"&&r.Method=="GET":
   jsonOut(w,200,map[string]any{"schema":"conditioning-capabilities/v1",
    "allowed_workflows":[]string{"toy-cnn-v1"},"max_batch":16,
@@ -253,14 +256,25 @@ var home=template.Must(template.New("home").Parse(`<!doctype html>
 <button type="submit">Queue toy image</button></form>
 <p><a href="/api/v1/jobs">View jobs and statuses (JSON)</a></p>
 <p><a href="/api/v1/capabilities">API and agent capabilities (JSON)</a></p>
-</main></body></html>`))
+<p><a href="/api/v1/openapi.json">Automation and agent API definition (OpenAPI JSON)</a></p>
+<section aria-labelledby="jobs-heading"><h2 id="jobs-heading">Recent submitted jobs</h2>
+<table><caption>Current queue state. This view does not automatically refresh.</caption>
+<thead><tr><th scope="col">Job</th><th scope="col">Treatment</th><th scope="col">State</th><th scope="col">Result</th></tr></thead>
+<tbody>{{range .Jobs}}<tr><th scope="row">{{.ID}}</th><td>{{.Request.Variant}}</td><td>{{.State}}</td>
+<td>{{if .ImageSHA256}}<a href="/api/v1/jobs/{{.ID}}/image">View generated toy image</a>{{else}}No image yet{{end}}</td></tr>
+{{else}}<tr><td colspan="4">No jobs submitted yet.</td></tr>{{end}}</tbody></table>
+</section></main></body></html>`))
 func(s *Server)ui(w http.ResponseWriter,r *http.Request){
  b:=make([]byte,24);if _,err:=rand.Read(b);err!=nil{fail(w,503,"RANDOMNESS_UNAVAILABLE");return}
  csrf:=hex.EncodeToString(b)
  http.SetCookie(w,&http.Cookie{Name:"conditioning_csrf",Value:csrf,Path:"/ui/",HttpOnly:true,
   Secure:strings.HasPrefix(s.origin,"https://"),SameSite:http.SameSiteStrictMode,MaxAge:900})
  w.Header().Set("Content-Type","text/html; charset=utf-8")
- _=home.Execute(w,map[string]string{"Token":csrf})
+ s.mu.Lock()
+ rows:=make([]Job,0,len(s.ledger.Order))
+ for _,id:=range s.ledger.Order{if j:=s.ledger.Jobs[id];j!=nil{rows=append(rows,*j)}}
+ s.mu.Unlock()
+ _=home.Execute(w,struct{Token string;Jobs []Job}{Token:csrf,Jobs:rows})
 }
 func(s *Server)validCSRF(r *http.Request)bool{
  if r.Header.Get("Origin")!=s.origin{return false}
