@@ -122,6 +122,27 @@ func TestAccessibleBasicFormWithOriginAndCSRF(t *testing.T){
  if v:=makeRequest("https://attacker.invalid");v!=403{t.Fatalf("CSRF accepted %d",v)}
  if v:=makeRequest("http://127.0.0.1:8090");v!=303{t.Fatalf("valid UI rejected %d",v)}
 }
+func TestDurableCommitFailureNeverDispatchesOrRetainsInMemoryJob(t *testing.T){
+ s,dir:=newTest(t)
+ if err:=os.Mkdir(filepath.Join(dir,"ledger.json"),0700);err!=nil{t.Fatal(err)}
+ request:=BatchRequest{RequestID:"durability-test-id",Jobs:[]JobInput{fixtureJob()}}
+ if _,_,err:=s.submit(request);err==nil{t.Fatal("unwritable ledger accepted")}
+ if len(s.ledger.Jobs)!=0||len(s.ledger.Order)!=0||len(s.ledger.Batches)!=0{
+  t.Fatal("unpersisted job remains eligible for worker dispatch")
+ }
+ if err:=os.Remove(filepath.Join(dir,"ledger.json"));err!=nil{t.Fatal(err)}
+ if ids,_,err:=s.submit(request);err!=nil||len(ids)!=1{t.Fatal("clean retry after valid rollback rejected",err)}
+}
+func TestUIRejectsOversizedForm(t *testing.T){
+ s,_:=newTest(t)
+ basic:="Basic "+base64.StdEncoding.EncodeToString([]byte("operator:"+string(fixtureToken)))
+ req:=httptest.NewRequest("POST","/ui/submit",strings.NewReader(strings.Repeat("a",9000)))
+ req.Header.Set("Authorization",basic)
+ req.Header.Set("Origin","http://127.0.0.1:8090")
+ req.Header.Set("Content-Type","application/x-www-form-urlencoded")
+ w:=httptest.NewRecorder();s.ServeHTTP(w,req)
+ if w.Code!=400{t.Fatalf("oversized UI body accepted: %d",w.Code)}
+}
 func TestNativeQueueDispatchAndDurablePNG(t *testing.T){
  imageData:=image.NewRGBA(image.Rect(0,0,64,64))
  for y:=0;y<64;y++{for x:=0;x<64;x++{imageData.Set(x,y,color.RGBA{R:uint8(x*3),G:uint8(y*3),B:42,A:255})}}
