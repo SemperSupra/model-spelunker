@@ -30,7 +30,7 @@ def mock_plan():
         ],
         "seeds": [17, 101],
         "encoders": [
-            {"variant": "base", "repository": "Qwen/Qwen3-4B",
+            {"variant": "base", "repository": "Comfy-Org/Z-Image-Turbo",
              "revision": R("c"), "weights_sha256": H("3"), "quantization": "bf16"},
             {"variant": "heretic", "repository": "CCSSNE/DreamFast-qwen3-4b-heretic",
              "revision": R("d"), "weights_sha256": H("4"), "quantization": "bf16"}
@@ -74,6 +74,7 @@ class ConditioningProtocolTests(unittest.TestCase):
         p = copy.deepcopy(self.plan)
         p.update(generator="flux2-klein-4b", generator_repo="black-forest-labs/FLUX.2-klein-4B",
                  generator_revision=R("e"), generator_weights_sha256=H("7"))
+        p["encoders"][0]["repository"] = "Comfy-Org/Flux-2-Klein-4B"
         obs = mock_observations(p)
         self.assertEqual(judge(p, obs)["generator"], "flux2-klein-4b")
 
@@ -171,6 +172,46 @@ class ConditioningProtocolTests(unittest.TestCase):
         self.obs["runs"][0]["native_run_ref"] = "my-claimed-run-id"
         r = judge(self.plan, self.obs)
         self.assertFalse(r["native_inference_attested"])
+
+    def test_reused_native_run_ref_denied(self):
+        self.obs["runs"][1]["native_run_ref"] = self.obs["runs"][0]["native_run_ref"]
+        with self.assertRaisesRegex(Denied, "NATIVE_RUN_REF_REUSED"):
+            judge(self.plan, self.obs)
+
+    def test_generic_qwen_upstream_not_accepted_as_generator_native_base(self):
+        self.plan["encoders"][0]["repository"] = "Qwen/Qwen3-4B"
+        with self.assertRaisesRegex(Denied, "ENCODER_IDENTITY"):
+            validate_plan(self.plan)
+
+    def test_source_observation_has_six_live_pins_and_shared_comfy_encoder(self):
+        source_path = Path(__file__).parent / "source-observations/conditioning-hf-20261112.json"
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+        self.assertEqual(source["schema"], "conditioning-public-source-census/v1")
+        self.assertEqual(source["native_evidence"]["workflow_run_id"], 43190428793)
+        self.assertEqual(source["native_evidence"]["job_id"], 131088046310)
+        self.assertEqual(source["native_evidence"]["source_commit"], "63f8b76edb6b693e2fdcc3827bb715c3e806a4d5")
+        self.assertTrue(source["limits"]["no_weight_downloads"])
+        self.assertFalse(source["findings"]["measured_image_generation"])
+        models = {v["model"]: v for v in source["source_metadata"]}
+        self.assertEqual(len(models), 6)
+        for m in models.values():
+            self.assertEqual(m["license"], "apache-2.0")
+            self.assertFalse(m["gated"])
+            self.assertFalse(m["disabled"])
+            self.assertFalse(m["weight_bytes_verified"])
+            self.assertEqual(len(m["sha"]), 40)
+            for file in m["selected"]:
+                self.assertEqual(len(file["oid"]), 64)
+                self.assertGreater(file["size"], 0)
+        def oid(model, path):
+            return next(f["oid"] for f in models[model]["selected"] if f["path"] == path)
+        name = "split_files/text_encoders/qwen_3_4b.safetensors"
+        z = oid("Comfy-Org/Z-Image-Turbo", name)
+        flux = oid("Comfy-Org/Flux-2-Klein-4B", name)
+        self.assertEqual(z, flux)
+        self.assertEqual(z, source["findings"]["shared_comfy_original_encoder"]["source_object_oid_sha256"])
+        modified = oid("CCSSNE/DreamFast-qwen3-4b-heretic", "comfyui/qwen3-4b-heretic.safetensors")
+        self.assertNotEqual(z, modified)
 
     def test_strict_digest_inputs_duplicate_and_nonfinite(self):
         with tempfile.TemporaryDirectory() as td:
