@@ -15,6 +15,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  foundry-native-catalog-source:
+    name: Exact TrueNAS official-shape catalog source rendering
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Pinned official TrueNAS Apps source-only renderer
+        shell: bash
+        run: |
+          set -euo pipefail
+          pin='827e1f004ff4efd307ae3609e4279f44ba6a2a58'
+          src="$RUNNER_TEMP/truenas-apps"
+          git init -q "$src"
+          git -C "$src" remote add origin https://github.com/truenas/apps.git
+          git -C "$src" fetch -q --depth 1 origin "$pin"
+          git -C "$src" checkout -q --detach FETCH_HEAD
+          [[ "$(git -C "$src" rev-parse HEAD)" == "$pin" ]] || exit 2
+          cp -a qualification/conditioning/runtime/catalog/ix-dev/community/conditioning-lab \
+            "$src/ix-dev/community/"
+          python3 -m venv "$RUNNER_TEMP/ix-venv"
+          "$RUNNER_TEMP/ix-venv/bin/python" -m pip install \
+            --disable-pip-version-check --no-input 'PyYAML==6.0.2'
+          export PATH="$RUNNER_TEMP/ix-venv/bin:$PATH"
+          cd "$src"
+          python3 .github/scripts/ci.py \
+            --app conditioning-lab --train community \
+            --test-file basic-values.yaml --skip-metadata --render-only=true
+          json_path="$src/ix-dev/community/conditioning-lab/templates/rendered/docker-compose.yaml"
+          test -s "$json_path"
+          docker compose -f "$json_path" config --format json \
+            > "$RUNNER_TEMP/conditioning-foundry-compose.json"
+          python3 - "$RUNNER_TEMP/conditioning-foundry-compose.json" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          services=x["services"]
+          assert "conditioning-controller" in services and "conditioning-worker" in services
+          c=services["conditioning-controller"];w=services["conditioning-worker"]
+          assert c.get("privileged") is not True and w.get("privileged") is not True
+          assert c.get("user")=="10001:10001",c.get("user")
+          assert w.get("user")=="1000:1000",w.get("user")
+          assert c.get("read_only") is True
+          assert not w.get("ports"),"worker unexpectedly exposed publicly"
+          assert not c.get("devices") and not w.get("devices")
+          for svc in services.values():
+            assert "/var/run/docker.sock" not in json.dumps(svc)
+            assert "0000000000000000000000000000000000000000000000000000000000000000" in svc.get("image",""),"unreleased digest became live unexpectedly"
+          print(json.dumps({"status":"SOURCE_RENDER_ONLY","services":sorted(services),
+                "upstream_ref":"827e1f004ff4efd307ae3609e4279f44ba6a2a58",
+                "real_images_pulled":False,"native_truenas_not_executed":True},sort_keys=True))
+          PY
+
   model-hydration-sidecar:
     runs-on: ubuntu-latest
     timeout-minutes: 10
