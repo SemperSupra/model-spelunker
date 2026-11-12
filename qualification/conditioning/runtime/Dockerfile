@@ -8,7 +8,7 @@ LABEL org.opencontainers.image.source="https://github.com/SemperSupra/model-spel
       org.opencontainers.image.description="Disposable ComfyUI conditioning runtime with synthetic Torch fixture" \
       org.opencontainers.image.licenses="GPL-3.0-or-later" \
       org.opencontainers.image.revision="${SOURCE_SHA}"
-COPY --chown=1000:1000 toy_node/__init__.py /opt/bundled_nodes/conditioning_toy_fixture/__init__.py
+COPY --chown=1000:1000 toy_node/ /opt/bundled_nodes/conditioning_toy_fixture/
 # Upstream entrypoint links only our audited fixture. No bundled manager, auto fetch,
 # custom-node pip installation or startup mutations outside the ephemeral /data.
 ENV COMFYUI_ENABLE_MANAGER=false \
