@@ -11,6 +11,10 @@ images:
   worker_cuda_image:
     repository: ghcr.io/sempersupra/conditioning-comfy-worker-cuda
     tag: "unpublished@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  # Pinned official TrueNAS utility image needed by ix-lib permissions helper.
+  container_utils_image:
+    repository: ghcr.io/truenas/containers/container-utils
+    tag: "1.1.2@sha256:6ddfdc314af9d18cfacb836ad266ef0ed91fecaa3686b20be72e464972860c08"
   hydrator_image:
     repository: ghcr.io/sempersupra/conditioning-maf-sidecar
     tag: "unpublished@sha256:0000000000000000000000000000000000000000000000000000000000000000"
