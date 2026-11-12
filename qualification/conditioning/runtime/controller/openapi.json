@@ -3,7 +3,7 @@
   "info": {
     "title": "Conditioning Lab Bounded Job API",
     "version": "0.0.1-source-only",
-    "description": "Experimental authenticated controller for synthetic model jobs. Not GPU, TrueNAS, or real generator admission."
+    "description": "Experimental authenticated controller for single-CNN and two-module synthetic conditioning jobs. No GPU, TrueNAS, or real generative model admission."
   },
   "servers": [
     {
@@ -176,7 +176,8 @@
           "workflow": {
             "type": "string",
             "enum": [
-              "toy-cnn-v1"
+              "toy-cnn-v1",
+              "toy-conditioned-v1"
             ],
             "description": "Synthetic Torch fixture; not an image generation model"
           },
@@ -197,8 +198,48 @@
             "minimum": 32,
             "maximum": 128,
             "multipleOf": 16
+          },
+          "prompt": {
+            "type": "string",
+            "enum": [
+              "red-square",
+              "blue-circle"
+            ],
+            "description": "Mandatory for toy-conditioned-v1; omitted for toy-cnn-v1. Synthetic fixed prompts only."
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "workflow": {
+                  "const": "toy-conditioned-v1"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "prompt"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "workflow": {
+                  "const": "toy-cnn-v1"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "prompt"
+                ]
+              }
+            }
+          }
+        ]
       }
     },
     "parameters": {
