@@ -69,7 +69,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - "$RUNNER_TEMP/maf-cache" <<'PY'
+          # Files are deliberately owned 10001:10001 by the nonroot sidecar.
+          # Independent ephemeral GitHub-hosted verifier reads as root without
+          # changing their ownership or filesystem contents.
+          sudo python3 - "$RUNNER_TEMP/maf-cache" <<'PY'
           import hashlib,json,pathlib,sys
           root=pathlib.Path(sys.argv[1])
           logical='asr/faster-whisper/tiny'
