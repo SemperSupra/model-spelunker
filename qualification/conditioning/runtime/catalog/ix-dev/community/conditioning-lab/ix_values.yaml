@@ -1,0 +1,22 @@
+# SOURCE-ONLY PLACEHOLDERS: NOT RELEASED OR PULLABLE.
+# Promotion requires replacing every value with real exact OCI digest from
+# trusted candidate build + independent pullback. Do not install this seed.
+images:
+  controller_image:
+    repository: ghcr.io/sempersupra/conditioning-controller
+    tag: "unpublished@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  worker_cpu_image:
+    repository: ghcr.io/sempersupra/conditioning-comfy-worker-cpu
+    tag: "unpublished@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  worker_cuda_image:
+    repository: ghcr.io/sempersupra/conditioning-comfy-worker-cuda
+    tag: "unpublished@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  hydrator_image:
+    repository: ghcr.io/sempersupra/conditioning-maf-sidecar
+    tag: "unpublished@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+consts:
+  controller_name: conditioning-controller
+  worker_name: conditioning-worker
+  hydrate_name: conditioning-hydrator
+  worker_port: 8188
+  catalog_status: SOURCE_ONLY_UNPUBLISHED
