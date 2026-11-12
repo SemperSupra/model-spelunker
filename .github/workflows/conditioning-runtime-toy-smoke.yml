@@ -15,6 +15,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  model-hydration-sidecar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Independent sidecar approval and no-download controls
+        run: python3 -m unittest discover -s qualification/conditioning/runtime/sidecar -p 'test_gate.py' -v
+      - name: Resolve MAF hydration sidecar base and ORAS OCI digests
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolve() {
+            local ref="$1"
+            docker buildx imagetools inspect "$ref" | awk '/^Digest:/ {print $2; exit}'
+          }
+          py='python:3.12-slim-bookworm'
+          oras='ghcr.io/oras-project/oras:v1.3.6'
+          pd="$(resolve "$py")"; od="$(resolve "$oras")"
+          [[ "$pd" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
+          [[ "$od" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
+          echo "python=$py@$pd" >> "$GITHUB_OUTPUT"
+          echo "oras=$oras@$od" >> "$GITHUB_OUTPUT"
+          echo "MAF_SIDECAR_PYTHON_DIGEST=$pd ORAS_DIGEST=$od"
+      - name: Build and inspect disposable approved-digest hydration image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --progress=plain \
+            --build-arg 'PYTHON_BASE_IMAGE=${{ steps.base.outputs.python }}' \
+            --build-arg 'ORAS_IMAGE=${{ steps.base.outputs.oras }}' \
+            -t local/conditioning-maf-sidecar:pr qualification/conditioning/runtime/sidecar
+          docker run --rm local/conditioning-maf-sidecar:pr --help
+          docker run --rm --entrypoint /usr/local/bin/oras local/conditioning-maf-sidecar:pr version
+      - name: Dispose sidecar image
+        if: always()
+        run: docker image rm local/conditioning-maf-sidecar:pr || true
+
   go-controller:
     runs-on: ubuntu-latest
     timeout-minutes: 6
