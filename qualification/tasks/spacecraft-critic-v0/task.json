@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "spacecraft-critic-v0",
+  "task_class": "engineering.design-critique-classification",
+  "instruction": "Read cases.json and write critic_report.json. For all 12 synthetic case IDs, write an object with EXACTLY verdict, violation_code, evidence_ref, finding. Output is {\"schema_version\":1,\"cases\":{...}}. Valid verdicts: VALID/INVALID; valid cases must use violation_code NONE; invalid cases use SOLAR_POWER, APPENDAGE_LOAD, AIRLOCK_INTERLOCK, TIMELINE_CONFLICT, CANON_AUTHORITY, THERMAL_DEFICIT. evidence_ref must be RFC6901 pointer to that exact case's facts field: cases.json#/cases/<zero-based-index>/facts. finding must give a concise evidence-based explanation (at least 12 characters). All physics limits are explicit synthetic fixture assumptions, not real engineering thresholds. Do not modify input files. No private source, real identities, weapons, proprietary canon or approved engineering judgments are contained in this task.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 180
+  },
+  "success": {
+    "kind": "deterministic-hidden-evidence-classification"
+  },
+  "allowed_write_paths": [
+    "critic_report.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "medium",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-evidence-ground-truth"
+  }
+}
