@@ -1,9 +1,5 @@
 name: Synthetic Spacecraft Critic — Qwen3 Two-Case Crossover
 on:
-  pull_request:
-    paths:
-      - 'qualification/tasks/spacecraft-critic-mini-v0/**'
-      - '.github/workflows/spacecraft-critic-mini-crossover.yml'
   workflow_dispatch:
 permissions:
   contents: read

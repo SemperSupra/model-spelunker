@@ -1,9 +1,5 @@
 name: Synthetic Spacecraft Critic — OpenWorker Qwen3 Public GHA
 on:
-  pull_request:
-    paths:
-      - 'qualification/tasks/spacecraft-critic-v0/**'
-      - '.github/workflows/spacecraft-critic-free-actor-interview.yml'
   workflow_dispatch:
 permissions:
   contents: read
