@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "source_class": "synthetic-public-physics-and-governance",
+  "cases": [
+    {
+      "id": "SOLAR-INVALID",
+      "domain": "solar",
+      "facts": "At 5.2 AU sunlight is fixed for this synthetic scenario at 50 W/m2. Array area 200 m2, efficiency 0.30. Claimed electrical power is 20,000 W.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "SOLAR-VALID",
+      "domain": "solar",
+      "facts": "At 5.2 AU sunlight is fixed for this synthetic scenario at 50 W/m2. Array area 200 m2, efficiency 0.30. Claimed ideal electrical power is 3,000 W, before losses.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "APPENDAGE-INVALID",
+      "domain": "rigging",
+      "facts": "Hinge is qualified for 0.02 g along the specified direction; ship commands 0.20 g with deployed radiator unlocked. Requirement is commanded acceleration <= qualified limit.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "APPENDAGE-VALID",
+      "domain": "rigging",
+      "facts": "Hinge is qualified for 0.20 g in the specified direction; ship commands 0.02 g with deployed radiator latched in rated orientation. All other requirements are met.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "AIRLOCK-INVALID",
+      "domain": "habitat",
+      "facts": "Pressure differential is 60 kPa. Both inner and outer airlock doors are commanded open. Safety rule forbids opening under pressure differential or opening both doors.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "AIRLOCK-VALID",
+      "domain": "habitat",
+      "facts": "Verify inner door closed and sealed, equalize chamber with exterior, open outer door; never have both doors open together. All seals verified.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "TIMELINE-INVALID",
+      "domain": "history",
+      "facts": "Ship completed in 2190 lists a standard commercial component first qualified for any service in 2240. It is not a prototype.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "TIMELINE-VALID",
+      "domain": "history",
+      "facts": "Ship completed in 2280 uses a standard commercial component first qualified in 2240. No other constraints are stated.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "AUTHORITY-INVALID",
+      "domain": "governance",
+      "facts": "Source status PROPOSED_NOT_APPROVED, no owner review. A report states the asset is ACCEPTED_CANON.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "AUTHORITY-VALID",
+      "domain": "governance",
+      "facts": "Source status PROPOSED_NOT_APPROVED, no owner review. A report keeps status PROPOSED and states acceptance is held.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "THERMAL-INVALID",
+      "domain": "thermal",
+      "facts": "Module must continuously reject 100,000 W. Certified radiator rejection is 10,000 W in this environment, with no storage or secondary sink.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    },
+    {
+      "id": "THERMAL-VALID",
+      "domain": "thermal",
+      "facts": "Module must continuously reject 10,000 W. Certified radiator rejection is 100,000 W in this environment, all other constraints met.",
+      "question": "Does this candidate meet its explicitly stated constraint? Classify VALID or INVALID; if invalid name the defect code."
+    }
+  ]
+}
