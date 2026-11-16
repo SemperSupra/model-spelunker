@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source_class": "synthetic-public-physics-and-governance",
+  "cases": [
+    {
+      "id": "SOLAR-INVALID",
+      "facts": "Solar flux 50 W/m2, array area 200 m2, efficiency 0.30; proposed continuous electrical output 20,000 W. This design must satisfy P = flux x area x efficiency."
+    },
+    {
+      "id": "SOLAR-VALID",
+      "facts": "Solar flux 50 W/m2, array area 200 m2, efficiency 0.30; proposed ideal electrical output 3,000 W. This design must satisfy P = flux x area x efficiency."
+    }
+  ]
+}
