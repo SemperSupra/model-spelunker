@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "spacecraft-critic-mini-v0",
+  "task_class": "engineering.design-critique-classification",
+  "instruction": "Read cases.json. Write critic_report.json containing EXACTLY {\"schema_version\":1,\"cases\":{\"SOLAR-INVALID\":{\"verdict\":\"INVALID\",\"violation_code\":\"SOLAR_POWER\"},\"SOLAR-VALID\":{\"verdict\":\"VALID\",\"violation_code\":\"NONE\"}}} if these synthetic scenarios support these judgments; verify calculations independently. Do not modify input. This mini-task is a two-case crossover against spacecraft-critic-v0 with the SAME harness, model, inference substrate and tool projection; only task volume is reduced. No private data is included.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 180
+  },
+  "success": {
+    "kind": "deterministic-hidden-tests"
+  },
+  "allowed_write_paths": [
+    "critic_report.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low",
+    "verification_strength": "hidden-boundary-tests"
+  }
+}

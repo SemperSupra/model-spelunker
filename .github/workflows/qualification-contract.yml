@@ -465,3 +465,9 @@ jobs:
           assert good1["candidate"]["configuration_digest"] == good2["candidate"]["configuration_digest"]
           print("PASS repeated reps create distinct receipts and failed evidence is preserved")
           PY
+
+      - name: Verify public synthetic spacecraft-critic oracle and negative controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/tasks/spacecraft-critic-v0/verify.py --self-test

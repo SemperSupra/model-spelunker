@@ -1,0 +1,18 @@
+name: Synthetic Spacecraft Critic — Qwen3 Two-Case Crossover
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: synthetic-spacecraft-critic-mini-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  qwen3-1-7b-mini:
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
+      admission_ref: 'github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json'
+      task: 'spacecraft-critic-mini-v0'
+      treatment_id: 'synthetic-spacecraft-mini-qwen3-17b'
+      reasoning_effort: 'none'
