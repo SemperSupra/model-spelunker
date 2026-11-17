@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -237,8 +238,20 @@ for name, route in {"query_key": "https://generativelanguage.googleapis.com/v1be
     setattr(DiagnosticTests, "test_route_" + name, test_route)
 
 
+class ReceiptVerificationRuntimeTests(unittest.TestCase):
+    def test_optimized_python_cannot_accept_a_receipt(self):
+        # A security/evidence verifier must never succeed with assertions disabled.
+        result = subprocess.run(
+            [sys.executable, "-O", "-c",
+             "from qualification.diagnostics.verify_gemini_receipt import verify; verify({}, {})"],
+            cwd=ROOT.parents[1], capture_output=True, text=True, timeout=20
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("RECEIPT_VALIDATION_DISABLED_BY_OPTIMIZATION", result.stderr)
+
+
 if __name__ == "__main__":
-    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(DiagnosticTests))
+    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__]))
     if result.wasSuccessful() and not result.skipped:
         proof = {"passed": result.testsRun, "failed": 0, "module_sha256": hashlib.sha256((ROOT / "GeminiReadiness.psm1").read_bytes()).hexdigest(), "entry_sha256": hashlib.sha256((ROOT / "Invoke-GeminiReadiness.ps1").read_bytes()).hexdigest(), "runtime": "native Windows PowerShell 5.1; Python stdlib loopback fake HTTP server", "live_calls": 0}
         target = os.environ.get("GEMINI_DIAG_TEST_PROOF")

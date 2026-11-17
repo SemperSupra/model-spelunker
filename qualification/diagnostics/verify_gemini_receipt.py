@@ -14,6 +14,10 @@ PROMPT = b'Return exactly READY as a synthetic connectivity check without tools.
 
 
 def verify(receipt, source_hashes):
+    # Assertions are acceptance gates here, not optional debug checks.
+    # Python -O strips them; reject that runtime instead of silently passing.
+    if not __debug__:
+        raise RuntimeError('RECEIPT_VALIDATION_DISABLED_BY_OPTIMIZATION')
     assert receipt['kind'] == 'provider-readiness-diagnostic'
     assert receipt['source_sha256'] == source_hashes
     assert receipt['admission']['prompt_sha256'] == hashlib.sha256(PROMPT).hexdigest()
