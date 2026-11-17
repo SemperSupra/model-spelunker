@@ -8,7 +8,17 @@ or the reducer. Authority: Model Spelunker #199; parent #198; data boundary:
 Agent Dispatch Private #830. Canonical WoW v0.0.4, GOV-AGENT-001 and
 GOV-EXEC-001 apply. No governance proposal is activated here.
 
-## Offline tests first
+## Live-first operating method
+
+Owner correction in #199 and IaC #426 is authoritative: observe real authorized
+systems, plan from evidence, apply within authority, then verify. Safe live
+discovery and bounded approved synthetic inference do not require a mock suite.
+R4 means reproducible procedure, repeatable observation, reversible local
+tooling and idempotent intended state; stochastic model output need not be
+byte-identical. Use these focused fault tests only for hazardous or unavailable
+conditions and protocol regressions.
+
+## Focused offline fault tests
 
 From the repository root on Windows with Python 3.12 and native PS5.1:
 
@@ -27,8 +37,9 @@ proof and the exact three-call/no-auth-fallback treatment. DNS, TLS and proxy
 failure classifications use fabricated typed transport observations; they
 are not live network fault injection.
 
-The live entry requires a successful fake-test proof matching both exact
-PowerShell source hashes. Test failure never grants live readiness.
+The live entry always records both exact PowerShell source hashes. A fake-test
+proof is optional supporting evidence; when supplied it must match the source.
+Neither a fake pass nor its absence determines live authorization/readiness.
 
 ## Approved live invocation
 
@@ -59,7 +70,7 @@ Run native `powershell.exe -NoProfile -NonInteractive -File` with:
 ```text
 qualification/diagnostics/Invoke-GeminiReadiness.ps1
   -Workcell <approved disposable workcell>
-  -TestProof <passing fake proof>
+  [-TestProof <optional matching fault-test evidence>]
   -OutputPath <new diagnostic receipt outside the workcell>
   -SourceCommit <exact committed source SHA>
   -BillingEvidenceRef <current authorized owner evidence reference>
