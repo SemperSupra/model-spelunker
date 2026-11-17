@@ -244,7 +244,7 @@ class ReceiptVerificationRuntimeTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, "-O", "-c",
              "from qualification.diagnostics.verify_gemini_receipt import verify; verify({}, {})"],
-            cwd=ROOT.parents[2], capture_output=True, text=True, timeout=20
+            cwd=ROOT.parents[1], capture_output=True, text=True, timeout=20
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("RECEIPT_VALIDATION_DISABLED_BY_OPTIMIZATION", result.stderr)
