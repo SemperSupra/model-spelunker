@@ -1,0 +1,19 @@
+{
+  "schema": "dle-gh-source-observation-v0",
+  "repository": "o/r",
+  "local_commit": "0123456789abcdef0123456789abcdef01234567",
+  "default_branch": "main",
+  "remote_default_commit": "abcdef0123456789abcdef0123456789abcdef01",
+  "issue_number": 7,
+  "issue_id": 42,
+  "issue_node_id": "I_example_public_synthetic",
+  "issue_state": "open",
+  "issue_updated_at": "2026-11-18T00:00:00Z",
+  "issue_body_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "issue_body_bytes": 8,
+  "issue_comment_count": 2,
+  "evidence_grade": "github_api_response_only",
+  "coverage": "issue_body_and_counts_not_comments_or_semantic_acceptance",
+  "github_verified": false,
+  "mutation_performed": false
+}
