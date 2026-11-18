@@ -5,7 +5,7 @@ class CapabilityCensusTests(unittest.TestCase):
     def test_frozen_positive_and_negative_controls(self):
         def fixture(args):
             if args == ["gh", "--version"]:
-                return 0, "gh version 1.2.3\\n"
+                return 0, "gh version 1.2.3"
             if args == CAPABILITIES["native_issue_artifacts"][0]:
                 return 1, "unsupported"
             if args == CAPABILITIES["native_pr_worktree"][0]:
