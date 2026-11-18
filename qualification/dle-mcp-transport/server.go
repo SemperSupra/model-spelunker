@@ -104,12 +104,14 @@ type Result struct {
     MutationPerformed bool `json:"mutation_performed"`
 }
 
-func newServer(provider Provider,repo string,issue int)*mcp.Server{
+func newServerWithReconciler(provider Provider,repo string,issue int,engine ReconcileEngine)*mcp.Server{
+    available:=[]string{"dle_discover","dle_observe"}
+    if engine!=nil {available=append(available,"dle_reconcile")}
     s:=mcp.NewServer(&mcp.Implementation{Name:"dle-source-observer-rdte",Version:"0.1.0"},nil)
     mcp.AddTool(s,&mcp.Tool{Name:"dle_discover",Description:"Discover the single selected source and read-only capabilities. This does not grant DLE authority."},
       func(ctx context.Context,_ *mcp.CallToolRequest,_ noInput)(*mcp.CallToolResult,Discovery,error){
         return nil,Discovery{Schema:"dle-mcp-discovery-v0",Repository:repo,IssueNumber:issue,
-            Tools:[]string{"dle_discover","dle_observe"},Scope:"one_pinned_source_only",
+            Tools:available,Scope:"one_pinned_source_only",
             ReadOnly:true,SemanticAuthority:"UNKNOWN_REQUIRES_PROJECT_DLE",MutationPerformed:false},nil
       })
     mcp.AddTool(s,&mcp.Tool{Name:"dle_observe",Description:"Observe the pinned source using the existing read-only GitHub observer; source evidence only, no semantic acceptance."},
@@ -120,7 +122,19 @@ func newServer(provider Provider,repo string,issue int)*mcp.Server{
         return nil,Result{Schema:"dle-mcp-observe-v0",Status:"OBSERVED_SOURCE_ONLY",
             Observation:o,Authority:"UNKNOWN_UNTIL_INDEPENDENT_DLE_RECONCILIATION",MutationPerformed:false},nil
       })
+    if engine!=nil {
+      mcp.AddTool(s,&mcp.Tool{Name:"dle_reconcile",Description:"Classify frozen, preselected local candidates against a pinned local DLE snapshot using the existing offline Go reconciler. This is NOT authenticated GitHub acceptance."},
+       func(ctx context.Context,_ *mcp.CallToolRequest,_ noInput)(*mcp.CallToolResult,ReconcileSummary,error){
+         r,err:=engine.Reconcile(ctx)
+         if err!=nil{return nil,ReconcileSummary{},err}
+         if err=validateReconcileSummary(r);err!=nil{return nil,ReconcileSummary{},err}
+         return nil,r,nil
+       })
+    }
     return s
+}
+func newServer(provider Provider,repo string,issue int)*mcp.Server{
+    return newServerWithReconciler(provider,repo,issue,nil)
 }
 
 // Bearer validation is a synthetic ingress test, not a production OAuth
@@ -137,13 +151,16 @@ func protected(next http.Handler,token string)http.Handler{
         next.ServeHTTP(w,r)
     })
 }
-func newHTTPHandler(provider Provider,repo string,issue int,token string)http.Handler{
+func newHTTPHandlerWithReconciler(provider Provider,repo string,issue int,token string,engine ReconcileEngine)http.Handler{
     mux:=http.NewServeMux()
     mcpHandler:=mcp.NewStreamableHTTPHandler(func(*http.Request)*mcp.Server{
-        return newServer(provider,repo,issue)
+        return newServerWithReconciler(provider,repo,issue,engine)
     },&mcp.StreamableHTTPOptions{Stateless:true,JSONResponse:true})
     mux.Handle("/mcp",protected(mcpHandler,token))
     return mux
+}
+func newHTTPHandler(provider Provider,repo string,issue int,token string)http.Handler{
+    return newHTTPHandlerWithReconciler(provider,repo,issue,token,nil)
 }
 func loadFixture(path string)(Observation,error){
     var o Observation
