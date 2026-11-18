@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: dle-mcp-parity-${{ github.event.pull_request.number || github.ref }}
@@ -44,6 +45,35 @@ jobs:
           go vet ./...
         env:
           GOTOOLCHAIN: auto
+
+      - name: Check live public GitHub observation through MCP
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: qualification/dle-mcp-transport
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DLE_OBSERVER_REPO: SemperSupra/model-spelunker
+          DLE_OBSERVER_ISSUE: "139"
+          DLE_OBSERVER_CHECKOUT: ${{ github.workspace }}
+          DLE_OBSERVER_BIN: ${{ runner.temp }}/dle-source-observer
+          DLE_OBSERVER_SOURCE_SHA: c21a098f5e925c516a687181d946463865b6d15f
+        run: |
+          mkdir -p "$RUNNER_TEMP/dle-observer-source"
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$DLE_OBSERVER_SOURCE_SHA"
+          git -C "$GITHUB_WORKSPACE" cat-file -e "$DLE_OBSERVER_SOURCE_SHA^{commit}"
+          git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/main.go" > "$RUNNER_TEMP/dle-observer-source/main.go"
+          git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/go.mod" > "$RUNNER_TEMP/dle-observer-source/go.mod"
+          (cd "$RUNNER_TEMP/dle-observer-source" && go build -o "$DLE_OBSERVER_BIN" .)
+          go test ./... -run '^TestLivePublicGitHubObserverThroughMCP        working-directory: qualification/dle-mcp-transport
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src=Path("server.go").read_text()
+          assert 'Name:"dle_discover"' in src
+          assert 'Name:"dle_observe"' in src
+          assert src.count('mcp.AddTool(')==2
+          print("PASS only declared read-only MCP tools are registered")
+          PY
+ -count=1 -v -timeout=90s
 
       - name: Verify no mutation-capable MCP tool
         working-directory: qualification/dle-mcp-transport
