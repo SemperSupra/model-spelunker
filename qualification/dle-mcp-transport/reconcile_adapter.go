@@ -12,12 +12,10 @@ import (
  "encoding/hex"
  "encoding/json"
  "errors"
- "fmt"
  "io"
  "os"
  "os/exec"
  "path/filepath"
- "sort"
  "strings"
  "time"
 )
@@ -164,8 +162,3 @@ func (e externalReconciler) Reconcile(ctx context.Context)(ReconcileSummary,erro
  return summary,nil
 }
 
-func allowedCountKeys(keys []string)[]string{
- result:=append([]string(nil),keys...)
- sort.Strings(result)
- return result
-}
