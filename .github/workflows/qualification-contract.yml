@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: qualification-contract-${{ github.event.pull_request.number || github.ref }}
@@ -187,6 +188,35 @@ jobs:
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v1/verify.py --self-test
+
+      - name: Test native GitHub DLE observation primitives
+        run: |
+          cd qualification/dle-gh-observer
+          go test ./... -count=1
+          go vet ./...
+
+      - name: Observe live public GitHub authority with gh (read only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd qualification/dle-gh-observer
+          go run . --repo "$GITHUB_REPOSITORY" --issue 139 --checkout "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/dle-gh-observation.json"
+          python - "$RUNNER_TEMP/dle-gh-observation.json" <<'PY'
+          import json,sys,os
+          result=json.load(open(sys.argv[1],encoding="utf-8"))
+          assert result["schema"]=="dle-gh-source-observation-v0"
+          assert result["repository"]==os.environ["GITHUB_REPOSITORY"]
+          assert result["issue_number"]==139
+          assert result["mutation_performed"] is False
+          assert result["github_verified"] is False
+          assert result["evidence_grade"]=="github_api_response_only"
+          assert result["coverage"]=="issue_body_and_counts_not_comments_or_semantic_acceptance"
+          assert len(result["issue_body_sha256"])==64
+          assert len(result["local_commit"]) in (40,64)
+          assert len(result["remote_default_commit"]) in (40,64)
+          print("PASS native git+gh read-only public authority observation; semantic acceptance remains UNKNOWN")
+          PY
 
       - name: Enforce task workspace layout contract
         run: python qualification/test_task_workspace_layout.py
