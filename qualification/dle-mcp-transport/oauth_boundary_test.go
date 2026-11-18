@@ -48,6 +48,10 @@ func syntheticVerifiedToken(_ context.Context,token string,_ *http.Request)(*aut
    info.UserID=""
  case "no-client":
    delete(info.Extra,"client_id")
+ case "ungranted-client":
+   info.Extra["client_id"]="unapproved-client"
+ case "ungranted-subject":
+   info.UserID="other-user"
  default:return nil,auth.ErrInvalidToken
  }
  return info,nil
@@ -63,6 +67,10 @@ func syntheticOAuthConfig()sourceAuthConfig{
   Verifier:syntheticVerifiedToken,
   Workset:mockWorkset,
   ResourceMetadataURL:mockResourceMetadata,
+  AllowedCallers:[]sourceClientGrant{
+   {Subject:"actor-1",ClientID:"synthetic-web"},
+   {Subject:"actor-1",ClientID:"synthetic-cli"},
+  },
  }
 }
 func TestSDKNativeOAuthDenials(t *testing.T){
@@ -74,6 +82,7 @@ func TestSDKNativeOAuthDenials(t *testing.T){
   {"",401},{"invalid",401},{"revoked",401},{"wrong-audience",401},
   {"expired",401},{"missing-expiry",401},{"missing-scope",403},
   {"wrong-workset",403},{"no-subject",403},{"no-client",403},
+  {"ungranted-client",403},{"ungranted-subject",403},
  }
  for _,tc:=range cases{
   req,err:=http.NewRequest("POST",srv.URL,strings.NewReader(`{"jsonrpc":"2.0","method":"tools/list","id":1}`))
@@ -146,6 +155,8 @@ func TestOAuthConfigurationFailsClosed(t *testing.T){
  fixture,err:=loadFixture("testdata/observed.json");if err!=nil{t.Fatal(err)}
  cases:=[]func(*sourceAuthConfig){
   func(c *sourceAuthConfig){c.Verifier=nil},
+  func(c *sourceAuthConfig){c.AllowedCallers=nil},
+  func(c *sourceAuthConfig){c.AllowedCallers=[]sourceClientGrant{{Subject:"",ClientID:"synthetic-web"}}},
   func(c *sourceAuthConfig){c.Workset="wrong/r#7"},
   func(c *sourceAuthConfig){c.ResourceMetadataURL="http://identity.example.invalid"},
   func(c *sourceAuthConfig){c.ResourceMetadataURL="https://identity.example.invalid/#fragment"},
