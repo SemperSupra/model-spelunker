@@ -75,6 +75,8 @@ jobs:
           src=Path("server.go").read_text()
           assert 'Name:"dle_discover"' in src
           assert 'Name:"dle_observe"' in src
-          assert src.count('mcp.AddTool(')==2
-          print("PASS only declared read-only MCP tools are registered")
+          assert src.count('mcp.AddTool(')==3
+          assert 'if engine!=nil' in src
+          assert 'newServerWithReconciler' in src
+          print("PASS two default read-only tools and one conditional bounded read-only reconciler")
           PY
