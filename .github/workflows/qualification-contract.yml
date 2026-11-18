@@ -224,6 +224,31 @@ jobs:
           print("PASS native git+gh read-only public authority observation; semantic acceptance remains UNKNOWN")
           PY
 
+      - name: Qualify native gh issue relationships and pinned Git source (read only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh issue view 139 --repo "$GITHUB_REPOSITORY" --json parent,subIssues,blockedBy,blocking > "$RUNNER_TEMP/dle-native-relations.json"
+          gh repo read-file qualification/tasks/dle-cold-start-v0/task.json --repo "$GITHUB_REPOSITORY" --ref "$PR_HEAD_SHA" --json path,gitSHA,size > "$RUNNER_TEMP/dle-native-source.json"
+          python - "$RUNNER_TEMP/dle-native-relations.json" "$RUNNER_TEMP/dle-native-source.json" <<'PY'
+          import json,subprocess,sys
+          relations=json.load(open(sys.argv[1],encoding="utf-8"))
+          source=json.load(open(sys.argv[2],encoding="utf-8"))
+          assert set(("blockedBy","blocking","subIssues","parent")).issubset(relations)
+          for field in ("blockedBy","blocking","subIssues"):
+              value=relations[field]
+              if value is not None:
+                  assert isinstance(value,dict) and isinstance(value.get("nodes"),list)
+                  assert isinstance(value.get("totalCount"),int) and len(value["nodes"]) <= value["totalCount"]
+          path="qualification/tasks/dle-cold-start-v0/task.json"
+          assert source["path"]==path and source["size"]>0
+          local=subprocess.check_output(["git","hash-object",path],text=True).strip()
+          assert source["gitSHA"]==local, "native remote pinned file differs from exact Git blob"
+          print("PASS gh issue relation read and gh repo read-file pinned Git-blob identity")
+          PY
+
       - name: Enforce task workspace layout contract
         run: python qualification/test_task_workspace_layout.py
 
