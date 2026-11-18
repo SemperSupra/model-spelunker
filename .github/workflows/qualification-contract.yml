@@ -128,6 +128,7 @@ jobs:
           jsonschema.validate(discovery_task, task_schema)
           jsonschema.validate(debugging_task, task_schema)
           jsonschema.validate(reconciliation_task, task_schema)
+          jsonschema.validate(json.loads(Path("qualification/tasks/dle-cold-start-v0/task.json").read_text()), task_schema)
           jsonschema.validate(api_boundary_task, task_schema)
           jsonschema.validate(method_ir_task, task_schema)
           jsonschema.validate(api_boundary_task_v1, task_schema)
@@ -181,6 +182,7 @@ jobs:
           python qualification/tasks/validation-discovery-v0/verify.py --self-test
           python qualification/tasks/boundary-bugfix-v0/verify.py --self-test
           python qualification/tasks/repository-reconciliation-v0/verify.py --self-test
+          python qualification/tasks/dle-cold-start-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v0/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
