@@ -195,6 +195,12 @@ jobs:
           go test ./... -count=1
           go vet ./...
 
+      - name: Discover installed native gh capabilities (read only)
+        run: |
+          cd qualification/dle-gh-observer
+          python -m unittest -q test_probe_capabilities.py
+          python probe_capabilities.py | python -c 'import json,sys; x=json.load(sys.stdin); assert x["mutation_performed"] is False; print(json.dumps(x,sort_keys=True))'
+
       - name: Observe live public GitHub authority with gh (read only)
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
