@@ -1,0 +1,58 @@
+name: DLE MCP Transport Contract
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/dle-mcp-transport/**'
+      - '.github/workflows/dle-mcp-transport-contract.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dle-mcp-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify selected Go toolchain
+        run: |
+          go version
+          go env GOTOOLCHAIN GOPROXY
+          test -z "${GH_TOKEN:-}"
+
+      - name: Resolve pinned upstream SDK in disposable runner
+        working-directory: qualification/dle-mcp-transport
+        run: |
+          go mod tidy
+          go mod verify
+          echo "=== Reproducible go.sum candidate (no secrets) ==="
+          cat go.sum
+        env:
+          GOTOOLCHAIN: auto
+
+      - name: Test transport parity and denial
+        working-directory: qualification/dle-mcp-transport
+        run: |
+          go test ./... -count=1 -v -timeout=180s
+          go vet ./...
+        env:
+          GOTOOLCHAIN: auto
+
+      - name: Verify no mutation-capable MCP tool
+        working-directory: qualification/dle-mcp-transport
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src=Path("server.go").read_text()
+          assert 'Name:"dle_discover"' in src
+          assert 'Name:"dle_observe"' in src
+          assert src.count('mcp.AddTool(')==2
+          print("PASS only declared read-only MCP tools are registered")
+          PY
