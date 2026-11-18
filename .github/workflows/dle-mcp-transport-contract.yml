@@ -33,8 +33,6 @@ jobs:
         run: |
           go mod tidy
           go mod verify
-          echo "=== Reproducible go.sum candidate (no secrets) ==="
-          cat go.sum
         env:
           GOTOOLCHAIN: auto
 
@@ -63,17 +61,7 @@ jobs:
           git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/main.go" > "$RUNNER_TEMP/dle-observer-source/main.go"
           git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/go.mod" > "$RUNNER_TEMP/dle-observer-source/go.mod"
           (cd "$RUNNER_TEMP/dle-observer-source" && go build -o "$DLE_OBSERVER_BIN" .)
-          go test ./... -run '^TestLivePublicGitHubObserverThroughMCP        working-directory: qualification/dle-mcp-transport
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          src=Path("server.go").read_text()
-          assert 'Name:"dle_discover"' in src
-          assert 'Name:"dle_observe"' in src
-          assert src.count('mcp.AddTool(')==2
-          print("PASS only declared read-only MCP tools are registered")
-          PY
- -count=1 -v -timeout=90s
+          go test ./... -run '^TestLivePublicGitHubObserverThroughMCP$' -count=1 -v -timeout=90s
 
       - name: Verify no mutation-capable MCP tool
         working-directory: qualification/dle-mcp-transport
