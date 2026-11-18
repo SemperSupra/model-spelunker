@@ -33,6 +33,10 @@ jobs:
         run: |
           go mod tidy
           go mod verify
+          echo '=== Canonical Go module after tidy ==='
+          cat go.mod
+          echo '=== Check committed module and sums match canonical resolution ==='
+          git diff --exit-code -- go.mod go.sum
         env:
           GOTOOLCHAIN: auto
 
