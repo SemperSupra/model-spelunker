@@ -105,6 +105,6 @@ func TestFailClosedSourceAndNoWriteTools(t *testing.T){
     fixture.MutationPerformed=false
     fixture.Repository="wrong/repo"
     if err:=validate(fixture,"o/r",7);err==nil{t.Fatal("wrong source accepted")}
-    if _,err:=brokenProvider{}.Observe(context.Background());err==nil{t.Fatal("error suppressed")}
+    if _,err:=(brokenProvider{}).Observe(context.Background());err==nil{t.Fatal("error suppressed")}
     if _,err:=os.Stat("testdata/observed.json");err!=nil{t.Fatal(err)}
 }
