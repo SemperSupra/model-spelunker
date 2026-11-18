@@ -45,6 +45,7 @@ jobs:
         run: |
           go test ./... -count=1 -v -timeout=180s
           go vet ./...
+          go test -race ./... -count=1 -timeout=180s
         env:
           GOTOOLCHAIN: auto
 
@@ -78,5 +79,9 @@ jobs:
           assert src.count('mcp.AddTool(')==3
           assert 'if engine!=nil' in src
           assert 'newServerWithReconciler' in src
-          print("PASS two default read-only tools and one conditional bounded read-only reconciler")
+          entry=Path("main.go").read_text()
+          assert 'newOAuthContractHandler(' not in entry
+          assert 'oauthDiscoveryRoutes(' not in entry
+          assert 'ip.IsLoopback()' in entry
+          print("PASS bounded tool registration; synthetic OAuth resource server is not publicly wired")
           PY
