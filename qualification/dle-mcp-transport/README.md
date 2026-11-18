@@ -25,6 +25,14 @@ Actual issue observation requires building the independently qualified `qualific
 HTTP is loopback-only with an explicit ephemeral bearer secret for the synthetic experiment. **Do not publicly expose this HTTP endpoint**, including through a public tunnel. It is NOT a complete OAuth/OIDC implementation. Production web clients require a separately qualified external MCP OAuth resource-server gateway with per-client authorization and trusted GitHub source access, without weakening the least-authority constraints.
 
 
+## Remote MCP OAuth qualification — synthetic, not deployed
+
+The alternative `oauth_boundary.go` wrapper uses the official SDK's `auth.RequireBearerToken` for scope/expiration checks and a **caller-injected trusted token verifier**. It enforces a single fixed workset reference (`OWNER/REPO#ISSUE`), a nonempty subject/client identifier derived from verified-token metadata, and the `dle.read` scope. An instance that exposes candidate reconciliation requires both `dle.read` and `dle.reconcile` on **every** MCP connection, so read-only clients cannot discover an elevated endpoint. Neither transport returns bearer credentials or actor IDs in tool responses.
+
+`oauth_metadata.go` composes the official SDK's RFC 9728 public resource-metadata handler at `/.well-known/oauth-protected-resource`, with a distinct protected `/mcp` route. Tests reject insecure or mismatched resource/issuer URLs and verify the SDK's public metadata and bearer challenge semantics. Synthetic distinct web/CLI tokens yield identical tool content for the same authorized workset.
+
+**No CLI listener wires these functions. No remote public endpoint exists.** The synthetic verifier in tests returns invented claims; it is not JWT/JWKS verification, OAuth consent, token exchange, real revocation, tenant isolation, provider eligibility, or GitHub account-authorization equivalence. The existing loopback fixture listener remains separate and must never be tunneled to the Internet. Before any remote deployment, admit a maintained authorization-server/IdP verifier with exact issuer/audience/signature/exp/nbf/revocation, per-client grants, proof of token binding to a permitted project workset, current GitHub source authority, and independent client HIL.
+
 ## Optional pinned local reconciliation (not remote GitHub authority)
 
 ```sh
