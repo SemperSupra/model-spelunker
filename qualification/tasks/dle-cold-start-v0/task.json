@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "dle-cold-start-v0",
+  "task_class": "repository.dle-cold-start-recovery",
+  "instruction": "Recover the current mission and next bounded action solely from the repository fixture, without previous chat context. Root AGENTS.md identifies current project authority. The historical baton may conflict with observed machine state. Write recovery.json with exactly these keys: authority, revision, accepted, next_action, unknowns, human_gate, evidence, mutation_performed. The current DLE authority is authority/current.json. The accepted field must be a list of accepted claim IDs only, in sorted order. The evidence object must identify PR 7 as merged, whether a source-bound independent review receipt exists, and whether local worktree state is directly observable. The next action must be a bounded eligible action, not release or blind execution. Preserve material unknowns as exact tokens. Do not change original fixture files or claim approval not evidenced by authoritative state. Use exact vocabulary for next_action: VERIFY_INDEPENDENT_REVIEW_RECEIPT, EXECUTE_NEXT_WORKCELL, PUBLISH_RELEASE, or NOOP. Use exact tokens for unknowns: INDEPENDENT_REVIEW_EVIDENCE and LOCAL_WORKTREE_STATE when applicable. human_gate is OWNER_RELEASE_APPROVAL_REQUIRED or NONE.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  },
+  "allowed_write_paths": [
+    "recovery.json"
+  ],
+  "projected_tools": [
+    "list_files",
+    "read_file",
+    "write_file"
+  ],
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "medium",
+    "planning_horizon": "short",
+    "tool_discovery": "medium",
+    "recovery_requirement": "high",
+    "context_volume": "small",
+    "environment_uncertainty": "medium",
+    "verification_strength": "source-authority-and-unknown-preservation"
+  }
+}

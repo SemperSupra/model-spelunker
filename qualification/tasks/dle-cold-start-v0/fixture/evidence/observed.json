@@ -1,0 +1,20 @@
+{
+  "pull_request": {
+    "number": 7,
+    "state": "closed",
+    "merged": true,
+    "merge_commit": "deadcafe00000000"
+  },
+  "ci": {
+    "frozen_candidate": "feedbeef00000000",
+    "passed": true
+  },
+  "independent_review": {
+    "receipt": null,
+    "candidate_revision": null
+  },
+  "local_worktree": "UNOBSERVABLE",
+  "release": {
+    "owner_approval": false
+  }
+}

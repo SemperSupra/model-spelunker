@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: qualification-contract-${{ github.event.pull_request.number || github.ref }}
@@ -128,6 +129,7 @@ jobs:
           jsonschema.validate(discovery_task, task_schema)
           jsonschema.validate(debugging_task, task_schema)
           jsonschema.validate(reconciliation_task, task_schema)
+          jsonschema.validate(json.loads(Path("qualification/tasks/dle-cold-start-v0/task.json").read_text()), task_schema)
           jsonschema.validate(api_boundary_task, task_schema)
           jsonschema.validate(method_ir_task, task_schema)
           jsonschema.validate(api_boundary_task_v1, task_schema)
@@ -181,10 +183,71 @@ jobs:
           python qualification/tasks/validation-discovery-v0/verify.py --self-test
           python qualification/tasks/boundary-bugfix-v0/verify.py --self-test
           python qualification/tasks/repository-reconciliation-v0/verify.py --self-test
+          python qualification/tasks/dle-cold-start-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v0/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v0/verify.py --self-test
           python qualification/tasks/api-boundary-classification-v1/verify.py --self-test
           python qualification/tasks/method-ir-siglip2-b16-256-v1/verify.py --self-test
+
+      - name: Test native GitHub DLE observation primitives
+        run: |
+          cd qualification/dle-gh-observer
+          go test ./... -count=1
+          go vet ./...
+
+      - name: Discover installed native gh capabilities (read only)
+        run: |
+          cd qualification/dle-gh-observer
+          python -m unittest -q test_probe_capabilities.py
+          python probe_capabilities.py | python -c 'import json,sys; x=json.load(sys.stdin); assert x["mutation_performed"] is False; print(json.dumps(x,sort_keys=True))'
+
+      - name: Observe live public GitHub authority with gh (read only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd qualification/dle-gh-observer
+          go run . --repo "$GITHUB_REPOSITORY" --issue 139 --checkout "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/dle-gh-observation.json"
+          python - "$RUNNER_TEMP/dle-gh-observation.json" <<'PY'
+          import json,sys,os
+          result=json.load(open(sys.argv[1],encoding="utf-8"))
+          assert result["schema"]=="dle-gh-source-observation-v0"
+          assert result["repository"]==os.environ["GITHUB_REPOSITORY"]
+          assert result["issue_number"]==139
+          assert result["mutation_performed"] is False
+          assert result["github_verified"] is False
+          assert result["evidence_grade"]=="github_api_response_only"
+          assert result["coverage"]=="issue_body_and_counts_not_comments_or_semantic_acceptance"
+          assert len(result["issue_body_sha256"])==64
+          assert len(result["local_commit"]) in (40,64)
+          assert len(result["remote_default_commit"]) in (40,64)
+          print("PASS native git+gh read-only public authority observation; semantic acceptance remains UNKNOWN")
+          PY
+
+      - name: Qualify native gh issue relationships and pinned Git source (read only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh issue view 139 --repo "$GITHUB_REPOSITORY" --json parent,subIssues,blockedBy,blocking > "$RUNNER_TEMP/dle-native-relations.json"
+          gh repo read-file qualification/tasks/dle-cold-start-v0/task.json --repo "$GITHUB_REPOSITORY" --ref "$PR_HEAD_SHA" --json path,gitSHA,size > "$RUNNER_TEMP/dle-native-source.json"
+          python - "$RUNNER_TEMP/dle-native-relations.json" "$RUNNER_TEMP/dle-native-source.json" <<'PY'
+          import json,subprocess,sys
+          relations=json.load(open(sys.argv[1],encoding="utf-8"))
+          source=json.load(open(sys.argv[2],encoding="utf-8"))
+          assert set(("blockedBy","blocking","subIssues","parent")).issubset(relations)
+          for field in ("blockedBy","blocking","subIssues"):
+              value=relations[field]
+              if value is not None:
+                  assert isinstance(value,dict) and isinstance(value.get("nodes"),list)
+                  assert isinstance(value.get("totalCount"),int) and len(value["nodes"]) <= value["totalCount"]
+          path="qualification/tasks/dle-cold-start-v0/task.json"
+          assert source["path"]==path and source["size"]>0
+          local=subprocess.check_output(["git","hash-object",path],text=True).strip()
+          assert source["gitSHA"]==local, "native remote pinned file differs from exact Git blob"
+          print("PASS gh issue relation read and gh repo read-file pinned Git-blob identity")
+          PY
 
       - name: Enforce task workspace layout contract
         run: python qualification/test_task_workspace_layout.py

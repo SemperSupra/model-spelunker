@@ -1,0 +1,19 @@
+{
+  "source": "authority/current.json",
+  "revision": "dle-revision-0002",
+  "mission": "Qualify a bounded repository repair before any release decision",
+  "accepted": [
+    {
+      "id": "A-CI",
+      "claim": "Source-bound CI passed for the frozen candidate"
+    }
+  ],
+  "candidate": [
+    {
+      "id": "C-REVIEW",
+      "claim": "Independent review is complete"
+    }
+  ],
+  "next_frontier": "Verify the missing review receipt against the frozen candidate",
+  "release_requires_owner_approval": true
+}
