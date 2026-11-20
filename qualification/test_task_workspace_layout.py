@@ -121,5 +121,30 @@ class TaskWorkspaceLayoutTests(unittest.TestCase):
             self.assertTrue(module.check(work))
 
 
+    def test_dle_cold_start_recovery_enforces_current_authority(self):
+        task_dir = TASKS / "dle-cold-start-recovery-v0"
+        task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+        validate_task_workspace_layout(task_dir, task)
+        spec = importlib.util.spec_from_file_location(
+            "dle_cold_start_recovery_v0_verify", task_dir / "verify.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "work"
+            shutil.copytree(task_dir / "fixture", work)
+            target = work / "resume.json"
+            target.write_text(json.dumps(module.EXPECTED), encoding="utf-8")
+            self.assertTrue(module.check(work))
+            wrong = dict(module.EXPECTED)
+            wrong["public_release"] = "ALLOWED"
+            target.write_text(json.dumps(wrong), encoding="utf-8")
+            self.assertFalse(module.check(work))
+            target.write_text(json.dumps(module.EXPECTED), encoding="utf-8")
+            (work / "memory-cache.json").write_text("{}", encoding="utf-8")
+            self.assertFalse(module.check(work))
+
+
 if __name__ == "__main__":
     unittest.main()
