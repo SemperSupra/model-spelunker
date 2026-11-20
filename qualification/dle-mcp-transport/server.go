@@ -105,8 +105,12 @@ type Result struct {
 }
 
 func newServerWithReconciler(provider Provider,repo string,issue int,engine ReconcileEngine)*mcp.Server{
+    return newServerWithBootstrap(provider,repo,issue,engine,nil)
+}
+func newServerWithBootstrap(provider Provider,repo string,issue int,engine ReconcileEngine,bootstrap *bootstrapReader)*mcp.Server{
     available:=[]string{"dle_discover","dle_observe"}
     if engine!=nil {available=append(available,"dle_reconcile")}
+    if bootstrap!=nil {available=append(available,"dle_bootstrap")}
     s:=mcp.NewServer(&mcp.Implementation{Name:"dle-source-observer-rdte",Version:"0.1.0"},nil)
     mcp.AddTool(s,&mcp.Tool{Name:"dle_discover",Description:"Discover the single selected source and read-only capabilities. This does not grant DLE authority."},
       func(ctx context.Context,_ *mcp.CallToolRequest,_ noInput)(*mcp.CallToolResult,Discovery,error){
@@ -131,6 +135,14 @@ func newServerWithReconciler(provider Provider,repo string,issue int,engine Reco
          return nil,r,nil
        })
     }
+    if bootstrap!=nil {
+      mcp.AddTool(s,&mcp.Tool{Name:"dle_bootstrap",Description:"Read the preselected public-safe, source-bound advisory DLE bootstrap. This is NOT an authenticated GitHub authority or disclosure grant."},
+       func(ctx context.Context,_ *mcp.CallToolRequest,_ noInput)(*mcp.CallToolResult,BootstrapView,error){
+         view,err:=bootstrap.Read()
+         if err!=nil{return nil,BootstrapView{},err}
+         return nil,view,nil
+       })
+    }
     return s
 }
 func newServer(provider Provider,repo string,issue int)*mcp.Server{
@@ -152,9 +164,12 @@ func protected(next http.Handler,token string)http.Handler{
     })
 }
 func newHTTPHandlerWithReconciler(provider Provider,repo string,issue int,token string,engine ReconcileEngine)http.Handler{
+    return newHTTPHandlerWithBootstrap(provider,repo,issue,token,engine,nil)
+}
+func newHTTPHandlerWithBootstrap(provider Provider,repo string,issue int,token string,engine ReconcileEngine,bootstrap *bootstrapReader)http.Handler{
     mux:=http.NewServeMux()
     mcpHandler:=mcp.NewStreamableHTTPHandler(func(*http.Request)*mcp.Server{
-        return newServerWithReconciler(provider,repo,issue,engine)
+        return newServerWithBootstrap(provider,repo,issue,engine,bootstrap)
     },&mcp.StreamableHTTPOptions{Stateless:true,JSONResponse:true})
     mux.Handle("/mcp",protected(mcpHandler,token))
     return mux
