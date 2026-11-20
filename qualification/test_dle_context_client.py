@@ -115,6 +115,27 @@ class DleBootstrapTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.project()
 
+    def test_duplicate_json_object_keys_are_denied_at_all_depths(self):
+        """Reject contradictory source, verification and accepted-claim keys."""
+        canonical = json.dumps(sample(), separators=(",", ":"))
+        cases = (
+            ("verification", '"github_verified":false',
+             '"github_verified":true,"github_verified":false'),
+            ("revision", '"revision":"' + REVISION + '"',
+             '"revision":"stale","revision":"' + REVISION + '"'),
+            ("nested accepted claim", '"status":"accepted"',
+             '"status":"candidate","status":"accepted"'),
+            ("unknown nested field", '"id":"a2"',
+             '"id":"a2","id":"a2"'),
+        )
+        for label, needle, replacement in cases:
+            with self.subTest(label=label):
+                self.assertIn(needle, canonical)
+                self.path.write_text(canonical.replace(needle, replacement, 1),
+                                     encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "duplicate JSON object key"):
+                    self.project()
+
     def test_no_arbitrary_source_authentication_via_digest(self):
         body = sample()
         body["mission"] = "Untrusted content can change the mission"
