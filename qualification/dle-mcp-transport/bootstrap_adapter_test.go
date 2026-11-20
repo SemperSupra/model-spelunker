@@ -178,6 +178,22 @@ func TestBootstrapPartialCLIAdmissionMustFail(t *testing.T){
  }
 }
 
+func TestBootstrapRejectsMismatchedWorksetAtCLIAdmission(t *testing.T){
+ reader,path:=writeBootstrap(t)
+ cmd:=exec.Command("go","run",".",
+  "--mode=fixture","--repo=o/r","--issue=8",
+  "--bootstrap-json="+path,
+  "--bootstrap-json-sha256="+reader.digest,
+  "--bootstrap-authority="+reader.authority,
+  "--bootstrap-revision="+reader.revision,
+  "--bootstrap-dle-sha256="+reader.authoritySHA,
+ )
+ out,err:=cmd.CombinedOutput()
+ if err==nil||!strings.Contains(string(out),"bootstrap belongs to another MCP workset"){
+  t.Fatalf("wrong-workset admission was not denied: error=%v output=%s",err,out)
+ }
+}
+
 func ExampleBootstrapView(){
  view:=bootstrapFixture()
  fmt.Println(view.Schema,view.GitHubVerified,view.AdvisoryOnly)
