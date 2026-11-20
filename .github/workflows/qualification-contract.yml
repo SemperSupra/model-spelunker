@@ -465,3 +465,10 @@ jobs:
           assert good1["candidate"]["configuration_digest"] == good2["candidate"]["configuration_digest"]
           print("PASS repeated reps create distinct receipts and failed evidence is preserved")
           PY
+
+  edge0-memory-exploratory-pr-208:
+    # Temporary scope-limited bridge: reusable experiment workflow is not yet on default.
+    if: github.event_name == 'pull_request' && github.head_ref == 'exp/206-edge0-memory-context-feasibility'
+    uses: ./.github/workflows/edge0-memory-context-public.yml
+    permissions:
+      contents: read
