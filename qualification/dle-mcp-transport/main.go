@@ -29,6 +29,11 @@ func main(){
     candidateFile:=flag.String("candidates","","preselected private candidate file")
     dleFile:=flag.String("dle","","independently sourced pinned local DLE snapshot")
     dleSHA:=flag.String("dle-sha256","","exact DLE source file sha256; not GitHub attestation")
+    bootstrapPath:=flag.String("bootstrap-json","","exact preselected public-safe DLE advisory projection JSON")
+    bootstrapDigest:=flag.String("bootstrap-json-sha256","","sha256 of the preselected advisory projection")
+    bootstrapAuthority:=flag.String("bootstrap-authority","","expected fixed project DLE URL")
+    bootstrapRevision:=flag.String("bootstrap-revision","","expected exact source revision")
+    bootstrapSourceSHA:=flag.String("bootstrap-dle-sha256","","expected independently selected DLE snapshot sha256")
     flag.Parse()
     if !repoPattern.MatchString(*repo)||strings.Contains(*repo,"..")||*issue<1 {fail(errors.New("invalid repository or issue"))}
     var p Provider
@@ -57,16 +62,27 @@ func main(){
         engine=externalReconciler{binary:*reconcileBin,binarySHA256:*reconcileBinSHA,
             authorityFile:*dleFile,candidateFile:*candidateFile,authoritySHA256:*dleSHA}
     }
+    var bootstrap *bootstrapReader
+    bootstrapSettings:=[]string{*bootstrapPath,*bootstrapDigest,*bootstrapAuthority,*bootstrapRevision,*bootstrapSourceSHA}
+    bootstrapCount:=0
+    for _,value:=range bootstrapSettings {if value!=""{bootstrapCount++}}
+    if bootstrapCount!=0 && bootstrapCount!=len(bootstrapSettings){fail(errors.New("partial bootstrap projection admission forbidden"))}
+    if bootstrapCount==len(bootstrapSettings){
+        if *bootstrapAuthority!=fmt.Sprintf("https://github.com/%s/issues/%d",*repo,*issue){fail(errors.New("bootstrap belongs to another MCP workset"))}
+        var err error
+        bootstrap,err=newBootstrapReader(*bootstrapPath,*bootstrapDigest,*bootstrapAuthority,*bootstrapRevision,*bootstrapSourceSHA)
+        if err!=nil{fail(err)}
+    }
     switch *transport {
     case "stdio":
-        if err:=newServerWithReconciler(p,*repo,*issue,engine).Run(context.Background(),&mcp.StdioTransport{});err!=nil{fail(err)}
+        if err:=newServerWithBootstrap(p,*repo,*issue,engine,bootstrap).Run(context.Background(),&mcp.StdioTransport{});err!=nil{fail(err)}
     case "http":
         host,_,err:=net.SplitHostPort(*addr);if err!=nil{fail(err)}
         ip:=net.ParseIP(host)
         if ip==nil||!ip.IsLoopback(){fail(errors.New("HTTP pilot only permits an explicit loopback IP"))}
         token:=os.Getenv("DLE_MCP_BEARER_TOKEN")
         if len(token)<24{fail(errors.New("ephemeral bearer token with at least 24 characters required"))}
-        srv:=&http.Server{Addr:*addr,Handler:newHTTPHandlerWithReconciler(p,*repo,*issue,token,engine),
+        srv:=&http.Server{Addr:*addr,Handler:newHTTPHandlerWithBootstrap(p,*repo,*issue,token,engine,bootstrap),
             ReadHeaderTimeout:5*time.Second,ReadTimeout:15*time.Second,WriteTimeout:30*time.Second}
         if err:=srv.ListenAndServe();err!=nil{fail(err)}
     default:fail(errors.New("unsupported transport"))

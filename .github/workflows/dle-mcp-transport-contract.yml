@@ -49,6 +49,20 @@ jobs:
         env:
           GOTOOLCHAIN: auto
 
+      - name: Cross-check pinned public DLE CLI consumer through selected MCP tool
+        working-directory: qualification/dle-mcp-transport
+        run: |
+          set -euo pipefail
+          readonly source_rev="084213324943c7ad12cba6afc11c0c8599db399e"
+          readonly client_blob="0b89c2782284cf2eb5a24b7b80ffbf157a721b63"
+          mkdir -p "$RUNNER_TEMP/pinned-consumer"
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$source_rev"
+          git -C "$GITHUB_WORKSPACE" show "$source_rev:qualification/dle_context_client.py" > "$RUNNER_TEMP/pinned-consumer/dle_context_client.py"
+          test "$(git hash-object "$RUNNER_TEMP/pinned-consumer/dle_context_client.py")" = "$client_blob"
+          PINNED_DLE_CONSUMER="$RUNNER_TEMP/pinned-consumer/dle_context_client.py" go test ./... -run "^TestBootstrapFromPinnedPublicDLEConsumer$" -count=1 -v -timeout=90s
+        env:
+          GOTOOLCHAIN: auto
+
       - name: Check live public GitHub observation through MCP
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         working-directory: qualification/dle-mcp-transport
@@ -76,7 +90,9 @@ jobs:
           src=Path("server.go").read_text()
           assert 'Name:"dle_discover"' in src
           assert 'Name:"dle_observe"' in src
-          assert src.count('mcp.AddTool(')==3
+          assert src.count('mcp.AddTool(')==4
+          assert 'Name:"dle_bootstrap"' in src
+          assert 'if bootstrap!=nil' in src
           assert 'if engine!=nil' in src
           assert 'newServerWithReconciler' in src
           entry=Path("main.go").read_text()
