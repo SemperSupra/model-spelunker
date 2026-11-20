@@ -209,6 +209,9 @@ jobs:
       - name: Self-test task-neutral OpenWorker tool-use hint
         run: PYTHONPATH=. python qualification/test_tool_hint.py
 
+      - name: Self-test OpenCode V2 event privacy projection
+        run: PYTHONPATH=. python -m unittest qualification.test_opencode_event_projection -v
+
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
 
