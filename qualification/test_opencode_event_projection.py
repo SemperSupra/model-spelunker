@@ -92,6 +92,13 @@ class ProjectionTests(unittest.TestCase):
     def test_reject_duplicate_top_keys(self):
         self.assert_reject(b'{"type":"session.tool.called","type":"session.tool.success"}\n')
 
+    def test_reject_numeric_overflow_and_giant_integer(self):
+        self.assert_reject(b'{"type":"session.tool.called","x":1e999}\n')
+        self.assert_reject(b'{"type":"session.tool.called","x":' + b'9' * 10_000 + b'}\n')
+
+    def test_reject_cross_session_filesystem_event(self):
+        self.assert_reject(events(event("session.execution.started", sid="one"), event("filesystem.changed", sid="two")).getvalue())
+
     def test_reject_nonfinite(self):
         self.assert_reject(b'{"type":"session.tool.called","x":NaN}\n')
 
