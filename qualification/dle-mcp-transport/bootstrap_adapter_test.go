@@ -20,7 +20,7 @@ import (
  "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const syntheticSource="https://github.com/example/public-synthetic/issues/42"
+const syntheticSource="https://github.com/o/r/issues/7"
 const syntheticRevision="issue-sha256-synthetic-rev-4"
 const syntheticDLEHash="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
