@@ -36,6 +36,21 @@ def _strings(value: Any, label: str) -> list[str]:
     return [_valid_text(item, label) for item in value]
 
 
+def _unique_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate keys at every JSON object depth before interpretation.
+
+    json.loads' normal last-key-wins behavior silently discards contradictory
+    source/verification claims. No key is permitted to shadow another, even
+    when the final parsed value appears to match the pinned source.
+    """
+    obj: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        obj[key] = value
+    return obj
+
+
 def _read_regular(path: Path) -> bytes:
     if path.is_symlink() or not path.is_file():
         raise ValueError("context must be a regular non-symlink file")
@@ -67,7 +82,7 @@ def project_context(
         raise ValueError("invalid expected source digest")
     data = _read_regular(path)
     try:
-        body = json.loads(data)
+        body = json.loads(data, object_pairs_hook=_unique_object_pairs)
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError("invalid context JSON") from exc
     if not isinstance(body, dict) or body.get("schema") != SCHEMA:
