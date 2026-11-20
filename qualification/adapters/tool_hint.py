@@ -55,6 +55,12 @@ def apply_tool_hint(instruction: str, mode: str) -> str:
         raise ValueError("task instruction must be nonempty")
     if mode in ("", NONE):
         return instruction
+    if mode in ("memory-recall-v1", "skill-procedure-v1"):
+        try:
+            from .learning_treatment import apply_learning_treatment
+        except ImportError:
+            from learning_treatment import apply_learning_treatment
+        return apply_learning_treatment(instruction, mode)
     if mode == INSPECT_V1:
         return instruction + "\n\n" + _HINT
     if mode == POLICY_FIRST_V1:
