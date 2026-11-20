@@ -1,11 +1,7 @@
 name: Edge0 Memory Context Public Feasibility
 # Synthetic/public inputs only: not a sovereign-host or real DLE actor test.
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/edge0-memory-context-public.yml'
-      - 'qualification/edge0_memory_context.py'
-      - 'qualification/edge0_memory_context.md'
+  workflow_call:
   workflow_dispatch:
 permissions:
   contents: read
