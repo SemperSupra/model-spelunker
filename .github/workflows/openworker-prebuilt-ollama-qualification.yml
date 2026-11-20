@@ -292,6 +292,9 @@ jobs:
           esac
           set +e
           python qualification/run_task.py \
+            --pass-env MODEL_SPELUNKER_TOOL_HINT_MODE \
+            --pass-env MODEL_SPELUNKER_REASONING_EFFORT \
+            --pass-env MODEL_SPELUNKER_MODEL \
             --task-commit "$GITHUB_SHA" \
             --substrate-profile-id gha-linux-x64-openworker-prebuilt-ollama \
             --substrate-profile-commit "$SUBSTRATE_PROFILE_COMMIT" \
