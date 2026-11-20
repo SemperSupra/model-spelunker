@@ -34,6 +34,12 @@ def loopback(url: str) -> str:
         raise ValueError("only explicit loopback model endpoints are allowed")
     return url.rstrip("/")
 
+class DenyRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a model endpoint's redirect outside the screened loopback."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ValueError("redirect denied: model endpoint must remain loopback")
+
+
 def parse_response(s: str) -> str:
     if len(s) > 4096:
         return "INVALID"
@@ -68,7 +74,7 @@ def run(model: str, url: str | None, levels: tuple[int, ...], timeout: int) -> d
                 try:
                     request = urllib.request.Request(url + "/chat/completions", data=body,
                                                      headers={"Content-Type": "application/json"}, method="POST")
-                    with urllib.request.urlopen(request, timeout=timeout) as response:
+                    with urllib.request.build_opener(urllib.request.ProxyHandler({}), DenyRedirect()).open(request, timeout=timeout) as response:
                         data = response.read(262145)
                     if len(data) > 262144:
                         raise ValueError("oversize response")
@@ -96,6 +102,8 @@ class Contract(unittest.TestCase):
         with self.assertRaises(ValueError):
             make_prompt("current", 999999)
     def test_egress(self):
+        with self.assertRaises(ValueError):
+            DenyRedirect().redirect_request(None, None, 302, 'found', {}, 'https://example.invalid')
         for bad in ("https://127.0.0.1:8080/v1","http://192.168.1.1:8080/v1",
                     "http://user:pass@localhost:8080/v1","http://localhost:8080/x"):
             with self.assertRaises(ValueError):
