@@ -262,6 +262,10 @@ jobs:
                   "tool_hint_mode":os.environ["MODEL_SPELUNKER_TOOL_HINT_MODE"],
               },
           }
+          if os.environ["MODEL_SPELUNKER_TOOL_HINT_MODE"] in ("memory-recall-v1", "skill-procedure-v1"):
+              from qualification.adapters.learning_treatment import load_bundle
+              _, bundle_digest = load_bundle(os.environ["MODEL_SPELUNKER_TOOL_HINT_MODE"])
+              candidate["configuration"]["learning_bundle_sha256"] = bundle_digest
           if os.environ.get("HARNESS_REALIZATION_PROFILE_DIGEST"):
               candidate["harness"]["realization"]={
                   "profile_ref":os.environ["HARNESS_REALIZATION_PROFILE_REF"],
@@ -325,6 +329,15 @@ jobs:
           assert receipt["candidate"]["configuration_digest"]
           # The metadata binding above makes the hint a separate configured actor.
           assert expected_hint in ("none","inspect-before-claim-v1","policy-first-v1","memory-recall-v1","skill-procedure-v1")
+          if expected_hint in ("memory-recall-v1", "skill-procedure-v1"):
+              from qualification.adapters.learning_treatment import load_bundle
+              bundle, sha = load_bundle(expected_hint)
+              assert receipt["candidate"]["configuration_digest"]
+              observed_bytes = receipt["observation"].get("workload", {}).get("started_request_message_bytes_total")
+              instruction = json.loads((Path("qualification/tasks") / os.environ["QUALIFICATION_TASK"] / "task.json").read_text())["instruction"]
+              assert isinstance(observed_bytes, (int, float))
+              assert observed_bytes >= len(instruction.encode("utf-8")) + len(bundle.encode("utf-8")), "learning treatment not delivered to model"
+              print("LEARNING_TREATMENT_DELIVERED=YES; bundle_digest=" + sha)
           rc=int(os.environ["QUALIFICATION_RC"])
           assert rc==(0 if receipt["observation"]["success"] else 1)
           print(json.dumps(receipt,sort_keys=True))
