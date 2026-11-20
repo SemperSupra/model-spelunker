@@ -206,6 +206,9 @@ jobs:
       - name: Self-test bounded synthetic repair-output diagnostic
         run: PYTHONPATH=. python qualification/test_diagnose_openworker_boundary.py
 
+      - name: Self-test bounded DLE advisory bootstrap and stale-source negatives
+        run: PYTHONPATH=. python -m unittest qualification.test_dle_context_client -v
+
       - name: Self-test learning treatment safety and provenance
         run: PYTHONPATH=. python -m unittest qualification.test_learning_treatment -v
 
