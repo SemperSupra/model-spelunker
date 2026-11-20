@@ -49,7 +49,7 @@ jobs:
         env:
           GOTOOLCHAIN: auto
 
-      - name: Cross-check pinned DLE CLI consumer through selected MCP tool
+      - name: Cross-check pinned public DLE CLI consumer through selected MCP tool
         working-directory: qualification/dle-mcp-transport
         run: |
           set -euo pipefail
@@ -59,44 +59,7 @@ jobs:
           git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$source_rev"
           git -C "$GITHUB_WORKSPACE" show "$source_rev:qualification/dle_context_client.py" > "$RUNNER_TEMP/pinned-consumer/dle_context_client.py"
           test "$(git hash-object "$RUNNER_TEMP/pinned-consumer/dle_context_client.py")" = "$client_blob"
-          PINNED_DLE_CONSUMER="$RUNNER_TEMP/pinned-consumer/dle_context_client.py" go test ./... -run '^TestBootstrapFromPinnedPublicDLEConsumer        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        working-directory: qualification/dle-mcp-transport
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DLE_OBSERVER_REPO: SemperSupra/model-spelunker
-          DLE_OBSERVER_ISSUE: "139"
-          DLE_OBSERVER_CHECKOUT: ${{ github.workspace }}
-          DLE_OBSERVER_BIN: ${{ runner.temp }}/dle-source-observer
-          DLE_OBSERVER_SOURCE_SHA: c21a098f5e925c516a687181d946463865b6d15f
-        run: |
-          mkdir -p "$RUNNER_TEMP/dle-observer-source"
-          git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$DLE_OBSERVER_SOURCE_SHA"
-          git -C "$GITHUB_WORKSPACE" cat-file -e "$DLE_OBSERVER_SOURCE_SHA^{commit}"
-          git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/main.go" > "$RUNNER_TEMP/dle-observer-source/main.go"
-          git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/go.mod" > "$RUNNER_TEMP/dle-observer-source/go.mod"
-          (cd "$RUNNER_TEMP/dle-observer-source" && go build -o "$DLE_OBSERVER_BIN" .)
-          go test ./... -run '^TestLivePublicGitHubObserverThroughMCP$' -count=1 -v -timeout=90s
-
-      - name: Verify no mutation-capable MCP tool
-        working-directory: qualification/dle-mcp-transport
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          src=Path("server.go").read_text()
-          assert 'Name:"dle_discover"' in src
-          assert 'Name:"dle_observe"' in src
-          assert src.count('mcp.AddTool(')==4
-          assert 'Name:"dle_bootstrap"' in src
-          assert 'if bootstrap!=nil' in src
-          assert 'if engine!=nil' in src
-          assert 'newServerWithReconciler' in src
-          entry=Path("main.go").read_text()
-          assert 'newOAuthContractHandler(' not in entry
-          assert 'oauthDiscoveryRoutes(' not in entry
-          assert 'ip.IsLoopback()' in entry
-          print("PASS bounded tool registration; synthetic OAuth resource server is not publicly wired")
-          PY
- -count=1 -v -timeout=90s
+          PINNED_DLE_CONSUMER="$RUNNER_TEMP/pinned-consumer/dle_context_client.py" go test ./... -run "^TestBootstrapFromPinnedPublicDLEConsumer$" -count=1 -v -timeout=90s
         env:
           GOTOOLCHAIN: auto
 
