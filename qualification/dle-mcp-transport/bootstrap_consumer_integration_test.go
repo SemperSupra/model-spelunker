@@ -28,7 +28,7 @@ func TestBootstrapFromPinnedPublicDLEConsumer(t *testing.T){
  root:=t.TempDir()
  source:=filepath.Join(root,"context.json")
  bootstrap:=filepath.Join(root,"bootstrap.json")
- const authority="https://github.com/example/public-synthetic/issues/42"
+ const authority="https://github.com/o/r/issues/7"
  const revision="synthetic-source-sha-9"
  sourceDigest:=strings.Repeat("a",64)
  raw:=map[string]any{
