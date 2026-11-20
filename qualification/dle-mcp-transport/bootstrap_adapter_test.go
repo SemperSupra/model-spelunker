@@ -181,10 +181,10 @@ func TestBootstrapPartialCLIAdmissionMustFail(t *testing.T){
 func TestBootstrapRejectsMismatchedWorksetAtCLIAdmission(t *testing.T){
  reader,path:=writeBootstrap(t)
  cmd:=exec.Command("go","run",".",
-  "--mode=fixture","--repo=o/r","--issue=8",
+  "--mode=fixture","--repo=o/r","--issue=7",
   "--bootstrap-json="+path,
   "--bootstrap-json-sha256="+reader.digest,
-  "--bootstrap-authority="+reader.authority,
+  "--bootstrap-authority=https://github.com/o/r/issues/8",
   "--bootstrap-revision="+reader.revision,
   "--bootstrap-dle-sha256="+reader.authoritySHA,
  )
