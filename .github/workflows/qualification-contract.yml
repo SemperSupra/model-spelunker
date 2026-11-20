@@ -206,6 +206,9 @@ jobs:
       - name: Self-test bounded synthetic repair-output diagnostic
         run: PYTHONPATH=. python qualification/test_diagnose_openworker_boundary.py
 
+      - name: Self-test learning treatment safety and provenance
+        run: PYTHONPATH=. python -m unittest qualification.test_learning_treatment -v
+
       - name: Self-test task-neutral OpenWorker tool-use hint
         run: PYTHONPATH=. python qualification/test_tool_hint.py
 
