@@ -12,6 +12,7 @@ import argparse
 from collections import Counter
 import hashlib
 import json
+import math
 from pathlib import Path
 import sys
 from typing import BinaryIO
@@ -58,14 +59,22 @@ def _reject_nonfinite(_value: str) -> None:
     raise ProjectionError("non-finite JSON number")
 
 
+def _finite_float(token: str) -> float:
+    value = float(token)
+    if not math.isfinite(value):
+        raise ProjectionError("non-finite JSON number")
+    return value
+
+
 def _decode(raw: bytes) -> dict[str, object]:
     try:
         obj = json.loads(
             raw.decode("utf-8"),
             object_pairs_hook=_unique_keys,
             parse_constant=_reject_nonfinite,
+            parse_float=_finite_float,
         )
-    except (UnicodeError, json.JSONDecodeError, RecursionError):
+    except (UnicodeError, json.JSONDecodeError, RecursionError, ValueError):
         raise ProjectionError("malformed JSONL event") from None
     if not isinstance(obj, dict):
         raise ProjectionError("event must be a JSON object")
@@ -110,14 +119,15 @@ def project_events(input_stream: BinaryIO) -> dict[str, object]:
             by_type[typ] += 1
         else:
             unknown += 1
-        if typ.startswith("session."):
-            sid = properties.get("sessionID")
+        sid = properties.get("sessionID")
+        if typ.startswith("session.") and (not isinstance(sid, str) or not sid or len(sid) > 128):
+            missing_session_identity += 1
+        elif "sessionID" in properties:
             if not isinstance(sid, str) or not sid or len(sid) > 128:
-                missing_session_identity += 1
-            else:
-                identities.add(sid)  # only in memory; never returned
-                if len(identities) > 1:
-                    raise ProjectionError("multiple session identities in one stream")
+                raise ProjectionError("invalid session identity")
+            identities.add(sid)  # only in memory; never returned
+            if len(identities) > 1:
+                raise ProjectionError("multiple session identities in one stream")
         if typ in TERMINAL_TYPES:
             terminal_count += 1
             terminal_kind = TERMINAL_TYPES[typ]
