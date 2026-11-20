@@ -76,7 +76,9 @@ jobs:
           src=Path("server.go").read_text()
           assert 'Name:"dle_discover"' in src
           assert 'Name:"dle_observe"' in src
-          assert src.count('mcp.AddTool(')==3
+          assert src.count('mcp.AddTool(')==4
+          assert 'Name:"dle_bootstrap"' in src
+          assert 'if bootstrap!=nil' in src
           assert 'if engine!=nil' in src
           assert 'newServerWithReconciler' in src
           entry=Path("main.go").read_text()
