@@ -3,14 +3,6 @@ name: Memory vs Skill - Public Qwen Qualification Screen
 # Source-public, credential-free only. This is a 1-rep screening experiment,
 # not an evaluation of OpenCode auto-memory or autonomous model learning.
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/learning-bootcamp-screen.yml'
-      - '.github/workflows/openworker-prebuilt-ollama-qualification.yml'
-      - 'qualification/learning/**'
-      - 'qualification/adapters/learning_treatment.py'
-      - 'qualification/adapters/tool_hint.py'
-      - 'qualification/test_learning_treatment.py'
   workflow_dispatch:
 
 permissions:
