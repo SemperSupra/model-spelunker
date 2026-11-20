@@ -116,7 +116,9 @@ if __name__ == "__main__":
     p.add_argument("--out")
     a=p.parse_args()
     if a.self_test:
-        unittest.main(argv=[__file__], exit=False, verbosity=2)
+        outcome = unittest.main(argv=[__file__], exit=False, verbosity=2)
+        if not outcome.result.wasSuccessful():
+            raise SystemExit(1)
     else:
         if not a.out or not 1 <= a.timeout <= 90:
             p.error("receipt path and bounded timeout required")
