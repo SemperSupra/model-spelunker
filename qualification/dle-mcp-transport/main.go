@@ -68,6 +68,7 @@ func main(){
     for _,value:=range bootstrapSettings {if value!=""{bootstrapCount++}}
     if bootstrapCount!=0 && bootstrapCount!=len(bootstrapSettings){fail(errors.New("partial bootstrap projection admission forbidden"))}
     if bootstrapCount==len(bootstrapSettings){
+        if *bootstrapAuthority!=fmt.Sprintf("https://github.com/%s/issues/%d",*repo,*issue){fail(errors.New("bootstrap belongs to another MCP workset"))}
         var err error
         bootstrap,err=newBootstrapReader(*bootstrapPath,*bootstrapDigest,*bootstrapAuthority,*bootstrapRevision,*bootstrapSourceSHA)
         if err!=nil{fail(err)}
