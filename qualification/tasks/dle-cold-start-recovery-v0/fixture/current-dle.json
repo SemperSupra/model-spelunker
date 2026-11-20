@@ -1,0 +1,21 @@
+{
+  "schema": "synthetic-dle-authority-v1",
+  "authority": "https://github.com/example/public-synthetic/issues/42",
+  "revision": "rev-2026-11-20-02",
+  "mission": "Qualify a public-safe Tool Belt bootstrap",
+  "next_action": "VERIFY_SYNTHETIC_RECONCILIATION",
+  "constraints": [
+    "No external effects",
+    "No public release without separate authority"
+  ],
+  "permissions": {
+    "public_release": false,
+    "allowed_actions": [
+      "inspect_synthetic_fixture",
+      "write_candidate_resume"
+    ]
+  },
+  "accepted_decisions": [
+    "Source DLE outranks cached memory"
+  ]
+}
