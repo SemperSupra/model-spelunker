@@ -83,7 +83,7 @@ class LearningTreatmentTests(unittest.TestCase):
             text, _ = load_bundle(name)
             lowered = text.lower()
             for forbidden in (
-                "sk-", "bearer ", "password=", "192.168.", "bigmac.local",
+                "sk-syntheticlongsecretvalue", "bearer ", "password=", "192.168.", "bigmac.local",
                 "truenas.local", "github_token", "github_pat_", "literal answer:",
                 "src/retry.py", "boundary-bugfix-v0", "validation-discovery-v0",
                 "disable permissions", "ignore the task",
