@@ -134,6 +134,7 @@ class TaskWorkspaceLayoutTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "work"
             shutil.copytree(task_dir / "fixture", work)
+            self.assertEqual(module.self_test(), 0)
             target = work / "resume.json"
             target.write_text(json.dumps(module.EXPECTED), encoding="utf-8")
             self.assertTrue(module.check(work))
