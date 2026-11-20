@@ -44,6 +44,42 @@ class LearningTreatmentTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     apply_tool_hint(AUTHORITATIVE, mode)
 
+    def test_runner_must_explicitly_project_treatment_env(self):
+        from qualification.endpoint_policy import sanitize_candidate_env
+        src = {
+            "PATH": "/bin",
+            "MODEL_SPELUNKER_TOOL_HINT_MODE": "memory-recall-v1",
+            "MODEL_SPELUNKER_MODEL": "ollama:qwen3:1.7b",
+            "MODEL_SPELUNKER_REASONING_EFFORT": "none",
+            "OPENAI_API_KEY": "SYNTHETIC_NEVER_REAL_SECRET",
+        }
+        baseline = sanitize_candidate_env(src)
+        self.assertNotIn("MODEL_SPELUNKER_TOOL_HINT_MODE", baseline)
+        projected = sanitize_candidate_env(
+            src,
+            pass_env=[
+                "MODEL_SPELUNKER_TOOL_HINT_MODE",
+                "MODEL_SPELUNKER_MODEL",
+                "MODEL_SPELUNKER_REASONING_EFFORT",
+            ],
+        )
+        self.assertEqual(projected["MODEL_SPELUNKER_TOOL_HINT_MODE"], "memory-recall-v1")
+        self.assertNotIn("OPENAI_API_KEY", projected)
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github/workflows/openworker-prebuilt-ollama-qualification.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("--pass-env MODEL_SPELUNKER_TOOL_HINT_MODE", workflow)
+        self.assertIn("LEARNING_TREATMENT_DELIVERED=YES", workflow)
+
+    def test_treatment_changes_prompt_bytes(self):
+        baseline = apply_tool_hint(AUTHORITATIVE, "none")
+        for mode in BUNDLES:
+            adjusted = apply_tool_hint(AUTHORITATIVE, mode)
+            bundle, digest = load_bundle(mode)
+            self.assertGreater(len(adjusted.encode("utf-8")), len(baseline.encode("utf-8")) + len(bundle.encode("utf-8")))
+            self.assertTrue(digest.startswith("sha256:"))
+
     def test_empty_task_is_rejected(self):
         for mode in ("memory-recall-v1", "skill-procedure-v1"):
             with self.assertRaises(ValueError):
