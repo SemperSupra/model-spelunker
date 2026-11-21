@@ -95,7 +95,8 @@ settings={
     "current task directory. First read index.txt, then read the TARGET file. Do not "
     "guess file contents, use shell commands, search external files, write data "
     "or describe unperformed actions. The session is headless and only the "
-    "read_file tool is available. Return exactly the file text after it is read.\n")
+    "read_file tool is available. After reading index.txt and its TARGET file, "
+    "return only the VALUE line from the selected TARGET file. Do not return index text.\n")
 
 PY
 export HOME="$root/home"
