@@ -11,7 +11,7 @@ export OLLAMA_MODELS="$RUNNER_TEMP/qwen-harness-models"
 export OLLAMA_CONTEXT_LENGTH=16384
 export OLLAMA_NUM_PARALLEL=1
 export QWEN_R10_MODE="${QWEN_R10_MODE:-baseline}"
-case "$QWEN_R10_MODE" in baseline|compact_system|compact_tools|compact_both) ;; *) echo "unsupported mode"; exit 2;; esac
+case "$QWEN_R10_MODE" in baseline|compact_system|compact_tools|compact_both|compact_schema|compact_schema_budget) ;; *) echo "unsupported mode"; exit 2;; esac
 export OLLAMA_MAX_LOADED_MODELS=1
 root="$RUNNER_TEMP/qwen-r10-native"
 mkdir -p "$root/ollama" "$root/home/.qwen" "$root/task" "$OLLAMA_MODELS"
@@ -78,7 +78,7 @@ settings={
      "generationConfig":{"timeout":140000,"maxRetries":0,
                          "contextWindowSize":16384,
                          "samplingParams":{"temperature":0,
-                                           "max_tokens":256,
+                                           "max_tokens":1024 if os.environ["QWEN_R10_MODE"]=="compact_schema_budget" else 256,
                                            "reasoning_effort":"none"}}
   }]},
   "tools":{"core":["read_file"],"eager":["read_file"],"toolSearch":{"enabled":False}},
