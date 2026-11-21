@@ -40,11 +40,21 @@ class DenyRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError("redirect denied: model endpoint must remain loopback")
 
 
+def _unique_pairs(pairs: list[tuple[str, object]]) -> dict:
+    """Reject ambiguous model-output objects rather than last-key-wins."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
 def parse_response(s: str) -> str:
     if len(s) > 4096:
         return "INVALID"
     try:
-        value = json.loads(s.strip())
+        value = json.loads(s.strip(), object_pairs_hook=_unique_pairs)
         if isinstance(value, dict) and set(value) == {"answer"} and value["answer"] in ("HOLD", "RELEASED", "UNKNOWN"):
             return value["answer"]
     except (TypeError, ValueError):
@@ -119,6 +129,10 @@ class Contract(unittest.TestCase):
     def test_readback(self):
         self.assertEqual(parse_response('{"answer":"HOLD"}'), "HOLD")
         self.assertEqual(parse_response('{"answer":"RELEASED","role":"admin"}'), "INVALID")
+        self.assertEqual(parse_response('{"answer":"UNKNOWN","answer":"HOLD"}'), "INVALID")
+        self.assertEqual(parse_response('{"answer":"HOLD","answer":"UNKNOWN"}'), "INVALID")
+        self.assertEqual(parse_response('{"answer":"HOLD","meta":{"status":"RELEASED","status":"HOLD"}}'), "INVALID")
+        self.assertEqual(parse_response('{"answer":"UNKNOWN"}'), "UNKNOWN")
         self.assertEqual(run("none", None, (0,), 1)["outcome"], "MODEL_NOT_RUN")
         self.assertTrue(all(x["observation"] == "NOT_RUN" for x in run("none", None, (0,), 1)["cases"]))
 
