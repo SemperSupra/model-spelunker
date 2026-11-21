@@ -22,7 +22,7 @@ NEEDLES={
   "StreamingToolCallParser",
 ],
 "packages/core/src/core/openaiContentGenerator/requestCaptureContext.ts":[
-  "post", "provider", "stream_options","samplingParams","openaiRequestCaptureContext"
+  "ContentGenerationPipeline", "provider-injected fields", "stream_options", "samplingParams", "openaiRequestCaptureContext"
 ],
 "packages/core/src/core/openaiContentGenerator/streamingToolCallParser.ts":[
   "StreamingToolCallParser","hasIncompleteToolCalls()","getCompletedToolCalls()",
