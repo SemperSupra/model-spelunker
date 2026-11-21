@@ -1,0 +1,55 @@
+name: Qwen Public Real Harness Context and Tool-Envelope Bisect
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwen-harness-profile.yml'
+      - 'qualification/qwencode_harness_profile/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-harness-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-envelope-reps:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        band: [real-qwen-ollama-context, independent-proxy-redteam]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout public-only source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Real pinned Ollama Qwen3 + native Qwen CLI scoped tool canary
+        if: matrix.band == 'real-qwen-ollama-context'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash qualification/qwencode_harness_profile/run_harness.sh
+      - name: Independent loopback identity and proxy leakage guards
+        if: matrix.band == 'independent-proxy-redteam'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwencode_harness_profile -p test_proxy.py -v
+      - name: Retain redacted request-envelope receipt even if model/harness fails
+        if: matrix.band == 'real-qwen-ollama-context' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-harness-envelope-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-harness-profile/receipt.json
+            ${{ runner.temp }}/qwen-harness-profile/proxy-metadata.json
+          retention-days: 7
+          if-no-files-found: ignore
