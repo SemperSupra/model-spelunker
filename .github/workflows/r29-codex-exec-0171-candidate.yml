@@ -38,6 +38,12 @@ jobs:
           test "$(git -C "$src" rev-parse HEAD)" = ccf9be8cc458bd6b8336fe84d68d8893f2691a5e
           python3 -c 'from pathlib import Path; from qualification.harness_refresh.codex_exec_0171 import inspect_source; import os; inspect_source(Path(os.environ["RUNNER_TEMP"])/"codex-0171-source")'
           rustup toolchain install 1.99.1 --profile minimal
+      - name: Preflight lockfile stability before lengthy Rust compilation
+        run: |
+          set -Eeuo pipefail
+          cd "$RUNNER_TEMP/codex-0171-source/codex-rs"
+          cargo +1.99.1 metadata --locked --format-version 1 --no-deps >/dev/null
+          git diff --exit-code -- Cargo.lock
       - name: Actual Codex exec release source build, no duplicate recursion patch
         run: |
           set -Eeuo pipefail
