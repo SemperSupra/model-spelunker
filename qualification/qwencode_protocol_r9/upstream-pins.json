@@ -1,0 +1,25 @@
+{
+  "schema": "qwen-r9-upstream-openai-protocol/v1",
+  "repo": "QwenLM/qwen-code",
+  "tag_commit": "99fcf89892f1a3a8027c75468546c7e7be906245",
+  "files": {
+    "packages/core/src/core/openaiContentGenerator/pipeline.ts": "360a3546951c84ff17dd5ea28751b6d5b291a985",
+    "packages/core/src/core/openaiContentGenerator/requestCaptureContext.ts": "dfceefeecaec53bdff61ad287edf714934e300e9",
+    "packages/core/src/core/openaiContentGenerator/streamingToolCallParser.ts": "b741d3da83487398f5366930151b98069232efbf",
+    "packages/core/src/core/llm-chat.ts": "369605df5146c7e7a427ba13746f57399082bcdd"
+  },
+  "expected": {
+    "stream_includes_usage": true,
+    "provider_reasoning_normalization": true,
+    "reasoning_effort_possible": true,
+    "custom_tool_choice": true,
+    "explicit_empty_stream_fail": true,
+    "capture_after_provider_request": true
+  },
+  "limits": {
+    "source_only": true,
+    "request_values_never_logged": true,
+    "model_inference_not_tested": true,
+    "guest_effect_not_tested": true
+  }
+}

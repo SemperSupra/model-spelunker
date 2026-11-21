@@ -1,0 +1,67 @@
+name: Qwen R9 Public OpenAI Request and Trailing-Usage Protocol Bisect
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_protocol_r9/**'
+      - '.github/workflows/qwen-r9-openai-protocol.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-r9-openai-wire-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-protocol-bands:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        band: [exact-upstream-source-audit, native-cli-trailing-usage-sse]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout source-neutral public Qwen qualification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch exact official v0.28.3 upstream source for independent audit
+        if: matrix.band == 'exact-upstream-source-audit'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: QwenLM/qwen-code
+          ref: 99fcf89892f1a3a8027c75468546c7e7be906245
+          path: vendor/qwen
+          persist-credentials: false
+      - name: Execute frozen exact source and negative protocol controls
+        if: matrix.band == 'exact-upstream-source-audit'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C vendor/qwen rev-parse HEAD)" = 99fcf89892f1a3a8027c75468546c7e7be906245
+          python3 qualification/qwencode_protocol_r9/source_audit.py --upstream vendor/qwen
+          python3 -m unittest discover -s qualification/qwencode_protocol_r9 -p test_protocol.py -v
+      - name: Native Qwen Code actual read_file with synthetic OpenAI SSE usage trailer
+        if: matrix.band == 'native-cli-trailing-usage-sse'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n qualification/qwencode_protocol_r9/run_usage_native.sh
+          python3 -m unittest discover -s qualification/qwencode_protocol_r9 -p test_protocol.py -k SSE -v
+          bash qualification/qwencode_protocol_r9/run_usage_native.sh
+      - name: Preserve only synthetic redacted usage/nonce-oracle status
+        if: matrix.band == 'native-cli-trailing-usage-sse' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r9-usage-native-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-public-usage/receipt.json
+            ${{ runner.temp }}/qwen-public-usage/mock-events.json
+          retention-days: 7
+          if-no-files-found: ignore
