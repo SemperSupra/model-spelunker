@@ -6,7 +6,8 @@ This is a **public-safe build and qualification fixture** for the official [Qwen
 The native Windows and Linux jobs download official release assets only from a versioned GitHub Release and verify their publisher-recorded SHA-256 digests, archive entry safety, exact native `qwen --version`, and source-neutral negative tests. Each job emits a portable ZIP kit with:
 - `kit.json`: upstream release, platform, expected immutable archive digest, classification and *no production authority*.
 - `upstream/qwen-code-{platform}.{zip|tar.gz}`: unchanged, SHA-verified upstream standalone release (includes its own Node runtime).
-- `Invoke-QwenCapsule.ps1`: Windows PowerShell 5.1 Observe, Plan, Apply, Verify, Rollback.
+- `Observe-QwenHost.ps1`: read-only, redacted Windows PowerShell 5.1 hardware/Hyper-V/WSL/tool census (safe on control host).
+- `Invoke-QwenCapsule.ps1`: Windows PowerShell 5.1 Observe, Plan, Apply, Verify, Rollback **inside the admitted guest only**.
 - `compile-routes.mjs`: Node 22+ standard-library compiler for class-separated Qwen model role catalogs, with no embedded keys.
 - `release-manifest.json` and this README, plus JSON evidence for the GitHub run.
 
@@ -54,3 +55,7 @@ Use the standalone Node runtime inside the **admitted** disposable guest to comp
 ```
 
 The example points at `example.invalid`, so it cannot make a model call. Production routes, model IDs and secret values are supplied privately by the approved workcell controller. Output references only environment variable names (`envKey`), not credentials. Its `agents.modelGrades` can select models across providers, but classification and network permissions must be enforced *outside Qwen*. In particular, private and cloud roles do **not** share an execution context or prompt history; an Agent Dispatch workset can coordinate them while preserving data boundaries. The `privateNetworkAdmitted` input is merely configuration consistency; it cannot itself grant network access.
+
+## B0 native control-surface preflight
+
+`Observe-QwenHost.ps1` may be run from an existing trusted Windows console without elevation. It only reports sanitized counts/capabilities, never raw VM names, SSH credentials, addresses or host identifiers. A DENIED result for Get-VM/Get-VMSwitch is a management-admission blocker, **not** evidence that VMs/switches are absent. It performs no host or private endpoint writes.
