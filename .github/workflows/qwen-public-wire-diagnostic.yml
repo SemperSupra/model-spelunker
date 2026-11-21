@@ -1,0 +1,54 @@
+name: Qwen Public OpenAI Tool-Wire Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwen-public-wire-diagnostic.yml'
+      - 'qualification/qwencode_wire/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-wire-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-wire-reps:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        band: [protocol-redteam, actual-qwen-cli-wire]
+    steps:
+      - name: Checkout public synthetic source only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Independent fake-model protocol + forged result negatives
+        if: matrix.band == 'protocol-redteam'
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s qualification/qwencode_wire -p test_mock_provider.py -v
+          echo "PASS source-neutral read_file protocol and forged-user-result deny tests"
+      - name: Actual Qwen CLI against loopback-only synthetic OpenAI wire
+        if: matrix.band == 'actual-qwen-cli-wire'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash qualification/qwencode_wire/run_wire_smoke.sh
+      - name: Collect source-bound fake-provider receipt even on failure
+        if: matrix.band == 'actual-qwen-cli-wire' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-public-wire-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-public-wire/receipt.json
+            ${{ runner.temp }}/qwen-public-wire/mock-events.json
+          retention-days: 7
+          if-no-files-found: ignore
