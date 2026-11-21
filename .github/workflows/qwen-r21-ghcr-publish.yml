@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -35,11 +36,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m qualification.agent_embodiment.qwen_oci_publish publish --output "$RUNNER_TEMP/qwen-ghcr-source" | tee "$RUNNER_TEMP/qwen-ghcr-admission.json"
+      - name: Reconcile immutable GHCR admission to authoritative public Foundry DLE
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 -m qualification.agent_embodiment.qwen_oci_publish sync-dle --receipt "$RUNNER_TEMP/qwen-ghcr-admission.json" | tee "$RUNNER_TEMP/qwen-ghcr-dle.json"
       - name: Persist allowlisted, credential-free immutable admission evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: qwen-r21-ghcr-admission-${{ github.run_id }}
-          path: ${{ runner.temp }}/qwen-ghcr-admission.json
+          path: |
+            ${{ runner.temp }}/qwen-ghcr-admission.json
+            ${{ runner.temp }}/qwen-ghcr-dle.json
           if-no-files-found: ignore
           retention-days: 7
