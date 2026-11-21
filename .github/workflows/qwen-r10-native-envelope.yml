@@ -1,0 +1,48 @@
+name: Qwen R10 native real Ollama envelope bisect
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_rootcause_r10/**'
+      - '.github/workflows/qwen-r10-native-envelope.yml'
+permissions:
+  contents: read
+concurrency:
+  group: qwen-r10-envelope-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-oracle:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        mode: [baseline, compact_both]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      QWEN_R10_MODE: ${{ matrix.mode }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify scripts and independent fail-closed containment
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n qualification/qwencode_rootcause_r10/run_native_bisect.sh
+          python3 -m py_compile qualification/qwencode_rootcause_r10/diagnostic_proxy.py
+          python3 qualification/qwencode_rootcause_r10/critic.py
+      - name: Actual native Qwen Code and real CPU Ollama diagnostic
+        shell: bash
+        run: bash qualification/qwencode_rootcause_r10/run_native_bisect.sh
+      - name: Retain sanitized exact-source causal metadata
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r10-native-${{ matrix.mode }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-r10-native/receipt.json
+            ${{ runner.temp }}/qwen-r10-native/proxy-metadata.json
+          retention-days: 7
+          if-no-files-found: ignore
