@@ -124,7 +124,7 @@ def selftest(x):
         lambda d: d["candidates"][1].update(agent="MCP_NATIVE"),
         lambda d: d["candidates"][2].update(automation="CLI_NATIVE_SAFE"),
         lambda d: d["candidates"][2].update(caveats=["manual approval optional"]),
-        lambda d: d["candidates"][1]["source_files"][0].update(blob_sha="0"*40),
+        lambda d: d["candidates"][1]["source_files"][0].update(blob_sha="z"*40),
         lambda d: d["candidates"][0]["source_files"][0].update(path="../private"),
         lambda d: d["candidates"].pop(),
         lambda d: d["candidates"].append(copy.deepcopy(d["candidates"][0])),
