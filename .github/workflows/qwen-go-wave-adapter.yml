@@ -1,0 +1,92 @@
+name: Qwen Public Existing Go Batch-Wave Adapter
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwen_wave_adapter/**'
+      - '.github/workflows/qwen-go-wave-adapter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-go-wave-adapter-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-adapter-qualifications:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        band: [domain-negative-critic, actual-supragoflow-go-consumer]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      GOPROXY: 'off'
+      GOSUMDB: 'off'
+      GOTOOLCHAIN: 'local'
+    steps:
+      - name: Checkout Qwen public source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Offline strict adapter schema, duplicate planner and denial tests
+        if: matrix.band == 'domain-negative-critic'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwen_wave_adapter -p test_bridge.py -v
+          python3 qualification/qwen_wave_adapter/bridge.py \
+            --input qualification/qwen_batches/workset.public.json
+      - name: Reuse EXACT existing public SupraGoFlow Go batch-wave compiler source
+        if: matrix.band == 'actual-supragoflow-go-consumer'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: SemperSupra/supragoflow
+          ref: adf08abff73058a7502afb514acc8314c77302f9
+          path: vendor/supragoflow
+          persist-credentials: false
+      - name: Actual native Go wave plan and one-card baton on public synthetic input
+        if: matrix.band == 'actual-supragoflow-go-consumer'
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed=$(git -C vendor/supragoflow rev-parse HEAD)
+          test "$observed" = adf08abff73058a7502afb514acc8314c77302f9
+          python3 qualification/qwen_wave_adapter/bridge.py \
+            --input qualification/qwen_wave_adapter/synthetic-ready.json \
+            --output "$RUNNER_TEMP/qwen-go-wave-synthetic.json"
+          (
+            cd vendor/supragoflow/rdte/batch-wave
+            go test ./...
+            go run ./cmd/batch-wave plan "$RUNNER_TEMP/qwen-go-wave-synthetic.json" > "$RUNNER_TEMP/go-plan.json"
+            go run ./cmd/batch-wave baton "$RUNNER_TEMP/qwen-go-wave-synthetic.json" b09-synthetic-one > "$RUNNER_TEMP/go-baton.json"
+          )
+          python3 - "$RUNNER_TEMP/go-plan.json" "$RUNNER_TEMP/go-baton.json" <<'PY'
+          import json,pathlib,sys
+          plan=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          baton=json.loads(pathlib.Path(sys.argv[2]).read_text())
+          assert plan["schema"]=="batch-wave/v1"
+          assert plan["card_count"]==2
+          assert plan["parallel_waves"]==[["b09-synthetic-one","b10-source-two"]]
+          assert len(plan["digest_sha256"])==64
+          assert baton["card"]["id"]=="b09-synthetic-one"
+          assert baton["plan_digest_sha256"]==plan["digest_sha256"]
+          assert baton["card"]["venue"]=="public-gha"
+          assert "admission" not in baton["card"]
+          print("PASS preexisting Go planner/one-card baton, two disjoint synthetic public-ready tasks")
+          PY
+      - name: Retain synthetic Go plan and baton only
+        if: matrix.band == 'actual-supragoflow-go-consumer' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-supragoflow-reuse-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/go-plan.json
+            ${{ runner.temp }}/go-baton.json
+          retention-days: 7
+          if-no-files-found: ignore
