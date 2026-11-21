@@ -128,7 +128,10 @@ valid=int(os.environ["QWEN_LEAN_RC"])==0 and expected in stdout and any(
 status="PASS" if valid else "FAIL"
 receipt={
  "schema":"qwen-public-lean-real-harness/v1",
- "verdict":status,\n "core_allowlist":["read_file"],\n "full_system_override":"QWEN_SYSTEM_MD_RUNNER_OWNED",\n "model_inference":"ACTUAL_PINNED_OLLAMA_QWEN3_1P7B",
+ "verdict":status,
+ "core_allowlist":["read_file"],
+ "full_system_override":"QWEN_SYSTEM_MD_RUNNER_OWNED",
+ "model_inference":"ACTUAL_PINNED_OLLAMA_QWEN3_1P7B",
  "qwen_exit":int(os.environ["QWEN_LEAN_RC"]),
  "hidden_fixture_oracle":"PASS" if expected in stdout else "FAIL",
  "request_seen":bool(completed),
