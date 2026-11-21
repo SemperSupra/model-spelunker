@@ -18,6 +18,7 @@ jobs:
           python3 qualification/agent_embodiment/final_oracle.py
           python3 qualification/agent_embodiment/lineage_oracle.py
           python3 qualification/agent_embodiment/qwen_embody.py self-test
+          python3 qualification/agent_embodiment/settings_drift.py
           bash -n qualification/agent_embodiment/run_native_installed.sh
   native-install-configure-and-use:
     runs-on: ubuntu-24.04
