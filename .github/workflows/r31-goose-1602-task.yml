@@ -1,0 +1,155 @@
+name: R31 Actual Goose 1.60.2 Qwen3 1.7B Model-Task Crossover (Public)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/r31-goose-1602-task.yml'
+      - 'qualification/harness_refresh/goose_1602.py'
+      - 'qualification/adapters/goose_cli.py'
+      - 'qualification/tasks/text-repair-v0/**'
+      - 'qualification/tasks/boundary-bugfix-v0/**'
+permissions:
+  contents: read
+jobs:
+  exact-source-goose-agent-and-independent-tasks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 44
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_BUILD_JOBS: '2'
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_BIND: '127.0.0.1:11434'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      MODEL_SPELUNKER_MODEL: 'qwen3:1.7b'
+      GOOSE_PROVIDER: 'ollama'
+      GOOSE_MODEL: 'qwen3:1.7b'
+      GOOSE_OLLAMA_HOST: 'http://127.0.0.1:11434'
+      OLLAMA_STREAM_USAGE: 'false'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      GOOSE_TELEMETRY_ENABLED: 'false'
+      MODEL_SPELUNKER_MAX_ITERATIONS: '4'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify pinned Goose v1.60.2 upstream and native toolchain
+        run: |
+          set -Eeuo pipefail
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/aaif-goose/goose.git "$RUNNER_TEMP/goose-1602-src"
+          git -C "$RUNNER_TEMP/goose-1602-src" checkout --quiet --detach fb55b5a6d7f5b5df96c8f817f1cde6a81880d9f1
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from qualification.harness_refresh.goose_1602 import git_source
+          git_source(Path(os.environ["RUNNER_TEMP"])/"goose-1602-src")
+          PY
+          rustup toolchain install 1.99.0 --profile minimal
+      - name: Build exact upstream Goose CLI, no default capabilities or auto-update
+        run: |
+          set -Eeuo pipefail
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/goose-1602-target"
+          cd "$RUNNER_TEMP/goose-1602-src"
+          cargo +1.99.0 build --locked --release -p goose-cli --bin goose --no-default-features --features rustls-tls,disable-update
+          "$CARGO_TARGET_DIR/release/goose" --version | grep -F 1.60.2
+          cd "$GITHUB_WORKSPACE"
+          python3 -m qualification.harness_refresh.goose_1602 stage --source "$RUNNER_TEMP/goose-1602-src" --binary "$CARGO_TARGET_DIR/release/goose" --output "$RUNNER_TEMP/goose-r31-local-oci"
+          python3 -m qualification.harness_refresh.goose_1602 verify --output "$RUNNER_TEMP/goose-r31-local-oci"
+          echo "GOOSE_BIN=$RUNNER_TEMP/goose-r31-local-oci/payload/goose" >> "$GITHUB_ENV"
+      - name: Install pinned local Ollama and exact Qwen3 model, no cloud credentials
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl -fLsS --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" -o "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime" "$RUNNER_TEMP/ollama-models"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+          export OLLAMA_MODELS="$RUNNER_TEMP/ollama-models"
+          echo "OLLAMA_MODELS=$OLLAMA_MODELS" >> "$GITHUB_ENV"
+          OLLAMA_HOST="$OLLAMA_BIND" nohup "$RUNNER_TEMP/ollama-runtime/bin/ollama" serve >"$RUNNER_TEMP/ollama-log.txt" 2>&1 &
+          for i in $(seq 1 80); do
+             if curl -fsS "http://$OLLAMA_BIND/api/tags" >/dev/null; then break; fi
+             sleep 1
+          done
+          curl -fsS "http://$OLLAMA_BIND/api/tags" >/dev/null
+          OLLAMA_HOST="$OLLAMA_BIND" "$RUNNER_TEMP/ollama-runtime/bin/ollama" pull "$OLLAMA_MODEL_TAG"
+          python3 - <<'PY'
+          import json,os,urllib.request
+          with urllib.request.urlopen("http://127.0.0.1:11434/api/tags",timeout=10) as x:
+              models=json.load(x)["models"]
+          m=next(v for v in models if v.get("name")==os.environ["OLLAMA_MODEL_TAG"])
+          assert m["digest"].removeprefix("sha256:").startswith(os.environ["OLLAMA_MODEL_DIGEST_PREFIX"])
+          PY
+      - name: Run two deterministic independent tasks; do not promote agent on self-report
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/r31-results"
+          for task in text-repair-v0 boundary-bugfix-v0; do
+            export GOOSE_XDG_CONFIG_HOME="$RUNNER_TEMP/goose-cfg-$task"
+            export GOOSE_XDG_DATA_HOME="$RUNNER_TEMP/goose-data-$task"
+            mkdir -p "$GOOSE_XDG_CONFIG_HOME" "$GOOSE_XDG_DATA_HOME"
+            unset OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY || true
+            TASK="$task" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          src="fb55b5a6d7f5b5df96c8f817f1cde6a81880d9f1"
+          task=os.environ["TASK"]
+          record={
+              "harness":{"name":"goose","version":"1.60.2",
+                         "artifact_ref":"LOCAL_CANDIDATE_ONLY","admission_ref":"NOT_GRANTED"},
+              "model":{"provider":"ollama","id":"qwen3:1.7b",
+                       "artifact_ref":"ollama-sha256:8f68893c685c"},
+              "toolset":["developer"],
+              "build":{"kind":"source-built","source_revision":src,
+                       "profile":"no-default-features+rustls-tls+disable-update",
+                       "harness_delivery":"LOCAL_CANDIDATE_NOT_GHCR_ADMITTED"},
+              "configuration":{"provider":"ollama","thinking_effort":"off",
+                  "max_turns":4,"max_tool_repetitions":2,
+                  "ollama_context_length":32768,
+                  "authority":"PUBLIC_SYNTHETIC_NO_PRODUCTION_ADMISSION"}}
+          Path(os.environ["RUNNER_TEMP"],"r31-results",task+"-candidate.json").write_text(json.dumps(record,sort_keys=True,indent=2)+"\n")
+          PY
+            set +e
+            python3 qualification/run_task.py \
+              --task-commit "$GITHUB_SHA" \
+              --substrate-profile-id "gha-linux-x64-goose-1602-source-r31" \
+              --substrate-profile-commit "$GITHUB_SHA" \
+              "qualification/tasks/$task" \
+              "$RUNNER_TEMP/r31-results/$task-candidate.json" \
+              "$RUNNER_TEMP/r31-results/$task-receipt.json" \
+              -- python3 "$GITHUB_WORKSPACE/qualification/adapters/goose_cli.py"
+            rc=$?
+            set -e
+            if [[ ! -s "$RUNNER_TEMP/r31-results/$task-receipt.json" ]]; then
+              echo "FAIL: missing independently verified task receipt"; exit 2
+            fi
+            TASK="$task" RC="$rc" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          task=os.environ["TASK"]
+          p=Path(os.environ["RUNNER_TEMP"])/"r31-results"/(task+"-receipt.json")
+          x=json.loads(p.read_text())
+          success=x["observation"]["success"]
+          rc=int(os.environ["RC"])
+          if rc!=(0 if success else 1):
+              raise SystemExit("infra/actor task exit inconsistent")
+          print(json.dumps({"schema":"r31-goose-source-task-observation/v1",
+                "task":task,"task_result":"PASS" if success else "FAIL",
+                "source":"fb55b5a6d7f5b5df96c8f817f1cde6a81880d9f1",
+                "artifact_admission":"LOCAL_CANDIDATE_ONLY",
+                "model_inference":"ACTUAL","production_admission":"NOT_GRANTED"}))
+          PY
+          done
+      - name: Preserve independent strict observations, including negative task results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: r31-goose-1602-two-tasks-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r31-results/*-receipt.json
+          if-no-files-found: ignore
+          retention-days: 14
