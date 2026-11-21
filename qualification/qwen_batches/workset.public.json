@@ -6,12 +6,12 @@
   "tasks": [
     {
       "id": "B01-WIRE-DIAG",
-      "state": "READY",
+      "state": "DONE_VERIFIED",
       "classification": "SYNTHETIC",
       "runtime": "public-gha",
       "role": "developer",
       "repo": "SemperSupra/model-spelunker",
-      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "source_sha": "f8b8ea2f8ab9060a943472258c4838b01fa2ef8f",
       "dle": "https://github.com/SemperSupra/model-spelunker/issues/220",
       "mission": "Isolate Qwen Code tool-call transport with one loopback mock provider, hidden nonce, and exact source-bound fixture, without live private endpoints.",
       "oracle": "Native Qwen CLI receives a synthetic read_file tool call, reads hidden file, and the independent oracle verifies tool readback plus no public disclosure.",
@@ -28,16 +28,21 @@
         "output_tokens": 500,
         "cost_usd": 0,
         "private_actions_minutes": 0
+      },
+      "evidence": {
+        "source_sha": "f8b8ea2f8ab9060a943472258c4838b01fa2ef8f",
+        "independent_oracle": "PASS",
+        "run_url": "https://github.com/SemperSupra/model-spelunker/actions/runs/44875274568"
       }
     },
     {
       "id": "B02-ROUTE-HARDEN",
-      "state": "READY",
+      "state": "DONE_VERIFIED",
       "classification": "PUBLIC_SOURCE",
       "runtime": "public-gha",
       "role": "critic",
       "repo": "SemperSupra/model-spelunker",
-      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "source_sha": "bce26f1838fbe10d2ddef0dc55a6990fb9218302",
       "dle": "https://github.com/SemperSupra/model-spelunker/issues/220",
       "mission": "Independently verify route-class separation, no plaintext secret, no private-to-cloud fallback, and disabled memory Git sync on public fixtures.",
       "oracle": "Run route unit tests including invalid URL, classification downgrade, embedded secret and unqualified private-network negative cases.",
@@ -54,6 +59,11 @@
         "output_tokens": 400,
         "cost_usd": 0,
         "private_actions_minutes": 0
+      },
+      "evidence": {
+        "source_sha": "bce26f1838fbe10d2ddef0dc55a6990fb9218302",
+        "independent_oracle": "PASS",
+        "run_url": "https://github.com/SemperSupra/model-spelunker/actions/runs/44875470102"
       }
     },
     {
@@ -106,6 +116,60 @@
         "tool_calls": 5,
         "context_tokens": 1300,
         "output_tokens": 600,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    },
+    {
+      "id": "B05-OLLAMA-HARNESS",
+      "state": "READY",
+      "classification": "SYNTHETIC",
+      "runtime": "public-gha",
+      "role": "developer",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "dle": "https://github.com/SemperSupra/model-spelunker/issues/206",
+      "mission": "Bisect Qwen3 Ollama chat streaming versus Qwen Code tool schemas under bounded public CPU, without a private endpoint or new model credential.",
+      "oracle": "Independent provider and harness nonce witnesses measure first-token, tool-call and final-task outcomes, with evidence that no context or time limit was silently bypassed.",
+      "failure": "Report CPU/prefill, context budget, wire protocol or tool harness failure separately; retain exact source and run receipts without fake PASS.",
+      "scope": [
+        "qualification/qwencode_model_diagnostics/"
+      ],
+      "depends_on": [
+        "B01-WIRE-DIAG"
+      ],
+      "resource_class": "heavy",
+      "budget": {
+        "wall_minutes": 20,
+        "tool_calls": 8,
+        "context_tokens": 1400,
+        "output_tokens": 600,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    },
+    {
+      "id": "B06-GUEST-PROVENANCE",
+      "state": "READY",
+      "classification": "PUBLIC_SOURCE",
+      "runtime": "public-gha",
+      "role": "critic",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "dle": "https://github.com/SemperSupra/model-spelunker/issues/224",
+      "mission": "Independently reduce exact public Agent Dispatch Windows guest boot, PS Direct and H0 proof into a source-neutral Qwen H1/H2 input profile; never start a new VM.",
+      "oracle": "Source/CI/provenance inputs are exact commit and run bound; capability matrix refuses to equate H0 VM start or separate WinBot guest proof with Qwen guest installation.",
+      "failure": "Keep Qwen H1/H2 NOT_TESTED if any inherited guest source, artifact, cleanup or admission evidence is absent; do not fabricate guest acceptance.",
+      "scope": [
+        "qualification/qwencode_guest_provenance/"
+      ],
+      "depends_on": [],
+      "resource_class": "light",
+      "budget": {
+        "wall_minutes": 8,
+        "tool_calls": 5,
+        "context_tokens": 900,
+        "output_tokens": 500,
         "cost_usd": 0,
         "private_actions_minutes": 0
       }
