@@ -1,0 +1,40 @@
+name: Qwen R10 native 32K wire/context qualification (strict final reported separately)
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_context32_r10/**'
+      - '.github/workflows/qwen-r10-context32-native.yml'
+permissions:
+  contents: read
+jobs:
+  offline-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 qualification/qwencode_context32_r10/critic.py
+          python3 qualification/qwencode_context32_r10/final_oracle.py
+          python3 -m py_compile qualification/qwencode_context32_r10/wire_proxy.py
+          bash -n qualification/qwencode_context32_r10/run_context32.sh
+  real-native-ollama:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Actual Qwen CLI / Qwen3-1.7B Ollama 32K wire and independently reported final
+        run: bash qualification/qwencode_context32_r10/run_context32.sh
+      - name: Retain redacted budget, tool and hidden-file oracle evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r10-context32-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-r10-context32/receipt.json
+            ${{ runner.temp }}/qwen-r10-context32/proxy-metadata.json
+          retention-days: 7
+          if-no-files-found: ignore
