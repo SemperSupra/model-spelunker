@@ -1,0 +1,29 @@
+name: R35 Pinned Pi OpenCode Aider Interface Census
+on:
+  pull_request:
+    paths:
+      - 'qualification/harness_refresh/interface_source_census.*'
+      - '.github/workflows/r35-interface-source-census.yml'
+permissions:
+  contents: read
+jobs:
+  source-contract:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify no implied agent/MCP authority and reject mutants
+        run: |
+          python3 -m py_compile qualification/harness_refresh/interface_source_census.py
+          python3 qualification/harness_refresh/interface_source_census.py self-test
+          python3 qualification/harness_refresh/interface_source_census.py verify
+      - name: Verify four exact immutable upstream git blobs
+        run: |
+          python3 qualification/harness_refresh/interface_source_census.py source-verify
