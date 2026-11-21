@@ -1,0 +1,59 @@
+name: Qwen Public Ollama Model-Wire Capacity Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwen-ollama-diagnostic.yml'
+      - 'qualification/qwencode_model_diagnostics/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-direct-ollama-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-diagnostics:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        band: [actual-local-ollama, parser-positive, parser-negative-critics]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout public-only source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Real pinned Qwen3 1.7B Ollama non-stream vs stream model tool-call oracle
+        if: matrix.band == 'actual-local-ollama'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash qualification/qwencode_model_diagnostics/run_pinned_ollama.sh
+      - name: Independent positive SSE tool-shape contract
+        if: matrix.band == 'parser-positive'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwencode_model_diagnostics -p test_probe.py -k ParserPositive -v
+      - name: Independent adversarial content-only and wrong-tool rejection
+        if: matrix.band == 'parser-negative-critics'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwencode_model_diagnostics -p test_probe.py -k ParserRedteam -v
+      - name: Preserve only source-neutral outcome/latency receipt even on failure
+        if: matrix.band == 'actual-local-ollama' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-public-ollama-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/qwen-direct-ollama-receipt.json
+          retention-days: 7
+          if-no-files-found: ignore
