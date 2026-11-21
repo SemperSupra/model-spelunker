@@ -304,8 +304,46 @@ def selftest():
         run_case(digest,digest)
         run_case("sha256:"+"1"*64,digest)
         run_case(None,digest,remote_ok=False)
+    # Exact-digest DLE record and idempotent issue callback, no real GitHub API.
+    accepted_receipt={
+        "schema":"qwen-ghcr-publish-admission/v1",
+        "state":"BUILD_ADMITTED","publication":"GHCR_DIGEST_CONFIRMED",
+        "source_commit":s,"immutable_ref":IMAGE+"@"+digest,"registry_image":IMAGE,
+        "source_classification":"PUBLIC_SYNTHETIC",
+        "actor_task_qualification":"NOT_PERFORMED",
+        "workcell_admission":"NOT_GRANTED","model_inference":"NOT_PERFORMED",
+        "manifest_digest":digest,"independent_checks":sorted(REQUIRED_REMOTE_CHECKS),
+        "payload_files":5
+    }
+    record=dle_record(accepted_receipt,good)
+    body=dle_body(record)
+    assert "GHCR_MAIN_ONLY_DIGEST_REFETCH" in body
+    assert "GHCR_TOKEN" not in body
+    for key,value in (
+        ("state","PUBLISHED_ONLY"),("actor_task_qualification","PASS"),
+        ("workcell_admission","PRODUCTION_ADMITTED"),
+        ("source_commit","b"*40),("immutable_ref",IMAGE+"@sha256:"+"1"*64),
+        ("independent_checks",[]),("payload_files",6)):
+        bad=dict(accepted_receipt);bad[key]=value
+        try:dle_record(bad,good)
+        except ValueError:pass
+        else:raise AssertionError("false DLE admission accepted: "+key)
+    def test_transport(pages,post=None):
+        def fake(args):
+            if args[0]=="--paginate":return pages
+            if args[0]=="--method":return post
+            raise ValueError("unexpected simulated DLE API call")
+        with patch.dict(globals(),{"gh_api_json":fake}):
+            return sync_dle(accepted_receipt,good)
+    posted={"body":body,"html_url":"https://github.com/SemperSupra/model-spelunker/issues/147#issuecomment-123"}
+    assert test_transport([[]],posted)["state"]=="RECORDED"
+    assert test_transport([[posted]])["state"]=="ALREADY_RECORDED"
+    try:test_transport([[{**posted,"body":body+"\nALTERED"}]])
+    except ValueError:pass
+    else:raise AssertionError("conflicting same-digest DLE receipt accepted")
     print(json.dumps({"schema":"qwen-ghcr-publication-offline-critic/v1",
       "state":"PASS","negative_contexts":5,"negative_digests":3,"negative_registry_actors":5,"synthetic_publication_cases":4,
+      "negative_dle_receipts":7,"synthetic_dle_transport_cases":3,
       "publication":"NOT_PERFORMED","real_registry":"NOT_CONTACTED"},sort_keys=True))
 
 def main():
