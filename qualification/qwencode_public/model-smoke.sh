@@ -61,11 +61,15 @@ data={
 }
 (home/'.qwen'/'settings.json').write_text(json.dumps(data))
 PY
-printf 'VALUE=17\n' >"$RUNNER_TEMP/qwen-agent-task/fixture.txt"
+python3 - <<'PY'
+import os,pathlib,secrets
+path=pathlib.Path(os.environ['RUNNER_TEMP'],'qwen-agent-task','fixture.txt')
+path.write_text('VALUE='+secrets.token_hex(12)+'\n')
+PY
 cd "$RUNNER_TEMP/qwen-agent-task"
 set +e
 timeout 180 "$RUNNER_TEMP/qwen-native/qwen-code/bin/qwen" \
-  -p 'Use read_file to open fixture.txt; report its exact contents, including VALUE=17.' \
+  -p 'Use the read_file tool to open fixture.txt. Reply with only the exact file text, without other words.' \
   --model 'qwen3:1.7b' --approval-mode yolo --max-session-turns 4 \
   --max-tool-calls 8 --max-wall-time 3m --output-format json \
   >"$RUNNER_TEMP/qwen-agent-result.json" 2>"$RUNNER_TEMP/qwen-agent-stderr.txt"
@@ -83,8 +87,12 @@ assert isinstance(events,list) and events,'no transcript'
 final=next((x for x in reversed(events) if x.get('type')=='result'),{})
 assert final and not final.get('is_error',True),'no terminal success'
 result=str(final.get('result',''))
-assert 'VALUE=17' in result,'independent fixture oracle not passed'
-had_tool='read_file' in p.read_text()
+expected=pathlib.Path(os.environ['RUNNER_TEMP'],'qwen-agent-task','fixture.txt').read_text().strip()
+assert expected in result,'independent hidden fixture oracle not passed'
+stats=final.get('stats') or {}
+tools=(stats.get('tools') or {}).get('byName') or {}
+assert isinstance(tools,dict) and 'read_file' in tools,'no independently recorded read_file call'
+had_tool=True
 receipt={'schema':'qwencode-public-agent-smoke/v1',
  'model':'qwen3:1.7b','endpoint_class':'local-runner-ollama',
  'fixture_oracle':'PASS','tool_name_evidenced':had_tool,
