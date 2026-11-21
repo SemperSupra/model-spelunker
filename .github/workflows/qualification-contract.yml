@@ -69,6 +69,9 @@ jobs:
               "openrouter-nvidia-nemotron3-ultra-free",
               "openrouter-google-gemma-4-31b-free",
               "openrouter-nvidia-nemotron-3-nano-omni-free",
+              "openrouter-particle-1-free",
+              "openrouter-recursive-flint-free",
+              "openrouter-google-gemma4-26b-a4b-free",
           }
           assert candidates["deepseek-flash"]["provider"] == "deepseek"
           assert candidates["groq-gpt-oss-20b"]["provider"] == "groq"
@@ -84,6 +87,15 @@ jobs:
           assert candidates["openrouter-nvidia-nemotron3-ultra-free"]["provider"] == "openrouter"
           assert candidates["openrouter-nvidia-nemotron3-ultra-free"]["model"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
           assert candidates["openrouter-nvidia-nemotron3-ultra-free"]["cost_class"] == "zero-token-price"
+          for new_id, exact_model in (
+              ("openrouter-particle-1-free", "particle-ai/particle-1:free"),
+              ("openrouter-recursive-flint-free", "recursive/flint-v1.0:free"),
+              ("openrouter-google-gemma4-26b-a4b-free", "google/gemma-4-26b-a4b-it:free"),
+          ):
+              assert candidates[new_id]["provider"] == "openrouter"
+              assert candidates[new_id]["treatment_kind"] == "model"
+              assert candidates[new_id]["model"] == exact_model
+              assert candidates[new_id]["cost_class"] == "zero-token-price"
           assert candidates["openrouter-free-router"]["treatment_kind"] == "router"
           assert candidates["openrouter-free-router"]["model"] == "openrouter/free"
           for candidate_id, candidate in candidates.items():
