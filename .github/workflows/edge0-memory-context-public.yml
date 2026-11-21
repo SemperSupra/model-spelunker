@@ -142,6 +142,38 @@ jobs:
           done
           if [ "$ok" != 1 ]; then echo 'INTEGRATION_UNKNOWN: model-server readiness not established' >&2; exit 1; fi
           echo 'LOCAL_MODEL_READY: mlx-lm integration, not Edge0 native-engine equivalence'
+      - name: Classify local MLX HTTP compatibility before full probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          from pathlib import Path
+          base='http://127.0.0.1:8080/v1'
+          opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+          # One bounded model-ID request; no prompt or body is logged.
+          body=json.dumps({'model':os.environ['MODEL_ID'],
+                           'messages':[{'role':'user','content':'Return the word UNKNOWN.'}],
+                           'temperature':0,'max_tokens':12,'stream':False}).encode()
+          req=urllib.request.Request(base+'/chat/completions',data=body,
+                                     headers={'Content-Type':'application/json'},method='POST')
+          try:
+              with opener.open(req,timeout=45) as response:
+                  status=response.status
+                  response.read(4096)
+          except urllib.error.HTTPError as exc:
+              status=exc.code
+          except Exception as exc:
+              print('MODEL_HTTP_DIAGNOSTIC transport_error_class='+type(exc).__name__)
+              raise
+          result={'schema':'edge0-model-http-status-v1','http_status':status,
+                  'model_identifier':os.environ['MODEL_ID'],'raw_reply_logged':False}
+          Path(os.environ['RUNNER_TEMP'],'edge0-http-status.json').write_text(
+              json.dumps(result,sort_keys=True)+'\\n')
+          print('MODEL_HTTP_DIAGNOSTIC status='+str(status)+'; no response body logged')
+          if status != 200:
+              raise SystemExit('INTEGRATION_UNKNOWN: local MLX HTTP status not 200')
+          PY
       - name: Observe real model with two context lengths and four treatments
         shell: bash
         run: |
@@ -166,5 +198,6 @@ jobs:
             ${{ runner.temp }}/edge0-assets.json
             ${{ runner.temp }}/edge0-pip-versions.txt
             ${{ runner.temp }}/edge0-observed.json
+            ${{ runner.temp }}/edge0-http-status.json
           if-no-files-found: ignore
           retention-days: 14
