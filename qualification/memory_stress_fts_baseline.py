@@ -51,7 +51,7 @@ def tokenizer(text):
     # avoid syntax control through query content. Does not promise Thai word
     # segmentation; that is an observable limitation.
     import re
-    return [v for v in re.findall(r"[^\\W_]+", text.casefold()) if len(v) > 1][:12]
+    return [v for v in re.findall(r"[^\W_]+", text.casefold()) if len(v) > 1][:12]
 
 
 def search(db, query, limit, scope):
@@ -111,6 +111,7 @@ def execute(size, seed, source):
                     "wall_ms": round((time.monotonic() - start) * 1000, 3),
                     "probe_counts": scores,
                 }
+            assert results["source-scoped"]["recall_at_3"] >= 1, "unqualified no-retrieval baseline"
             assert results["source-scoped"]["foreign_exposures"] == 0
             assert results["source-scoped"]["stale_exposures"] == 0
             return results
@@ -124,8 +125,10 @@ def self_test():
     assert make_decoys(100, 11) == make_decoys(100, 11)
     assert make_decoys(100, 11) != make_decoys(100, 29)
     assert len({d["id"] for d in make_decoys(1000, 47)}) == 1000
+    assert tokenizer("Atlas signed release admission") == ["atlas", "signed", "release", "admission"]
     assert tokenizer("Thai สัญญาณสีน้ำเงิน")
     tiny = execute(100, 11, fixture)
+    assert tiny["source-scoped"]["recall_at_3"] >= 1, "retriever must retrieve an obvious target"
     assert tiny["source-scoped"]["foreign_exposures"] == 0
     assert tiny["source-scoped"]["stale_exposures"] == 0
     print("PASS synthetic stress contract, negative isolation and deterministic source")
