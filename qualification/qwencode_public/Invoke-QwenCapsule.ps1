@@ -129,11 +129,58 @@ function RunVersion([string]$Directory, [string]$Version) {
     Require ($LASTEXITCODE -eq 0 -and $output.Contains($Version)) 'QWEN_VERSION_MISMATCH'
     return $output
 }
-function VerifyInstalled([string]$Directory, [string]$Plan, [string]$Version) {
+function VerifyExpandedArchive([string]$Directory, [string]$Archive) {
+    # Compare ALL extracted source files with the SHA-pinned official ZIP.
+    # The writable owner marker is never used as expected-content evidence.
+    Add-Type -AssemblyName System.IO.Compression
+    $source = [IO.File]::OpenRead($Archive)
+    $expected = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $rootPrefix = [IO.Path]::GetFullPath($Directory).TrimEnd('\') + '\'
+    try {
+        $zip = New-Object IO.Compression.ZipArchive($source, [IO.Compression.ZipArchiveMode]::Read)
+        try {
+            foreach($item in $zip.Entries) {
+                if($item.FullName.EndsWith('/')) { continue }
+                $name = [string]$item.FullName
+                Require ($expected.Add($name)) 'DUPLICATE_EXPANDED_PATH'
+                Require ($expected.Count -le 16000) 'EXPANDED_FILE_COUNT_LIMIT'
+                $path = Join-Path $Directory ($name.Replace('/', '\'))
+                Require (Test-Path -LiteralPath $path -PathType Leaf) 'INSTALLED_FILE_MISSING'
+                NoReparse $path
+                Require ((Get-Item -LiteralPath $path -Force).Length -eq $item.Length) 'INSTALLED_FILE_SIZE_DRIFT'
+                $digest = [Security.Cryptography.SHA256]::Create()
+                $stream = $item.Open()
+                try {
+                    $hash = ([BitConverter]::ToString($digest.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+                } finally {
+                    $stream.Dispose()
+                    $digest.Dispose()
+                }
+                Require ((ShaFile $path) -ceq $hash) 'INSTALLED_FILE_HASH_DRIFT'
+            }
+        } finally { $zip.Dispose() }
+    } finally { $source.Dispose() }
+    $seen = 0
+    foreach($item in (Get-ChildItem -LiteralPath $Directory -Recurse -Force)) {
+        Require (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) 'EXPANDED_REPARSE_POINT'
+        if($item.PSIsContainer) { continue }
+        if($item.Name -eq 'owner.json' -and $item.DirectoryName -eq $Directory) { continue }
+        Require ($item.FullName.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) 'EXPANDED_PATH_ESCAPE'
+        $relative = $item.FullName.Substring($rootPrefix.Length).Replace('\', '/')
+        Require ($expected.Contains($relative)) 'UNEXPECTED_INSTALLED_FILE'
+        $seen += 1
+        Require ($seen -le 16000) 'EXPANDED_FILE_COUNT_LIMIT'
+    }
+    Require ($expected.Count -gt 0 -and $seen -eq $expected.Count) 'INSTALLED_FILE_SET_DRIFT'
+    return $expected.Count
+}
+function VerifyInstalled([string]$Directory, [string]$Plan, [string]$Version, [string]$Archive) {
     Require (OwnerMatches $Directory $Plan) 'FOREIGN_OR_MISSING_OWNER'
     $marker = LoadJson (Join-Path $Directory 'owner.json')
     $cli = Join-Path $Directory 'qwen-code\lib\cli.js'
     Require ((ShaFile $cli) -ceq $marker.cliSha256) 'INSTALLED_CLI_TAINT'
+    $fileCount = VerifyExpandedArchive $Directory $Archive
+    Require ($fileCount -gt 0) 'EMPTY_INSTALLED_PAYLOAD'
     $output = RunVersion $Directory $Version
     return $output
 }
@@ -195,7 +242,7 @@ switch($Phase) {
         Require $validInput 'PINNED_ARCHIVE_NOT_VERIFIED'
         Require (-not (Test-Path -LiteralPath $stage)) 'INCOMPLETE_STAGE_REQUIRES_ROLLBACK'
         if(Test-Path -LiteralPath $active) {
-            $actual = VerifyInstalled $active $plan ([string]$manifest.version)
+            $actual = VerifyInstalled $active $plan ([string]$manifest.version) $desiredArchive
             ToJson @{phase='apply';result='NOOP_VERIFIED';planSha256=$plan;version=$actual}
             break
         }
@@ -219,7 +266,7 @@ switch($Phase) {
     }
     'Verify' {
         Require $validInput 'PINNED_ARCHIVE_NOT_VERIFIED'
-        $version = VerifyInstalled $active $plan ([string]$manifest.version)
+        $version = VerifyInstalled $active $plan ([string]$manifest.version) $desiredArchive
         ToJson @{phase='verify';result='LOCAL_PAYLOAD_PASS';planSha256=$plan;version=$version;
                  providerRoute='NOT_TESTED';productionAdmission='NOT_TESTED'}
         break

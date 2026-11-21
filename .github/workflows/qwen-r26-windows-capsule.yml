@@ -58,6 +58,19 @@ jobs:
           if ($verify.result -ne 'LOCAL_PAYLOAD_PASS' -or $verify.productionAdmission -ne 'NOT_TESTED') { throw 'runtime verify failed' }
           $repeat=(& $script -Phase Apply @args -ApprovePlanSha256 $plan.planSha256 | ConvertFrom-Json)
           if ($repeat.result -ne 'NOOP_VERIFIED') { throw 'repeated apply not idempotent' }
+          # File-set integrity must reject both an added file and a modified
+          # non-cli.js file, not just an owner marker or the principal CLI hash.
+          $extra=Join-Path $root 'active\qwen-code\r27-unexpected-file.txt'
+          [IO.File]::WriteAllText($extra,'unexpected')
+          $refused=$false
+          try { & $script -Phase Verify @args | Out-Null } catch { $refused=$true }
+          if(-not $refused) { throw 'injected file accepted by full source inventory' }
+          Remove-Item -LiteralPath $extra -Force
+          $aux=Join-Path $root 'active\qwen-code\bin\qwen.cmd'
+          [IO.File]::AppendAllText($aux,([Environment]::NewLine + 'REM R27 deliberate auxiliary-file tamper'))
+          $refused=$false
+          try { & $script -Phase Verify @args | Out-Null } catch { $refused=$true }
+          if(-not $refused) { throw 'modified secondary executable accepted by full payload hash' }
           $back=(& $script -Phase Rollback @args -ApprovePlanSha256 $plan.planSha256 | ConvertFrom-Json)
           if ($back.result -ne 'OWNED_GENERATION_ABSENT' -or (Test-Path -LiteralPath (Join-Path $root 'active'))) { throw 'owned rollback failed' }
           $again=(& $script -Phase Rollback @args -ApprovePlanSha256 $plan.planSha256 | ConvertFrom-Json)
@@ -68,7 +81,7 @@ jobs:
           $refused=$false
           try { & $script -Phase Rollback @args -ApprovePlanSha256 $plan.planSha256 | Out-Null } catch { $refused=$true }
           if (-not $refused -or -not (Test-Path -LiteralPath $foreign)) { throw 'foreign resource deleted' }
-          Write-Host 'PASS Windows PS5.1 public synthetic: source/hash, OPAV, idempotence, denied production, foreign isolation'
+          Write-Host 'PASS Windows PS5.1 source-bound complete payload inventory, injection/tamper denials, OPAV/owned rollback'
       - name: Report exact test scope
         if: always()
         shell: powershell
