@@ -7,7 +7,8 @@ The native Windows and Linux jobs download official release assets only from a v
 - `kit.json`: upstream release, platform, expected immutable archive digest, classification and *no production authority*.
 - `upstream/qwen-code-{platform}.{zip|tar.gz}`: unchanged, SHA-verified upstream standalone release (includes its own Node runtime).
 - `Invoke-QwenCapsule.ps1`: Windows PowerShell 5.1 Observe, Plan, Apply, Verify, Rollback.
-- This README, plus JSON evidence for the GitHub run.
+- `compile-routes.mjs`: Node 22+ standard-library compiler for class-separated Qwen model role catalogs, with no embedded keys.
+- `release-manifest.json` and this README, plus JSON evidence for the GitHub run.
 
 Public runners are disposable, stateless build/test surfaces. Jobs use standard public hosted runners only, with no self-hosted runner labels, no API secrets, no host mounts, and no live sovereign endpoints. Assets uploaded through GitHub Actions are **not** signed by the owner and are temporary; production must additionally bind an approved source, artifact digest, workcell lease, and external admission verifier.
 
@@ -42,3 +43,14 @@ $root = 'C:\QwenGuestTemp\capsule'
 The public runner is **not** a substitute for a native Hyper-V guest. It cannot validate host Hyper-V permissions, private network routes, resident services, rollback of non-GHA VMs, external authentication keys or the observed physical machine. No cloud-hosted runner should attempt to access an owner's home LAN or private repository. For live acceptance use the pre-existing private DLE and workcell authority, and keep those credentials and observations entirely off public GitHub.
 
 No generic automatic `latest` downloads, `irm|iex`, registry writes, PATH changes, global installs, cloud model fallback, unsupported media processing, or self-authorized YOLO privilege are part of this kit.
+
+## Classified model routing (guest only)
+
+Use the standalone Node runtime inside the **admitted** disposable guest to compile a route manifest from current, operator-approved observed endpoints. Example public-safe fixture:
+
+```powershell
+# Within disposable guest; Node is packaged in the upstream standalone archive.
+& '.\qwen-code\node\node.exe' .\compile-routes.mjs --manifest .\routes.public.example.json
+```
+
+The example points at `example.invalid`, so it cannot make a model call. Production routes, model IDs and secret values are supplied privately by the approved workcell controller. Output references only environment variable names (`envKey`), not credentials. Its `agents.modelGrades` can select models across providers, but classification and network permissions must be enforced *outside Qwen*. In particular, private and cloud roles do **not** share an execution context or prompt history; an Agent Dispatch workset can coordinate them while preserving data boundaries. The `privateNetworkAdmitted` input is merely configuration consistency; it cannot itself grant network access.
