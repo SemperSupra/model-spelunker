@@ -42,10 +42,11 @@ jobs:
           plan=json.loads(pathlib.Path(sys.argv[1]).read_text())
           cards=[json.loads(x) for x in pathlib.Path(sys.argv[2]).read_text().splitlines()]
           assert plan['dispatch_authorized'] is False
-          assert plan['candidate_ids'] == ['B06-GUEST-PROVENANCE','B05-OLLAMA-HARNESS']
-          assert len(cards)==6
+          assert plan['candidate_ids'] == [] and plan['in_progress'] == ['B07-REAL-QWEN-HARNESS']
+          assert plan['failed'] == []
+          assert len(cards)==7
           assert all(x['max_tool_calls']<=8 and x['max_context_tokens']<=1600 for x in cards)
-          assert plan['collisions']==0 and plan['private_actions_minutes']==0 and plan['verified_count']==2
+          assert plan['collisions']==0 and plan['private_actions_minutes']==0 and plan['verified_count']==4
           print('PASS independent public packet/card/eligibility, no dispatch')
           PY
       - name: Execute adversarial admission/scope/forged-PASS negatives independently
