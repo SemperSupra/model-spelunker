@@ -1,0 +1,54 @@
+name: Qwen Public Independent GHA Receipt Verification
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwen_batch_verify/**'
+      - '.github/workflows/qwen-receipt-verification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-receipt-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-live-evidence:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        band: [offline-negative-critic, live-github-source-and-jobs]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout public-only source without persistent credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Independent offline forgery and incomplete-page tests
+        if: matrix.band == 'offline-negative-critic'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwen_batch_verify -p test_verify.py -v
+      - name: Live GitHub API source and exact named-job identity verifier
+        if: matrix.band == 'live-github-source-and-jobs'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/qwen_batch_verify/verify.py \
+            --output "$RUNNER_TEMP/public-gha-job-verification.json"
+      - name: Publish bounded source/status-only evidence
+        if: matrix.band == 'live-github-source-and-jobs' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-source-job-receipt-${{ github.run_id }}
+          path: ${{ runner.temp }}/public-gha-job-verification.json
+          retention-days: 7
+          if-no-files-found: ignore
