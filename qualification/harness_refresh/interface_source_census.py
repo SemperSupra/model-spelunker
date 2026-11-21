@@ -6,6 +6,7 @@ URLs and validates exact Git blob identities, not HEAD or tag aliases.
 """
 from __future__ import annotations
 import argparse
+import ast
 import copy
 import hashlib
 import json
@@ -51,12 +52,17 @@ def verify(x):
             if not HEX40.fullmatch(f["blob_sha"]) or f["proof"] != "SOURCE_OBSERVED":
                 raise ValueError("unverified source blob")
             if f["surface"] not in {"jsonl-rpc", "http-api-source", "sdk-source",
-                                     "scripted-cli-source"}:
+                                     "scripted-cli-source", "approval-eof-source"}:
                 raise ValueError("unknown surface")
         if c["agent"] != "ADAPTER_REQUIRED_UNVERIFIED":
             raise ValueError("unproven MCP or agent invocation")
-        if c["id"] == "aider" and c["automation"] != "CLI_SOURCE_UNADMITTED":
-            raise ValueError("unsafe Aider auto-approval assumption")
+        if c["id"] == "aider":
+            if c["automation"] != "CLI_SOURCE_UNADMITTED":
+                raise ValueError("unsafe Aider auto-approval assumption")
+            if "approval-eof-source" not in {v["surface"] for v in c["source_files"]}:
+                raise ValueError("Aider EOF source proof missing")
+            if not any("HARD HOLD" in v for v in c["caveats"]):
+                raise ValueError("Aider unattended approval HOLD missing")
         if not c["human"].endswith("_SOURCE") or not isinstance(c["caveats"], list) or not c["caveats"]:
             raise ValueError("missing audience/provenance caveats")
     return {"schema": "agent-source-interface-critic/v1", "result": "SOURCE_ONLY_VALID",
@@ -65,6 +71,29 @@ def verify(x):
 def blob_sha(data: bytes) -> str:
     return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
+def confirm_aider_eof_default(raw: bytes) -> None:
+    """Observe upstream default-yes EOF behavior; never execute upstream code."""
+    module = ast.parse(raw.decode("utf-8"))
+    matches = [n for n in ast.walk(module)
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+               and n.name == "confirm_ask"]
+    if len(matches) != 1:
+        raise ValueError("Aider approval implementation relocated")
+    fn = matches[0]
+    defaults = {arg.arg: default for arg, default in
+                zip(fn.args.args[-len(fn.args.defaults):], fn.args.defaults)}
+    default = defaults.get("default")
+    if not isinstance(default, ast.Constant) or default.value != "y":
+        raise ValueError("Aider approval default changed: requalify")
+    eof = [n for n in ast.walk(fn) if isinstance(n, ast.ExceptHandler)
+           and isinstance(n.type, ast.Name) and n.type.id == "EOFError"]
+    # Preserve an explicit fail-closed release HOLD if EOF silently adopts "yes".
+    if not any(isinstance(n, ast.Assign) and any(
+        isinstance(t, ast.Name) and t.id == "res" for t in n.targets)
+        and isinstance(n.value, ast.Name) and n.value.id == "default"
+        for handler in eof for n in ast.walk(handler)):
+        raise ValueError("Aider EOF handling changed: requalify")
+    
 def online_verify(x):
     verified = []
     for c in x["candidates"]:
@@ -80,6 +109,8 @@ def online_verify(x):
                 raise ValueError("over-budget pinned source")
             if blob_sha(data) != f["blob_sha"]:
                 raise ValueError("pinned upstream blob drift: " + c["id"])
+            if c["id"] == "aider" and f["surface"] == "approval-eof-source":
+                confirm_aider_eof_default(data)
             verified.append(c["id"] + ":" + f["surface"])
     return verified
 
@@ -92,6 +123,7 @@ def selftest(x):
         lambda d: d["candidates"][0].update(upstream="badlogic/pi-mono"),
         lambda d: d["candidates"][1].update(agent="MCP_NATIVE"),
         lambda d: d["candidates"][2].update(automation="CLI_NATIVE_SAFE"),
+        lambda d: d["candidates"][2].update(caveats=["manual approval optional"]),
         lambda d: d["candidates"][1]["source_files"][0].update(blob_sha="0"*40),
         lambda d: d["candidates"][0]["source_files"][0].update(path="../private"),
         lambda d: d["candidates"].pop(),
