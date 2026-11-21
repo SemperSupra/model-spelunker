@@ -72,7 +72,7 @@ def fetch_json(url: str, max_bytes:int=2_000_000):
         obj=json.loads(data.decode("utf-8"))
         return obj
 def tag_version(tag: str) -> tuple[int,...] | None:
-    m=re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)",tag)
+    m=re.fullmatch(r"(?:rust-)?v?(\d+)\.(\d+)\.(\d+)",tag)
     if not m:return None
     return tuple(int(v) for v in m.groups())
 def choose_release(releases:list, mode:str) -> dict:
@@ -220,6 +220,7 @@ def selftest():
       {"tag_name":"v2.2.0","draft":False,"prerelease":False}]
     assert choose_release(versions,"major2_release")["tag_name"]=="v2.3.0"
     assert tag_version("v0.154.0")==(0,154,0)
+    assert tag_version("rust-v0.171.0")==(0,171,0)
     assert tag_version("v1.0.0-rc1") is None
     fake={"source_commit":"a"*40,"tag":"v1.55.0"}
     assert classification({**SUBJECTS[1],"baseline_version":"1.55.0"},fake)=="BASELINE_VERSION_CURRENT"
