@@ -1,0 +1,27 @@
+name: R30 Source-Bound Native Agent Config and Permission Projections
+on:
+  pull_request:
+    paths:
+      - 'qualification/harness_refresh/native_config_projections.py'
+      - '.github/workflows/r30-harness-native-config.yml'
+permissions:
+  contents: read
+jobs:
+  source-only-native-config-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate exact-source provider schemas and reject unsafe configuration mutants
+        run: |
+          python3 -m py_compile qualification/harness_refresh/native_config_projections.py
+          python3 -m qualification.harness_refresh.native_config_projections
+          python3 - <<'PY'
+          from qualification.harness_refresh.native_config_projections import plan,validate
+          for name in ("goose","codex-exec","openworker","qwen-code"):
+              x=plan(name,"ollama-loopback")
+              validate(x)
+              assert x["production_admitted"] is False and x["apply_performed"] is False
+          PY
