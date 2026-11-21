@@ -92,7 +92,9 @@ settings={
     "current task directory. Use the read_file tool for fixture.txt; do not "
     "guess file contents, use shell commands, search external files, write data "
     "or describe unperformed actions. The session is headless and only the "
-    "read_file tool is available. Return exactly the file text after it is read.\n")
+    "read_file tool is available. After the read_file tool returns, output only "
+    "the exact VALUE line from fixture.txt as your final answer, without any "
+    "prefix, quotes, Markdown, explanation or extra text.\n")
 
 PY
 export HOME="$root/home"
