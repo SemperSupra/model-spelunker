@@ -1,0 +1,31 @@
+name: OpenRouter R11 Public Free Catalog Qualification
+on:
+  pull_request:
+    paths:
+      - 'qualification/openrouter_free_r11/**'
+      - '.github/workflows/openrouter-r11-public-census.yml'
+      - 'qualification/models/hosted-api.json'
+permissions:
+  contents: read
+jobs:
+  independent-offline-negative-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Synthetic exact/free/tools/negative-source oracle
+        run: python3 qualification/openrouter_free_r11/catalog_census.py --selftest
+  public-catalog-census-no-key:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check current PUBLIC OpenRouter free model list, no provider key, no inference
+        env:
+          OPENROUTER_API_KEY: ''
+          OPENAI_API_KEY: ''
+        run: python3 qualification/openrouter_free_r11/catalog_census.py --live
