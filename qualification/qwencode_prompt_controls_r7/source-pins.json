@@ -1,0 +1,19 @@
+{
+  "schema": "qwen-v0.28.3-upstream-source/v1",
+  "repository": "QwenLM/qwen-code",
+  "version": "v0.28.3",
+  "commit": "99fcf89892f1a3a8027c75468546c7e7be906245",
+  "files": {
+    "packages/core/src/core/prompts.ts": "7a1ce05021c1c422f248885a5954efdc7fdb55b5",
+    "packages/core/src/config/config.ts": "9344d0773ba8019a5bebc41fc808cb84c3a8629e",
+    "packages/cli/src/config/config.ts": "fbf8f20c11fbb09b2e580a77cdc8a69d4339628c",
+    "packages/cli/src/config/settingsSchema.ts": "128aca5fa55efd4e051af7e14afe3cd50938b78e"
+  },
+  "conclusions": {
+    "full_override": "QWEN_SYSTEM_MD replaces base prompt, but append/context files can still be added",
+    "identity_only": "QWEN_SYSTEM_IDENTITY_MD changes leading identity, not full default prompt",
+    "core_allowlist": "tools.core/--core-tools allows only enumerated registered tools; settings and runtime behavior must be confirmed",
+    "eager_not_allowlist": "tools.eager defers schemas but does not itself deny tool registration",
+    "model_override": "only in owned public temporary files; private role/host effect still requires separate Agent Dispatch authority"
+  }
+}
