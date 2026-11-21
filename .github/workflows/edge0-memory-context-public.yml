@@ -84,10 +84,14 @@ jobs:
           assert platform.system()=='Darwin' and platform.machine()=='arm64'
           assert ram >= 6*1024**3 and disk >= 8*1024**3, 'insufficient available memory/disk'
           PY
-      - name: Install exploratory MLX server, record exact resolved packages
+      - name: Install exploratory MLX server in disposable Python venv
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/edge0-venv"
+          source "$RUNNER_TEMP/edge0-venv/bin/activate"
+          printf '%s/edge0-venv/bin\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          printf 'VIRTUAL_ENV=%s/edge0-venv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
           python3 -m pip install --no-cache-dir 'mlx-lm>=0.28,<1.0' 'huggingface-hub>=0.27,<2.0'
           python3 -m pip freeze > "$RUNNER_TEMP/edge0-pip-versions.txt"
           python3 - <<'PY'
