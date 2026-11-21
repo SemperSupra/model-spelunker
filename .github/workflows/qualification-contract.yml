@@ -219,6 +219,9 @@ jobs:
           python3 qualification/edge0_memory_context.py --out "$RUNNER_TEMP/edge0-source-only.json" --levels 0,512,2048
           python3 -c 'import json,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"edge0-source-only.json"; r=json.loads(p.read_text()); assert r["outcome"]=="MODEL_NOT_RUN"; assert len(r["cases"])==12; assert all(x["observation"]=="NOT_RUN" for x in r["cases"]); print("PASS Edge0 synthetic fixture, MODEL_NOT_RUN")'
 
+      - name: Self-test frozen synthetic DLE CPE memory hierarchy fixture
+        run: PYTHONPATH=. python qualification/memory_hierarchy_cpu_bakeoff.py --self-test
+
       - name: Self-test Edge0 publisher source-model census and admission negatives
         run: PYTHONPATH=. python qualification/test_edge0_source_catalog.py
 
