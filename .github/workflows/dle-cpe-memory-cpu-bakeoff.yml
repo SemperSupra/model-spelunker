@@ -1,0 +1,152 @@
+name: DLE CPE Memory CPU Bakeoff
+
+# Public-original synthetic tasks only. Neither DLE nor CPE authority is mutable.
+# A native memory retrieval result is not an agent/model coding-task outcome.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/dle-cpe-memory-cpu-bakeoff.yml'
+      - '.github/workflows/qualification-contract.yml'
+      - 'qualification/memory_hierarchy_cpu_bakeoff.py'
+      - 'qualification/fixtures/memory_dle_cpe_synthetic_v1.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memory-cpe-cpu-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpu-memory:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: public cpu / ${{ matrix.provider }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        provider: [control, engram, reme, openviking-source]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      GIT_TERMINAL_PROMPT: '0'
+      PROVIDER: ${{ matrix.provider }}
+      ENGRAM_SOURCE_SHA: 380d513841f0cc96f87088b837156d758bd1ee4c
+      REME_SOURCE_SHA: 54fa3381d7fec4cdabb1b4092f5e755d7f62c769
+      VIKING_SOURCE_SHA: aa885b902075e17b13756266049de3c21ac4ae43
+    steps:
+      - name: Checkout synthetic qualification without persistent credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Use public Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Source-only contract and fixture negative tests
+        run: |
+          set -euo pipefail
+          python qualification/memory_hierarchy_cpu_bakeoff.py --self-test
+          python - <<'PY'
+          import hashlib,pathlib
+          f=pathlib.Path('qualification/fixtures/memory_dle_cpe_synthetic_v1.json')
+          print('FROZEN_SYNTHETIC_SHA256='+hashlib.sha256(f.read_bytes()).hexdigest())
+          PY
+
+      - name: Set up pinned Go for Engram native build
+        if: matrix.provider == 'engram'
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+
+      - name: Exact Git source admission
+        if: matrix.provider != 'control'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$PROVIDER" in
+            engram) repo=Gentleman-Programming/engram; sha="$ENGRAM_SOURCE_SHA" ;;
+            reme) repo=agentscope-ai/ReMe; sha="$REME_SOURCE_SHA" ;;
+            openviking-source) repo=volcengine/OpenViking; sha="$VIKING_SOURCE_SHA" ;;
+            *) exit 3 ;;
+          esac
+          root="$RUNNER_TEMP/memory-upstream"
+          mkdir -p "$root"
+          git -C "$root" init -q
+          git -C "$root" -c protocol.version=2 fetch --quiet --depth=1 --no-tags "https://github.com/$repo.git" "$sha"
+          git -C "$root" checkout --quiet --detach FETCH_HEAD
+          actual="$(git -C "$root" rev-parse HEAD)"
+          test "$actual" = "$sha"
+          echo "BAKEOFF_SOURCE_SHA=$actual" >> "$GITHUB_ENV"
+          echo "MEMORY_UPSTREAM=$root" >> "$GITHUB_ENV"
+          echo "PUBLIC_EXACT_SOURCE=$repo@$actual"
+
+      - name: Build native Engram Go CLI, local-only
+        if: matrix.provider == 'engram'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$MEMORY_UPSTREAM"
+          go version
+          go build -trimpath -o "$RUNNER_TEMP/engram" ./cmd/engram
+          "$RUNNER_TEMP/engram" version
+          echo "ENGRAM_BIN=$RUNNER_TEMP/engram" >> "$GITHUB_ENV"
+
+      - name: Install native ReMe library in disposable venv, no API credentials
+        if: matrix.provider == 'reme'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/reme-venv"
+          "$RUNNER_TEMP/reme-venv/bin/python" -m pip install "$MEMORY_UPSTREAM"
+          test -x "$RUNNER_TEMP/reme-venv/bin/reme"
+          echo "$RUNNER_TEMP/reme-venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/reme-venv/bin/python" -m pip freeze > "$RUNNER_TEMP/pip-freeze.txt"
+          sha256sum "$RUNNER_TEMP/pip-freeze.txt"
+
+      - name: Run bounded native retrieval and source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--backend "$PROVIDER" --out "$RUNNER_TEMP/memory-cpu-receipt.json")
+          if [ "$PROVIDER" = "openviking-source" ]; then args+=(--upstream "$MEMORY_UPSTREAM"); fi
+          python qualification/memory_hierarchy_cpu_bakeoff.py "${args[@]}"
+
+      - name: Independent receipt policy and evidence check
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'memory-cpu-receipt.json'
+          r=json.loads(p.read_text())
+          assert r['public_only_synthetic'] is True
+          assert r['dle_cpe_authority_unchanged'] is True
+          assert r['agent_task_accepted'] is False
+          assert r['model_inference_executed'] is False
+          if r['backend'] in ('engram','reme'):
+              assert r['native_memory_retrieval_executed'] is True
+              assert r['status']=='PASS_NATIVE_ADAPTER'
+              assert not r['cross_project_leak_queries']
+          else:
+              assert r['native_memory_retrieval_executed'] is False
+          print('PASS independent source/actor authority and evidence contract')
+          PY
+
+      - name: Upload independent provider and source receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cpu-memory-${{ matrix.provider }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/memory-cpu-receipt.json
+            ${{ runner.temp }}/pip-freeze.txt
+          if-no-files-found: ignore
+          retention-days: 14
