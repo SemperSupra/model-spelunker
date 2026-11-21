@@ -24,7 +24,8 @@ def build(profile):
     remaining=target-len(fixed)
     if remaining<0:
         raise ValueError("invalid target below base payload")
-    base["messages"][0]["content"]=original + (" X"*(remaining//2)) + ("X" if remaining%2 else "")
+    pad=" Neutral synthetic task-bound instruction, no real data. "
+    base["messages"][0]["content"]=original+(pad*(remaining//len(pad)+1))[:remaining]
     assert len(json.dumps(base,separators=(",",":")).encode())==target
     return base
 
@@ -49,6 +50,8 @@ def run(profile):
                     "read_file_valid":valid_tool(calls),
                     "tool_call_count":len(calls)})
         row["result"]="PASS" if row["read_file_valid"] else "FAIL"
+    except urllib.error.HTTPError as err:
+        row.update({"result":"FAIL","error_type":"HTTPError","http_status":err.code})
     except (urllib.error.URLError,TimeoutError,OSError,ValueError) as err:
         row.update({"result":"FAIL","error_type":type(err).__name__})
     row["wall_seconds"]=round(time.monotonic()-start,2)
