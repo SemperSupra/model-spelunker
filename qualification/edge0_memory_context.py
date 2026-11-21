@@ -40,11 +40,21 @@ class DenyRedirect(urllib.request.HTTPRedirectHandler):
         raise ValueError("redirect denied: model endpoint must remain loopback")
 
 
+def _unique_json_members(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate JSON keys even when the final value looks correct."""
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate model-response JSON member")
+        result[key] = value
+    return result
+
+
 def parse_response(s: str) -> str:
     if len(s) > 4096:
         return "INVALID"
     try:
-        value = json.loads(s.strip())
+        value = json.loads(s.strip(), object_pairs_hook=_unique_json_members)
         if isinstance(value, dict) and set(value) == {"answer"} and value["answer"] in ("HOLD", "RELEASED", "UNKNOWN"):
             return value["answer"]
     except (TypeError, ValueError):
@@ -119,6 +129,15 @@ class Contract(unittest.TestCase):
     def test_readback(self):
         self.assertEqual(parse_response('{"answer":"HOLD"}'), "HOLD")
         self.assertEqual(parse_response('{"answer":"RELEASED","role":"admin"}'), "INVALID")
+        # Default json.loads would silently keep the last contradictory answer.
+        for conflicting in (
+            '{"answer":"RELEASED","answer":"HOLD"}',
+            '{"answer":"HOLD","answer":"RELEASED"}',
+            '{"answer":"HOLD","answer":"HOLD"}',
+            '{"answer":"HOLD","nested":{"flag":0,"flag":1}}',
+        ):
+            self.assertEqual(parse_response(conflicting), "INVALID")
+
         self.assertEqual(run("none", None, (0,), 1)["outcome"], "MODEL_NOT_RUN")
         self.assertTrue(all(x["observation"] == "NOT_RUN" for x in run("none", None, (0,), 1)["cases"]))
 
