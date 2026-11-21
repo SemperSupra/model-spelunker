@@ -1,0 +1,67 @@
+{
+  "schema": "qwen-public-guest-provenance/v1",
+  "authority": "SemperSupra/model-spelunker#224",
+  "origin_class": "PUBLIC_SOURCE",
+  "host_runner": "windows-2025",
+  "guest_image": {
+    "name": "Windows 11 Enterprise Evaluation x64",
+    "purpose": "evaluation-only",
+    "size_bytes": 8225329152,
+    "sha256": "bc3f24086ebadc94489066b5ad78089e2cf5c3491e90e790bb81a2b199c10e38",
+    "image_authority": "SemperSupra/agent-dispatch-private#406",
+    "wimlib_sha256": "2f446d6fa3866582175f1a22a7be198eeee0aec7aba5b4e04ad25c99eae2d265"
+  },
+  "evidence": [
+    {
+      "id": "H0-VM",
+      "target": "Hyper-V create/start/stop/remove",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "run_id": 44874310455,
+      "claim": "SUPPORTED",
+      "independent_gate": "PASS",
+      "independent_cleanup": "PASS"
+    },
+    {
+      "id": "H1-WINDOWS-BOOT",
+      "target": "Windows Evaluation guest boot on isolated owned VHDX",
+      "repo": "SemperSupra/agent-dispatch",
+      "source_sha": "8fa183f49e792e244ed85bb1a441399fe7f8a27e",
+      "run_id": 44558554583,
+      "claim": "SUPPORTED_OTHER_WORKSET",
+      "independent_gate": "PASS",
+      "independent_cleanup": "PASS"
+    },
+    {
+      "id": "H1-PS-DIRECT",
+      "target": "Windows first logon and PowerShell Direct",
+      "repo": "SemperSupra/agent-dispatch",
+      "source_sha": "604f27ddb99a0e14b088e836c99479eac6debf58",
+      "run_id": 44608439342,
+      "claim": "SUPPORTED_OTHER_WORKSET_WITH_RECEIPT_RECOVERY",
+      "producer_job": "PASS",
+      "original_gate": "FAIL_FILENAME_ONLY",
+      "recovered_run_id": 44613887489,
+      "recovered_source_sha": "6f070215caac5ef7d0309049a8eb41c75864bfeb",
+      "independent_gate": "PASS_VIA_RECOVERY",
+      "independent_cleanup": "PASS"
+    }
+  ],
+  "boundaries": {
+    "qwen_guest_installed": "NOT_TESTED",
+    "qwen_guest_cli_version": "NOT_TESTED",
+    "qwen_guest_tool_call": "NOT_TESTED",
+    "qwen_guest_model_inference": "NOT_TESTED",
+    "qwen_guest_mcp": "NOT_TESTED",
+    "real_private_host_admission": "BLOCKED_ADMISSION",
+    "production_credential_projection": "NOT_AUTHORIZED",
+    "public_workflow_can_reuse_parent_without_grant": false,
+    "no_private_source_in_public_runner": true
+  },
+  "adoption": {
+    "status": "SOURCE_INPUT_READY_NOT_EXECUTION_ADMITTED",
+    "next": "Bind Qwen public Windows x64 standalone archive SHA to the already reviewed guest builder only in a separately approved public-safe typed Agent Dispatch assignment. Attest guest OS and Qwen within guest; independent teardown, source and site effects remain separate.",
+    "public_qwen_windows_sha256": "44bcbcfbef3a1c5a04f48a42b1fbede2a0ba248482b01c3cea8a65693d1552b4",
+    "source_ref": "https://github.com/SemperSupra/model-spelunker/pull/221"
+  }
+}
