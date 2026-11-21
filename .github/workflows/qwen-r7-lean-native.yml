@@ -1,0 +1,67 @@
+name: Qwen R7 Native Lean System Prompt and Tool-Only Harness
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwen-r7-lean-native.yml'
+      - 'qualification/qwencode_prompt_controls_r7/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-r7-lean-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-source-and-real-agent:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        band: [upstream-source-audit, real-lean-cli-model]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout public Qwen synthetic qualification
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout exact public upstream QwenLM v0.28.3 source
+        if: matrix.band == 'upstream-source-audit'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: QwenLM/qwen-code
+          ref: 99fcf89892f1a3a8027c75468546c7e7be906245
+          path: vendor/qwen
+          persist-credentials: false
+      - name: Independent source pin, full-prompt override, tool allowlist critic
+        if: matrix.band == 'upstream-source-audit'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C vendor/qwen rev-parse HEAD)" = 99fcf89892f1a3a8027c75468546c7e7be906245
+          python3 qualification/qwencode_prompt_controls_r7/source_audit.py --upstream vendor/qwen
+          python3 -m unittest discover -s qualification/qwencode_prompt_controls_r7 -p test_source_audit.py -v
+          bash -n qualification/qwencode_prompt_controls_r7/run_lean_native.sh
+      - name: Actual native Qwen Code with real local CPU Ollama and lean prompt
+        if: matrix.band == 'real-lean-cli-model'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n qualification/qwencode_prompt_controls_r7/run_lean_native.sh
+          bash qualification/qwencode_prompt_controls_r7/run_lean_native.sh
+      - name: Retain strictly redacted real agent prompt envelope and task oracle even on FAIL
+        if: matrix.band == 'real-lean-cli-model' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r7-lean-real-agent-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-r7-lean-native/receipt.json
+            ${{ runner.temp }}/qwen-r7-lean-native/proxy-metadata.json
+          retention-days: 7
+          if-no-files-found: ignore
