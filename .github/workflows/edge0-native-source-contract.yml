@@ -1,0 +1,122 @@
+name: Edge0 Native Source Build Contract
+
+# Public source and synthetic qualification only. NO MODEL WEIGHTS OR INFERENCE.
+# An admitted source build is not a model, tool-use, or agent task acceptance.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/edge0-native-source-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge0-native-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-source:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: source build / ${{ matrix.preset }} / ${{ matrix.host }}
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - host: ubuntu-24.04
+            preset: cpu
+          - host: macos-15
+            preset: mac-metal
+    env:
+      EDGE0_SOURCE_SHA: da7a5cac2539367eb46a67b5ebd80f25f4e96a1e
+      EDGE0_SOURCE_URI: https://github.com/Edge0-AI/Edge0.git
+      PRESET: ${{ matrix.preset }}
+      GIT_TERMINAL_PROMPT: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout qualification repository without persistent credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Source and toolchain preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v git
+          command -v cmake
+          command -v ninja
+          command -v python3
+          cmake --version | head -n 1
+          ninja --version
+          python3 - <<'PY'
+          import os,platform,shutil
+          d=shutil.disk_usage(os.environ['RUNNER_TEMP'])
+          print('SOURCE_ONLY_PREFLIGHT os='+platform.system()+' arch='+platform.machine()+
+                ' disk_free_bytes='+str(d.free))
+          assert d.free >= 6*1024**3, 'insufficient disk for bounded source build'
+          PY
+
+      - name: Fetch exact public upstream Git source without model assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/edge0-upstream"
+          mkdir -p "$root"
+          git -C "$root" init -q
+          git -C "$root" -c protocol.version=2 fetch --quiet --depth=1 --no-tags "$EDGE0_SOURCE_URI" "$EDGE0_SOURCE_SHA"
+          git -C "$root" checkout --quiet --detach FETCH_HEAD
+          actual="$(git -C "$root" rev-parse HEAD)"
+          test "$actual" = "$EDGE0_SOURCE_SHA"
+          test -f "$root/edge0-infer/CMakePresets.json"
+          test -f "$root/edge0-infer/CMakeLists.txt"
+          test -f "$root/edge0-infer/docs/getting-started.md"
+          test ! -d "$root/models"
+          echo "EDGE0_PINNED_SOURCE=$actual"
+          echo "EDGE0_MODEL_NOT_DOWNLOADED=YES"
+
+      - name: Compile pinned source and prove native CLI identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/edge0-upstream/edge0-infer"
+          cmake --preset "$PRESET"
+          cmake --build --preset "$PRESET" --parallel 2
+          binary="build/$PRESET/bin/edge0-infer"
+          test -x "$binary"
+          "$binary" info > "$RUNNER_TEMP/edge0-source-info.txt"
+          grep -E 'model\.0:.*edge0_35b' "$RUNNER_TEMP/edge0-source-info.txt"
+          EDGE0_BINARY="$PWD/$binary" python3 - <<'PY'
+          import hashlib,json,os,platform,shutil
+          from pathlib import Path
+          exe=Path(os.environ['EDGE0_BINARY'])
+          lines=Path(os.environ['RUNNER_TEMP'],'edge0-source-info.txt').read_text().splitlines()
+          source=Path(os.environ['RUNNER_TEMP'],'edge0-upstream')
+          assert not any((source/p).exists() for p in ('models','downloads','checkpoint'))
+          row={'schema':'edge0-native-public-source-v1',
+               'upstream_commit':os.environ['EDGE0_SOURCE_SHA'],
+               'qualification_head':os.environ['GITHUB_SHA'],
+               'platform':platform.system(),'machine':platform.machine(),
+               'preset':os.environ['PRESET'],
+               'binary_sha256':hashlib.sha256(exe.read_bytes()).hexdigest(),
+               'binary_bytes':exe.stat().st_size,
+               'native_35b_compiled':True,'model_loaded':False,
+               'agent_task_accepted':False,'info_lines':lines[:12]}
+          Path(os.environ['RUNNER_TEMP'],'edge0-native-source-receipt.json').write_text(
+              json.dumps(row,sort_keys=True,indent=2)+'\n')
+          print('PASS native source compile; MODEL_NOT_RUN; AGENT_NOT_QUALIFIED')
+          PY
+
+      - name: Upload bounded source-only receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: edge0-native-source-${{ matrix.host }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/edge0-native-source-receipt.json
+            ${{ runner.temp }}/edge0-source-info.txt
+          if-no-files-found: ignore
+          retention-days: 14
