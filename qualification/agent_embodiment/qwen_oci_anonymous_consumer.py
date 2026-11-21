@@ -122,5 +122,8 @@ def main():
     if args.action=="self-test":
         selftest();return
     if not args.regctl:p.error("probe requires --regctl")
-    print(json.dumps(run(args.regctl),sort_keys=True))
+    result=run(args.regctl)
+    print(json.dumps(result,sort_keys=True))
+    if result.get("verdict")!="ANONYMOUS_FETCH_AND_NATIVE_SMOKE_PASS":
+        raise SystemExit(1)
 if __name__=="__main__":main()
