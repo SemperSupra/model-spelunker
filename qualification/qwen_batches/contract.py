@@ -33,7 +33,6 @@ def validate(plan):
     assert_valid(isinstance(plan.get("tasks"), list) and 1 <= len(plan["tasks"]) <= 16, "task count")
     ids = set()
     source_paths = []
-    role_budget = {}
     for t in plan["tasks"]:
         assert_valid(isinstance(t, dict), "task type")
         task_id = t.get("id")
@@ -92,7 +91,6 @@ def validate(plan):
                          all(x not in ("", ".", "..") for x in s.rstrip("/").split("/")),
                          f"{task_id}: unsafe scope")
             source_paths.append((t["repo"], task_id, s.rstrip("/")))
-        role_budget[t["role"]] = role_budget.get(t["role"], 0) + 1
     mapping = {t["id"]: t for t in plan["tasks"]}
     for t in plan["tasks"]:
         deps = t["depends_on"]
@@ -126,55 +124,24 @@ def validate(plan):
     return plan
 
 
-def plan_candidates(plan):
+def summarize(plan):
+    """Non-scheduling DLE census only; canonical wave planner is SupraGoFlow Go."""
     validate(plan)
-    ready = [x for x in plan["tasks"] if x["state"] == "READY"]
-    ready.sort(key=lambda t: (t["resource_class"] == "heavy", t["id"]))
-    selected = []
-    heavy = 0
-    for task in ready:
-        if len(selected) >= plan["max_parallel"]:
-            break
-        if task["resource_class"] == "heavy" and heavy >= 1:
-            continue
-        selected.append(task)
-        heavy += task["resource_class"] == "heavy"
-    return {"schema": "qwen-batch-candidates/v1",
-            "dispatch_authorized": False,
+    states = {name: sum(t["state"] == name for t in plan["tasks"])
+              for name in sorted(VALID_STATES)}
+    return {"schema": "qwen-batch-status/v1",
             "dispatcher": "AGENT_DISPATCH_ONLY",
-            "candidate_ids": [t["id"] for t in selected],
-            "eligible": len(ready),
-            "in_progress": [t["id"] for t in plan["tasks"] if t["state"] == "IN_PROGRESS"],
-            "failed": [t["id"] for t in plan["tasks"] if t["state"] == "FAILED"],
-            "blocked": [{"id": t["id"], "state": t["state"]} for t in plan["tasks"]
-                        if t["state"].startswith("BLOCKED")],
-            "verified_count": sum(t["state"] == "DONE_VERIFIED" for t in plan["tasks"]),
-            "collisions": 0, "private_actions_minutes": 0}
-
-
-def actor_card(t):
-    """Small bounded instruction for weaker model; cannot confer authority."""
-    data = {
-        "packet": t["id"],
-        "role": t["role"],
-        "source": f'{t["repo"]}@{t["source_sha"]}',
-        "authoritative_dle": t["dle"],
-        "only_edit_paths": t["scope"],
-        "mission": t["mission"],
-        "independent_acceptance": t["oracle"],
-        "on_failure": t["failure"],
-        "max_tool_calls": t["budget"]["tool_calls"],
-        "max_context_tokens": t["budget"]["context_tokens"],
-        "max_wall_minutes": t["budget"]["wall_minutes"],
-        "mandatory_sequence": "observe DLE -> plan -> admitted apply in owned branch -> test -> independent oracle -> source/receipt/PR DLE -> stop",
-        "rule": "Never self-promote results, widen paths, read secrets, dispatch without admission, merge main, or send private data to public CI."
-    }
-    return data
+            "planner": "EXISTING_SUPRAGOFLOW_GO_BATCH_WAVE",
+            "dispatch_authorized": False,
+            "candidate_selection": "NOT_IMPLEMENTED",
+            "counts": states,
+            "total_tasks": len(plan["tasks"]),
+            "private_actions_minutes": 0}
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("command", choices=("validate", "candidates", "cards", "hash"))
+    p.add_argument("command", choices=("validate", "status", "hash"))
     p.add_argument("--file", default=str(THIS/"workset.public.json"))
     args = p.parse_args()
     raw = Path(args.file).read_bytes()
@@ -183,10 +150,7 @@ def main():
         print("PASS qwen batch packet contract")
     elif args.command == "hash":
         print(hashlib.sha256(raw).hexdigest())
-    elif args.command == "candidates":
-        print(json.dumps(plan_candidates(doc), indent=2, sort_keys=True))
-    elif args.command == "cards":
-        for t in sorted(doc["tasks"], key=lambda a: a["id"]):
-            print(json.dumps(actor_card(t), sort_keys=True))
+    elif args.command == "status":
+        print(json.dumps(summarize(doc), indent=2, sort_keys=True))
 if __name__ == "__main__":
     main()
