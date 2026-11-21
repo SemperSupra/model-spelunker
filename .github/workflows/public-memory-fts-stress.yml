@@ -1,0 +1,53 @@
+name: Public Memory FTS Stress Baseline
+on:
+  pull_request:
+    paths:
+      - 'qualification/memory_stress_fts_baseline.py'
+      - 'qualification/fixtures/memory_dle_cpe_synthetic_v1.json'
+      - '.github/workflows/public-memory-fts-stress.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: memory-fts-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  fixture-and-mutation:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Independent deterministic source and scope tests
+        run: python3 qualification/memory_stress_fts_baseline.py --self-test
+  paired-load:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Six paired full synthetic SQLite FTS5 reps
+        run: |
+          python3 qualification/memory_stress_fts_baseline.py --out "$RUNNER_TEMP/fts-stress.json"
+          python3 - <<'PY'
+          import json, os, pathlib
+          r=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"fts-stress.json").read_text())
+          assert len(r["rows"])==6
+          assert {x["distractors"] for x in r["rows"]}=={100,1000}
+          assert {x["seed"] for x in r["rows"]}=={11,29,47}
+          assert all(x["treatments"]["source-scoped"]["foreign_exposures"]==0 for x in r["rows"])
+          assert all(x["treatments"]["source-scoped"]["stale_exposures"]==0 for x in r["rows"])
+          assert r["memory_effectiveness_qualified"] is False and r["agent_task_accepted"] is False
+          print("PASS six paired source-only stress reps; NO memory/task claim")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: public-fts-stress-${{ github.run_id }}
+          path: ${{ runner.temp }}/fts-stress.json
+          retention-days: 14
+          if-no-files-found: ignore
