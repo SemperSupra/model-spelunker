@@ -212,6 +212,13 @@ jobs:
       - name: Self-test learning treatment safety and provenance
         run: PYTHONPATH=. python -m unittest qualification.test_learning_treatment -v
 
+      - name: Self-test Edge0 synthetic memory-context contract (source only)
+        if: github.event_name == 'pull_request' && github.head_ref == 'exp/206-edge0-memory-context-feasibility'
+        run: |
+          python3 qualification/edge0_memory_context.py --self-test
+          python3 qualification/edge0_memory_context.py --out "$RUNNER_TEMP/edge0-source-only.json" --levels 0,512,2048
+          python3 -c 'import json,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"edge0-source-only.json"; r=json.loads(p.read_text()); assert r["outcome"]=="MODEL_NOT_RUN"; assert len(r["cases"])==12; assert all(x["observation"]=="NOT_RUN" for x in r["cases"]); print("PASS Edge0 synthetic fixture, MODEL_NOT_RUN")'
+
       - name: Self-test task-neutral OpenWorker tool-use hint
         run: PYTHONPATH=. python qualification/test_tool_hint.py
 
