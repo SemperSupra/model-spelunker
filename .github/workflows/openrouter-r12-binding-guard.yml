@@ -1,0 +1,21 @@
+name: OpenRouter R12 Exact Catalog Binding Guard
+on:
+  pull_request:
+    paths:
+      - 'qualification/openrouter_free_r12/**'
+      - '.github/workflows/openrouter-r12-binding-guard.yml'
+permissions:
+  contents: read
+jobs:
+  exact-source-negative-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reconcile real catalog candidates against tested public exact IDs
+        env:
+          OPENROUTER_API_KEY: ''
+          OPENAI_API_KEY: ''
+        run: python3 qualification/openrouter_free_r12/binding_guard.py
