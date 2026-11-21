@@ -119,6 +119,7 @@ python3 - <<'PY'
 import json,os,pathlib,sys
 sys.path.insert(0,str(pathlib.Path.cwd()/"qualification/qwencode_context32_r10"))
 from final_oracle import extract_final_response,classify_final,InvalidResult
+from causal_diagnostic import classify as diagnose_causal
 p=pathlib.Path(os.environ["RUNNER_TEMP"],"qwen-r10-context32")
 expected=(p/"task/fixture.txt").read_text().strip()
 stdout=(p/"cli.stdout").read_text(errors="replace")
@@ -126,6 +127,7 @@ metadata=json.loads((p/"proxy-metadata.json").read_text()) if (p/"proxy-metadata
 events=metadata.get("events",[])
 completed=[v for v in events if v.get("phase")=="upstream-request" and v.get("result")!="IN_PROGRESS"]
 final_class=classify_final(stdout,expected,"VALUE=UNUSED_ORACLE_DECOY")
+causal=diagnose_causal(stdout,p/"task",expected)
 valid=int(os.environ["QWEN_LEAN_RC"])==0 and final_class=="EXACT_FINAL" and any(
    v.get("sse_tool_delta_events",0)>0 for v in completed) and bool(completed) and all(
    v.get("requested_output_budget",0)>=256 and "read_file" in v.get("tool_names",[]) for v in completed)
@@ -142,6 +144,7 @@ receipt={
  "hidden_fixture_oracle":"PASS" if final_class=="EXACT_FINAL" else "FAIL",
  "final_answer_source":"QWEN_CLI_JSON_RESULT_FRAME_ONLY",
  "final_answer_class":final_class,
+ "causal_diagnostic":causal,
  "request_seen":bool(completed),
  "request_count":len(completed),
  "upstream_request_bytes":[e.get("request_bytes") for e in completed],
