@@ -19,8 +19,8 @@ class ContractPositive(unittest.TestCase):
         self.assertIs(plan["dispatch_authorized"], False)
         self.assertEqual(len(plan["candidate_ids"]), 0)
         self.assertEqual(plan["candidate_ids"], [])
-        self.assertEqual(plan["in_progress"], ["B08-CONTEXT-CROSSOVER"])
-        self.assertEqual(plan["failed"], ["B07-REAL-QWEN-HARNESS"])
+        self.assertEqual(plan["in_progress"], [])
+        self.assertEqual(plan["failed"], ["B07-REAL-QWEN-HARNESS", "B08-CONTEXT-CROSSOVER"])
         self.assertEqual(plan["private_actions_minutes"], 0)
         self.assertEqual(plan["collisions"], 0)
         self.assertEqual(plan["verified_count"], 4)
@@ -63,7 +63,10 @@ class ContractNegatives(unittest.TestCase):
         self.bad(lambda d: d["tasks"][3].__setitem__("state", "READY"))
 
     def test_unverified_dependency(self):
-        self.bad(lambda d: d["tasks"][7].__setitem__("depends_on", ["B03-H1-GUEST"]))
+        def change(d):
+            d["tasks"][7]["state"] = "IN_PROGRESS"
+            d["tasks"][7]["depends_on"] = ["B03-H1-GUEST"]
+        self.bad(change)
 
     def test_dependency_cycle(self):
         def make(d):
@@ -108,7 +111,7 @@ class ContractNegatives(unittest.TestCase):
         self.bad(make)
 
     def test_false_failed_status_without_receipt(self):
-        self.bad(lambda d: d["tasks"][7].__setitem__("state", "FAILED"))
+        self.bad(lambda d: d["tasks"][7].__setitem__("evidence", {}))
 
     def test_failed_claim_cannot_be_marked_as_oracle_pass(self):
         self.bad(lambda d: d["tasks"][6]["evidence"].__setitem__(
