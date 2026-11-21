@@ -119,7 +119,7 @@ def self_test():
         lambda x: x["audiences"]["agent"][0].update(status="ADAPTER_VERIFIED"),
         lambda x: x["audiences"]["agent"][0].update(receipt_sha256="0"*64),
         lambda x: x["audiences"]["human"][0].update(interface="mcp-server"),
-        lambda x: x["audiences"]["automation"][0].update(origin="adapter"),
+        lambda x: x["audiences"]["automation"][0].update(status="NATIVE", origin="adapter"),
         lambda x: x.update(target="jetson-gpu-proven"),
         lambda x: x["gates"].update(source_checked="yes"),
     ]
