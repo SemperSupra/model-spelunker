@@ -1,0 +1,57 @@
+name: Qwen R8 Public 4B Instruct Native Real Model Qualification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwen-r8-4b-instruct.yml'
+      - 'qualification/qwencode_model_tier_r8/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-r8-4b-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-real-tier-and-critic:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        band: [real-qwen4b-cli-ollama, independent-source-critic]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout only public synthetic qualification sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Public 4B digest-pinned native Qwen CLI + real local Ollama tool-use
+        if: matrix.band == 'real-qwen4b-cli-ollama'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n qualification/qwencode_model_tier_r8/run_4b_native.sh
+          bash qualification/qwencode_model_tier_r8/run_4b_native.sh
+      - name: Independent model identity, source and no-host-effects negative critic
+        if: matrix.band == 'independent-source-critic'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n qualification/qwencode_model_tier_r8/run_4b_native.sh
+          python3 -m unittest discover -s qualification/qwencode_model_tier_r8 -p test_model_tier.py -v
+      - name: Retain source-bound redacted outcome and model request metadata even on failure
+        if: matrix.band == 'real-qwen4b-cli-ollama' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r8-native-4b-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-r8-4b-native/receipt.json
+            ${{ runner.temp }}/qwen-r8-4b-native/proxy-metadata.json
+          retention-days: 7
+          if-no-files-found: ignore
