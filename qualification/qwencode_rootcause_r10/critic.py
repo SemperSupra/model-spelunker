@@ -40,6 +40,12 @@ for mode in ("compact_schema","compact_schema_budget"):
     assert len(minim["tools"])==1
     assert minim["tools"][0]["function"]["parameters"]["required"]==["file_path"]
     assert len(minim["messages"])==2
+for mode in ("compact_all_prompt","compact_all_prompt_budget"):
+    minim=module.normalize_request(copy.deepcopy(fixture),mode)
+    assert len(minim["messages"])==2
+    assert minim["messages"][-1]["content"].startswith("Call read_file")
+    assert len(minim["tools"])==1
+    assert minim["tools"][0]["function"]["parameters"]["required"]==["file_path"]
 for bad in ("INVALID","",None):
     try:module.normalize_request(copy.deepcopy(fixture),bad)
     except ValueError:pass
