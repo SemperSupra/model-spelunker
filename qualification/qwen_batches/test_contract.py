@@ -19,8 +19,8 @@ class ContractPositive(unittest.TestCase):
         self.assertIs(plan["dispatch_authorized"], False)
         self.assertEqual(len(plan["candidate_ids"]), 0)
         self.assertEqual(plan["candidate_ids"], [])
-        self.assertEqual(plan["in_progress"], ["B07-REAL-QWEN-HARNESS"])
-        self.assertEqual(plan["failed"], [])
+        self.assertEqual(plan["in_progress"], ["B08-CONTEXT-CROSSOVER"])
+        self.assertEqual(plan["failed"], ["B07-REAL-QWEN-HARNESS"])
         self.assertEqual(plan["private_actions_minutes"], 0)
         self.assertEqual(plan["collisions"], 0)
         self.assertEqual(plan["verified_count"], 4)
@@ -63,7 +63,7 @@ class ContractNegatives(unittest.TestCase):
         self.bad(lambda d: d["tasks"][3].__setitem__("state", "READY"))
 
     def test_unverified_dependency(self):
-        self.bad(lambda d: d["tasks"][6].__setitem__("depends_on", ["B03-H1-GUEST"]))
+        self.bad(lambda d: d["tasks"][7].__setitem__("depends_on", ["B03-H1-GUEST"]))
 
     def test_dependency_cycle(self):
         def make(d):
@@ -106,6 +106,13 @@ class ContractNegatives(unittest.TestCase):
                 "run_url": "https://github.com/SemperSupra/model-spelunker/actions/runs/123456"
             }
         self.bad(make)
+
+    def test_false_failed_status_without_receipt(self):
+        self.bad(lambda d: d["tasks"][7].__setitem__("state", "FAILED"))
+
+    def test_failed_claim_cannot_be_marked_as_oracle_pass(self):
+        self.bad(lambda d: d["tasks"][6]["evidence"].__setitem__(
+            "independent_oracle", "PASS"))
 
     def test_nonzero_public_host_effects(self):
         self.bad(lambda d: d.__setitem__("public_host_effects", True))
