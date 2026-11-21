@@ -55,6 +55,26 @@ jobs:
           python3 -m qualification.harness_refresh.codex_exec_0171 verify --output "$RUNNER_TEMP/codex-0171-candidate"
           cp "$RUNNER_TEMP/codex-0171-candidate/payload/build-receipt.json" "$RUNNER_TEMP/codex-0171-build-receipt.json"
           cp "$RUNNER_TEMP/codex-0171-candidate/layout-receipt.json" "$RUNNER_TEMP/codex-0171-layout-receipt.json"
+      - name: Bounded Cargo.lock root-cause probe, never silently amend source
+        if: failure()
+        run: |
+          set -Eeuo pipefail
+          cd "$RUNNER_TEMP/codex-0171-source/codex-rs"
+          echo 'DIAG: committed upstream Cargo.lock identity:'
+          git rev-parse HEAD
+          git show HEAD:codex-rs/Cargo.lock | sha256sum
+          echo 'DIAG: trial copy, cargo metadata un-locked (NOT accepted as source):'
+          cp Cargo.lock "$RUNNER_TEMP/codex-0171-upstream-Cargo.lock"
+          set +e
+          cargo +1.99.1 metadata --format-version 1 --no-deps > "$RUNNER_TEMP/codex-0171-metadata.json" 2>"$RUNNER_TEMP/codex-0171-metadata-error.txt"
+          rc=$?
+          set -e
+          echo "METADATA_RC=$rc"
+          echo 'DIAG: lockfile delta summary only:'
+          git diff --numstat -- Cargo.lock || true
+          git diff -- Cargo.lock | grep -E '^[+-](name =|version =|source =|checksum =)' | head -n 100 || true
+          echo 'DIAG: stored file bytes remain external, not used for build admission'
+          test "$(sha256sum "$RUNNER_TEMP/codex-0171-upstream-Cargo.lock" | awk '{print $1}')" = "$(git show HEAD:codex-rs/Cargo.lock | sha256sum | awk '{print $1}')"
       - name: Keep redacted source-candidate OCI receipts, no GHCR publication
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
