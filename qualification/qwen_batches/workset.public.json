@@ -224,7 +224,7 @@
     },
     {
       "id": "B08-CONTEXT-CROSSOVER",
-      "state": "IN_PROGRESS",
+      "state": "FAILED",
       "classification": "SYNTHETIC",
       "runtime": "public-gha",
       "role": "critic",
@@ -248,6 +248,19 @@
         "output_tokens": 600,
         "cost_usd": 0,
         "private_actions_minutes": 0
+      },
+      "evidence": {
+        "source_sha": "e56394e9116c7e88d2e80d07976cc3ab5570c439",
+        "independent_oracle": "FAIL",
+        "run_url": "https://github.com/SemperSupra/model-spelunker/actions/runs/44876698668",
+        "small_profile": "PASS",
+        "small_request_bytes": 595,
+        "small_elapsed_seconds": 5.14,
+        "large_profile": "TIMEOUT",
+        "large_request_bytes": 29365,
+        "large_system_chars": 14459,
+        "large_tools": 3,
+        "large_elapsed_seconds": 120.11
       }
     }
   ]
