@@ -1,0 +1,43 @@
+name: Qwen Public Guest Provenance Reuse (No VM Effect)
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_guest_provenance/**'
+      - '.github/workflows/qwen-guest-provenance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-guest-provenance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-reduction:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        band: [exact-source-reducer, independent-false-promotion-mutants]
+    steps:
+      - name: Checkout reviewed public provenance only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pure existing guest source reduction
+        if: matrix.band == 'exact-source-reducer'
+        run: |
+          set -euo pipefail
+          python3 qualification/qwencode_guest_provenance/reduce.py
+          python3 -m unittest discover -s qualification/qwencode_guest_provenance -p test_provenance.py -k ProvenancePositive -v
+      - name: Independent critic forbids claiming Qwen install or remote admission
+        if: matrix.band == 'independent-false-promotion-mutants'
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwencode_guest_provenance -p test_provenance.py -k ProvenanceRedteam -v
+          echo "PASS source provenance negatives; no VM effect"
