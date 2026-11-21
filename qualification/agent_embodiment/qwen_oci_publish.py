@@ -172,8 +172,50 @@ def selftest():
         try:tag_for(bad,s)
         except ValueError:pass
         else:raise AssertionError("invalid registry digest admitted")
+    # Mock the registry transport to execute real publish() branching and
+    # independently reject tag reassignment and invalid remote admission.
+    from unittest.mock import patch
+    with tempfile.TemporaryDirectory(prefix="qwen-ghcr-test-") as temp:
+        out=Path(temp)/"oci";(out/"payload").mkdir(parents=True)
+        (out/"payload/build-receipt.json").write_text(json.dumps({"source_commit":s}))
+        accepted={**good,"GHCR_TOKEN":"synthetic-local-only",
+                  "GITHUB_ACTOR":"github-actions[bot]"}
+        def run_case(prior,after,remote_ok=True):
+            calls=[]
+            digests=iter([prior,after])
+            def copy(*args):
+                calls.append((args[2],args[3]))
+            def image_lookup(*args):
+                return next(digests)
+            def admission(*args):
+                if not remote_ok:raise RuntimeError("synthetic remote evidence denied")
+                return {"state":"BUILD_ADMITTED","immutable_ref":IMAGE+"@"+digest,
+                        "actor_task_qualification":"NOT_PERFORMED"}
+            with patch.dict(globals(),{
+                  "verify_local":lambda *_:{"artifact_manifest_digest":digest},
+                  "regctl_path":lambda *_:Path(temp)/"synthetic-regctl",
+                  "login":lambda *args:None,
+                  "image_digest":image_lookup,
+                  "registry_copy":copy,
+                  "independently_admit":admission
+                }):
+                if prior not in (None,digest) or not remote_ok:
+                    try:publish(out,accepted)
+                    except (ValueError,RuntimeError):pass
+                    else:raise AssertionError("registry divergence accepted")
+                    if prior not in (None,digest):
+                        assert not calls,"tag reassign attempted"
+                else:
+                    result=publish(out,accepted)
+                    assert result["state"]=="BUILD_ADMITTED"
+                    assert result["publication"]=="GHCR_DIGEST_CONFIRMED"
+                    assert len(calls)==(0 if prior==digest else 1)
+        run_case(None,digest)
+        run_case(digest,digest)
+        run_case("sha256:"+"1"*64,digest)
+        run_case(None,digest,remote_ok=False)
     print(json.dumps({"schema":"qwen-ghcr-publication-offline-critic/v1",
-      "state":"PASS","negative_contexts":5,"negative_digests":3,"negative_registry_actors":5,
+      "state":"PASS","negative_contexts":5,"negative_digests":3,"negative_registry_actors":5,"synthetic_publication_cases":4,
       "publication":"NOT_PERFORMED","real_registry":"NOT_CONTACTED"},sort_keys=True))
 
 def main():
