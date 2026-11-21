@@ -6,7 +6,8 @@ This script does not create VMs, issue credentials, alter host configuration,
 install a global package, start services, or grant production authority.
 
 SyntheticCI is designed only for ephemeral GitHub Actions runner qualification.
-Production uses the existing trusted workcell controller's external admission verifier.
+Production is deliberately denied here until a separately authenticated,
+controller-owned workcell adapter is independently qualified.
 #>
 [CmdletBinding()]
 param(
@@ -63,14 +64,13 @@ function RequireWorkcell([string]$Plan) {
         Require ($env:GITHUB_ACTIONS -eq 'true' -and $env:CI -eq 'true') 'SYNTHETIC_CI_ONLY'
         return
     }
-    Require (IsVM) 'PRODUCTION_REQUIRES_DISPOSABLE_GUEST'
-    Require (-not [string]::IsNullOrWhiteSpace($AdmissionReceiptPath)) 'ADMISSION_RECEIPT_MISSING'
-    Require (-not [string]::IsNullOrWhiteSpace($AdmissionVerifierPath)) 'TRUSTED_VERIFIER_MISSING'
-    Require (Test-Path -LiteralPath $AdmissionVerifierPath -PathType Leaf) 'TRUSTED_VERIFIER_MISSING'
-    # The verifier MUST be independently authenticated/pinned by the external
-    # workcell controller, not selected by the model or trusted from this CLI.
-    & $AdmissionVerifierPath verify --receipt $AdmissionReceiptPath --plan $Plan --effect 'guest-qwen-capsule'
-    Require ($LASTEXITCODE -eq 0) 'EXTERNAL_ADMISSION_DENIED'
+    # Synthetic public packaging qualification is the only authority accepted
+    # by this standalone capsule. A user-provided verifier executable path
+    # cannot prove trusted-controller identity or an authenticated lease.
+    # Actual guest production admission belongs to Agent Dispatch and its
+    # independently pinned controller. Do not execute caller-controlled
+    # verifier programs to manufacture a successful admission receipt.
+    throw 'PRODUCTION_REQUIRES_EXTERNAL_TRUSTED_CONTROLLER_INTEGRATION_NOT_IMPLEMENTED'
 }
 function CheckZipSafety([string]$ZipPath) {
     Add-Type -AssemblyName System.IO.Compression
