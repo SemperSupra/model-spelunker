@@ -20,6 +20,7 @@ jobs:
       - name: Reject wrong-file, no-tool, low-budget and forged-success mutants
         run: |
           python3 qualification/qwencode_twohop_r12/critic.py
+          python3 qualification/qwencode_twohop_r12/final_oracle.py
           python3 -m py_compile qualification/qwencode_twohop_r12/wire_proxy.py
           bash -n qualification/qwencode_twohop_r12/run_twohop.sh
   actual-native-two-hop:
