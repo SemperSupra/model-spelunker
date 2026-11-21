@@ -14,8 +14,8 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-HEX40 = re.compile(r"[0-9a-f]{40}\\Z")
-SAFE = re.compile(r"[a-zA-Z0-9._/-]+\\Z")
+HEX40 = re.compile(r"[0-9a-f]{40}\Z")
+SAFE = re.compile(r"[a-zA-Z0-9._/-]+\Z")
 ALLOWED = {"pi", "opencode", "aider"}
 SOURCES = {"pi": "earendil-works/pi", "opencode": "anomalyco/opencode",
            "aider": "Aider-AI/aider"}
@@ -63,7 +63,7 @@ def verify(x):
             "candidates": 3, "runtime_qualified": False, "production_admitted": False}
 
 def blob_sha(data: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\0" + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
 def online_verify(x):
     verified = []
