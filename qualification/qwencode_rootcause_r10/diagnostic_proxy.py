@@ -15,6 +15,17 @@ import urllib.request
 import urllib.error
 
 
+def normalize_request(obj,mode):
+    if mode not in ("baseline","compact_system","compact_tools","compact_both"):
+        raise ValueError("unsupported normalization mode")
+    if mode in ("compact_system","compact_both"):
+        compact={"role":"system","content":"Read fixture.txt using read_file. Return the exact file text. Do not guess."}
+        obj["messages"]=[compact]+[m for m in obj.get("messages",[]) if m.get("role") not in ("system","developer")]
+    if mode in ("compact_tools","compact_both"):
+        obj["tools"]=[t for t in obj.get("tools",[]) if t.get("type")=="function" and t.get("function",{}).get("name")=="read_file"]
+    return obj
+
+
 class Proxy(ThreadingHTTPServer):
     daemon_threads=True
     def __init__(self,address,state):
@@ -72,11 +83,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         original_bytes=len(payload)
         mode=self.server.mode
-        if mode in ("compact_system","compact_both"):
-            compact={"role":"system","content":"Read fixture.txt using read_file. Return the exact file text. Do not guess."}
-            obj["messages"]=[compact]+[m for m in obj.get("messages",[]) if m.get("role") not in ("system","developer")]
-        if mode in ("compact_tools","compact_both"):
-            obj["tools"]=[t for t in obj.get("tools",[]) if t.get("type")=="function" and t.get("function",{}).get("name")=="read_file"]
+        obj=normalize_request(obj,mode)
         if mode!="baseline":
             payload=json.dumps(obj,separators=(",",":")).encode("utf-8")
         messages=obj.get("messages") or []
