@@ -50,3 +50,173 @@ jobs:
             ${{ runner.temp }}/edge0-host.json
           if-no-files-found: ignore
           retention-days: 14
+
+  model-m1:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 216 && github.event.pull_request.head.repo.full_name == github.repository
+    needs: source
+    name: Exploratory real Edge0 8B via MLX on hosted M1
+    runs-on: macos-15
+    timeout-minutes: 28
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      MODEL_ID: Edge0/Edge0-8B-A1B-preview
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize runner-local ephemeral model paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'HF_HOME=%s/edge0-hf\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'MODEL_DIR=%s/edge0-model\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Fail closed if not Apple Silicon or adequate initial space
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,platform,shutil,subprocess
+          ram=int(subprocess.check_output(['sysctl','-n','hw.memsize']).decode())
+          disk=shutil.disk_usage(os.environ['RUNNER_TEMP']).free
+          print(f'CAPACITY_PREFLIGHT ram_bytes={ram} disk_free_bytes={disk}')
+          assert platform.system()=='Darwin' and platform.machine()=='arm64'
+          assert ram >= 6*1024**3 and disk >= 8*1024**3, 'insufficient available memory/disk'
+          PY
+      - name: Install exploratory MLX server in disposable Python venv
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/edge0-venv"
+          source "$RUNNER_TEMP/edge0-venv/bin/activate"
+          printf '%s/edge0-venv/bin\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          printf 'VIRTUAL_ENV=%s/edge0-venv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          python3 -m pip install --no-cache-dir 'mlx-lm>=0.28,<1.0' 'huggingface-hub>=0.27,<2.0'
+          python3 -m pip freeze > "$RUNNER_TEMP/edge0-pip-versions.txt"
+          python3 - <<'PY'
+          import importlib.metadata
+          print('MLX_VERSION='+importlib.metadata.version('mlx-lm'))
+          PY
+      - name: Discover exact model revision and gate model storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,shutil
+          from pathlib import Path
+          from huggingface_hub import HfApi
+          i=HfApi().model_info(os.environ['MODEL_ID'],files_metadata=True)
+          n=sum(int(f.size or 0) for f in i.siblings)
+          free=shutil.disk_usage(os.environ['RUNNER_TEMP']).free
+          row={'schema':'edge0-model-asset-v1','model':os.environ['MODEL_ID'],
+               'sha':i.sha,'assets_bytes':n,'disk_available_bytes':free,'model_loaded':False}
+          Path(os.environ['RUNNER_TEMP'],'edge0-assets.json').write_text(json.dumps(row,sort_keys=True)+'\n')
+          print(f'MODEL_PREFLIGHT revision={i.sha} assets_bytes={n} available_bytes={free}')
+          assert i.sha and n>0 and n+3*1024**3 < free, 'model footprint unqualified'
+          PY
+      - name: Download exact observed snapshot — one attempt, no private artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          from huggingface_hub import snapshot_download
+          r=json.loads(Path(os.environ['RUNNER_TEMP'],'edge0-assets.json').read_text())
+          path=snapshot_download(repo_id=r['model'],revision=r['sha'],local_dir=os.environ['MODEL_DIR'],max_workers=2)
+          assert Path(path,'config.json').is_file()
+          print('MODEL_SNAPSHOT_HYDRATED sha='+r['sha'])
+          PY
+      - name: Prove local MLX endpoint really loads the model
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m mlx_lm.server --model "$MODEL_DIR" --host 127.0.0.1 --port 8080 > "$RUNNER_TEMP/edge0-private-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/edge0-server.pid"
+          ok=0
+          for i in $(seq 1 90); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8080/v1/models > /dev/null; then ok=1; break; fi
+            if ! kill -0 "$(cat "$RUNNER_TEMP/edge0-server.pid")" 2>/dev/null; then break; fi
+            sleep 3
+          done
+          if [ "$ok" != 1 ]; then echo 'INTEGRATION_UNKNOWN: model-server readiness not established' >&2; exit 1; fi
+          echo 'LOCAL_MODEL_READY: mlx-lm integration, not Edge0 native-engine equivalence'
+      - name: Classify local MLX HTTP compatibility before full probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, re, urllib.request, urllib.error
+          from pathlib import Path
+          base='http://127.0.0.1:8080/v1'
+          opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+          # One bounded model-ID request; no prompt or body is logged.
+          # mlx_lm.server exposes one already-selected local model; its model
+          # field is optional, and the HF repo identifier differs from MODEL_DIR.
+          body=json.dumps({'messages':[{'role':'user','content':'Return the word UNKNOWN.'}],
+                           'temperature':0,'max_tokens':12,'stream':False}).encode()
+          req=urllib.request.Request(base+'/chat/completions',data=body,
+                                     headers={'Content-Type':'application/json'},method='POST')
+          try:
+              with opener.open(req,timeout=45) as response:
+                  status=response.status
+                  response.read(4096)
+          except urllib.error.HTTPError as exc:
+              status=exc.code
+              # Inspect only bounded local synthetic-error bytes; emit a coarse
+              # allowlisted category and digest, never raw backend text.
+              raw=exc.read(4096)
+              message=raw.decode('utf-8','replace').lower()
+              categories={'model':('model not found','invalid model','model mismatch'),
+                          'tokenizer':('tokenizer','tokenisation','tokenization'),
+                          'chat_template':('chat template','chat_template'),
+                          'index_error':('list index out of range','indexerror'),
+                          'unsupported_arch':('unsupported architecture','not supported','unknown model type'),
+                          'path_error':('no such file','filenotfounderror'),
+                          'generation_error':('generation failed','generation error')}
+              category=next((key for key,terms in categories.items() if any(term in message for term in terms)), 'unclassified')
+              print('MODEL_HTTP_ERROR_CATEGORY='+category+' digest_sha256='+hashlib.sha256(raw).hexdigest())
+              log_file=Path(os.environ['RUNNER_TEMP'],'edge0-private-server.log')
+              if log_file.exists():
+                  log=log_file.read_text(errors='replace')[-32768:]
+                  types=re.findall(r'\\b(?:IndexError|ValueError|KeyError|RuntimeError|TypeError|OSError|AttributeError|NotImplementedError|FileNotFoundError):',log)
+                  print('MODEL_SERVER_EXCEPTION_TYPE='+((types[-1].rstrip(':')) if types else 'unclassified'))
+          except Exception as exc:
+              print('MODEL_HTTP_DIAGNOSTIC transport_error_class='+type(exc).__name__)
+              raise
+          result={'schema':'edge0-model-http-status-v1','http_status':status,
+                  'model_identifier':os.environ['MODEL_ID'],'raw_reply_logged':False}
+          Path(os.environ['RUNNER_TEMP'],'edge0-http-status.json').write_text(
+              json.dumps(result,sort_keys=True)+'\\n')
+          print('MODEL_HTTP_DIAGNOSTIC status='+str(status)+'; no response body logged')
+          if status != 200:
+              raise SystemExit('INTEGRATION_UNKNOWN: local MLX HTTP status not 200')
+          PY
+      - name: Observe real model with two context lengths and four treatments
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/edge0_memory_context.py \
+            --base-url http://127.0.0.1:8080/v1 \
+            --model Edge0/Edge0-8B-A1B-preview --omit-request-model --levels 0,2048 --timeout 45 \
+            --out "$RUNNER_TEMP/edge0-observed.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          a=json.loads(Path(os.environ['RUNNER_TEMP'],'edge0-observed.json').read_text())
+          print('REAL_MODEL_OBSERVATION returned='+str(sum(x['observation']=='RETURNED' for x in a['cases']))+
+                ' total='+str(len(a['cases']))+'; NOT agent qualification')
+          PY
+      - name: Retain sanitized model/assets/version observations only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: edge0-mlx-m1-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/edge0-assets.json
+            ${{ runner.temp }}/edge0-pip-versions.txt
+            ${{ runner.temp }}/edge0-observed.json
+            ${{ runner.temp }}/edge0-http-status.json
+          if-no-files-found: ignore
+          retention-days: 14
