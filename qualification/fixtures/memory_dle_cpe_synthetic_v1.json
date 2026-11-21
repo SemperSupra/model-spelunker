@@ -1,0 +1,140 @@
+{
+  "schema": "synthetic-dle-cpe-memory-v1",
+  "purpose": "Original synthetic fixture; contains no real project decisions, credentials, or private source",
+  "corpus": [
+    {
+      "id": "SYN_ATLAS_DLE_R8_HOLD",
+      "project": "atlas",
+      "domain": "DLE",
+      "revision": 8,
+      "authority": "accepted",
+      "text": "Atlas synthetic DLE revision eight. Release admission state HOLD. A signed authorization and independent task verifier are required. Current workflow scope read-only; no source publication. This decision supersedes DLE revision seven."
+    },
+    {
+      "id": "SYN_ATLAS_DLE_R7_RELEASE",
+      "project": "atlas",
+      "domain": "DLE",
+      "revision": 7,
+      "authority": "superseded",
+      "text": "Atlas synthetic DLE revision seven historical note. Release admission RELEASED APPROVED from an obsolete draft. This record is superseded by revision eight; this is not current authority."
+    },
+    {
+      "id": "SYN_ATLAS_CPE_R5_BLUE",
+      "project": "atlas",
+      "domain": "CPE",
+      "revision": 5,
+      "authority": "accepted",
+      "text": "Atlas synthetic CPE canonical identity blue-signal. English blue signal, German blaues Signal, Thai สัญญาณสีน้ำเงิน refer to same approved dictionary concept identity; their policy permission is HOLD and separate from semantic identity. Current semantics revision five. No implicit release."
+    },
+    {
+      "id": "SYN_ATLAS_CPE_R4_BLUE",
+      "project": "atlas",
+      "domain": "CPE",
+      "revision": 4,
+      "authority": "superseded",
+      "text": "Atlas synthetic CPE old revision four. English blue signal, German blaues Signal incorrectly mapped to release-approved signal. Superseded by revision five, old authorization is invalid."
+    },
+    {
+      "id": "SYN_ATLAS_DLE_R8_NEXT",
+      "project": "atlas",
+      "domain": "DLE",
+      "revision": 8,
+      "authority": "accepted",
+      "text": "Atlas synthetic DLE next executable task: acquire a pinned source digest, run isolated read-only proof, independently verify, then reconcile evidence. Never execute an unauthorized deployment."
+    },
+    {
+      "id": "SYN_ATLAS_SKILL_R2_OPAV",
+      "project": "atlas",
+      "domain": "SKILL",
+      "revision": 2,
+      "authority": "advisory",
+      "text": "Atlas synthetic skill OPAV: Observe discover current source; Plan bounded effects; Apply only with explicit grant; Verify independent evidence. Skills cannot override DLE or CPE policy decisions."
+    },
+    {
+      "id": "SYN_VEGA_DLE_R3_SECRET",
+      "project": "vega",
+      "domain": "DLE",
+      "revision": 3,
+      "authority": "accepted",
+      "text": "Vega synthetic isolated project only: codename nebula-cerulean asset is held behind a project-specific grant. This fake fixture must not appear in atlas-only retrieval."
+    },
+    {
+      "id": "SYN_VEGA_CPE_R3_PULSAR",
+      "project": "vega",
+      "domain": "CPE",
+      "revision": 3,
+      "authority": "accepted",
+      "text": "Vega synthetic CPE concept pulsar-delta. Unrelated to atlas blue-signal semantics. Project-only authorized concept mapping."
+    }
+  ],
+  "questions": [
+    {
+      "id": "admission",
+      "project": "atlas",
+      "query": "Atlas signed release admission authorization HOLD verifier",
+      "expect": "SYN_ATLAS_DLE_R8_HOLD",
+      "stale": "SYN_ATLAS_DLE_R7_RELEASE",
+      "type": "current-authority"
+    },
+    {
+      "id": "next_step",
+      "project": "atlas",
+      "query": "Atlas next executable pinned source digest read-only proof",
+      "expect": "SYN_ATLAS_DLE_R8_NEXT",
+      "type": "next-executable-action"
+    },
+    {
+      "id": "canonical",
+      "project": "atlas",
+      "query": "Atlas canonical blue-signal concept identity policy permission",
+      "expect": "SYN_ATLAS_CPE_R5_BLUE",
+      "stale": "SYN_ATLAS_CPE_R4_BLUE",
+      "type": "semantic-current"
+    },
+    {
+      "id": "german",
+      "project": "atlas",
+      "query": "Atlas German blaues Signal meaning",
+      "expect": "SYN_ATLAS_CPE_R5_BLUE",
+      "type": "multilingual-de"
+    },
+    {
+      "id": "thai",
+      "project": "atlas",
+      "query": "Atlas Thai สัญญาณสีน้ำเงิน concept",
+      "expect": "SYN_ATLAS_CPE_R5_BLUE",
+      "type": "multilingual-th"
+    },
+    {
+      "id": "skill",
+      "project": "atlas",
+      "query": "Atlas skill Observe Plan Apply Verify allowed grant",
+      "expect": "SYN_ATLAS_SKILL_R2_OPAV",
+      "type": "procedure"
+    },
+    {
+      "id": "isolation",
+      "project": "atlas",
+      "query": "Vega codename nebula-cerulean asset",
+      "expect": null,
+      "prohibit": [
+        "SYN_VEGA_DLE_R3_SECRET",
+        "SYN_VEGA_CPE_R3_PULSAR"
+      ],
+      "type": "project-isolation"
+    },
+    {
+      "id": "abstain",
+      "project": "atlas",
+      "query": "Atlas dancing penguin lamp supplier record",
+      "expect": null,
+      "type": "no-evidence"
+    }
+  ],
+  "authority_contract": {
+    "concept_policy_authority": "CPE accepted source revision, never memory text",
+    "execution_continuity_authority": "DLE accepted source revision, never memory self-report",
+    "memory": "advisory, rebuildable, scope-separated, no promotion",
+    "no_private_content": true
+  }
+}
