@@ -66,6 +66,12 @@
           "blob_sha": "71bb3282a5901e3c0107a646322d90d3867551d5",
           "surface": "scripted-cli-source",
           "proof": "SOURCE_OBSERVED"
+        },
+        {
+          "path": "aider/io.py",
+          "blob_sha": "ed6f22d51ae1b1dee249be67f6750498cbf0e905",
+          "surface": "approval-eof-source",
+          "proof": "SOURCE_OBSERVED"
         }
       ],
       "human": "TERMINAL_NATIVE_SOURCE",
@@ -74,7 +80,8 @@
       "caveats": [
         "--yes may bypass prompts; never enable by default",
         "Closed stdin approval behavior must be independently negative-tested",
-        "No ambient shell or auto commit in protected workcells"
+        "No ambient shell or auto commit in protected workcells",
+        "Upstream io.py confirm_ask(default='y') handles EOFError by res=default; closed stdin can imply yes without interactive authorization; HARD HOLD until fail-closed wrapper/source repair and live negative oracle"
       ]
     }
   ]
