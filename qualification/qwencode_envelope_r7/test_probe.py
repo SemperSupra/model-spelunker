@@ -1,8 +1,13 @@
 """Independent source-only invariant and negative mutant for R7 CPU envelopes."""
 import json,sys,unittest
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).parent))
-from probe import PROFILES,build
+import importlib.util
+# Unique import name: inherited direct-model parser is also named probe.py.
+spec=importlib.util.spec_from_file_location("qwen_r7_payload_under_test",
+                                           Path(__file__).with_name("probe.py"))
+module=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+PROFILES,build=module.PROFILES,module.build
 
 
 class EnvelopePositive(unittest.TestCase):
@@ -19,6 +24,9 @@ class EnvelopePositive(unittest.TestCase):
                 self.assertEqual(obj["tool_choice"],"auto")
                 self.assertEqual(obj["messages"][1],target["messages"][1])
                 self.assertEqual(obj["tools"],target["tools"])
+                self.assertIn("Neutral synthetic task-bound instruction",
+                              obj["messages"][0]["content"])
+
                 self.assertEqual([x["function"]["name"] for x in obj["tools"]],
                                   ["read_file","glob","list_directory"])
 
