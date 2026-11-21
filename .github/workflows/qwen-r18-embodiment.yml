@@ -1,0 +1,50 @@
+name: Qwen R18 Reproducible Agent Embodiment
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/**'
+      - '.github/workflows/qwen-r18-embodiment.yml'
+permissions:
+  contents: read
+jobs:
+  source-negative-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m py_compile qualification/agent_embodiment/qwen_embody.py
+          python3 qualification/agent_embodiment/qwen_embody.py self-test
+          python3 qualification/qwencode_public/kit.py self-test
+          python3 qualification/agent_embodiment/qwen_embody.py plan
+  real-pinned-install-reproduce-remove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Acquire pinned official standalone asset verified against release manifest
+        run: python3 qualification/qwencode_public/kit.py fetch --platform linux-x64 --archive "${{ runner.temp }}/qwen-code-linux-x64.tar.gz"
+      - name: Plan and reproducibly install, configure, verify, remove
+        run: |
+          set -Eeuo pipefail
+          root="$RUNNER_TEMP/embodiment-r18"
+          archive="$RUNNER_TEMP/qwen-code-linux-x64.tar.gz"
+          trap 'if [[ -d "$root" ]]; then python3 qualification/agent_embodiment/qwen_embody.py remove --root "$root" || true; fi' EXIT
+          python3 qualification/agent_embodiment/qwen_embody.py plan >"$RUNNER_TEMP/plan-r18.json"
+          python3 qualification/agent_embodiment/qwen_embody.py stage --root "$root" --archive "$archive"
+          python3 qualification/agent_embodiment/qwen_embody.py verify --root "$root"
+          if python3 qualification/agent_embodiment/qwen_embody.py stage --root "$root" --archive "$archive"; then
+            echo "FAIL: repeated stage unexpectedly overwrote owned workcell"; exit 1
+          fi
+          python3 qualification/agent_embodiment/qwen_embody.py remove --root "$root"
+          test ! -e "$root"
+          echo 'PASS pinned native Qwen install + independent settings verify + fail-closed repeat + owned rollback'
+      - name: Do not upload secret or local host inventories
+        if: always()
+        run: echo "No cloud credentials, host inventory or model inference executed"
