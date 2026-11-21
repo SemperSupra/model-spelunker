@@ -1,4 +1,4 @@
-name: Qwen R10 native 32K context corrective qualification
+name: Qwen R10 native 32K wire/context qualification (strict final reported separately)
 on:
   pull_request:
     paths:
@@ -16,6 +16,7 @@ jobs:
           persist-credentials: false
       - run: |
           python3 qualification/qwencode_context32_r10/critic.py
+          python3 qualification/qwencode_context32_r10/final_oracle.py
           python3 -m py_compile qualification/qwencode_context32_r10/wire_proxy.py
           bash -n qualification/qwencode_context32_r10/run_context32.sh
   real-native-ollama:
@@ -25,7 +26,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Actual Qwen CLI / Qwen3-1.7B Ollama 32K end-to-end tool oracle
+      - name: Actual Qwen CLI / Qwen3-1.7B Ollama 32K wire and independently reported final
         run: bash qualification/qwencode_context32_r10/run_context32.sh
       - name: Retain redacted budget, tool and hidden-file oracle evidence
         if: always()
