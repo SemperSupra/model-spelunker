@@ -152,8 +152,9 @@ jobs:
           base='http://127.0.0.1:8080/v1'
           opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
           # One bounded model-ID request; no prompt or body is logged.
-          body=json.dumps({'model':os.environ['MODEL_ID'],
-                           'messages':[{'role':'user','content':'Return the word UNKNOWN.'}],
+          # mlx_lm.server exposes one already-selected local model; its model
+          # field is optional, and the HF repo identifier differs from MODEL_DIR.
+          body=json.dumps({'messages':[{'role':'user','content':'Return the word UNKNOWN.'}],
                            'temperature':0,'max_tokens':12,'stream':False}).encode()
           req=urllib.request.Request(base+'/chat/completions',data=body,
                                      headers={'Content-Type':'application/json'},method='POST')
@@ -180,7 +181,7 @@ jobs:
           set -euo pipefail
           python3 qualification/edge0_memory_context.py \
             --base-url http://127.0.0.1:8080/v1 \
-            --model Edge0/Edge0-8B-A1B-preview --levels 0,2048 --timeout 45 \
+            --model Edge0/Edge0-8B-A1B-preview --omit-request-model --levels 0,2048 --timeout 45 \
             --out "$RUNNER_TEMP/edge0-observed.json"
           python3 - <<'PY'
           import json,os
