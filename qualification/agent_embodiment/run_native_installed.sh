@@ -75,6 +75,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path.cwd()/"qualification/agent_embodiment"))
 from final_oracle import verify_selected,classify_final
 from lineage_oracle import lineage_verdict
+from settings_drift import audit as audit_settings
 root=Path(os.environ["RUNNER_TEMP"])/"qwen-r18-live"
 cell=Path(os.environ["RUNNER_TEMP"])/"qwen-r18-installed"
 target=(root/"task/index.txt").read_text().split("=",1)[1].strip()
@@ -83,12 +84,15 @@ expected=(root/"task"/target).read_text().strip()
 decoy=(root/"task"/("b.txt" if target=="a.txt" else "a.txt")).read_text().strip()
 stdout=(root/"cli.stdout").read_text(errors="replace")
 lineage=lineage_verdict(stdout,root/"task",target)
+drift=audit_settings(cell/"home/.qwen/settings.json")
 final=classify_final(stdout,expected,decoy)
 good=int(os.environ["R18_EXIT"])==0 and lineage=="PASS" and verify_selected(stdout,expected,decoy)
+# Diagnose settings effects but keep task correctness independent of configuration integrity.
 receipt={
  "schema":"agent-embodiment-native-use/v1","framework":"QWEN_CODE_0_28_3",
  "runtime":"OLLAMA_0_34_1_QWEN3_1P7B_32K","source_class":"PUBLIC_SYNTHETIC",
  "installed_settings_sha256":hashlib.sha256((cell/"home/.qwen/settings.json").read_bytes()).hexdigest(),
+ "post_run_settings_drift":drift,
  "cli_exit":int(os.environ["R18_EXIT"]),"tool_lineage_class":lineage,
  "final_answer_class":final,"independent_hidden_oracle":"PASS" if good else "FAIL",
  "model_inference":"ACTUAL","operational_admission":"NOT_GRANTED",
