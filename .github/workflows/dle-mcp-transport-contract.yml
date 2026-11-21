@@ -1,0 +1,87 @@
+name: DLE MCP Transport Contract
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/dle-mcp-transport/**'
+      - '.github/workflows/dle-mcp-transport-contract.yml'
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: dle-mcp-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify selected Go toolchain
+        run: |
+          go version
+          go env GOTOOLCHAIN GOPROXY
+          test -z "${GH_TOKEN:-}"
+
+      - name: Resolve pinned upstream SDK in disposable runner
+        working-directory: qualification/dle-mcp-transport
+        run: |
+          go mod tidy
+          go mod verify
+          echo '=== Canonical Go module after tidy ==='
+          cat go.mod
+          echo '=== Check committed module and sums match canonical resolution ==='
+          git diff --exit-code -- go.mod go.sum
+        env:
+          GOTOOLCHAIN: auto
+
+      - name: Test transport parity and denial
+        working-directory: qualification/dle-mcp-transport
+        run: |
+          go test ./... -count=1 -v -timeout=180s
+          go vet ./...
+          go test -race ./... -count=1 -timeout=180s
+        env:
+          GOTOOLCHAIN: auto
+
+      - name: Check live public GitHub observation through MCP
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: qualification/dle-mcp-transport
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DLE_OBSERVER_REPO: SemperSupra/model-spelunker
+          DLE_OBSERVER_ISSUE: "139"
+          DLE_OBSERVER_CHECKOUT: ${{ github.workspace }}
+          DLE_OBSERVER_BIN: ${{ runner.temp }}/dle-source-observer
+          DLE_OBSERVER_SOURCE_SHA: c21a098f5e925c516a687181d946463865b6d15f
+        run: |
+          mkdir -p "$RUNNER_TEMP/dle-observer-source"
+          git -C "$GITHUB_WORKSPACE" fetch --no-tags --depth=1 origin "$DLE_OBSERVER_SOURCE_SHA"
+          git -C "$GITHUB_WORKSPACE" cat-file -e "$DLE_OBSERVER_SOURCE_SHA^{commit}"
+          git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/main.go" > "$RUNNER_TEMP/dle-observer-source/main.go"
+          git -C "$GITHUB_WORKSPACE" show "$DLE_OBSERVER_SOURCE_SHA:qualification/dle-gh-observer/go.mod" > "$RUNNER_TEMP/dle-observer-source/go.mod"
+          (cd "$RUNNER_TEMP/dle-observer-source" && go build -o "$DLE_OBSERVER_BIN" .)
+          go test ./... -run '^TestLivePublicGitHubObserverThroughMCP$' -count=1 -v -timeout=90s
+
+      - name: Verify no mutation-capable MCP tool
+        working-directory: qualification/dle-mcp-transport
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src=Path("server.go").read_text()
+          assert 'Name:"dle_discover"' in src
+          assert 'Name:"dle_observe"' in src
+          assert src.count('mcp.AddTool(')==3
+          assert 'if engine!=nil' in src
+          assert 'newServerWithReconciler' in src
+          entry=Path("main.go").read_text()
+          assert 'newOAuthContractHandler(' not in entry
+          assert 'oauthDiscoveryRoutes(' not in entry
+          assert 'ip.IsLoopback()' in entry
+          print("PASS bounded tool registration; synthetic OAuth resource server is not publicly wired")
+          PY
