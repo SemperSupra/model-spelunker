@@ -16,6 +16,7 @@ jobs:
           persist-credentials: false
       - run: |
           python3 qualification/qwencode_context32_r10/critic.py
+          python3 qualification/qwencode_context32_r10/final_oracle.py
           python3 -m py_compile qualification/qwencode_context32_r10/wire_proxy.py
           bash -n qualification/qwencode_context32_r10/run_context32.sh
   real-native-ollama:
