@@ -2,8 +2,10 @@ name: Qwen R18 Reproducible Agent Embodiment
 on:
   pull_request:
     paths:
-      - 'qualification/agent_embodiment/**'
-      - '.github/workflows/qwen-r18-embodiment.yml'
+      - 'qualification/agent_embodiment/qwen_embody.py'
+      - 'qualification/agent_embodiment/qwen-public-linux.json'
+      - 'qualification/qwencode_public/kit.py'
+      - 'qualification/qwencode_public/release-manifest.json'
 permissions:
   contents: read
 jobs:
