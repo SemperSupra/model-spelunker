@@ -1,0 +1,53 @@
+name: Qwen R6 CPU Context and Tool-Schema Crossover
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_envelope_bisect/**'
+      - '.github/workflows/qwen-intermediate-envelope.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-r6-envelope-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-model-profiles:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        profile: [short-three, medium-one, medium-three, offline-critics]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout only public synthetic qualification sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Actual pinned Qwen3/Ollama source-neutral tool-selection response
+        if: matrix.profile != 'offline-critics'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash qualification/qwencode_envelope_bisect/run.sh '${{ matrix.profile }}'
+      - name: Independent schema/context and private-content red-team
+        if: matrix.profile == 'offline-critics'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwencode_envelope_bisect -p test_diagnose.py -v
+      - name: Retain redacted per-profile receipt on PASS or FAIL
+        if: matrix.profile != 'offline-critics' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r6-model-${{ matrix.profile }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/qwen-mid-${{ matrix.profile }}.json
+          retention-days: 7
+          if-no-files-found: ignore
