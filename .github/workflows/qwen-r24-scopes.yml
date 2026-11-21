@@ -1,0 +1,23 @@
+name: Qwen R24 Source-scoped Qualification Workflow Contract
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/check_workflow_scopes.py'
+      - '.github/workflows/qwen-r18-native-use.yml'
+      - '.github/workflows/qwen-r18-embodiment.yml'
+      - '.github/workflows/qwen-r19-oci-carrier.yml'
+      - '.github/workflows/qwen-r24-scopes.yml'
+permissions:
+  contents: read
+jobs:
+  offline-workflow-input-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Enforce precise Qwen runtime, installer and OCI build input sets
+        run: |
+          python3 -m py_compile qualification/agent_embodiment/check_workflow_scopes.py
+          python3 qualification/agent_embodiment/check_workflow_scopes.py
