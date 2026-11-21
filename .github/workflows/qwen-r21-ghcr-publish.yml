@@ -33,6 +33,7 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -Eeuo pipefail
           python3 -m qualification.agent_embodiment.qwen_oci_publish publish --output "$RUNNER_TEMP/qwen-ghcr-source" | tee "$RUNNER_TEMP/qwen-ghcr-admission.json"
       - name: Persist allowlisted, credential-free immutable admission evidence
         if: always()
