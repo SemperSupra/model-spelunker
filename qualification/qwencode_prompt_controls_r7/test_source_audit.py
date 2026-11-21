@@ -50,6 +50,13 @@ class Negative(unittest.TestCase):
                                                 "export QWEN_SYSTEM_IDENTITY_MD="))
 
     @unittest.skipUnless(FILES,"upstream checkout for negative source mutation")
+    def test_bridge_reenable_is_denied_for_small_model(self):
+        altered=RUNNER.replace('"toolSearch":{"enabled":False}',
+                               '"toolSearch":{"enabled":True}')
+        with self.assertRaises(ValueError):
+            source_check(PINS,FILES,altered)
+
+    @unittest.skipUnless(FILES,"upstream checkout for negative source mutation")
     def test_floating_upstream_source_denied(self):
         altered=copy.deepcopy(PINS)
         altered["version"]="latest"
