@@ -42,6 +42,20 @@ jobs:
           if python3 qualification/agent_embodiment/qwen_embody.py stage --root "$root" --archive "$archive"; then
             echo "FAIL: repeated stage unexpectedly overwrote owned workcell"; exit 1
           fi
+          # An installed binary modification MUST invalidate the stage-bound inventory.
+          printf '\n#tamper\n' >> "$root/native/qwen-code/bin/qwen"
+          if python3 qualification/agent_embodiment/qwen_embody.py verify --root "$root"; then
+            echo "FAIL: modified installed runtime passed integrity"; exit 1
+          fi
+          # A damaged but originally-owned workcell MUST remain removable.
+          python3 qualification/agent_embodiment/qwen_embody.py remove --root "$root"
+          test ! -e "$root"
+          # Independently exercise settings drift and owner-bound teardown.
+          python3 qualification/agent_embodiment/qwen_embody.py stage --root "$root" --archive "$archive"
+          printf '\n' >> "$root/home/.qwen/settings.json"
+          if python3 qualification/agent_embodiment/qwen_embody.py verify --root "$root"; then
+            echo "FAIL: modified settings passed integrity"; exit 1
+          fi
           python3 qualification/agent_embodiment/qwen_embody.py remove --root "$root"
           test ! -e "$root"
           echo 'PASS pinned native Qwen install + independent settings verify + fail-closed repeat + owned rollback'
