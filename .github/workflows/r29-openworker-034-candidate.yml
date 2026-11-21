@@ -1,0 +1,47 @@
+name: R29 OpenWorker 0.3.4 Source-Pinned Candidate Offline OCI Qualification
+on:
+  pull_request:
+    paths:
+      - 'qualification/harness_refresh/openworker_034.py'
+      - '.github/workflows/r29-openworker-034-candidate.yml'
+permissions:
+  contents: read
+jobs:
+  source-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m py_compile qualification/harness_refresh/openworker_034.py
+          python3 -m qualification.harness_refresh.openworker_034 self-test
+  build-native-source-and-offline-admit-locally:
+    needs: [source-critic]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.11'
+      - name: Build pinned 0.3.4 source, offline import/CLI, rootless OCI hydrate
+        run: |
+          set -Eeuo pipefail
+          python -m qualification.harness_refresh.openworker_034 build --output "$RUNNER_TEMP/openworker-034-candidate"
+          python -m qualification.harness_refresh.openworker_034 verify --output "$RUNNER_TEMP/openworker-034-candidate"
+          cp "$RUNNER_TEMP/openworker-034-candidate/payload/build-receipt.json" "$RUNNER_TEMP/openworker-034-build-receipt.json"
+          cp "$RUNNER_TEMP/openworker-034-candidate/layout-receipt.json" "$RUNNER_TEMP/openworker-034-oci-layout-receipt.json"
+      - name: Preserve public exact source + digest evidence, never publish candidate as admitted
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openworker-034-candidate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/openworker-034-build-receipt.json
+            ${{ runner.temp }}/openworker-034-oci-layout-receipt.json
+          retention-days: 14
+          if-no-files-found: ignore
