@@ -117,7 +117,11 @@ def query_result(query: dict, body: str, ms: int, fixture: dict) -> dict:
         "observed_ms": ms, "returned_bytes": len(body.encode("utf-8")),
         "returned_sha256": sha_bytes(body.encode("utf-8")),
         "source_ids_seen": found[:20],
+        "candidate_count": len(found),
         "expected_source_recalled": expected in found if expected else None,
+        "expected_source_top1": (found[0] == expected) if expected and found else (False if expected else None),
+        "no_evidence_non_abstention": bool(found) if expected is None else None,
+        "superseded_first": (found[0].endswith("R7_RELEASE") or found[0].endswith("R4_BLUE")) if found else False,
         "cross_project_source_seen": any(x.startswith("SYN_VEGA_") for x in found),
         "superseded_source_seen": any("R7_RELEASE" in x or "R4_BLUE" in x for x in found),
         "guard": guard,
@@ -194,14 +198,14 @@ def reme(fixture, tmp: Path) -> tuple[list[dict], dict]:
         settle_ms = 0
         for attempt in range(12):
             body, _ = http_json(port, "search", {"query":"Atlas admission signed release",
-                                                  "limit":8})
+                                                  "limit":3})
             if "SYN_ATLAS_DLE_R8_HOLD" in body:
                 break
             time.sleep(1)
             settle_ms += 1000
         output = []
         for q in fixture["questions"]:
-            body, ms = http_json(port, "search", {"query":q["query"],"limit":8})
+            body, ms = http_json(port, "search", {"query":q["query"],"limit":3})
             output.append(query_result(q, body, ms, fixture))
         return output, {"native_write_count":len(writes),
                         "native_write_ms_total":sum(writes),
@@ -295,6 +299,11 @@ def main():
             receipt.update(results=results,meta=meta,native_memory_retrieval_executed=True,
                            positives=len(positives),
                            recalled=sum(1 for r in positives if r["expected_source_recalled"]),
+                           expected_top1=sum(1 for r in positives if r["expected_source_top1"]),
+                           returned_bytes_total=sum(r["returned_bytes"] for r in results),
+                           stale_exposure_queries=sum(1 for r in results if r["superseded_source_seen"]),
+                           stale_top1_queries=sum(1 for r in results if r["superseded_first"]),
+                           negative_non_abstention=sum(1 for r in results if r["no_evidence_non_abstention"]),
                            cross_project_leak_queries=false_leaks,
                            status="PASS_NATIVE_ADAPTER" if not false_leaks else "FAIL_PROJECT_SCOPE")
     except Exception as exc:
