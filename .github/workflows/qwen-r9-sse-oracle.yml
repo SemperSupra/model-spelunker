@@ -1,0 +1,26 @@
+name: Qwen R9 SSE metadata oracle
+on:
+  push:
+    branches: [agent/issue-248-r9-stream-oracle]
+    paths:
+      - 'qualification/qwencode_stream_r9/**'
+      - '.github/workflows/qwen-r9-sse-oracle.yml'
+  pull_request:
+    paths:
+      - 'qualification/qwencode_stream_r9/**'
+      - '.github/workflows/qwen-r9-sse-oracle.yml'
+permissions:
+  contents: read
+jobs:
+  content-tool-reasoning:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 qualification/qwencode_stream_r9/stream_oracle.py --selftest positive
+  malformed-wire-mutants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 qualification/qwencode_stream_r9/stream_oracle.py --selftest negative
