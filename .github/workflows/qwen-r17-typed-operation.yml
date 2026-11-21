@@ -1,0 +1,47 @@
+name: Qwen R17 Typed Read-File Operation Qualification
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_context32_r10/**'
+      - '.github/workflows/qwen-r17-typed-operation.yml'
+permissions:
+  contents: read
+concurrency:
+  group: qwen-r17-typed-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  independent-negative-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fail closed on mismatched, unauthorized, missing or ambiguous tool results
+        run: |
+          python3 qualification/qwencode_context32_r10/typed_projection.py
+          python3 qualification/qwencode_context32_r10/final_oracle.py
+          python3 qualification/qwencode_context32_r10/causal_diagnostic.py
+          python3 qualification/qwencode_context32_r10/critic.py
+          bash -n qualification/qwencode_context32_r10/run_context32.sh
+  actual-native-typed-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    env:
+      QWEN_R17_MODE: typed
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pin and run actual Qwen/Ollama and independent typed tool projection
+        run: bash qualification/qwencode_context32_r10/run_context32.sh
+      - name: Preserve synthetic receipt even if task fails
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r17-typed-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-r10-context32/receipt.json
+            ${{ runner.temp }}/qwen-r10-context32/proxy-metadata.json
+          if-no-files-found: ignore
+          retention-days: 7
