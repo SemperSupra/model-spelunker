@@ -94,8 +94,10 @@ expected=(root/"task/fixture.txt").read_text().strip()
 state=json.loads((root/"mock-events.json").read_text())
 events=state["events"]
 phases=[x["phase"] for x in events]
-usage_requested=any(x.get("usage_requested") is True for x in events if x["phase"]=="protocol-request")
-usage_trailer=any(x.get("usage_trailer_emitted") is True for x in events)
+request_events=[x for x in events if x["phase"]=="protocol-request"]
+turn_events=[x for x in events if x["phase"] in ("read-file-call-sent","tool-result-seen")]
+usage_requested=len(request_events)==2 and all(x.get("usage_requested") is True for x in request_events)
+usage_trailer=len(turn_events)==2 and all(x.get("usage_trailer_emitted") is True for x in turn_events)
 
 result=(root/"cli-result.json").read_text(errors="replace")
 passed=int(os.environ["QWEN_USAGE_RC"])==0 and \
@@ -110,6 +112,8 @@ out={
   "native_qwen":"EXECUTED",
   "tool_call_requested":"read-file-call-sent" in phases,
   "tool_result_observed":"tool-result-seen" in phases,
+  "usage_requested_on_both_turns":usage_requested,
+  "usage_trailer_emitted_on_both_turns":usage_trailer,
   "hidden_fixture_oracle":"PASS" if expected in result else "FAIL",
   "qwen_exit":int(os.environ["QWEN_USAGE_RC"]),
   "actual_ollama_openrouter_sovereign":"NOT_TESTED",
