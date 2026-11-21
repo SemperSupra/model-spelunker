@@ -56,6 +56,19 @@ jobs:
           python qualification/qwencode_public/kit.py self-test
           if ($LASTEXITCODE -ne 0) { throw 'archive negative controls failed' }
 
+      - name: Classified model-role compiler and privacy negatives
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          node --version
+          node qualification/qwencode_public/compile-routes.mjs --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'model routing boundary test failed' }
+          node qualification/qwencode_public/compile-routes.mjs --manifest qualification/qwencode_public/routes.public.example.json > $env:RUNNER_TEMP/qwen-synthetic-settings.json
+          if ($LASTEXITCODE -ne 0) { throw 'model routing synthetic settings failed' }
+          $cfg=Get-Content $env:RUNNER_TEMP/qwen-synthetic-settings.json -Raw | ConvertFrom-Json
+          if($cfg.agents.modelGrades.planner -ne 'openai:public-model-not-real') { throw 'model grade not compiled' }
+          if($cfg.memory.enableTeamMemorySync -ne $false) { throw 'unsafe git memory sync' }
+
       - name: Download and SHA256 verify exact official standalone release
         shell: pwsh
         run: |
