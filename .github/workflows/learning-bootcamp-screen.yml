@@ -4,6 +4,9 @@ name: Memory vs Skill - Public Qwen Qualification Screen
 # not an evaluation of OpenCode auto-memory or autonomous model learning.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/learning-bootcamp-screen.yml'
 
 permissions:
   contents: read
@@ -16,7 +19,7 @@ concurrency:
 jobs:
   public-qwen-learning-screen:
     # Do not execute untrusted fork-supplied code in any runner with a token.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch'
     name: ${{ matrix.task }} / ${{ matrix.arm }}
     strategy:
       fail-fast: false
@@ -52,4 +55,21 @@ jobs:
       realization_digest: ''
       treatment_id: ${{ matrix.arm }}-${{ matrix.task }}
       tool_hint_mode: ${{ matrix.mode }}
+      output_diagnostic_mode: none
+
+  public-cold-start-control:
+    # Independent first real-model baseline for #206: deliberately ONE new
+    # synthetic task, not another 3x2 exploratory matrix. No fork credentials.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'exp/206-public-cold-start-openworker-control-20261121'
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83
+      admission_ref: github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json
+      task: dle-cold-start-recovery-v0
+      reasoning_effort: none
+      python_version: ''
+      realization_profile_ref: ''
+      realization_digest: ''
+      treatment_id: cold-start-dle-only-control
+      tool_hint_mode: none
       output_diagnostic_mode: none
