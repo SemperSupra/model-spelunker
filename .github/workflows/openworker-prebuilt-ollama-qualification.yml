@@ -25,6 +25,10 @@ on:
         description: Optional exact Python version matching the admitted artifact ABI
         required: false
         default: ''
+      max_iterations:
+        description: Bound model/tool execution rounds (1-12; default 4)
+        required: false
+        default: '4'
       treatment_id:
         description: Short actor treatment label used in receipt artifact identity
         required: false
@@ -69,6 +73,10 @@ on:
         required: false
         type: string
         default: ''
+      max_iterations:
+        required: false
+        type: string
+        default: '4'
       treatment_id:
         required: false
         type: string
@@ -124,6 +132,7 @@ jobs:
       MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
       MODEL_SPELUNKER_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       MODEL_SPELUNKER_TOOL_HINT_MODE: ${{ inputs.tool_hint_mode }}
+      MODEL_SPELUNKER_MAX_ITERATIONS: ${{ inputs.max_iterations }}
       MODEL_SPELUNKER_OUTPUT_DIAGNOSTIC_MODE: ${{ inputs.output_diagnostic_mode }}
       BOUNDARY_SNAPSHOT: '/tmp/model-spelunker-boundary-snapshot'
       BOUNDARY_REPORT: '/tmp/model-spelunker-boundary-diagnostic.json'
@@ -145,6 +154,19 @@ jobs:
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: ${{ inputs.python_version }}
+
+      - name: Bound and validate iteration budget before model hydration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          value=os.environ["MODEL_SPELUNKER_MAX_ITERATIONS"]
+          assert re.fullmatch(r"[0-9]{1,2}",value), "noncanonical iteration budget"
+          rounds=int(value)
+          assert 1 <= rounds <= 12, "iteration budget exceeds admitted public bound"
+          print("ITERATION_BUDGET_ADMITTED="+str(rounds))
+          PY
 
       - name: Hydrate admitted OpenWorker artifact
         shell: bash
@@ -256,7 +278,7 @@ jobs:
                   "parallel_tool_calls":False,
                   "max_tokens":2048,
                   "reasoning_effort":os.environ["MODEL_SPELUNKER_REASONING_EFFORT"],
-                  "max_iterations":4,
+                  "max_iterations":int(os.environ["MODEL_SPELUNKER_MAX_ITERATIONS"]),
                   "ollama_context_length":int(os.environ["OLLAMA_CONTEXT_LENGTH"]),
                   "harness_delivery":"prebuilt-admitted-artifact",
                   "tool_hint_mode":os.environ["MODEL_SPELUNKER_TOOL_HINT_MODE"],
@@ -297,6 +319,7 @@ jobs:
           set +e
           python qualification/run_task.py \
             --pass-env MODEL_SPELUNKER_TOOL_HINT_MODE \
+            --pass-env MODEL_SPELUNKER_MAX_ITERATIONS \
             --pass-env MODEL_SPELUNKER_REASONING_EFFORT \
             --pass-env MODEL_SPELUNKER_MODEL \
             --task-commit "$GITHUB_SHA" \
