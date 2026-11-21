@@ -22,7 +22,7 @@ EXPECTED={
 PASS={"tool_lineage_class":"PASS","final_answer_class":"EXACT_FINAL",
       "independent_hidden_oracle":"PASS","post_run_profile_integrity":"PASS",
       "verdict":"PASS"}
-ALLOWED_FINAL={"EXACT_FINAL","EXPECTED_WITH_EXTRA","WRONG_FINAL","MISSING_FINAL","INVALID_JSON","INVALID_RESULT"}
+ALLOWED_FINAL={"EXACT_FINAL","EXPECTED_WITH_EXTRA","WRONG_FINAL","INVALID_OR_MISSING_RESULT","DECOY_IN_FINAL","EMPTY_FINAL"}
 def classify(data: dict, script_exit: int, trial: int, source: str) -> dict:
     if not isinstance(data,dict):raise ValueError("no classification object")
     if not isinstance(trial,int) or trial<1 or trial>16:raise ValueError("invalid trial index")
@@ -37,7 +37,12 @@ def classify(data: dict, script_exit: int, trial: int, source: str) -> dict:
     drift=data.get("post_run_settings_drift")
     if not isinstance(drift,dict) or drift.get("class")!="UNCHANGED" or drift.get("byte_identical") is not True:
         raise ValueError("missing post-run settings invariant")
-    model_success=all(data.get(k)==v for k,v in PASS.items())
+    semantic_success=(data.get("tool_lineage_class")=="PASS" and
+                      data.get("final_answer_class")=="EXACT_FINAL" and
+                      data.get("independent_hidden_oracle")=="PASS")
+    if data.get("verdict")!=("PASS" if semantic_success else "FAIL"):
+        raise ValueError("receipt verdict contradicts independent semantic evidence")
+    model_success=semantic_success
     if model_success and script_exit!=0:
         raise ValueError("script failed despite task PASS")
     if not model_success and script_exit!=1:
@@ -46,10 +51,11 @@ def classify(data: dict, script_exit: int, trial: int, source: str) -> dict:
         raise ValueError("unrecognized final-answer classification")
     if data.get("independent_hidden_oracle") not in ("PASS","FAIL"):
         raise ValueError("unrecognized hidden oracle outcome")
-    if data.get("tool_lineage_class") not in ("PASS","WRONG_TOOL_COUNT",
-               "WRONG_TOOL_ORDER","WRONG_TOOL_PATH","BAD_RESULT",
-               "UNMATCHED_TOOL_ID","INVALID_JSON","MISSING_RESULT",
-               "EXTRA_TOOL","INVALID_FRAME"):
+    if data.get("tool_lineage_class") not in ("PASS","INVALID_TARGET","INVALID_JSON",
+               "INVALID_FRAME","UNEXPECTED_TOOL","INVALID_ARGS","OUT_OF_SCOPE",
+               "MISSING_TOOL_ID","INVALID_RESULT_ID","TOOL_RESULT_ERROR",
+               "WRONG_TOOL_COUNT","REUSED_TOOL_ID","WRONG_READ_SEQUENCE",
+               "MISSING_OR_MISORDERED_TOOL_RESULT"):
         # Report novel classifications as infrastructure/evaluation drift, not a task failure.
         raise ValueError("unrecognized tool-lineage class")
     return {
