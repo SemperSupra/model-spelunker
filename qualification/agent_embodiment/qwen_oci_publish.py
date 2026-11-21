@@ -146,6 +146,96 @@ def publish(out: Path,env: dict) -> dict:
         "registry_image":image
     }
 
+DLE_ISSUE=147
+DLE_REPO="SemperSupra/model-spelunker"
+DLE_MARKER="qwen-ghcr-foundry-admission:v1:"
+REQUIRED_REMOTE_CHECKS=frozenset((
+    "remote-manifest-digest","remote-build-receipt-exact-bytes",
+    "remote-payload-file-hashes","official-release-digest",
+    "native-cli-version"
+))
+
+def dle_record(receipt: dict,env: dict) -> dict:
+    head=admission_context(env)
+    digest=receipt.get("manifest_digest","")
+    if not re.fullmatch(r"sha256:[a-f0-9]{64}",digest):
+        raise ValueError("no trustworthy remote digest")
+    required={
+        "schema":"qwen-ghcr-publish-admission/v1","state":"BUILD_ADMITTED",
+        "publication":"GHCR_DIGEST_CONFIRMED",
+        "source_commit":head,
+        "immutable_ref":IMAGE+"@"+digest,
+        "registry_image":IMAGE,
+        "source_classification":"PUBLIC_SYNTHETIC",
+        "actor_task_qualification":"NOT_PERFORMED",
+        "workcell_admission":"NOT_GRANTED",
+        "model_inference":"NOT_PERFORMED"
+    }
+    if any(receipt.get(k)!=v for k,v in required.items()):
+        raise ValueError("non-admitted receipt state or source identity")
+    if (not isinstance(receipt.get("independent_checks"),list)
+        or frozenset(receipt["independent_checks"])!=REQUIRED_REMOTE_CHECKS
+        or len(receipt["independent_checks"])!=len(REQUIRED_REMOTE_CHECKS)):
+        raise ValueError("missing or unexpected independent remote checks")
+    if receipt.get("payload_files")!=5:
+        raise ValueError("unknown Qwen carrier file count")
+    return {
+        "schema":"model-spelunker-ghcr-dle/v1",
+        "governing_issue":DLE_REPO+"#"+str(DLE_ISSUE),
+        "source_commit":head,
+        "harness":"qwen-code","platform":"linux-amd64",
+        "registry_image":IMAGE,"immutable_ref":IMAGE+"@"+digest,
+        "manifest_digest":digest,
+        "build_state":"BUILD_ADMITTED",
+        "independent_checks":sorted(REQUIRED_REMOTE_CHECKS),
+        "payload_files":5,
+        "model_inference":"NOT_PERFORMED",
+        "actor_task_qualification":"NOT_PERFORMED",
+        "production_admission":"NOT_GRANTED",
+        "evidence_source":"GHCR_MAIN_ONLY_DIGEST_REFETCH"
+    }
+
+def dle_body(record: dict) -> str:
+    marker="<!-- "+DLE_MARKER+record["manifest_digest"].split(":")[1]+" -->"
+    return (marker+"\n### Qwen Code GHCR realization: BUILD_ADMITTED\n\n"
+        "Main-only rootless publisher independently re-fetched the immutable digest, "
+        "checked OCI manifest and original payload hashes, then smoked pinned native Qwen CLI. "
+        "This is artifact acceptance, NOT model-task or production workcell admission.\n\n"
+        +json.dumps(record,sort_keys=True,indent=2)+"\n")
+
+def gh_api_json(args: list[str]):
+    result=subprocess.run(["gh","api",*args],capture_output=True,text=True,check=False)
+    if result.returncode:
+        raise RuntimeError("GitHub DLE receipt transport unavailable")
+    try:
+        return json.loads(result.stdout)
+    except ValueError as err:
+        raise ValueError("malformed DLE API response") from err
+
+def sync_dle(receipt: dict,env: dict) -> dict:
+    record=dle_record(receipt,env)
+    body=dle_body(record)
+    resource="repos/"+DLE_REPO+"/issues/"+str(DLE_ISSUE)+"/comments"
+    pages=gh_api_json(["--paginate","--slurp",resource+"?per_page=100"])
+    if not isinstance(pages,list):
+        raise ValueError("unexpected GitHub issue comment pagination")
+    rows=[row for page in pages
+          for row in (page if isinstance(page,list) else [page])]
+    marker=body.splitlines()[0]
+    previous=[row for row in rows
+              if isinstance(row,dict) and marker in str(row.get("body",""))]
+    if previous:
+        if any(row.get("body")!=body for row in previous):
+            raise ValueError("DLE immutable digest key has conflicting receipt")
+        return {"state":"ALREADY_RECORDED",
+                "comment_url":previous[0].get("html_url"),
+                "manifest_digest":record["manifest_digest"]}
+    posted=gh_api_json(["--method","POST",resource,"-f","body="+body])
+    if not isinstance(posted,dict) or posted.get("body")!=body or not posted.get("html_url"):
+        raise ValueError("DLE write acknowledgement is invalid")
+    return {"state":"RECORDED","comment_url":posted["html_url"],
+            "manifest_digest":record["manifest_digest"]}
+
 def selftest():
     s="a"*40
     digest="sha256:"+"f"*64
@@ -220,11 +310,17 @@ def selftest():
 
 def main():
     p=argparse.ArgumentParser()
-    p.add_argument("action",choices=("self-test","publish"))
+    p.add_argument("action",choices=("self-test","publish","sync-dle"))
+    p.add_argument("--receipt",type=Path)
     p.add_argument("--output",type=Path)
     args=p.parse_args()
     if args.action=="self-test":
         selftest();return
+    if args.action=="sync-dle":
+        if not args.receipt:p.error("--receipt required for sync-dle")
+        record=json.loads(args.receipt.read_text(encoding="utf-8"))
+        print(json.dumps(sync_dle(record,dict(os.environ)),sort_keys=True))
+        return
     if not args.output:p.error("--output required for publish")
     out=args.output.resolve()
     # Do not write stdout containing raw registry credentials or errors.
