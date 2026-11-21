@@ -1,0 +1,22 @@
+name: Qwen R21 GHCR Publish Source-only Negative Review
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/qwen_oci_publish.py'
+      - '.github/workflows/qwen-r21-ghcr-publish.yml'
+      - '.github/workflows/qwen-r21-ghcr-critic.yml'
+permissions:
+  contents: read
+jobs:
+  offline-public-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Regress protected publisher admission and manifest negatives
+        run: |
+          python3 -m qualification.agent_embodiment.qwen_oci_publish self-test
+          python3 -m qualification.agent_embodiment.qwen_oci self-test
+          python3 -m py_compile qualification/agent_embodiment/qwen_oci_publish.py
