@@ -212,7 +212,7 @@
         "private_actions_minutes": 0
       },
       "evidence": {
-        "source_sha": "285c6a4094c0517a9e0204461a0bd56bf573d9617",
+        "source_sha": "285c6a4094c0517a9e0204461a0bd56bf573d961",
         "independent_oracle": "FAIL",
         "run_url": "https://github.com/SemperSupra/model-spelunker/actions/runs/44876312124",
         "receipt_artifact_id": 14695943272,
