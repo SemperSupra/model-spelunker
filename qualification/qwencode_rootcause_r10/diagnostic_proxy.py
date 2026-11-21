@@ -16,14 +16,14 @@ import urllib.error
 
 
 def normalize_request(obj,mode):
-    if mode not in ("baseline","compact_system","compact_tools","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget"):
+    if mode not in ("baseline","compact_system","compact_tools","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget","force_256_full","force_256_compact"):
         raise ValueError("unsupported normalization mode")
-    if mode in ("compact_system","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget"):
+    if mode in ("compact_system","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget","force_256_compact"):
         compact={"role":"system","content":"Read fixture.txt using read_file. Return the exact file text. Do not guess."}
         obj["messages"]=[compact]+[m for m in obj.get("messages",[]) if m.get("role") not in ("system","developer")]
-    if mode in ("compact_tools","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget"):
+    if mode in ("compact_tools","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget","force_256_compact"):
         obj["tools"]=[t for t in obj.get("tools",[]) if t.get("type")=="function" and t.get("function",{}).get("name")=="read_file"]
-    if mode in ("compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget"):
+    if mode in ("compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget","force_256_compact"):
         if len(obj.get("tools",[]))!=1 or obj["tools"][0]["function"]["name"]!="read_file":
             raise ValueError("required read_file tool missing")
         obj["tools"][0]["function"]["description"]="Read one local file"
@@ -32,10 +32,12 @@ def normalize_request(obj,mode):
             "properties":{"file_path":{"type":"string","description":"file path"}},
             "required":["file_path"]
         }
-    if mode in ("compact_all_prompt","compact_all_prompt_budget"):
+    if mode in ("compact_all_prompt","compact_all_prompt_budget","force_256_compact"):
         for message in obj.get("messages",[]):
-            if message.get("role")=="user" and isinstance(message.get("content"),str):
+            if message.get("role")=="user":
                 message["content"]="Call read_file using file_path fixture.txt, then return its exact contents."
+    if mode in ("force_256_full","force_256_compact"):
+        obj["max_tokens"]=256
     return obj
 
 
@@ -95,6 +97,7 @@ class Handler(BaseHTTPRequestHandler):
             self.as_json(400,{"error":"bad JSON"})
             return
         original_bytes=len(payload)
+        original_budget=obj.get("max_tokens")
         mode=self.server.mode
         obj=normalize_request(obj,mode)
         if mode!="baseline":
@@ -109,6 +112,7 @@ class Handler(BaseHTTPRequestHandler):
             "request_keys":sorted(obj.keys()),
             "message_role_lengths":[{"role":m.get("role"),"json_chars":len(json.dumps(m.get("content","")))} for m in messages],
             "requested_output_budget":obj.get("max_tokens"),
+            "original_output_budget":original_budget,
             "messages_count":len(messages),
             "system_content_chars":sum(len(json.dumps(m.get("content","")))
                 for m in messages if m.get("role") in ("system","developer")),
@@ -185,7 +189,7 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--port-file",required=True)
     p.add_argument("--state",required=True)
-    p.add_argument("--mode",choices=("baseline","compact_system","compact_tools","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget"),required=True)
+    p.add_argument("--mode",choices=("baseline","compact_system","compact_tools","compact_both","compact_schema","compact_schema_budget","compact_all_prompt","compact_all_prompt_budget","force_256_full","force_256_compact"),required=True)
     options=p.parse_args()
     server=Proxy(("127.0.0.1",0),options.state)
     server.mode=options.mode
