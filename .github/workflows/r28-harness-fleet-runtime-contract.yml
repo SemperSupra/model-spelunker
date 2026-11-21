@@ -1,0 +1,21 @@
+name: R28 Agent Fleet Runtime and Authority Configuration Contract
+on:
+  pull_request:
+    paths:
+      - 'qualification/harness_refresh/runtime_targets.json'
+      - 'qualification/harness_refresh/validate_runtime_targets.py'
+      - '.github/workflows/r28-harness-fleet-runtime-contract.yml'
+permissions:
+  contents: read
+jobs:
+  source-only-config-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Enforce platform, model gateway, least authority and negative controls
+        run: |
+          python3 -m py_compile qualification/harness_refresh/validate_runtime_targets.py
+          python3 qualification/harness_refresh/validate_runtime_targets.py

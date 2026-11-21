@@ -1,0 +1,190 @@
+{
+  "schema": "agent-fleet-runtime-targets/v1",
+  "status": "DESIGN_CONTRACT_NOT_DEPLOYED",
+  "authority": {
+    "lease_source": "Agent Dispatch external authenticated workcell controller",
+    "self_authorization": false,
+    "production_admitted": false,
+    "workspace_mutation": "explicit_task_scope_only",
+    "network_egress": "deny_except_admitted_model_route",
+    "secret_source": "scoped_runtime_injection_not_git",
+    "max_delegation_depth": 0
+  },
+  "common": {
+    "source": "exact_pinned_upstream_commit_plus_release_digest",
+    "artifact": "immutable_oci_digest",
+    "verification": "independent_task_oracle",
+    "cleanup": "owner_bound_idempotent",
+    "dle": "source_commit_and_run_and_realization",
+    "memory_default": "disabled",
+    "mcp_default": "disabled",
+    "global_approval_bypass": false,
+    "auto_model_upgrade": false
+  },
+  "routes": [
+    {
+      "id": "ollama-openai-loopback",
+      "type": "openai-compatible",
+      "url": "http://127.0.0.1:11434/v1",
+      "credential_env": "OLLAMA_API_KEY",
+      "admission": "LOOPBACK_ISOLATED_WORKCELL_ONLY",
+      "model_bindings": "runtime_observed_and_immutable",
+      "not_claimed": "remote_node"
+    },
+    {
+      "id": "llama-server-openai-loopback",
+      "type": "openai-compatible",
+      "url": "http://127.0.0.1:8080/v1",
+      "credential_env": "LOCAL_MODEL_API_KEY",
+      "admission": "LOOPBACK_ISOLATED_WORKCELL_ONLY",
+      "model_bindings": "runtime_observed_and_immutable",
+      "not_claimed": "remote_node"
+    },
+    {
+      "id": "governed-proxy",
+      "type": "openai-compatible",
+      "url": null,
+      "url_env": "ADMITTED_MODEL_BASE_URL",
+      "credential_env": "ADMITTED_MODEL_API_KEY",
+      "admission": "EXTERNAL_SIGNED_SCOPE_REQUIRED",
+      "model_bindings": "runtime_observed_and_immutable",
+      "not_claimed": "any_actual_host"
+    }
+  ],
+  "targets": [
+    {
+      "id": "public-linux-amd64",
+      "os": "linux",
+      "arch": "amd64",
+      "environment": "public-free-ci",
+      "runtime": "disposable",
+      "controller": "GHA_SYNTHETIC_ONLY",
+      "allowed_routes": [
+        "ollama-openai-loopback"
+      ],
+      "model_inference": "requires_explicit_test"
+    },
+    {
+      "id": "public-windows-amd64",
+      "os": "windows",
+      "arch": "amd64",
+      "environment": "public-free-ci",
+      "runtime": "powershell-5.1",
+      "controller": "GHA_SYNTHETIC_ONLY",
+      "allowed_routes": [
+        "ollama-openai-loopback"
+      ],
+      "model_inference": "requires_explicit_test"
+    },
+    {
+      "id": "sovereign-linux-amd64",
+      "os": "linux",
+      "arch": "amd64",
+      "environment": "sovereign",
+      "runtime": "user-level-runtime",
+      "controller": "EXTERNAL_CONTROLLER_ADMISSION_REQUIRED",
+      "allowed_routes": [
+        "ollama-openai-loopback",
+        "llama-server-openai-loopback",
+        "governed-proxy"
+      ],
+      "model_inference": "not_observed_in_this_contract"
+    },
+    {
+      "id": "sovereign-macos-arm64",
+      "os": "macos",
+      "arch": "arm64",
+      "environment": "sovereign",
+      "runtime": "user-local-darwin",
+      "controller": "EXTERNAL_CONTROLLER_ADMISSION_REQUIRED",
+      "allowed_routes": [
+        "llama-server-openai-loopback",
+        "governed-proxy"
+      ],
+      "model_inference": "not_observed_in_this_contract"
+    },
+    {
+      "id": "windows-hyperv-guest-amd64",
+      "os": "windows",
+      "arch": "amd64",
+      "environment": "sovereign",
+      "runtime": "powershell-5.1-disposable-guest",
+      "controller": "EXTERNAL_CONTROLLER_ADMISSION_REQUIRED",
+      "allowed_routes": [
+        "governed-proxy"
+      ],
+      "model_inference": "not_observed_in_this_contract"
+    }
+  ],
+  "harnesses": [
+    {
+      "id": "qwen-code",
+      "prior_version": "0.28.3",
+      "refresh_version": "PENDING_UPSTREAM_SOURCE_CENSUS",
+      "default_model": "qwen3:1.7b",
+      "default_context": 32768,
+      "default_output_tokens": 256,
+      "max_tool_rounds": 4,
+      "tools": [
+        "read_file"
+      ],
+      "write_requires": "separate_permission",
+      "provider_config": "qwen_embody_profile",
+      "config_status": "SOURCE_BASELINE_ONLY"
+    },
+    {
+      "id": "goose",
+      "prior_version": "1.55.0",
+      "refresh_version": "PENDING_UPSTREAM_SOURCE_CENSUS",
+      "default_model": "qwen3:1.7b",
+      "default_context": 32768,
+      "default_output_tokens": 256,
+      "max_tool_rounds": 4,
+      "max_tool_repetitions": 2,
+      "tools": [
+        "developer"
+      ],
+      "write_requires": "separate_permission",
+      "provider_config": "goose_actor_json",
+      "config_status": "SOURCE_BASELINE_ONLY"
+    },
+    {
+      "id": "codex-exec",
+      "prior_version": "0.154.0",
+      "refresh_version": "PENDING_UPSTREAM_SOURCE_CENSUS",
+      "default_model": "qwen3:1.7b",
+      "default_context": 32768,
+      "default_output_tokens": 256,
+      "max_tool_rounds": 4,
+      "tools": [
+        "filesystem",
+        "shell"
+      ],
+      "write_requires": "task_scoped_workcell_with_explicit_admission",
+      "provider_config": "codex_actor_json",
+      "config_status": "SOURCE_BASELINE_ONLY"
+    },
+    {
+      "id": "openworker",
+      "prior_version": "commit:5bc10d928e0b64aae74313349a3b17bd19643ae2",
+      "refresh_version": "PENDING_UPSTREAM_SOURCE_CENSUS",
+      "default_model": "qwen3:1.7b",
+      "default_context": 32768,
+      "default_output_tokens": 256,
+      "max_tool_rounds": 4,
+      "tools": [
+        "read_file",
+        "write_file"
+      ],
+      "write_requires": "separate_permission",
+      "provider_config": "openworker_actor_json",
+      "config_status": "SOURCE_BASELINE_ONLY"
+    }
+  ],
+  "limitations": [
+    "A generic route profile does not prove an individual harness accepts that endpoint setting; native adapter must be source-reviewed and tested.",
+    "Real model identifiers, tool schemas, available RAM/GPU/context and permission envelopes must be observed in admitted workcell, not guessed.",
+    "One baseline small-model task result must not promote coding agents for unrelated missions.",
+    "MCP tools and memory integrations are deferred pending source and authority review."
+  ]
+}
