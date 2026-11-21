@@ -213,7 +213,7 @@ jobs:
         run: PYTHONPATH=. python -m unittest qualification.test_learning_treatment -v
 
       - name: Self-test Edge0 synthetic memory-context contract (source only)
-        if: github.event_name == 'pull_request' && github.head_ref == 'exp/206-edge0-memory-context-feasibility'
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 214 && github.event.pull_request.head.repo.full_name == github.repository
         run: |
           python3 qualification/edge0_memory_context.py --self-test
           python3 qualification/edge0_memory_context.py --out "$RUNNER_TEMP/edge0-source-only.json" --levels 0,512,2048
