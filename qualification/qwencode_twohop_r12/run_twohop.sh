@@ -119,7 +119,7 @@ export QWEN_LEAN_RC="$rc"
 python3 - <<'PY'
 import json,os,pathlib,sys
 sys.path.insert(0,str(pathlib.Path.cwd()/"qualification/qwencode_twohop_r12"))
-from final_oracle import verify_selected
+from final_oracle import verify_selected,classify_final
 p=pathlib.Path(os.environ["RUNNER_TEMP"],"qwen-r12-twohop")
 target=(p/"task/index.txt").read_text().strip().split("=",1)[1]
 assert target in ("a.txt","b.txt")
@@ -144,6 +144,7 @@ receipt={
  "qwen_exit":int(os.environ["QWEN_LEAN_RC"]),
  "hidden_fixture_oracle":"PASS" if verify_selected(stdout,expected,decoy) else "FAIL",
  "final_answer_source":"QWEN_CLI_JSON_RESULT_FRAME_ONLY",
+ "final_answer_class":classify_final(stdout,expected,decoy),
  "two_hop_tool_delta_min":sum(v.get("sse_tool_delta_events",0) for v in completed),
  "request_seen":bool(completed),
  "request_count":len(completed),
