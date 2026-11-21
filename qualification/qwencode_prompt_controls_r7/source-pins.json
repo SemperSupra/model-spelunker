@@ -14,6 +14,7 @@
     "identity_only": "QWEN_SYSTEM_IDENTITY_MD changes leading identity, not full default prompt",
     "core_allowlist": "tools.core/--core-tools allows only enumerated registered tools; settings and runtime behavior must be confirmed",
     "eager_not_allowlist": "tools.eager defers schemas but does not itself deny tool registration",
-    "model_override": "only in owned public temporary files; private role/host effect still requires separate Agent Dispatch authority"
+    "model_override": "only in owned public temporary files; private role/host effect still requires separate Agent Dispatch authority",
+    "tool_search_disabled": "tools.toolSearch.enabled=false explicitly denies tool_search and tool_call, leaving direct read_file allowlisted; source-verified, runtime effect must be independently observed"
   }
 }
