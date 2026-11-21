@@ -1,0 +1,83 @@
+name: Qwen Code Public Nested Hyper-V H0 Placement
+
+# Reuse existing ACCEPTED Agent Dispatch Hyper-V lifecycle fixture,
+# never duplicate a VM controller. Public runner; no guest media/network/disk.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwencode-public-hyperv-h0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-hyperv-h0-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-h0:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2025
+    timeout-minutes: 12
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout only public source without persist credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout exactly admitted public Agent Dispatch H0 implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: SemperSupra/agent-dispatch
+          ref: e82b65bcf1513e58e79331b70f4d043941466082
+          path: .public-agent-dispatch-h0
+          persist-credentials: false
+      - name: B0 capability preflight and H0 lifecycle, independent cleanup oracle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parent = Join-Path $env:RUNNER_TEMP 'qwen-hyperv-h0'
+          New-Item -ItemType Directory -Path $parent -Force | Out-Null
+          $receipt = Join-Path $parent 'receipt.json'
+          $evidence = Join-Path $parent 'hyperv-lifecycle.json'
+          $proto = [ordered]@{
+            schema = 'github-runner-capability/v1'
+            capabilities = @()
+            warnings = @()
+            runner = [ordered]@{
+              requested_label = 'windows-2025'
+              execution_model = 'native-host'
+              image_os = $env:ImageOS
+              image_version = $env:ImageVersion
+              authority = 'SemperSupra/model-spelunker#220'
+              source_parent = 'SemperSupra/agent-dispatch@e82b65bcf1513e58e79331b70f4d043941466082'
+            }
+          }
+          [IO.File]::WriteAllText($receipt, ($proto | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding($false)))
+          $script = '.public-agent-dispatch-h0/scripts/windows_hyperv_lifecycle_probe.ps1'
+          if(-not (Test-Path -LiteralPath $script)) { throw 'PINNED_H0_SOURCE_MISSING' }
+          & $script -ReceiptPath $receipt -EvidencePath $evidence
+          if($LASTEXITCODE -ne 0) { throw 'H0_REUSE_PROBE_FAILED' }
+          $row = Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json
+          $cap = @($row.capabilities | Where-Object { $_.name -eq 'windows:hyper-v-vm-lifecycle' })
+          if($cap.Count -ne 1) { throw 'H0_CAPABILITY_MISSING_OR_DUPLICATE' }
+          $ok = $cap[0].classification -eq 'SUPPORTED' -and
+                $cap[0].oracleSatisfied -eq $true -and
+                $cap[0].evidence.cleanup.satisfied -eq $true -and
+                $cap[0].evidence.cleanup.vm_absent -eq $true -and
+                $cap[0].evidence.cleanup.run_directory_absent -eq $true
+          if(-not $ok) { throw ('H0_NOT_QUALIFIED:' + $cap[0].classification) }
+          Write-Host 'QWEN_H0=SUPPORTED'
+          Write-Host 'QWEN_H0_CLEANUP=PASS'
+          Write-Host 'QWEN_H1_GUEST_BOOT=NOT_TESTED'
+          Write-Host 'QWEN_LOCAL_SOVEREIGN_ENDPOINTS=NOT_TESTED'
+      - name: Preserve sanitized H0 receipt and staged evidence even on failure
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: qwen-public-windows-hyperv-h0-${{ github.run_id }}
+          path: ${{ runner.temp }}/qwen-hyperv-h0/*.json
+          if-no-files-found: ignore
+          retention-days: 14
