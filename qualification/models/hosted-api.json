@@ -119,6 +119,33 @@
       "reasoning_effort": "low",
       "cost_class": "zero-token-price",
       "route_note": "NVIDIA Nemotron 3 Nano Omni 30B reasoning model via OpenRouter zero-token free tier."
+    },
+    "openrouter-particle-1-free": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "particle-ai/particle-1:free",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "zero-token-price",
+      "route_note": "Exact free coding-efficiency model; must independently pass public key/model/zero-price/tools admission."
+    },
+    "openrouter-recursive-flint-free": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "recursive/flint-v1.0:free",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "zero-token-price",
+      "route_note": "Exact free agentic coding model; mutable hosted provider, perform task oracle separately."
+    },
+    "openrouter-google-gemma4-26b-a4b-free": {
+      "treatment_kind": "model",
+      "provider": "openrouter",
+      "model": "google/gemma-4-26b-a4b-it:free",
+      "api_base": "https://openrouter.ai/api/v1",
+      "reasoning_effort": "omit",
+      "cost_class": "zero-token-price",
+      "route_note": "Exact free distinct-family control; no image/audio inputs in first task; zero-price/tools preflight required."
     }
   }
 }
