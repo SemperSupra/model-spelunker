@@ -1,0 +1,81 @@
+{
+  "schema": "agent-three-audience-observation/v1",
+  "harness": "qwen-code",
+  "source": {
+    "commit": "99fcf89892f1a3a8027c75468546c7e7be906245",
+    "version": "0.28.3",
+    "legacy_retained": true
+  },
+  "target": "linux-arm64",
+  "audiences": {
+    "human": [
+      {
+        "interface": "terminal",
+        "status": "UNVERIFIED",
+        "origin": "upstream",
+        "source_ref": null,
+        "receipt_sha256": null
+      },
+      {
+        "interface": "touch",
+        "status": "UNVERIFIED",
+        "origin": "adapter",
+        "source_ref": null,
+        "receipt_sha256": null
+      },
+      {
+        "interface": "voice",
+        "status": "UNVERIFIED",
+        "origin": "adapter",
+        "source_ref": null,
+        "receipt_sha256": null
+      },
+      {
+        "interface": "photo",
+        "status": "UNVERIFIED",
+        "origin": "adapter",
+        "source_ref": null,
+        "receipt_sha256": null
+      }
+    ],
+    "automation": [
+      {
+        "interface": "cli",
+        "status": "UNVERIFIED",
+        "origin": "upstream",
+        "source_ref": null,
+        "receipt_sha256": null
+      },
+      {
+        "interface": "structured-output",
+        "status": "UNVERIFIED",
+        "origin": "upstream",
+        "source_ref": null,
+        "receipt_sha256": null
+      }
+    ],
+    "agent": [
+      {
+        "interface": "mcp-server",
+        "status": "UNVERIFIED",
+        "origin": "none",
+        "source_ref": null,
+        "receipt_sha256": null
+      },
+      {
+        "interface": "typed-api",
+        "status": "UNVERIFIED",
+        "origin": "adapter",
+        "source_ref": null,
+        "receipt_sha256": null
+      }
+    ]
+  },
+  "gates": {
+    "source_checked": false,
+    "execution_verified": false,
+    "task_oracle_passed": false,
+    "physical_target_verified": false,
+    "production_admitted": false
+  }
+}
