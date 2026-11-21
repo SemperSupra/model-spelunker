@@ -1,0 +1,60 @@
+{
+  "schema": "qwen-independent-batches/v1",
+  "dispatcher": "AGENT_DISPATCH_ONLY",
+  "max_parallel": 2,
+  "public_host_effects": false,
+  "tasks": [
+    {
+      "id": "B09-SYNTHETIC-ONE",
+      "classification": "SYNTHETIC",
+      "role": "developer",
+      "mission": "Check one synthetic, read-only fixture in a disposable public runner without private data.",
+      "oracle": "Independent exact source hash and synthetic fixture outcome observed without host changes.",
+      "scope": [
+        "qualification/synthetic_fixture_one/"
+      ],
+      "state": "READY",
+      "runtime": "public-gha",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "dle": "https://github.com/SemperSupra/model-spelunker/issues/238",
+      "failure": "Stop on any unknown effect or mismatch; publish bounded FAIL and source hash, no retry.",
+      "depends_on": [],
+      "resource_class": "light",
+      "budget": {
+        "wall_minutes": 8,
+        "tool_calls": 4,
+        "context_tokens": 768,
+        "output_tokens": 400,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    },
+    {
+      "id": "B10-SOURCE-TWO",
+      "classification": "PUBLIC_SOURCE",
+      "role": "critic",
+      "mission": "Independently validate a second public source fixture with no shell, secrets, or private data.",
+      "oracle": "Independent public source AST shape and negative test must pass with exact known SHA.",
+      "scope": [
+        "qualification/synthetic_fixture_two/"
+      ],
+      "state": "READY",
+      "runtime": "public-gha",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "dle": "https://github.com/SemperSupra/model-spelunker/issues/238",
+      "failure": "Stop on any unknown effect or mismatch; publish bounded FAIL and source hash, no retry.",
+      "depends_on": [],
+      "resource_class": "light",
+      "budget": {
+        "wall_minutes": 8,
+        "tool_calls": 4,
+        "context_tokens": 768,
+        "output_tokens": 400,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    }
+  ]
+}
