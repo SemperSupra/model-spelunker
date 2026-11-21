@@ -30,6 +30,7 @@ REQUIRED={
     "systemPrompt: argv.systemPrompt",
     "appendSystemPrompt: argv.appendSystemPrompt",
     "argv.coreTools || settings.tools?.core",
+    "settings.tools?.toolSearch?.enabled === false",
     "settings.tools?.eager",
     "tools.core",
     "coreToolsAllowList",
@@ -44,7 +45,8 @@ RUNNER_REQUIRED=(
     "export QWEN_SYSTEM_MD=",
     "export QWEN_WRITE_SYSTEM_MD=0",
     "--core-tools read_file",
-    '"tools":{"core":["read_file"],"eager":["read_file"]}',
+    '"tools":{"core":["read_file"],"eager":["read_file"],"toolSearch":{"enabled":False}}',
+    "--approval-mode default",
     "proxy-metadata.json",
     "sse_tool_delta_events",
     "hidden_fixture_oracle",
@@ -91,6 +93,7 @@ def source_check(pins,files,runner):
         "identity_override":"IDENTITY_ONLY_NOT_FULL_PROMPT",
         "core_tools":"EXPLICIT_NARROW_ALLOWLIST",
         "eager_tools":"SCHEMA_DEFERRAL_NOT_AUTHORIZATION",
+        "tool_search_bridge":"EXPLICIT_DISABLED_REMOVES_TWO_BRIDGE_TOOLS",
         "model_runtime":"NOT_TESTED_BY_STATIC_AUDIT",
         "signed_admission":"NOT_GRANTED"
     }
