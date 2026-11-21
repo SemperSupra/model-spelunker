@@ -46,6 +46,18 @@ for mode in ("compact_all_prompt","compact_all_prompt_budget"):
     assert minim["messages"][-1]["content"].startswith("Call read_file")
     assert len(minim["tools"])==1
     assert minim["tools"][0]["function"]["parameters"]["required"]==["file_path"]
+multi=copy.deepcopy(fixture)
+multi["messages"][-1]["content"]=[{"type":"text","text":"SENSITIVE_MULTI"}]
+for mode in ("force_256_full","force_256_compact"):
+    corrected=module.normalize_request(copy.deepcopy(multi),mode)
+    assert corrected["max_tokens"]==256
+    assert corrected["stream_options"]==multi["stream_options"]
+    if mode=="force_256_full":
+        assert corrected["messages"]==multi["messages"]
+        assert corrected["tools"]==multi["tools"]
+    else:
+        assert "SENSITIVE_MULTI" not in json.dumps(corrected)
+        assert len(corrected["tools"])==1
 for bad in ("INVALID","",None):
     try:module.normalize_request(copy.deepcopy(fixture),bad)
     except ValueError:pass
