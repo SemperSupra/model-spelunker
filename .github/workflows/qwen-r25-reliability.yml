@@ -1,0 +1,69 @@
+name: Qwen R25 Actual Installed-Agent Reliability Matrix (Bounded)
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/classify_reliability_trial.py'
+      - 'qualification/agent_embodiment/run_native_installed.sh'
+      - 'qualification/agent_embodiment/qwen_embody.py'
+      - 'qualification/agent_embodiment/qwen-public-linux.json'
+      - 'qualification/agent_embodiment/final_oracle.py'
+      - 'qualification/agent_embodiment/lineage_oracle.py'
+      - 'qualification/agent_embodiment/settings_drift.py'
+      - '.github/workflows/qwen-r25-reliability.yml'
+permissions:
+  contents: read
+jobs:
+  independent-scientific-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test model PASS/FAIL receipt classification and reject false infra/task states
+        run: |
+          python3 -m qualification.agent_embodiment.classify_reliability_trial self-test
+          python3 -m py_compile qualification/agent_embodiment/classify_reliability_trial.py
+          bash -n qualification/agent_embodiment/run_native_installed.sh
+  actual-independent-model-trials:
+    needs: [independent-scientific-critic]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        trial: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exact existing R18 actual Qwen Code and pinned Ollama two-hop treatment
+        id: model
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          set +e
+          bash qualification/agent_embodiment/run_native_installed.sh
+          rc=$?
+          set -e
+          echo "script_exit=$rc" >> "$GITHUB_OUTPUT"
+          if [[ ! -s "$RUNNER_TEMP/qwen-r18-live/receipt.json" ]]; then
+            echo "FAIL: no model observation receipt — infrastructure failure"
+            exit 2
+          fi
+          # Model task failures are scientific observations, not an infra PASS.
+          python3 -m qualification.agent_embodiment.classify_reliability_trial classify \
+            --receipt "$RUNNER_TEMP/qwen-r18-live/receipt.json" \
+            --output "$RUNNER_TEMP/qwen-r25-trial.json" \
+            --script-exit "$rc" --trial "${{ matrix.trial }}" --source-sha "$GITHUB_SHA"
+      - name: Preserve actual redacted randomized trial regardless of model outcome
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r25-exact-source-${{ github.run_id }}-trial-${{ matrix.trial }}
+          path: |
+            ${{ runner.temp }}/qwen-r25-trial.json
+            ${{ runner.temp }}/qwen-r18-live/receipt.json
+          retention-days: 14
+          if-no-files-found: ignore
