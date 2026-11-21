@@ -1,0 +1,61 @@
+name: Qwen R21 Protected Main GHCR Harness Realization Publisher
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/qwen_oci_publish.py'
+      - '.github/workflows/qwen-r21-ghcr-publish.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'qualification/agent_embodiment/qwen_oci_publish.py'
+      - '.github/workflows/qwen-r21-ghcr-publish.yml'
+permissions:
+  contents: read
+concurrency:
+  group: qwen-r21-ghcr-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  offline-public-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Regress protected publisher admission and manifest negatives
+        run: |
+          python3 -m qualification.agent_embodiment.qwen_oci_publish self-test
+          python3 -m qualification.agent_embodiment.qwen_oci self-test
+          python3 -m py_compile qualification/agent_embodiment/qwen_oci_publish.py
+  publish-main-only:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'SemperSupra/model-spelunker'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    needs: [offline-public-critic]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch only official Qwen Code release asset by pinned digest
+        run: python3 qualification/qwencode_public/kit.py fetch --platform linux-x64 --archive "$RUNNER_TEMP/qwen-code-linux-x64.tar.gz"
+      - name: Rootless verified local OCI build (no Docker, model or credentials)
+        run: |
+          python3 -m qualification.agent_embodiment.qwen_oci build --archive "$RUNNER_TEMP/qwen-code-linux-x64.tar.gz" --output "$RUNNER_TEMP/qwen-ghcr-source" --source-commit "$GITHUB_SHA"
+          python3 -m qualification.agent_embodiment.qwen_oci verify --output "$RUNNER_TEMP/qwen-ghcr-source"
+      - name: Publish immutable GHCR digest and independently refetch, hydrate, verify and smoke
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -m qualification.agent_embodiment.qwen_oci_publish publish --output "$RUNNER_TEMP/qwen-ghcr-source" | tee "$RUNNER_TEMP/qwen-ghcr-admission.json"
+      - name: Persist allowlisted, credential-free immutable admission evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r21-ghcr-admission-${{ github.run_id }}
+          path: ${{ runner.temp }}/qwen-ghcr-admission.json
+          if-no-files-found: ignore
+          retention-days: 7
