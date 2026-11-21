@@ -26,6 +26,22 @@ def verify_selected(stdout: str, expected: str, decoy: str) -> bool:
     except InvalidResult:
         return False
 
+def classify_final(stdout: str, expected: str, decoy: str) -> str:
+    try:
+        result=extract_final_response(stdout)
+    except InvalidResult:
+        return "INVALID_OR_MISSING_RESULT"
+    if result==expected:
+        return "EXACT_FINAL"
+    if decoy in result:
+        return "DECOY_IN_FINAL"
+    if expected in result:
+        return "EXPECTED_WITH_EXTRA"
+    if not result:
+        return "EMPTY_FINAL"
+    return "WRONG_FINAL"
+
+
 def selftest() -> None:
     def payload(final,tool="VALUE=DECOY",error=False):
         return json.dumps([
@@ -36,6 +52,7 @@ def selftest() -> None:
     selected="VALUE=SELECTED"
     decoy="VALUE=DECOY"
     assert verify_selected(payload(selected),selected,decoy)
+    assert classify_final(payload(selected),selected,decoy)=="EXACT_FINAL"
     adversarial=[
         payload(decoy,selected),
         payload("",selected),
@@ -49,6 +66,10 @@ def selftest() -> None:
     ]
     for bad in adversarial:
         assert not verify_selected(bad,selected,decoy),"bad assistant final accepted"
+    assert classify_final(payload(selected+" extra"),selected,decoy)=="EXPECTED_WITH_EXTRA"
+    assert classify_final(payload(decoy),selected,decoy)=="DECOY_IN_FINAL"
+    assert classify_final(payload(""),selected,decoy)=="EMPTY_FINAL"
+    assert classify_final("not JSON",selected,decoy)=="INVALID_OR_MISSING_RESULT"
     print(json.dumps({"schema":"qwen-r12-strict-final-oracle/v1","state":"PASS","positives":1,"negatives":len(adversarial)}))
 
 if __name__=="__main__":
