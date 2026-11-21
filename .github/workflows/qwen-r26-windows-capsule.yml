@@ -1,0 +1,76 @@
+name: Qwen R26 Windows PS5.1 Disposable Capsule OPAV
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_public/Invoke-QwenCapsule.ps1'
+      - 'qualification/qwencode_public/Observe-QwenHost.ps1'
+      - 'qualification/qwencode_public/kit.py'
+      - 'qualification/qwencode_public/release-manifest.json'
+      - '.github/workflows/qwen-r26-windows-capsule.yml'
+permissions:
+  contents: read
+jobs:
+  native-ps51-capsule:
+    runs-on: windows-2025
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify pinned official public release and native Windows version
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          python qualification/qwencode_public/kit.py self-test
+          if ($LASTEXITCODE -ne 0) { throw 'archive critic failed' }
+          python qualification/qwencode_public/kit.py fetch --platform windows-x64 --archive "$env:RUNNER_TEMP\qwen-windows-official.zip"
+          if ($LASTEXITCODE -ne 0) { throw 'official source verification failed' }
+          python qualification/qwencode_public/kit.py smoke --platform windows-x64 --archive "$env:RUNNER_TEMP\qwen-windows-official.zip" --out "$env:RUNNER_TEMP\qwen-native-smoke"
+          if ($LASTEXITCODE -ne 0) { throw 'native runtime smoke failed' }
+      - name: Native PowerShell 5.1 read-only host census and synthetic admission refusals
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'not native PS5.1' }
+          $r=(& ./qualification/qwencode_public/Observe-QwenHost.ps1 | ConvertFrom-Json)
+          if ($r.schema -ne 'qwencode-public-host-census/v1' -or $r.mutation -ne 'NONE' -or $r.host_identity -ne 'REDACTED') { throw 'host census contract failure' }
+          $script="./qualification/qwencode_public/Invoke-QwenCapsule.ps1"
+          $manifest="./qualification/qwencode_public/release-manifest.json"
+          $archive=Join-Path $env:RUNNER_TEMP 'qwen-windows-official.zip'
+          $root=Join-Path $env:RUNNER_TEMP 'qwen-r26-capsule'
+          $args=@{ManifestPath=$manifest;ArchivePath=$archive;Root=$root;Mode='SyntheticCI'}
+          $o=(& $script -Phase Observe @args | ConvertFrom-Json)
+          if ($o.hostMutation -ne 'NONE') { throw 'observe mutated host' }
+          $plan=(& $script -Phase Plan @args | ConvertFrom-Json)
+          if ($plan.state -ne 'CREATE' -or $plan.planSha256 -notmatch '^[0-9a-f]{64}$') { throw 'synthetic workcell not plannable' }
+          $refused=$false
+          try { & $script -Phase Apply @args -ApprovePlanSha256 ('0'*64) | Out-Null } catch { $refused=$true }
+          if (-not $refused -or (Test-Path -LiteralPath $root)) { throw 'unapproved install modified disk' }
+          $refused=$false
+          try { & $script -Phase Apply -Mode Production -ManifestPath $manifest -ArchivePath $archive -Root $root -ApprovePlanSha256 $plan.planSha256 | Out-Null } catch { $refused=$true }
+          if (-not $refused -or (Test-Path -LiteralPath $root)) { throw 'production admission bypass' }
+          $applied=(& $script -Phase Apply @args -ApprovePlanSha256 $plan.planSha256 | ConvertFrom-Json)
+          if ($applied.result -ne 'APPLIED_GUEST_ONLY') { throw 'synthetic apply rejected' }
+          $verify=(& $script -Phase Verify @args | ConvertFrom-Json)
+          if ($verify.result -ne 'LOCAL_PAYLOAD_PASS' -or $verify.productionAdmission -ne 'NOT_TESTED') { throw 'runtime verify failed' }
+          $repeat=(& $script -Phase Apply @args -ApprovePlanSha256 $plan.planSha256 | ConvertFrom-Json)
+          if ($repeat.result -ne 'NOOP_VERIFIED') { throw 'repeated apply not idempotent' }
+          $back=(& $script -Phase Rollback @args -ApprovePlanSha256 $plan.planSha256 | ConvertFrom-Json)
+          if ($back.result -ne 'OWNED_GENERATION_ABSENT' -or (Test-Path -LiteralPath (Join-Path $root 'active'))) { throw 'owned rollback failed' }
+          $again=(& $script -Phase Rollback @args -ApprovePlanSha256 $plan.planSha256 | ConvertFrom-Json)
+          $foreign=Join-Path $root 'active'
+          [void](New-Item -ItemType Directory -Force -Path $foreign)
+          $f=(& $script -Phase Plan @args | ConvertFrom-Json)
+          if ($f.state -ne 'BLOCKED') { throw 'foreign active not blocked' }
+          $refused=$false
+          try { & $script -Phase Rollback @args -ApprovePlanSha256 $plan.planSha256 | Out-Null } catch { $refused=$true }
+          if (-not $refused -or -not (Test-Path -LiteralPath $foreign)) { throw 'foreign resource deleted' }
+          Write-Host 'PASS Windows PS5.1 public synthetic: source/hash, OPAV, idempotence, denied production, foreign isolation'
+      - name: Report exact test scope
+        if: always()
+        shell: powershell
+        run: |
+          Write-Host 'PUBLIC_SYNTHETIC_WINDOWS_RUNNER_ONLY; physical Hyper-V guest NOT_TESTED; production admission NOT_GRANTED; model inference NOT_RUN'
