@@ -48,7 +48,7 @@ def tag_for(digest: str, source_sha: str) -> str:
     return "src-"+source_sha[:12]+"-oci-"+digest.split(":")[1][:16]
 
 def login(regctl: Path, config: Path, token: str, actor: str):
-    if not token or not re.fullmatch(r"[A-Za-z0-9-]{1,39}(?:\\[bot\\])?",actor):
+    if not token or not re.fullmatch(r"[A-Za-z0-9-]{1,39}(?:\[bot\])?",actor):
         raise ValueError("scoped registry token/actor absent")
     env={**os.environ,"REGCTL_CONFIG":str(config)}
     result=subprocess.run([str(regctl),"registry","login","ghcr.io",
