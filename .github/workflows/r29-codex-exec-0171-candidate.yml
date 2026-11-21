@@ -1,0 +1,93 @@
+name: R29 Codex Exec 0.171 Native Source and Rootless OCI Candidate
+on:
+  pull_request:
+    paths:
+      - 'qualification/harness_refresh/codex_exec_0171.py'
+      - '.github/workflows/r29-codex-exec-0171-candidate.yml'
+permissions:
+  contents: read
+jobs:
+  source-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m py_compile qualification/harness_refresh/codex_exec_0171.py
+          python3 -m qualification.harness_refresh.codex_exec_0171 self-test
+  exact-native-source-build:
+    needs: [source-critic]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Acquire exact Codex 0.171 upstream and Rust 1.99.1
+        run: |
+          set -Eeuo pipefail
+          src="$RUNNER_TEMP/codex-0171-source"
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/openai/codex.git "$src"
+          git -C "$src" checkout --quiet --detach ccf9be8cc458bd6b8336fe84d68d8893f2691a5e
+          test "$(git -C "$src" rev-parse HEAD)" = ccf9be8cc458bd6b8336fe84d68d8893f2691a5e
+          python3 -c 'from pathlib import Path; from qualification.harness_refresh.codex_exec_0171 import inspect_source; import os; inspect_source(Path(os.environ["RUNNER_TEMP"])/"codex-0171-source")'
+          rustup toolchain install 1.99.1 --profile minimal
+      - name: Preflight lockfile stability before lengthy Rust compilation
+        run: |
+          set -Eeuo pipefail
+          cd "$RUNNER_TEMP/codex-0171-source/codex-rs"
+          cargo +1.99.1 metadata --locked --format-version 1 --no-deps >/dev/null
+          git diff --exit-code -- Cargo.lock
+      - name: Actual Codex exec release source build, no duplicate recursion patch
+        run: |
+          set -Eeuo pipefail
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/codex-0171-target"
+          cd "$RUNNER_TEMP/codex-0171-source/codex-rs"
+          cargo +1.99.1 build --locked --release -p codex-exec --bin codex-exec
+          test -x "$CARGO_TARGET_DIR/release/codex-exec"
+          "$CARGO_TARGET_DIR/release/codex-exec" --version
+          "$CARGO_TARGET_DIR/release/codex-exec" --help >/dev/null
+          cd "$GITHUB_WORKSPACE"
+          python3 -m qualification.harness_refresh.codex_exec_0171 stage \
+            --source "$RUNNER_TEMP/codex-0171-source" \
+            --binary "$CARGO_TARGET_DIR/release/codex-exec" \
+            --output "$RUNNER_TEMP/codex-0171-candidate"
+          python3 -m qualification.harness_refresh.codex_exec_0171 verify --output "$RUNNER_TEMP/codex-0171-candidate"
+          cp "$RUNNER_TEMP/codex-0171-candidate/payload/build-receipt.json" "$RUNNER_TEMP/codex-0171-build-receipt.json"
+          cp "$RUNNER_TEMP/codex-0171-candidate/layout-receipt.json" "$RUNNER_TEMP/codex-0171-layout-receipt.json"
+      - name: Bounded Cargo.lock root-cause probe, never silently amend source
+        if: failure()
+        run: |
+          set -Eeuo pipefail
+          cd "$RUNNER_TEMP/codex-0171-source/codex-rs"
+          echo 'DIAG: committed upstream Cargo.lock identity:'
+          git rev-parse HEAD
+          git show HEAD:codex-rs/Cargo.lock | sha256sum
+          echo 'DIAG: trial copy, cargo metadata un-locked (NOT accepted as source):'
+          cp Cargo.lock "$RUNNER_TEMP/codex-0171-upstream-Cargo.lock"
+          set +e
+          cargo +1.99.1 metadata --format-version 1 --no-deps > "$RUNNER_TEMP/codex-0171-metadata.json" 2>"$RUNNER_TEMP/codex-0171-metadata-error.txt"
+          rc=$?
+          set -e
+          echo "METADATA_RC=$rc"
+          echo 'DIAG: lockfile delta summary only:'
+          git diff --numstat -- Cargo.lock || true
+          git diff -- Cargo.lock | grep -E '^[+-](name =|version =|source =|checksum =)' | head -n 100 || true
+          echo 'DIAG: stored file bytes remain external, not used for build admission'
+          test "$(sha256sum "$RUNNER_TEMP/codex-0171-upstream-Cargo.lock" | awk '{print $1}')" = "$(git show HEAD:codex-rs/Cargo.lock | sha256sum | awk '{print $1}')"
+      - name: Keep redacted source-candidate OCI receipts, no GHCR publication
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codex-exec-0171-candidate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/codex-0171-build-receipt.json
+            ${{ runner.temp }}/codex-0171-layout-receipt.json
+          retention-days: 14
+          if-no-files-found: ignore
