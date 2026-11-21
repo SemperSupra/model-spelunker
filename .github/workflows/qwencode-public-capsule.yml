@@ -84,6 +84,17 @@ jobs:
           python qualification/qwencode_public/kit.py smoke --platform $env:QWEN_PUBLIC_PLATFORM --archive $env:QWEN_ARCHIVE --out $unpack
           if ($LASTEXITCODE -ne 0) { throw 'native Qwen smoke failed' }
 
+      - name: Windows native PS5.1 read-only Hyper-V/workcell census
+        if: matrix.platform == 'windows-x64'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $script=Join-Path $env:GITHUB_WORKSPACE 'qualification\qwencode_public\Observe-QwenHost.ps1'
+          $receipt=(& $script | ConvertFrom-Json)
+          if($receipt.schema -ne 'qwencode-public-host-census/v1' -or $receipt.mutation -ne 'NONE' -or $receipt.host_identity -ne 'REDACTED') { throw 'read-only census contract failed' }
+          if($receipt.powershell_major -ne 5) { throw 'Windows PowerShell 5.1 required' }
+          Write-Host 'PASS native PS5.1 sanitized read-only census'
+
       - name: Windows native PowerShell 5.1 Observe/Plan/Apply/Verify/Rollback
         if: matrix.platform == 'windows-x64'
         shell: powershell
