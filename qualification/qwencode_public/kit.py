@@ -199,7 +199,7 @@ def assemble(manifest: dict, platform_id: str, archive: Path, output: Path) -> d
     }
     with zipfile.ZipFile(output, "w", allowZip64=True) as z:
         add_file(z, "kit.json", (json.dumps(payload, sort_keys=True, indent=2) + "\n").encode())
-        for name in ("Invoke-QwenCapsule.ps1", "README.md", "release-manifest.json"):
+        for name in ("Invoke-QwenCapsule.ps1", "README.md", "release-manifest.json", "compile-routes.mjs"):
             add_file(z, name, (HERE / name).read_bytes())
         add_file(z, "upstream/" + entry["asset"], archive.read_bytes(), stored=True)
     return {"kit_sha256": checksum(output), "kit_bytes": output.stat().st_size,
