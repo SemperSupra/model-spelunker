@@ -1,0 +1,14 @@
+# One-way Qwen packet → existing SupraGoFlow Go batch-wave bridge
+
+Issue [#238](https://github.com/SemperSupra/model-spelunker/issues/238) reconciles source ownership after discovering that [private IaC #603](https://github.com/mark-e-deyoung/infrastructure-as-code-private/issues/603) and [public SupraGoFlow PR #61](https://github.com/SemperSupra/supragoflow/pull/61) **already implement** public-safe Go standard-library `batch-wave/v1` deterministic conflict/DAG planning and small actor batons. The Qwen-specific Python `plan_candidates` in [draft #225](https://github.com/SemperSupra/model-spelunker/pull/225) **must not become a second portfolio wave scheduling algorithm**.
+
+This bridge is **only** a strict one-way schema adapter:
+- Reads the existing Qwen task ledger, calls its domain-specific validator, selects *no more than the externally budgeted two* `READY` public-only tasks, and refuses if extra tasks or unresolved dependencies exist. **It does not order or prioritize tasks.**
+- Emits `NO_READY_PUBLIC_TASKS` for the actual current R5 public ledger; this is not a success or an approved execution.
+- Converts an explicit reviewed public-synthetic two-card fixture into the established Go `batch-wave/v1` schema with unique branches, exact SHAs, owned writes and resources, bounded steps, independent oracles and cleanup.
+- Delegates **all actual wave formation, conflicts, dependency validation and one-card baton rendering** to the previously qualified `SemperSupra/supragoflow@adf08abff73058a7502afb514acc8314c77302f9` Go source; the workflow SHA-pins this source and executes its native CLI in disposable free-tier public GHA.
+- Independent negative tests refuse private-to-public projection, hypothetical self-admission, path collisions, source drift, implicit dropping of a third candidate and missing dependencies. No private IaC workset is copied into the public fixture.
+
+The two new **independent GHA CI jobs** are offline source/security negative tests and an actual Go compiler/CLI consume+baton rep. No private Actions minutes, host changes, paid API, remote model, secret, deployment, workcell admission or new scheduler. Any generated manifest is advisory and source-neutral; actual effects require the existing Agent Dispatch signed/native admission.
+
+**Release integration/housekeeping prerequisite:** after this adapter's real Go CI acceptance, stop recommending the redundant Qwen `plan_candidates` result as the authoritative placement/wave selector; retain Qwen-specific validation, status ledger and external GitHub receipt verification in #225/#236, and use the existing SupraGoFlow Go planner as sole placement preflight. Do not rewrite or delete history on another actor's branch. Update #224/#601/#603 and keep stacked PRs draft until integration is reviewed.
