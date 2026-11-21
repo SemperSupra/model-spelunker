@@ -47,8 +47,11 @@ def tag_for(digest: str, source_sha: str) -> str:
         raise ValueError("invalid source sha")
     return "src-"+source_sha[:12]+"-oci-"+digest.split(":")[1][:16]
 
+def valid_actor(actor: str) -> bool:
+    return isinstance(actor,str) and bool(re.fullmatch(r"[A-Za-z0-9-]{1,39}(?:\[bot\])?",actor))
+
 def login(regctl: Path, config: Path, token: str, actor: str):
-    if not token or not re.fullmatch(r"[A-Za-z0-9-]{1,39}(?:\[bot\])?",actor):
+    if not token or not valid_actor(actor):
         raise ValueError("scoped registry token/actor absent")
     env={**os.environ,"REGCTL_CONFIG":str(config)}
     result=subprocess.run([str(regctl),"registry","login","ghcr.io",
@@ -152,6 +155,9 @@ def selftest():
         "GITHUB_EVENT_NAME":"push","GITHUB_REF":"refs/heads/main","GITHUB_SHA":s
     }
     assert admission_context(good)==s
+    assert valid_actor("github-actions[bot]") and valid_actor("mark-e-deyoung")
+    for actor in ("","../bad","a b","[bot]","evil;command"):
+        assert not valid_actor(actor), "unsafe registry actor admitted"
     for key,bad in (
         ("GITHUB_REPOSITORY","SemperSupra/another"),
         ("GITHUB_REF","refs/heads/feature"),
@@ -167,7 +173,7 @@ def selftest():
         except ValueError:pass
         else:raise AssertionError("invalid registry digest admitted")
     print(json.dumps({"schema":"qwen-ghcr-publication-offline-critic/v1",
-      "state":"PASS","negative_contexts":5,"negative_digests":3,
+      "state":"PASS","negative_contexts":5,"negative_digests":3,"negative_registry_actors":5,
       "publication":"NOT_PERFORMED","real_registry":"NOT_CONTACTED"},sort_keys=True))
 
 def main():
