@@ -2,7 +2,11 @@ name: R28 Agent Fleet Upstream Version and Artifact Refresh Census
 on:
   pull_request:
     paths:
-      - 'qualification/harness_refresh/**'
+      - 'qualification/harness_refresh/release_census.py'
+      - 'qualification/harness-artifacts/**'
+      - 'qualification/harness-realizations/**'
+      - 'qualification/qwencode_public/release-manifest.json'
+      - 'qualification/agent_embodiment/qwen-public-linux.json'
       - '.github/workflows/r28-harness-fleet-census.yml'
 permissions:
   contents: read
