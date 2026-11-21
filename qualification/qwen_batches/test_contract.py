@@ -17,11 +17,13 @@ class ContractPositive(unittest.TestCase):
         plan = plan_candidates(doc)
         self.assertEqual(plan["dispatcher"], "AGENT_DISPATCH_ONLY")
         self.assertIs(plan["dispatch_authorized"], False)
-        self.assertEqual(len(plan["candidate_ids"]), 2)
-        self.assertEqual(plan["candidate_ids"], ["B06-GUEST-PROVENANCE", "B05-OLLAMA-HARNESS"])
+        self.assertEqual(len(plan["candidate_ids"]), 0)
+        self.assertEqual(plan["candidate_ids"], [])
+        self.assertEqual(plan["in_progress"], ["B07-REAL-QWEN-HARNESS"])
+        self.assertEqual(plan["failed"], [])
         self.assertEqual(plan["private_actions_minutes"], 0)
         self.assertEqual(plan["collisions"], 0)
-        self.assertEqual(plan["verified_count"], 2)
+        self.assertEqual(plan["verified_count"], 4)
         self.assertEqual(len(plan["blocked"]), 2)
 
     def test_bounded_weak_actor_cards(self):
@@ -61,7 +63,7 @@ class ContractNegatives(unittest.TestCase):
         self.bad(lambda d: d["tasks"][3].__setitem__("state", "READY"))
 
     def test_unverified_dependency(self):
-        self.bad(lambda d: d["tasks"][5].__setitem__("depends_on", ["B05-OLLAMA-HARNESS"]))
+        self.bad(lambda d: d["tasks"][6].__setitem__("depends_on", ["B03-H1-GUEST"]))
 
     def test_dependency_cycle(self):
         def make(d):
@@ -93,7 +95,7 @@ class ContractNegatives(unittest.TestCase):
         self.bad(lambda d: d.__setitem__("dispatcher", "NEW_BATCH_SCHEDULER"))
 
     def test_false_verified_status(self):
-        self.bad(lambda d: d["tasks"][4].__setitem__("state", "DONE_VERIFIED"))
+        self.bad(lambda d: d["tasks"][6].__setitem__("state", "DONE_VERIFIED"))
 
     def test_claim_without_oracle(self):
         def make(d):
