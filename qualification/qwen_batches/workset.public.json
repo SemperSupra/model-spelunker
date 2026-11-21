@@ -1,0 +1,114 @@
+{
+  "schema": "qwen-independent-batches/v1",
+  "dispatcher": "AGENT_DISPATCH_ONLY",
+  "max_parallel": 2,
+  "public_host_effects": false,
+  "tasks": [
+    {
+      "id": "B01-WIRE-DIAG",
+      "state": "READY",
+      "classification": "SYNTHETIC",
+      "runtime": "public-gha",
+      "role": "developer",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "dle": "https://github.com/SemperSupra/model-spelunker/issues/220",
+      "mission": "Isolate Qwen Code tool-call transport with one loopback mock provider, hidden nonce, and exact source-bound fixture, without live private endpoints.",
+      "oracle": "Native Qwen CLI receives a synthetic read_file tool call, reads hidden file, and the independent oracle verifies tool readback plus no public disclosure.",
+      "failure": "Classify protocol, CLI, tool schema or time-budget failure and preserve a source-bound redacted receipt; never call model-service failure proved.",
+      "scope": [
+        "qualification/qwencode_wire/"
+      ],
+      "depends_on": [],
+      "resource_class": "light",
+      "budget": {
+        "wall_minutes": 15,
+        "tool_calls": 6,
+        "context_tokens": 1000,
+        "output_tokens": 500,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    },
+    {
+      "id": "B02-ROUTE-HARDEN",
+      "state": "READY",
+      "classification": "PUBLIC_SOURCE",
+      "runtime": "public-gha",
+      "role": "critic",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "dle": "https://github.com/SemperSupra/model-spelunker/issues/220",
+      "mission": "Independently verify route-class separation, no plaintext secret, no private-to-cloud fallback, and disabled memory Git sync on public fixtures.",
+      "oracle": "Run route unit tests including invalid URL, classification downgrade, embedded secret and unqualified private-network negative cases.",
+      "failure": "Keep model routing NOT_QUALIFIED; report exact failed negative case and minimal source patch within the one assigned path.",
+      "scope": [
+        "qualification/qwencode_public/compile-routes.mjs"
+      ],
+      "depends_on": [],
+      "resource_class": "light",
+      "budget": {
+        "wall_minutes": 8,
+        "tool_calls": 4,
+        "context_tokens": 800,
+        "output_tokens": 400,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    },
+    {
+      "id": "B03-H1-GUEST",
+      "state": "BLOCKED_ADMISSION",
+      "classification": "PUBLIC_SOURCE",
+      "runtime": "public-gha",
+      "role": "operator",
+      "repo": "SemperSupra/model-spelunker",
+      "source_sha": "495647cbdd415b7a70db94cbef4619ed21e3c706",
+      "dle": "https://github.com/SemperSupra/model-spelunker/issues/220",
+      "mission": "After independently approved typed Agent Dispatch assignment, reuse observed guest boot infrastructure, pin glibc guest identity, then verify clean teardown.",
+      "oracle": "Actual booted guest identity, H1 image SHA, runner identity, no-uplink isolation and owned VM/storage cleanup independently checked.",
+      "failure": "Return BLOCKED_ADMISSION or exact ENVIRONMENT, HARNESS or ORACLE failure and preserve negative evidence without issuing a new grant.",
+      "scope": [
+        "qualification/qwencode_guest_h1/"
+      ],
+      "depends_on": [],
+      "resource_class": "heavy",
+      "budget": {
+        "wall_minutes": 20,
+        "tool_calls": 5,
+        "context_tokens": 1200,
+        "output_tokens": 600,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    },
+    {
+      "id": "B04-SITE-PROVIDER",
+      "state": "BLOCKED_ADMISSION",
+      "classification": "PRIVATE",
+      "runtime": "private-admitted-guest",
+      "role": "operator",
+      "repo": "mark-e-deyoung/infrastructure-as-code-private",
+      "source_sha": "865bfbedb2bbaa8ed724837fc78a47a61ecda406",
+      "dle": "https://github.com/mark-e-deyoung/infrastructure-as-code-private/issues/601",
+      "mission": "Once admitted, verify sovereign BigMac and TrueNAS model routes, Tool Belt projection and private-data egress protections inside an owned disposable guest.",
+      "oracle": "Independently signed guest receipt proves identity, scoped tool call, no unintended egress, revoke and rollback for exact model/workcell profile.",
+      "failure": "Return BLOCKED_ADMISSION on missing lease, issuer or credential rotation; do not substitute public synthetic model or bypass endpoint policy.",
+      "scope": [
+        "qualification/qwencode_site/"
+      ],
+      "depends_on": [
+        "B03-H1-GUEST"
+      ],
+      "resource_class": "heavy",
+      "budget": {
+        "wall_minutes": 20,
+        "tool_calls": 5,
+        "context_tokens": 1300,
+        "output_tokens": 600,
+        "cost_usd": 0,
+        "private_actions_minutes": 0
+      }
+    }
+  ]
+}
