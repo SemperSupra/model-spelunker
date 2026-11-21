@@ -35,6 +35,11 @@ assert len(only_system["tools"])==2 and only_system["tools"]==fixture["tools"]
 only_tools=module.normalize_request(copy.deepcopy(fixture),"compact_tools")
 assert only_tools["messages"]==fixture["messages"]
 assert len(only_tools["tools"])==1
+for mode in ("compact_schema","compact_schema_budget"):
+    minim=module.normalize_request(copy.deepcopy(fixture),mode)
+    assert len(minim["tools"])==1
+    assert minim["tools"][0]["function"]["parameters"]["required"]==["file_path"]
+    assert len(minim["messages"])==2
 for bad in ("INVALID","",None):
     try:module.normalize_request(copy.deepcopy(fixture),bad)
     except ValueError:pass
