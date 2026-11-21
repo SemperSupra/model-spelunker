@@ -1,0 +1,51 @@
+name: Qwen Public Classified Route Guard
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwen-route-guard.yml'
+      - 'qualification/qwencode_security/**'
+      - 'qualification/qwencode_public/compile-routes.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-route-guard-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-route-bands:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        band: [public-private-positive, adversarial-negatives]
+    steps:
+      - name: Read public source only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Node runtime from hosted runner (no persistent install)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+      - name: Check source-neutral, no-ambient-YOLO acceptance
+        if: matrix.band == 'public-private-positive'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test --test-name-pattern='^POSITIVE' qualification/qwencode_security/route_guards.test.mjs
+          node qualification/qwencode_public/compile-routes.mjs --self-test
+      - name: Run independent red-team endpoint/credential/cross-class mutants
+        if: matrix.band == 'adversarial-negatives'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test --test-name-pattern='^NEGATIVE' qualification/qwencode_security/route_guards.test.mjs
+          echo "PASS credential, unknown role, model, and cross-class guardrail negatives"
