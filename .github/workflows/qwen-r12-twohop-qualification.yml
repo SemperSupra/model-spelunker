@@ -1,0 +1,44 @@
+name: Qwen R12 Native Two-Hop Read Oracle
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_twohop_r12/**'
+      - '.github/workflows/qwen-r12-twohop-qualification.yml'
+permissions:
+  contents: read
+concurrency:
+  group: qwen-r12-twohop-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  independent-negative-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reject wrong-file, no-tool, low-budget and forged-success mutants
+        run: |
+          python3 qualification/qwencode_twohop_r12/critic.py
+          python3 qualification/qwencode_twohop_r12/final_oracle.py
+          python3 -m py_compile qualification/qwencode_twohop_r12/wire_proxy.py
+          bash -n qualification/qwencode_twohop_r12/run_twohop.sh
+  actual-native-two-hop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pinned real native Qwen3 CPU read-index-then-target interview
+        run: bash qualification/qwencode_twohop_r12/run_twohop.sh
+      - name: Retain synthetic evidence on failure or success
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r12-twohop-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-r12-twohop/receipt.json
+            ${{ runner.temp }}/qwen-r12-twohop/proxy-metadata.json
+          retention-days: 7
+          if-no-files-found: ignore
