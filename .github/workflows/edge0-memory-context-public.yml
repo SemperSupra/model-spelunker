@@ -1,0 +1,52 @@
+name: Edge0 Memory Context Public Feasibility
+# Synthetic/public inputs only: not a sovereign-host or real DLE actor test.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/edge0-memory-context-public.yml'
+      - 'qualification/edge0_memory_context.py'
+      - 'qualification/edge0_memory_context.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: edge0-memory-context-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 7
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [ubuntu-24.04, macos-15]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Native synthetic negative test and dry-readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/edge0_memory_context.py --self-test
+          python3 qualification/edge0_memory_context.py --out "$RUNNER_TEMP/edge0-source.json" --levels 0,512,2048
+          python3 - <<'PY'
+          import json,os,platform,shutil
+          from pathlib import Path
+          d=shutil.disk_usage(os.environ['RUNNER_TEMP'])
+          row={'schema':'edge0-host-census-v1','source_sha':os.environ['GITHUB_SHA'],
+               'os':platform.system(),'arch':platform.machine(),'cpus':os.cpu_count(),
+               'disk_free_bytes':d.free,'disk_total_bytes':d.total,'model_loaded':False}
+          Path(os.environ['RUNNER_TEMP'],'edge0-host.json').write_text(json.dumps(row,sort_keys=True)+'\n')
+          print('PASS synthetic source controls; MODEL_NOT_RUN')
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: edge0-source-${{ matrix.host }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/edge0-source.json
+            ${{ runner.temp }}/edge0-host.json
+          if-no-files-found: ignore
+          retention-days: 14
