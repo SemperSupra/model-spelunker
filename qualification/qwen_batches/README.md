@@ -1,47 +1,34 @@
-# Qwen actor batching contract
+# Qwen Code packet validation and evidence status (no wave planner)
 
-**Purpose:** Increase *independently verified completions per iteration* without increasing weak-model context load or spawning a competing execution system. Owner issue: [Model Spelunker #224](https://github.com/SemperSupra/model-spelunker/issues/224). This is a reusable **pure, read-only packet compiler**, not a scheduler, job queue, admission grant, or source of evidence. Agent Dispatch remains the sole executor/admission authority, GitHub DLE remains the sole durable work/source authority.
+Owner [Model Spelunker #224](https://github.com/SemperSupra/model-spelunker/issues/224) / de-duplication [#240](https://github.com/SemperSupra/model-spelunker/issues/240).
 
-## Rule for ChatGPT, local Qwen/OpenCode actors and other small models
+This subtree is a **source-neutral Qwen-domain validation and evidence ledger**, not a second packet scheduler or actor-baton generator. It rejects source-scope collisions, private work on public Actions, unbounded weak-model task envelopes, unverified `DONE_VERIFIED`, false `FAILED`, missing dependencies and unauthorized placement.
 
-Never treat the conversation transcript as source-of-truth. Start from the current DLE/AGENTS.md, then read only the exact packet and files it names. Each actor gets **one packet**, disjoint writable paths, one source SHA, one branch, one exact acceptance oracle and short stop/failure instructions. No giant kickoff prompt, unbounded tool exposure, or broad repo scans. A completed edit is not a verified result.
+**One wave-planning source of truth:** the *existing* [SupraGoFlow Go `batch-wave/v1` compiler](https://github.com/SemperSupra/supragoflow/pull/61) (private coordination authority [IaC #603](https://github.com/mark-e-deyoung/infrastructure-as-code-private/issues/603)), whose public source is SHA-pinned and was actually called in [Qwen adapter PR #239 / CI #44878299706](https://github.com/SemperSupra/model-spelunker/actions/runs/44878299706). The adapter under `qualification/qwen_wave_adapter/` maps only properly classified READY Qwen tasks into that existing Go format; it never selects a subset or dispatches jobs, and the current R5 packet set correctly has **zero READY public tasks**. Actual work effects remain under signed/external Agent Dispatch admission, never a Go parser result.
 
-A supervisor plans up to two independent public jobs per batch and collects their evidence **once per round**. It does not wait for an unrelated lane before admitting the next runnable lane; it also does not spin on blocked work, call stalled jobs PASS, or blindly retry unknown-effect operations. If a packet is blocked, record precisely which admission/input/oracle is missing and continue the unaffected packet. Heavy real-guest reps are serialized within their resource pool; fast static/transport/model mocks may run in separate jobs. GitHub Actions concurrency/max-parallel caps are part of the actual resource budget, not an excuse for one-at-a-time agent thinking.
+## One weak actor per context
 
-### Small-model cold start (copyable as ONE message)
+Read root/scoped `AGENTS.md`, the exact authoritative issue, and one externally prepared Go `batch-wave` baton. Confirm source SHA, uniquely owned branch/file/resources, explicit bounded effect, prerequisites and independent oracle; stop if admission missing. Small-model work cards should stay at <=8 tool calls, <=1600 task-specific context tokens and <=20 minutes, but **the full Qwen Code system+tools prompt may be much larger**; qualify actual model/runtime request size separately. Execute only admitted effects inside owned disposable workcells, retain independent witnesses, publish the six-line GitHub DLE receipt and stop. Do not ingest whole conversations or mark self-assessed prose PASS.
 
-```text
-Read your project's AGENTS.md and the exact authoritative DLE issue in the packet.
-Read only one assigned qwen-independent-batches/v1 packet; pin its source_sha.
-Check its state, dependencies, resource/credential limits, exact source scope.
-Observe -> plan -> only admitted apply in your own branch -> verify against its
-independent oracle. Emit SHA, changed paths, test command, result, run URL,
-cleanup proof, and next blocker to DLE; stop. Never self-promote, merge,
-expand the task, reveal credentials, or run private work on public GHA.
-```
+The supervising actor gives independent tasks to separate public/free GHA workers, max two concurrent until resource headroom is qualified. Long model/VM tasks do not block fast static critics. Failures are recorded and analyzed rather than silently retried or counted as completed throughput. Do not edit other actors' branches.
 
-### Pure contract commands
+## Current pure, non-executable commands
 
 ```sh
 python3 qualification/qwen_batches/contract.py validate
-python3 qualification/qwen_batches/contract.py candidates
-python3 qualification/qwen_batches/contract.py cards
-python3 -m unittest discover -s qualification/qwen_batches -p 'test_*.py' -v
+python3 qualification/qwen_batches/contract.py status
+python3 qualification/qwen_batches/contract.py hash
+python3 -m unittest discover -s qualification/qwen_batches -p test_contract.py -v
 ```
 
-`candidates` computes **advisory eligibility only**. It cannot launch jobs, issue credentials, or certify PASS. The two chosen packets are separate isolated branches/jobs; no shared write files. `cards` prints one bounded JSON record per task, suitable for weaker local models with small context. A supervisor may select a single record and use the existing dispatch mechanism *only after* its native grant/lease has been accepted.
+The obsolete Python `candidates` and `cards` actions and `plan_candidates` function are **removed**, after qualified existing-Go interoperability. `status` only reports counts, no task selection and no execution grant.
 
-### Four independent bands and ownership
+Use the existing Go adapter for *public-safe synthetic* tasks only. Private IaC owner host/guest and MCP acceptance remain separate; no private data or credentials in public Actions. Source-bound run/commit/job status verification is independently implemented by [#234 / PR #236](https://github.com/SemperSupra/model-spelunker/pull/236) and must not be mistaken for semantic artifact content attestation.
 
-- **B01 transport diagnosis:** isolate Qwen CLI vs OpenAI-compatible model protocol in a public loopback mock; exact oracle requires hidden fixture and evidenced tool action. Owns only `qualification/qwencode_wire/`.
-- **B02 security red team:** separately test model route classification, forbidden secrets, fallback denial and memory sync. Owns only the pre-existing route compiler; do not collide with B01.
-- **B03 Hyper-V guest:** reuse Agent Dispatch's proven public Hyper-V lifecycle and guest builder, not a new VM controller; currently `BLOCKED_ADMISSION` for an exact typed guest-job assignment.
-- **B04 sovereign site:** private BigMac/TrueNAS/MCP and local workcell tests, `BLOCKED_ADMISSION`; no private data or credentials in public runners.
+## Ledger and acceptance boundary
 
-Source changes should be split into separate PRs. A batch contract PR must not be merged as a substitute for a failed Qwen tool-call or guest test. `DONE_VERIFIED` requires exact source SHA, independent oracle PASS, and a relevant GitHub run; a machine-readable packet cannot authenticate its own assertions. The existing Agent Dispatch grants and protected reviewer are still mandatory.
+Public source-neutral packet states include four verified subclaims (tool wire, route security, direct model tool selection, guest provenance), two independently witnessed model failures (full Qwen CLI with CPU Qwen3:1.7b and 29KB context direct model timeout), and two separate admission-blocked H2 guest/private-site effects. They are **not** claims that the whole Qwen Code environment is ready to install.
 
-### Reps and throughput measurements
+Keep dated exact source/run references in [issue #224](https://github.com/SemperSupra/model-spelunker/issues/224); domain security source and target status are governed by [#220](https://github.com/SemperSupra/model-spelunker/issues/220), private [IaC #601](https://github.com/mark-e-deyoung/infrastructure-as-code-private/issues/601), and [Agent Dispatch #748](https://github.com/SemperSupra/agent-dispatch-private/issues/748). Do not auto-merge draft source, issue credentials, install persistent host tools or bypass the still-unresolved LiteLLM credential incident.
 
-At every DLE checkpoint retain `ready`, `in_progress`, `blocked_by_admission`, `blocked_by_input`, `independent_oracle_verified`, `rejected_claims`, `scope_collisions`, `public_GHA_jobs`, `private_GHA_minutes`, and exact head SHAs. Favor `independent verified receipts / public job-minute` and `verified reps / iteration` over volume of commands, agents, or comments. Never infer speedup from merely issuing multiple tool calls simultaneously.
-
-Public sources and CI are safe for source-neutral synthetic Qwen qualification only; real owner hardware, workcell admission and credentials remain private under [IaC #601](https://github.com/mark-e-deyoung/infrastructure-as-code-private/issues/601) and [Agent Dispatch #748](https://github.com/SemperSupra/agent-dispatch-private/issues/748). No new scheduler, public private-repo checkout, unbounded YOLO, or bypass of the exposed LiteLLM-key hold.
+Every `DONE_VERIFIED` or `FAILED` receipt requires independent source-bound positive/negative evidence; actual guest boot and site-model/tool use require their own external admit/verify/cleanup gates.

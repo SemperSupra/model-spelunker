@@ -6,41 +6,42 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from contract import validate, plan_candidates, actor_card
+from contract import validate, summarize
 
 ORIGINAL = json.loads((Path(__file__).parent / "workset.public.json").read_text())
 
 
 class ContractPositive(unittest.TestCase):
-    def test_schema_and_safe_advisory_candidates(self):
+    def test_domain_packet_validator_and_no_scheduler_status(self):
         doc = validate(copy.deepcopy(ORIGINAL))
-        plan = plan_candidates(doc)
-        self.assertEqual(plan["dispatcher"], "AGENT_DISPATCH_ONLY")
-        self.assertIs(plan["dispatch_authorized"], False)
-        self.assertEqual(len(plan["candidate_ids"]), 0)
-        self.assertEqual(plan["candidate_ids"], [])
-        self.assertEqual(plan["in_progress"], [])
-        self.assertEqual(plan["failed"], ["B07-REAL-QWEN-HARNESS", "B08-CONTEXT-CROSSOVER"])
-        self.assertEqual(plan["private_actions_minutes"], 0)
-        self.assertEqual(plan["collisions"], 0)
-        self.assertEqual(plan["verified_count"], 4)
-        self.assertEqual(len(plan["blocked"]), 2)
+        status = summarize(doc)
+        self.assertEqual(status["dispatcher"], "AGENT_DISPATCH_ONLY")
+        self.assertEqual(status["planner"], "EXISTING_SUPRAGOFLOW_GO_BATCH_WAVE")
+        self.assertFalse(status["dispatch_authorized"])
+        self.assertEqual(status["candidate_selection"], "NOT_IMPLEMENTED")
+        self.assertNotIn("candidate_ids", status)
+        self.assertNotIn("cards", status)
+        self.assertEqual(status["counts"]["DONE_VERIFIED"], 4)
+        self.assertEqual(status["counts"]["FAILED"], 2)
+        self.assertEqual(status["counts"]["BLOCKED_ADMISSION"], 2)
+        self.assertEqual(status["counts"]["READY"], 0)
+        self.assertEqual(status["counts"]["IN_PROGRESS"], 0)
+        self.assertEqual(status["total_tasks"], 8)
+        self.assertEqual(status["private_actions_minutes"], 0)
 
-    def test_bounded_weak_actor_cards(self):
+    def test_packet_budget_validation_remains_strict(self):
         for task in ORIGINAL["tasks"]:
             with self.subTest(task=task["id"]):
-                card = actor_card(task)
-                serialized = json.dumps(card, sort_keys=True)
-                self.assertLess(len(serialized), 2200)
-                self.assertEqual(card["max_tool_calls"], task["budget"]["tool_calls"])
-                self.assertIn("independent", card["mandatory_sequence"])
-                self.assertIn("Never self-promote", card["rule"])
-                self.assertEqual(card["only_edit_paths"], task["scope"])
+                self.assertLessEqual(task["budget"]["tool_calls"], 8)
+                self.assertLessEqual(task["budget"]["context_tokens"], 1600)
+                self.assertLessEqual(task["budget"]["wall_minutes"], 20)
+                self.assertEqual(task["budget"]["private_actions_minutes"], 0)
 
-    def test_per_rep_no_automatic_completion(self):
-        candidate = plan_candidates(ORIGINAL)
-        self.assertNotIn("DONE_VERIFIED", candidate["candidate_ids"])
-        self.assertFalse(candidate["dispatch_authorized"])
+    def test_status_does_not_turn_packet_oracle_into_execution(self):
+        report = summarize(ORIGINAL)
+        self.assertFalse(report["dispatch_authorized"])
+        self.assertEqual(report["candidate_selection"], "NOT_IMPLEMENTED")
+        self.assertEqual(report["counts"]["FAILED"], 2)
 
 
 class ContractNegatives(unittest.TestCase):

@@ -28,26 +28,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Verify exact public packet, deterministic card contract
+      - name: Strict Qwen schema and non-scheduling status census
         if: matrix.band == 'positive-and-actor-card'
         shell: bash
         run: |
           set -euo pipefail
           python3 qualification/qwen_batches/contract.py validate
-          python3 qualification/qwen_batches/contract.py candidates > "$RUNNER_TEMP/candidates.json"
-          python3 qualification/qwen_batches/contract.py cards > "$RUNNER_TEMP/cards.jsonl"
+          python3 qualification/qwen_batches/contract.py status > "$RUNNER_TEMP/qwen-status.json"
+          python3 qualification/qwen_batches/contract.py hash > "$RUNNER_TEMP/qwen-ledger-hash.txt"
           python3 -m unittest discover -s qualification/qwen_batches -p test_contract.py -k ContractPositive -v
-          python3 - "$RUNNER_TEMP/candidates.json" "$RUNNER_TEMP/cards.jsonl" <<'PY'
+          python3 - "$RUNNER_TEMP/qwen-status.json" <<'PY'
           import json,sys,pathlib
-          plan=json.loads(pathlib.Path(sys.argv[1]).read_text())
-          cards=[json.loads(x) for x in pathlib.Path(sys.argv[2]).read_text().splitlines()]
-          assert plan['dispatch_authorized'] is False
-          assert plan['candidate_ids'] == [] and plan['in_progress'] == []
-          assert plan['failed'] == ['B07-REAL-QWEN-HARNESS','B08-CONTEXT-CROSSOVER']
-          assert len(cards)==8
-          assert all(x['max_tool_calls']<=8 and x['max_context_tokens']<=1600 for x in cards)
-          assert plan['collisions']==0 and plan['private_actions_minutes']==0 and plan['verified_count']==4
-          print('PASS independent public packet/card/eligibility, no dispatch')
+          v=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          assert v['planner']=='EXISTING_SUPRAGOFLOW_GO_BATCH_WAVE'
+          assert v['dispatcher']=='AGENT_DISPATCH_ONLY'
+          assert v['dispatch_authorized'] is False and v['candidate_selection']=='NOT_IMPLEMENTED'
+          assert 'candidate_ids' not in v and 'cards' not in v
+          assert v['counts']['DONE_VERIFIED']==4
+          assert v['counts']['FAILED']==2
+          assert v['counts']['BLOCKED_ADMISSION']==2
+          assert v['counts']['READY']==0 and v['counts']['IN_PROGRESS']==0
+          assert v['private_actions_minutes']==0
+          print('PASS strict status-only Qwen ledger; external Go planner is sole wave selector')
           PY
       - name: Execute adversarial admission/scope/forged-PASS negatives independently
         if: matrix.band == 'negative-critics'
