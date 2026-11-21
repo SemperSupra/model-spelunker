@@ -11,7 +11,7 @@ export OLLAMA_MODELS="$RUNNER_TEMP/qwen-harness-models"
 export OLLAMA_CONTEXT_LENGTH=16384
 export OLLAMA_NUM_PARALLEL=1
 export QWEN_R10_MODE="${QWEN_R10_MODE:-baseline}"
-case "$QWEN_R10_MODE" in baseline|compact_system|compact_tools|compact_both|compact_schema|compact_schema_budget|compact_all_prompt|compact_all_prompt_budget) ;; *) echo "unsupported mode"; exit 2;; esac
+case "$QWEN_R10_MODE" in baseline|compact_system|compact_tools|compact_both|compact_schema|compact_schema_budget|compact_all_prompt|compact_all_prompt_budget|force_256_full|force_256_compact) ;; *) echo "unsupported mode"; exit 2;; esac
 export OLLAMA_MAX_LOADED_MODELS=1
 root="$RUNNER_TEMP/qwen-r10-native"
 mkdir -p "$root/ollama" "$root/home/.qwen" "$root/task" "$OLLAMA_MODELS"
@@ -151,6 +151,7 @@ receipt={
  "original_request_bytes":[e.get("original_request_bytes") for e in completed],
  "message_role_lengths":[e.get("message_role_lengths") for e in completed],
  "wire_output_budget":[e.get("requested_output_budget") for e in completed],
+ "original_output_budget":[e.get("original_output_budget") for e in completed],
  "finish_reasons":[e.get("finish_reasons") for e in completed],
  "sse_content_deltas":[e.get("sse_content_deltas") for e in completed],
  "sse_reasoning_deltas":[e.get("sse_reasoning_deltas") for e in completed],
