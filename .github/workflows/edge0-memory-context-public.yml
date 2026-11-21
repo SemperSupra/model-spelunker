@@ -147,7 +147,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, urllib.request, urllib.error
+          import hashlib, json, os, re, urllib.request, urllib.error
           from pathlib import Path
           base='http://127.0.0.1:8080/v1'
           opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -164,6 +164,24 @@ jobs:
                   response.read(4096)
           except urllib.error.HTTPError as exc:
               status=exc.code
+              # Inspect only bounded local synthetic-error bytes; emit a coarse
+              # allowlisted category and digest, never raw backend text.
+              raw=exc.read(4096)
+              message=raw.decode('utf-8','replace').lower()
+              categories={'model':('model not found','invalid model','model mismatch'),
+                          'tokenizer':('tokenizer','tokenisation','tokenization'),
+                          'chat_template':('chat template','chat_template'),
+                          'index_error':('list index out of range','indexerror'),
+                          'unsupported_arch':('unsupported architecture','not supported','unknown model type'),
+                          'path_error':('no such file','filenotfounderror'),
+                          'generation_error':('generation failed','generation error')}
+              category=next((key for key,terms in categories.items() if any(term in message for term in terms)), 'unclassified')
+              print('MODEL_HTTP_ERROR_CATEGORY='+category+' digest_sha256='+hashlib.sha256(raw).hexdigest())
+              log_file=Path(os.environ['RUNNER_TEMP'],'edge0-private-server.log')
+              if log_file.exists():
+                  log=log_file.read_text(errors='replace')[-32768:]
+                  types=re.findall(r'\\b(?:IndexError|ValueError|KeyError|RuntimeError|TypeError|OSError|AttributeError|NotImplementedError|FileNotFoundError):',log)
+                  print('MODEL_SERVER_EXCEPTION_TYPE='+((types[-1].rstrip(':')) if types else 'unclassified'))
           except Exception as exc:
               print('MODEL_HTTP_DIAGNOSTIC transport_error_class='+type(exc).__name__)
               raise
