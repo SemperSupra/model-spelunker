@@ -16,11 +16,12 @@ for fragment in (
     '"TARGET="+target',
     'secrets.token_hex(16)',
     'target in ("a.txt","b.txt")',
-    "decoy not in stdout",
+    "verify_selected(stdout,expected,decoy)",
     'sse_tool_delta_events",0) for v in completed)>=2',
     'requested_output_budget",0)>=256',
     '"hidden_fixture_oracle"',
     "qualification/qwencode_twohop_r12/wire_proxy.py",
+    "QWEN_CLI_JSON_RESULT_FRAME_ONLY",
 ):
     require(fragment in source, "missing source control "+fragment)
 
