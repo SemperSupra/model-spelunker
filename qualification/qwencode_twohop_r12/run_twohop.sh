@@ -117,7 +117,9 @@ rc=$?
 set -e
 export QWEN_LEAN_RC="$rc"
 python3 - <<'PY'
-import json,os,pathlib
+import json,os,pathlib,sys
+sys.path.insert(0,str(pathlib.Path.cwd()/"qualification/qwencode_twohop_r12"))
+from final_oracle import verify_selected
 p=pathlib.Path(os.environ["RUNNER_TEMP"],"qwen-r12-twohop")
 target=(p/"task/index.txt").read_text().strip().split("=",1)[1]
 assert target in ("a.txt","b.txt")
@@ -127,7 +129,7 @@ stdout=(p/"cli.stdout").read_text(errors="replace")
 metadata=json.loads((p/"proxy-metadata.json").read_text()) if (p/"proxy-metadata.json").is_file() else {"events":[]}
 events=metadata.get("events",[])
 completed=[v for v in events if v.get("phase")=="upstream-request" and v.get("result")!="IN_PROGRESS"]
-valid=int(os.environ["QWEN_LEAN_RC"])==0 and expected in stdout and decoy not in stdout and sum(
+valid=int(os.environ["QWEN_LEAN_RC"])==0 and verify_selected(stdout,expected,decoy) and sum(
    v.get("sse_tool_delta_events",0) for v in completed)>=2 and bool(completed) and all(
    v.get("requested_output_budget",0)>=256 and "read_file" in v.get("tool_names",[]) for v in completed)
 status="PASS" if valid else "FAIL"
@@ -140,7 +142,8 @@ receipt={
  "full_system_override":"QWEN_SYSTEM_MD_RUNNER_OWNED",
  "model_inference":"ACTUAL_PINNED_OLLAMA_QWEN3_1P7B",
  "qwen_exit":int(os.environ["QWEN_LEAN_RC"]),
- "hidden_fixture_oracle":"PASS" if expected in stdout and decoy not in stdout else "FAIL",
+ "hidden_fixture_oracle":"PASS" if verify_selected(stdout,expected,decoy) else "FAIL",
+ "final_answer_source":"QWEN_CLI_JSON_RESULT_FRAME_ONLY",
  "two_hop_tool_delta_min":sum(v.get("sse_tool_delta_events",0) for v in completed),
  "request_seen":bool(completed),
  "request_count":len(completed),
