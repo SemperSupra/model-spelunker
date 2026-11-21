@@ -1,0 +1,46 @@
+name: Qwen R9 real Ollama one-field crossover
+on:
+  pull_request:
+    paths:
+      - 'qualification/qwencode_ollama_crossover_r9/**'
+      - '.github/workflows/qwen-r9-real-ollama-crossover.yml'
+permissions:
+  contents: read
+jobs:
+  independent-source-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Offline parser and one-variable negative controls
+        run: python3 qualification/qwencode_ollama_crossover_r9/crossover.py --selftest
+  real-ollama-two-cases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Start disposable Ollama 0.34.1 localhost-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ollama/ollama:0.34.1
+          docker image inspect ollama/ollama:0.34.1 --format 'container_digest={{index .RepoDigests 0}}'
+          docker run -d --rm --name ollama-r9 -p 127.0.0.1:11434:11434 ollama/ollama:0.34.1
+          for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:11434/api/version > /dev/null; then break; fi; sleep 2; done
+          curl -fsS http://127.0.0.1:11434/api/version | python3 -c 'import sys,json; a=json.load(sys.stdin); assert a.get("version")=="0.34.1", "wrong Ollama version"'
+      - name: Download one public model inside disposable container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec ollama-r9 ollama pull qwen3:1.7b
+          curl -fsS http://127.0.0.1:11434/api/tags | python3 -c 'import json,sys; ms=json.load(sys.stdin)["models"]; xs=[m for m in ms if m["name"]=="qwen3:1.7b"]; assert len(xs)==1 and len(xs[0]["digest"])==64; print("model_digest_sha256="+xs[0]["digest"])'
+      - name: Real same-model same-task include_usage crossover
+        run: python3 qualification/qwencode_ollama_crossover_r9/crossover.py --live
+      - name: Teardown
+        if: always()
+        shell: bash
+        run: docker rm -f ollama-r9 >/dev/null 2>&1 || true
