@@ -36,6 +36,22 @@ assert target is not None,'model unavailable'
 assert target['digest'].removeprefix('sha256:').startswith(os.environ['MODEL_DIGEST_PREFIX']),'model digest mismatch'
 print('PASS pinned public local model')
 PY
+python3 - <<'PY'
+# A provider-layer canary distinguishes Ollama's OpenAI-compatible wire behavior
+# from Qwen Code agent/harness behavior. No private input or route.
+import json,os,urllib.request
+body={
+  'model':os.environ['MODEL_TAG'],
+  'messages':[{'role':'user','content':'Reply with the word ALIVE only.'}],
+  'reasoning_effort':'none','stream':False,
+  'max_tokens':64
+}
+req=urllib.request.Request('http://'+os.environ['OLLAMA_HOST']+'/v1/chat/completions',
+  data=json.dumps(body).encode(),headers={'Content-Type':'application/json'})
+with urllib.request.urlopen(req,timeout=60) as res: data=json.load(res)
+assert 'ALIVE' in str(data['choices'][0]['message'].get('content','')).upper(), 'OpenAI provider did not emit a non-thinking content response'
+print('PASS Ollama OpenAI-compatible nonthinking provider response')
+PY
 python3 qualification/qwencode_public/kit.py fetch --platform linux-x64 --archive "$RUNNER_TEMP/qwen-code-linux-x64.tar.gz"
 python3 qualification/qwencode_public/kit.py smoke --platform linux-x64 \
   --archive "$RUNNER_TEMP/qwen-code-linux-x64.tar.gz" --out "$RUNNER_TEMP/qwen-native"
@@ -51,7 +67,7 @@ data={
      'id':'qwen3:1.7b','envKey':'OLLAMA_API_KEY',
      'baseUrl':'http://127.0.0.1:11434/v1',
      'generationConfig':{'timeout':180000,'maxRetries':1,'contextWindowSize':8192,
-         'samplingParams':{'temperature':0,'max_tokens':512}}
+         'samplingParams':{'temperature':0,'max_tokens':512,'reasoning_effort':'none'}}
   }]},
   'memory':{'enableManagedAutoMemory':False,'enableManagedAutoDream':False,
       'enableTeamMemory':False,'enableTeamMemorySync':False},
