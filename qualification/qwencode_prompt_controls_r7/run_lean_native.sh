@@ -79,7 +79,7 @@ settings={
                                            "max_tokens":256,
                                            "reasoning_effort":"none"}}
   }]},
-  "tools":{"core":["read_file"],"eager":["read_file"]},
+  "tools":{"core":["read_file"],"eager":["read_file"],"toolSearch":{"enabled":False}},
   "memory":{"enableManagedAutoMemory":False,"enableManagedAutoDream":False,
             "enableTeamMemory":False,"enableTeamMemorySync":False},
   "experimental":{"agentTeam":False},
@@ -106,7 +106,7 @@ set +e
   cd "$root/task"
   timeout 150 "$root/native/qwen-code/bin/qwen" \
     --prompt 'Use read_file on fixture.txt and output only its exact contents. Do not guess.' \
-    --model qwen3:1.7b --core-tools read_file --approval-mode yolo --max-session-turns 4 \
+    --model qwen3:1.7b --core-tools read_file --approval-mode default --max-session-turns 4 \
     --max-tool-calls 4 --max-wall-time 140s --output-format json \
     >"$root/cli.stdout" 2>"$root/cli.stderr"
 )
@@ -124,12 +124,14 @@ completed=[v for v in events if v.get("phase")=="upstream-request" and v.get("re
 valid=int(os.environ["QWEN_LEAN_RC"])==0 and expected in stdout and any(
    v.get("sse_tool_delta_events",0)>0 for v in completed) and bool(completed) and all(
    v.get("system_content_chars",100000)<5000 and v.get("request_bytes",100000)<14000
-   and v.get("tools_count",100)>0 and v.get("tools_count",100)<=4 for v in completed)
+   and v.get("tools_count",100)==1 and v.get("tool_names",[])==["read_file"] for v in completed)
 status="PASS" if valid else "FAIL"
 receipt={
  "schema":"qwen-public-lean-real-harness/v1",
  "verdict":status,
  "core_allowlist":["read_file"],
+ "bridge_disabled":True,
+ "approval_mode":"default",
  "full_system_override":"QWEN_SYSTEM_MD_RUNNER_OWNED",
  "model_inference":"ACTUAL_PINNED_OLLAMA_QWEN3_1P7B",
  "qwen_exit":int(os.environ["QWEN_LEAN_RC"]),
@@ -139,6 +141,7 @@ receipt={
  "upstream_request_bytes":[e.get("request_bytes") for e in completed],
  "system_content_chars":[e.get("system_content_chars") for e in completed],
  "tools_advertised":[e.get("tools_count") for e in completed],
+ "tool_names":[e.get("tool_names") for e in completed],
  "response_elapsed_seconds":[e.get("response_elapsed_seconds") for e in completed],
  "first_sse_event_seconds":[e.get("first_sse_event_seconds") for e in completed],
  "tool_deltas":[e.get("sse_tool_delta_events") for e in completed],
