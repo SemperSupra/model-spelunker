@@ -92,7 +92,7 @@ def validate(plan):
         assert_valid(all(isinstance(x, str) and x in mapping and x != t["id"] for x in deps),
                      f"{t['id']}: missing/self dependency")
         assert_valid(len(deps) == len(set(deps)), f"{t['id']}: duplicate dependency")
-        if t["state"] == "READY":
+        if t["state"] in ("READY", "IN_PROGRESS", "DONE_VERIFIED"):
             assert_valid(all(mapping[x]["state"] == "DONE_VERIFIED" for x in deps),
                          f"{t['id']}: dependency not verified")
     visited = set()
@@ -137,6 +137,8 @@ def plan_candidates(plan):
             "dispatcher": "AGENT_DISPATCH_ONLY",
             "candidate_ids": [t["id"] for t in selected],
             "eligible": len(ready),
+            "in_progress": [t["id"] for t in plan["tasks"] if t["state"] == "IN_PROGRESS"],
+            "failed": [t["id"] for t in plan["tasks"] if t["state"] == "FAILED"],
             "blocked": [{"id": t["id"], "state": t["state"]} for t in plan["tasks"]
                         if t["state"].startswith("BLOCKED")],
             "verified_count": sum(t["state"] == "DONE_VERIFIED" for t in plan["tasks"]),
