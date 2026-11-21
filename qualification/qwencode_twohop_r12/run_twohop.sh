@@ -121,6 +121,7 @@ python3 - <<'PY'
 import json,os,pathlib,sys
 sys.path.insert(0,str(pathlib.Path.cwd()/"qualification/qwencode_twohop_r12"))
 from final_oracle import verify_selected,classify_final
+from lineage_oracle import lineage_verdict
 p=pathlib.Path(os.environ["RUNNER_TEMP"],"qwen-r12-twohop")
 target=(p/"task/index.txt").read_text().strip().split("=",1)[1]
 assert target in ("a.txt","b.txt")
@@ -130,7 +131,8 @@ stdout=(p/"cli.stdout").read_text(errors="replace")
 metadata=json.loads((p/"proxy-metadata.json").read_text()) if (p/"proxy-metadata.json").is_file() else {"events":[]}
 events=metadata.get("events",[])
 completed=[v for v in events if v.get("phase")=="upstream-request" and v.get("result")!="IN_PROGRESS"]
-valid=int(os.environ["QWEN_LEAN_RC"])==0 and verify_selected(stdout,expected,decoy) and sum(
+lineage=lineage_verdict(stdout,p/"task",target)
+valid=int(os.environ["QWEN_LEAN_RC"])==0 and lineage=="PASS" and verify_selected(stdout,expected,decoy) and sum(
    v.get("sse_tool_delta_events",0) for v in completed)>=2 and bool(completed) and all(
    v.get("requested_output_budget",0)>=256 and "read_file" in v.get("tool_names",[]) for v in completed)
 status="PASS" if valid else "FAIL"
@@ -146,6 +148,8 @@ receipt={
  "hidden_fixture_oracle":"PASS" if verify_selected(stdout,expected,decoy) else "FAIL",
  "final_answer_source":"QWEN_CLI_JSON_RESULT_FRAME_ONLY",
  "final_answer_class":classify_final(stdout,expected,decoy),
+ "tool_lineage_class":lineage,
+ "lineage_verifier":"EXACT_ORDERED_READ_FILE_TWO_TOOL_RESULT_IDS",
  "two_hop_tool_delta_min":sum(v.get("sse_tool_delta_events",0) for v in completed),
  "request_seen":bool(completed),
  "request_count":len(completed),
