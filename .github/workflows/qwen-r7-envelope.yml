@@ -1,0 +1,53 @@
+name: Qwen R7 Public CPU Request-Envelope Bounds
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwen-r7-envelope.yml'
+      - 'qualification/qwencode_envelope_r7/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-r7-envelope-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-cpu-envelopes:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        band: [r7-12kb, r7-19kb, r7-25kb, offline-critics]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout public source only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Actual Qwen3 Ollama streamed tool-selection envelope
+        if: matrix.band != 'offline-critics'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash qualification/qwencode_envelope_r7/run.sh '${{ matrix.band }}'
+      - name: Independent source-only factor/secret critic
+        if: matrix.band == 'offline-critics'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/qwencode_envelope_r7 -p test_probe.py -v
+      - name: Preserve redacted outcome even if model times out
+        if: matrix.band != 'offline-critics' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r7-${{ matrix.band }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/qwen-r7-${{ matrix.band }}.json
+          retention-days: 7
+          if-no-files-found: ignore
