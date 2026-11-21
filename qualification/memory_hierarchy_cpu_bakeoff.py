@@ -166,7 +166,12 @@ def reme(fixture, tmp: Path) -> tuple[list[dict], dict]:
         deadline = time.monotonic() + 75
         while time.monotonic() < deadline:
             if proc.poll() is not None:
-                raise RuntimeError("ReMe exited during local startup; see sanitized startup status")
+                # Categorize public-synthetic startup failure without uploading raw server logs.
+                log.flush()
+                sample=(tmp / "reme.log").read_text(encoding="utf-8",errors="replace")
+                errors=re.findall(r"(?:ModuleNotFoundError|ImportError|RuntimeError|ValueError|TypeError|AttributeError|FileNotFoundError):[^\\n]{0,180}",sample)
+                category=errors[-1][:190] if errors else "uncategorized"
+                raise RuntimeError("ReMe exited during local startup; category="+category)
             try:
                 http_json(port, "version", {}, timeout=2)
                 break
