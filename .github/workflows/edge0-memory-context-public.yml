@@ -58,16 +58,20 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 28
     env:
-      HF_HOME: ${{ runner.temp }}/edge0-hf
       HF_HUB_DISABLE_TELEMETRY: '1'
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       MODEL_ID: Edge0/Edge0-8B-A1B-preview
-      MODEL_DIR: ${{ runner.temp }}/edge0-model
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Initialize runner-local ephemeral model paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'HF_HOME=%s/edge0-hf\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'MODEL_DIR=%s/edge0-model\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Fail closed if not Apple Silicon or adequate initial space
         shell: bash
         run: |
