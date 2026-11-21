@@ -1,0 +1,38 @@
+name: Qwen R18 Installed Embodiment Actual Model Qualification
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/**'
+      - '.github/workflows/qwen-r18-native-use.yml'
+permissions:
+  contents: read
+jobs:
+  independent-negative-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 qualification/agent_embodiment/final_oracle.py
+          python3 qualification/agent_embodiment/lineage_oracle.py
+          python3 qualification/agent_embodiment/qwen_embody.py self-test
+          bash -n qualification/agent_embodiment/run_native_installed.sh
+  native-install-configure-and-use:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install exact official Qwen and invoke configured native Ollama model using read_file
+        run: bash qualification/agent_embodiment/run_native_installed.sh
+      - name: Upload redacted source-bound receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r18-native-use-${{ github.run_id }}
+          path: ${{ runner.temp }}/qwen-r18-live/receipt.json
+          if-no-files-found: ignore
+          retention-days: 7
