@@ -60,7 +60,11 @@ def load_profile() -> dict:
 
 def settings(profile: dict) -> dict:
     m=profile["model"]
+    # Source pinned Qwen Code v0.28.3: packages/cli/src/config/settings.ts
+    # SETTINGS_VERSION=4, SETTINGS_VERSION_KEY='$version'.
+    # Preseed version so the CLI does not rewrite its owned settings on startup.
     return {
+      "$version":4,
       "security":{"auth":{"selectedType":"openai"}},
       "model":{"name":m["model"]},
       "modelProviders":{"openai":[{
