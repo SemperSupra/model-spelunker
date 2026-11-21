@@ -1,0 +1,39 @@
+name: R28 Agent Fleet Upstream Version and Artifact Refresh Census
+on:
+  pull_request:
+    paths:
+      - 'qualification/harness_refresh/**'
+      - '.github/workflows/r28-harness-fleet-census.yml'
+permissions:
+  contents: read
+jobs:
+  offline-source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m py_compile qualification/harness_refresh/release_census.py
+          python3 -m qualification.harness_refresh.release_census self-test
+  public-upstream-version-observation:
+    needs: [offline-source-contract]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read official upstream source/release metadata, without tokens
+        run: |
+          set -Eeuo pipefail
+          python3 -m qualification.harness_refresh.release_census observe --output "$RUNNER_TEMP/r28-agent-upstream-census.json"
+      - name: Preserve source-only public version candidate evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: r28-public-agent-version-census-${{ github.run_id }}
+          path: ${{ runner.temp }}/r28-agent-upstream-census.json
+          if-no-files-found: ignore
+          retention-days: 14
