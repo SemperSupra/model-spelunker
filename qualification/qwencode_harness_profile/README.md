@@ -1,0 +1,15 @@
+# Qwen Code / real Ollama small-model harness envelope — band B07
+
+Parent [batch DLE #224](https://github.com/SemperSupra/model-spelunker/issues/224) and [model qualification #206](https://github.com/SemperSupra/model-spelunker/issues/206). This is a fresh public-only experiment, not a service, broker, scheduler, VM controller or production profile.
+
+**Why this rep:** previous native Qwen CLI → deterministic OpenAI SSE fake provider **PASS** ([#226](https://github.com/SemperSupra/model-spelunker/pull/226)); actual Ollama Qwen3:1.7b direct OpenAI non-stream and SSE `read_file` selections **PASS** ([#230](https://github.com/SemperSupra/model-spelunker/pull/230)); full native Qwen CLI + real Ollama task previously **FAIL/TIMEOUT** ([run 44873579863](https://github.com/SemperSupra/model-spelunker/actions/runs/44873579863)). The interaction is the missing qualification.
+
+The new experiment combines official SHA-pinned Qwen Code v0.28.3 standalone, pinned Ollama 0.34.1/Qwen3:1.7b on a **standard public free-tier Ubuntu 24.04 disposable runner**, and a tiny `127.0.0.1` metadata-only HTTP proxy to the runner's own Ollama API. The proxy never stores raw prompt, file data, model outputs, Authorization values, or host identity. Only counts/timing, model name, tool names, first SSE event and number of streamed tool deltas are retained.
+
+One critical variable is changed from the failed full-agent rep: small-model schema deferral via Qwen's `tools.core: ["read_file"]` and `tools.eager: ["read_file"]`, with no MCP and memory Git sync disabled, plus an observed 16,384-token Ollama context configuration. `tools.core` is deprecated upstream and is a temporary test-only diagnostic; future adoption must use a source-qualified replacement and deny non-exempt tools separately. The model must read an unknown random nonce file and return its exact content. Both network tool-call and final file oracle are required; a valid CLI `--version` or a direct model tool call alone is not enough.
+
+The parallel **light** CI band independently tests proxy localhost binding, blocked routes and no raw request/token logging. The **heavy** band starts one Ollama model instance, performs one capped native Qwen session, records a redacted receipt even on failure and terminates run-owned processes. The heavy workflow has a 15-minute cap and is not a private or persistent runner.
+
+**Safety:** YOLO auto-approval is used only for this tightly bounded public-synthetic disposable runner fixture; it does not itself sandbox commands. Nothing in this test gives YOLO, tool grants, model endpoints or access to the owner's local Windows/BigMac/TrueNAS systems. A PASS does **not** qualify multi-agent orchestration, memory, MCP, local Hyper-V guest installation, or sovereign models. A FAIL must record the request envelope, categorized block, and independent critic outcome.
+
+No public private-repository checkout or cloud-hosted private model calls. Keep PR a draft; reconcile exact source/run/results in DLE before the next rep.
