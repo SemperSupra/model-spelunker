@@ -1,0 +1,25 @@
+name: Qwen R9 synthetic request shape
+on:
+  push:
+    branches: [agent/issue-248-r9-request-shape]
+    paths:
+      - 'qualification/qwencode_protocol_r9/**'
+      - '.github/workflows/qwen-r9-request-shape.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  positive-envelope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Positive synthetic metadata and secret non-disclosure oracle
+        run: python3 qualification/qwencode_protocol_r9/request_shape.py --selftest positive
+  negative-mutants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Independent fail-closed mutation oracle
+        run: python3 qualification/qwencode_protocol_r9/request_shape.py --selftest negative
