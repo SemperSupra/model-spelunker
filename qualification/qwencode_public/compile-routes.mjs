@@ -58,7 +58,8 @@ export function compileRoutes(input) {
     modelProviders:{openai:registry},
     agents:{modelGrades:roles,allowedGrades:Object.keys(roles),
       defaultBackground:true,maxParallelAgents:3},
-    tools:{approvalMode:'yolo'},
+    // Never pre-enable YOLO in a transport/profile compiler. The qualified
+    // workcell controller sets that mode only after external admission.
     mcpServers:{},
     memory:{enableManagedAutoMemory:false,enableManagedAutoDream:false,
       enableStructuredRecall:false,enableTeamMemory:false,
@@ -77,6 +78,7 @@ function selfTest(){
   assert.equal(x.agents.modelGrades.coder,'openai:local-coder');
   assert.equal(x.modelProviders.openai[0].envKey,'LOCAL_CODER_KEY');
   assert.equal(x.model.name,'local-coder');
+  assert.equal(Object.hasOwn(x,'tools'),false,'compiler may not grant YOLO');
   assert.equal(JSON.stringify(x).includes('apiKey'),false);
   const bad=(change)=>{assert.throws(()=>compileRoutes({...good,routes:[{...good.routes[0],...change}]}));};
   bad({kind:'cloud',baseUrl:'https://example.invalid/v1'});
