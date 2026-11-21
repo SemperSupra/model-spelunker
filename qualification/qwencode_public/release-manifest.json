@@ -1,0 +1,25 @@
+{
+  "schema": "qwencode-public-release/v1",
+  "upstream": "QwenLM/qwen-code",
+  "upstream_ref": "v0.28.3",
+  "version": "0.28.3",
+  "license": "Apache-2.0",
+  "published_utc": "2026-11-21T01:45:48Z",
+  "source": "https://api.github.com/repos/QwenLM/qwen-code/releases/tags/v0.28.3",
+  "platforms": {
+    "windows-x64": {
+      "asset": "qwen-code-win-x64.zip",
+      "format": "zip",
+      "size_bytes": 75566987,
+      "sha256": "44bcbcfbef3a1c5a04f48a42b1fbede2a0ba248482b01c3cea8a65693d1552b4",
+      "binary": "qwen-code/bin/qwen.cmd"
+    },
+    "linux-x64": {
+      "asset": "qwen-code-linux-x64.tar.gz",
+      "format": "tar.gz",
+      "size_bytes": 94075488,
+      "sha256": "4058d50847d01d864eb37b856711dbaee7e7deed7ad9278565b692e5773e0fae",
+      "binary": "qwen-code/bin/qwen"
+    }
+  }
+}
