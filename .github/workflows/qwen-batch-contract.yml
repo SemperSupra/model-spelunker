@@ -42,8 +42,8 @@ jobs:
           plan=json.loads(pathlib.Path(sys.argv[1]).read_text())
           cards=[json.loads(x) for x in pathlib.Path(sys.argv[2]).read_text().splitlines()]
           assert plan['dispatch_authorized'] is False
-          assert plan['candidate_ids'] == [] and plan['in_progress'] == ['B08-CONTEXT-CROSSOVER']
-          assert plan['failed'] == ['B07-REAL-QWEN-HARNESS']
+          assert plan['candidate_ids'] == [] and plan['in_progress'] == []
+          assert plan['failed'] == ['B07-REAL-QWEN-HARNESS','B08-CONTEXT-CROSSOVER']
           assert len(cards)==8
           assert all(x['max_tool_calls']<=8 and x['max_context_tokens']<=1600 for x in cards)
           assert plan['collisions']==0 and plan['private_actions_minutes']==0 and plan['verified_count']==4
