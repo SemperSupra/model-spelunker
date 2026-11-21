@@ -32,9 +32,9 @@ jobs:
     env:
       CI: 'true'
       QWEN_PUBLIC_PLATFORM: ${{ matrix.platform }}
-      QWEN_ARCHIVE: ${{ runner.temp }}/qwen-official-${{ matrix.platform }}.archive
-      QWEN_KIT: ${{ runner.temp }}/qwen-public-kit-${{ matrix.platform }}.zip
-      QWEN_RECEIPT: ${{ runner.temp }}/qwen-public-receipt-${{ matrix.platform }}.json
+      QWEN_ARCHIVE: ${{ github.workspace }}/qwen-official-${{ matrix.platform }}.archive
+      QWEN_KIT: ${{ github.workspace }}/qwen-public-kit-${{ matrix.platform }}.zip
+      QWEN_RECEIPT: ${{ github.workspace }}/qwen-public-receipt-${{ matrix.platform }}.json
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Checkout only PUBLIC source without credentials
