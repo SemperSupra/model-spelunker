@@ -52,7 +52,7 @@ jobs:
           retention-days: 14
 
   model-m1:
-    if: github.event_name == 'pull_request' && github.head_ref == 'exp/206-edge0-r2-mlx-m1-clean-20261121' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 216 && github.event.pull_request.head.repo.full_name == github.repository
     needs: source
     name: Exploratory real Edge0 8B via MLX on hosted M1
     runs-on: macos-15
