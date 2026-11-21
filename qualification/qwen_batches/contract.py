@@ -79,6 +79,13 @@ def validate(plan):
             t["evidence"].get("independent_oracle") == "PASS" and
             PUBLIC_REF.fullmatch(t["evidence"].get("run_url", ""))),
             f"{task_id}: unverifiable DONE marker")
+        assert_valid(t["state"] != "FAILED" or (
+            isinstance(t.get("evidence"), dict) and
+            SHA.fullmatch(t["evidence"].get("source_sha", "")) and
+            t["evidence"]["source_sha"] == t["source_sha"] and
+            t["evidence"].get("independent_oracle") == "FAIL" and
+            PUBLIC_REF.fullmatch(t["evidence"].get("run_url", ""))),
+            f"{task_id}: unverifiable FAILED marker")
         for s in t["scope"]:
             assert_valid(isinstance(s, str) and s.startswith("qualification/") and
                          not s.startswith("/") and "//" not in s and
