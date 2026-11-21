@@ -16,13 +16,22 @@ import urllib.error
 
 
 def normalize_request(obj,mode):
-    if mode not in ("baseline","compact_system","compact_tools","compact_both"):
+    if mode not in ("baseline","compact_system","compact_tools","compact_both","compact_schema","compact_schema_budget"):
         raise ValueError("unsupported normalization mode")
-    if mode in ("compact_system","compact_both"):
+    if mode in ("compact_system","compact_both","compact_schema","compact_schema_budget"):
         compact={"role":"system","content":"Read fixture.txt using read_file. Return the exact file text. Do not guess."}
         obj["messages"]=[compact]+[m for m in obj.get("messages",[]) if m.get("role") not in ("system","developer")]
-    if mode in ("compact_tools","compact_both"):
+    if mode in ("compact_tools","compact_both","compact_schema","compact_schema_budget"):
         obj["tools"]=[t for t in obj.get("tools",[]) if t.get("type")=="function" and t.get("function",{}).get("name")=="read_file"]
+    if mode in ("compact_schema","compact_schema_budget"):
+        if len(obj.get("tools",[]))!=1 or obj["tools"][0]["function"]["name"]!="read_file":
+            raise ValueError("required read_file tool missing")
+        obj["tools"][0]["function"]["description"]="Read one local file"
+        obj["tools"][0]["function"]["parameters"]={
+            "type":"object",
+            "properties":{"file_path":{"type":"string","description":"file path"}},
+            "required":["file_path"]
+        }
     return obj
 
 
@@ -170,7 +179,7 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--port-file",required=True)
     p.add_argument("--state",required=True)
-    p.add_argument("--mode",choices=("baseline","compact_system","compact_tools","compact_both"),required=True)
+    p.add_argument("--mode",choices=("baseline","compact_system","compact_tools","compact_both","compact_schema","compact_schema_budget"),required=True)
     options=p.parse_args()
     server=Proxy(("127.0.0.1",0),options.state)
     server.mode=options.mode
