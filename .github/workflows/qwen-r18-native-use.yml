@@ -2,8 +2,14 @@ name: Qwen R18 Installed Embodiment Actual Model Qualification
 on:
   pull_request:
     paths:
-      - 'qualification/agent_embodiment/**'
-      - '.github/workflows/qwen-r18-native-use.yml'
+      - 'qualification/agent_embodiment/qwen_embody.py'
+      - 'qualification/agent_embodiment/qwen-public-linux.json'
+      - 'qualification/agent_embodiment/run_native_installed.sh'
+      - 'qualification/agent_embodiment/final_oracle.py'
+      - 'qualification/agent_embodiment/lineage_oracle.py'
+      - 'qualification/agent_embodiment/settings_drift.py'
+      - 'qualification/qwencode_public/kit.py'
+      - 'qualification/qwencode_public/release-manifest.json'
 permissions:
   contents: read
 jobs:

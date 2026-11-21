@@ -2,8 +2,13 @@ name: Qwen R19 Reuse Existing Rootless OCI Harness Foundry
 on:
   pull_request:
     paths:
-      - 'qualification/agent_embodiment/**'
-      - '.github/workflows/qwen-r19-oci-carrier.yml'
+      - 'qualification/agent_embodiment/qwen_oci.py'
+      - 'qualification/agent_embodiment/qwen_embody.py'
+      - 'qualification/agent_embodiment/qwen-public-linux.json'
+      - 'qualification/qwencode_public/kit.py'
+      - 'qualification/qwencode_public/release-manifest.json'
+      - 'qualification/package_artifact_oci.py'
+      - 'qualification/hydrate_oci_layout.py'
 permissions:
   contents: read
 jobs:
