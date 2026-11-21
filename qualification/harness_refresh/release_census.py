@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 import re
+import subprocess
 import urllib.request
 import urllib.error
 
@@ -117,6 +118,54 @@ def classification(subject:dict,current:dict)->str:
     if new>old:return "UPDATE_CANDIDATE"
     if new==old:return "BASELINE_VERSION_CURRENT"
     return "UPSTREAM_BEHIND_BASELINE"
+def git_candidate(subject:dict)->dict:
+    """Independent uncredentialed GitHub smart-HTTP tag/commit proof.
+
+    Tags are NOT proven GitHub releases or artifact checksum admissions.
+    Annotated ^{} dereference is mandatory for source commit identity.
+    """
+    repo=subject["repo"]
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",repo):
+        raise ValueError("unsafe git repository")
+    argv=["git","-c","credential.helper=","ls-remote",
+          "--tags" if subject["upstream"]!="head" else "--heads",
+          "https://github.com/"+repo+".git"]
+    if subject["upstream"]=="head":
+        argv=["git","-c","credential.helper=","ls-remote",
+              "https://github.com/"+repo+".git","HEAD"]
+    result=subprocess.run(argv,capture_output=True,text=True,timeout=50,
+                          check=False,env={"PATH":"/usr/bin:/bin",
+                                           "GIT_TERMINAL_PROMPT":"0",
+                                           "GIT_CONFIG_NOSYSTEM":"1"})
+    if result.returncode:raise ValueError("uncredentialed git ls-remote unavailable")
+    if len(result.stdout)>5_000_000:raise ValueError("oversized git ref list")
+    refs={}
+    deref={}
+    for line in result.stdout.splitlines():
+        cols=line.split("\t")
+        if len(cols)!=2:continue
+        sha,name=cols
+        if not re.fullmatch("[a-f0-9]{40}",sha):continue
+        if name=="HEAD":
+            return {"tag":None,"version":None,"source_commit":sha,
+                    "published_at":None,"release_assets":[],
+                    "release_asset_sha_coverage":0,"evidence":"GIT_HEAD_ONLY"}
+        if not name.startswith("refs/tags/"):continue
+        tag=name[len("refs/tags/"):]
+        if tag.endswith("^{}"):deref[tag[:-3]]=sha
+        else:refs[tag]=sha
+    eligible=[]
+    for tag,sha in refs.items():
+        version=tag_version(tag)
+        if version is None:continue
+        if subject["upstream"]=="major2_release" and version[0]!=2:continue
+        eligible.append((version,tag,deref.get(tag,sha)))
+    if not eligible:raise ValueError("no admissible semver tags")
+    version,tag,sha=max(eligible,key=lambda x:x[0])
+    return {"tag":tag,"version":".".join(map(str,version)),
+            "source_commit":sha,"published_at":None,"release_assets":[],
+            "release_asset_sha_coverage":0,
+            "evidence":"GIT_TAG_CANDIDATE_RELEASE_NOT_CONFIRMED"}
 def observe(subject:dict)->dict:
     base=BASE+subject["repo"]+"/"
     try:
@@ -139,9 +188,18 @@ def observe(subject:dict)->dict:
             current=redacted_release(release,commit.get("sha",""))
         status=classification(subject,current)
     except (ValueError,KeyError,urllib.error.HTTPError,urllib.error.URLError,TimeoutError) as e:
-        current={"tag":None,"version":None,"source_commit":None,"published_at":None,
-                 "release_assets":[],"release_asset_sha_coverage":0}
-        status="UNAVAILABLE_OR_UNVERIFIED"
+        api_error=("HTTP_"+str(e.code)) if isinstance(e,urllib.error.HTTPError) else type(e).__name__
+        try:
+            current=git_candidate(subject)
+            status=classification(subject,current)
+            if current["evidence"]!="GIT_HEAD_ONLY":
+                status="GIT_TAG_"+status+"_RELEASE_UNVERIFIED"
+        except (ValueError,TimeoutError,OSError,subprocess.SubprocessError) as git_error:
+            current={"tag":None,"version":None,"source_commit":None,"published_at":None,
+                     "release_assets":[],"release_asset_sha_coverage":0,
+                     "evidence":"NONE"}
+            status="UNAVAILABLE_OR_UNVERIFIED"
+            api_error=api_error+"__GIT_"+type(git_error).__name__
     return {"id":subject["id"],"official_repo":subject["repo"],
             "previous_class":subject["class"],"baseline_version":subject["baseline_version"],
             "baseline_source_sha":subject["baseline_sha"],
@@ -193,5 +251,6 @@ def main():
     print(json.dumps({"schema":result["schema"],"authority":result["authority"],
        "subjects":[{"id":x["id"],"status":x["status"],
                     "current_version":x["observed_upstream"]["version"],
+                    "evidence":x["observed_upstream"].get("evidence","GITHUB_RELEASE_API"),
                     "source_sha":x["observed_upstream"]["source_commit"]} for x in result["subjects"]]},sort_keys=True))
 if __name__=="__main__":main()
