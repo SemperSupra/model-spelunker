@@ -1,0 +1,16 @@
+{
+  "schema": "qwen-role-routes/v1",
+  "workcellClass": "public",
+  "routes": [
+    {
+      "role": "planner",
+      "kind": "cloud",
+      "dataClass": "public",
+      "modelId": "public-model-not-real",
+      "envKey": "PUBLIC_PLAN_KEY",
+      "baseUrl": "https://example.invalid/v1",
+      "timeoutMs": 120000,
+      "contextWindowSize": 32768
+    }
+  ]
+}

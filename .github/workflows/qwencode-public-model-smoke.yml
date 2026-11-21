@@ -1,0 +1,42 @@
+name: Qwen Code Public Local Model Smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwencode-public-model-smoke.yml'
+      - 'qualification/qwencode_public/model-smoke.sh'
+      - 'qualification/qwencode_public/kit.py'
+      - 'qualification/qwencode_public/release-manifest.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-model-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-local-model:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout public source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pinned Qwen Code + Ollama + Qwen3 1.7B public-only agentic task
+        shell: bash
+        run: bash qualification/qwencode_public/model-smoke.sh
+      - name: Retain only synthetic task/model evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: qwen-public-actual-model-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/qwen-agent-receipt.json
+            ${{ runner.temp }}/qwen-agent-result.json
+            ${{ runner.temp }}/qwen-agent-stderr.txt
+          retention-days: 7
+          if-no-files-found: ignore
