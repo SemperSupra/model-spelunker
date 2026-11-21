@@ -1,0 +1,148 @@
+name: Qwen Code Public Disposable Capsule RDTE
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qwencode-public-capsule.yml'
+      - 'qualification/qwencode_public/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qwen-public-capsule-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned-portable:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: ${{ matrix.platform }} immutable standalone and guest-payload OPAV
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - runner: windows-2025
+            platform: windows-x64
+          - runner: ubuntu-24.04
+            platform: linux-x64
+    env:
+      CI: 'true'
+      QWEN_PUBLIC_PLATFORM: ${{ matrix.platform }}
+      QWEN_ARCHIVE: ${{ runner.temp }}/qwen-official-${{ matrix.platform }}.archive
+      QWEN_KIT: ${{ runner.temp }}/qwen-public-kit-${{ matrix.platform }}.zip
+      QWEN_RECEIPT: ${{ runner.temp }}/qwen-public-receipt-${{ matrix.platform }}.json
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout only PUBLIC source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up ephemeral Python for CI harness only
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Source-neutral offline negative controls
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python qualification/qwencode_public/kit.py self-test
+          if ($LASTEXITCODE -ne 0) { throw 'archive negative controls failed' }
+
+      - name: Download and SHA256 verify exact official standalone release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python qualification/qwencode_public/kit.py fetch --platform $env:QWEN_PUBLIC_PLATFORM --archive $env:QWEN_ARCHIVE
+          if ($LASTEXITCODE -ne 0) { throw 'upstream digest verification failed' }
+
+      - name: Independently execute native Qwen binary from unpacked release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $unpack=Join-Path $env:RUNNER_TEMP ('qwen-native-' + $env:QWEN_PUBLIC_PLATFORM)
+          python qualification/qwencode_public/kit.py smoke --platform $env:QWEN_PUBLIC_PLATFORM --archive $env:QWEN_ARCHIVE --out $unpack
+          if ($LASTEXITCODE -ne 0) { throw 'native Qwen smoke failed' }
+
+      - name: Windows native PowerShell 5.1 Observe/Plan/Apply/Verify/Rollback
+        if: matrix.platform == 'windows-x64'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($PSVersionTable.PSVersion.Major -ne 5) { throw 'requires native PowerShell 5.1' }
+          $script=Join-Path $env:GITHUB_WORKSPACE 'qualification\qwencode_public\Invoke-QwenCapsule.ps1'
+          $manifest=Join-Path $env:GITHUB_WORKSPACE 'qualification\qwencode_public\release-manifest.json'
+          $root=Join-Path $env:RUNNER_TEMP 'qwen-opav-native'
+          $common=@{ManifestPath=$manifest;ArchivePath=$env:QWEN_ARCHIVE;Root=$root;Mode='SyntheticCI'}
+          $o=(& $script -Phase Observe @common | ConvertFrom-Json)
+          if($o.hostMutation -ne 'NONE') { throw 'host mutation in observe' }
+          $p=(& $script -Phase Plan @common | ConvertFrom-Json)
+          if($p.state -ne 'CREATE' -or $p.planSha256 -notmatch '^[0-9a-f]{64}$') { throw 'plan not admitted for empty test root' }
+          $refused=$false
+          try { & $script -Phase Apply @common -ApprovePlanSha256 ('0'*64) | Out-Null } catch { $refused=$true }
+          if(-not $refused -or (Test-Path -LiteralPath $root)) { throw 'unapproved apply mutated disk' }
+          $refused=$false
+          try { & $script -Phase Apply -Mode Production -ManifestPath $manifest -ArchivePath $env:QWEN_ARCHIVE -Root $root -ApprovePlanSha256 $p.planSha256 | Out-Null } catch { $refused=$true }
+          if(-not $refused -or (Test-Path -LiteralPath $root)) { throw 'production admission bypass' }
+          $first=(& $script -Phase Apply @common -ApprovePlanSha256 $p.planSha256 | ConvertFrom-Json)
+          if($first.result -ne 'APPLIED_GUEST_ONLY') { throw 'synthetic install not applied' }
+          $verify=(& $script -Phase Verify @common | ConvertFrom-Json)
+          if($verify.result -ne 'LOCAL_PAYLOAD_PASS') { throw 'local payload verification failed' }
+          $repeat=(& $script -Phase Apply @common -ApprovePlanSha256 $p.planSha256 | ConvertFrom-Json)
+          if($repeat.result -ne 'NOOP_VERIFIED') { throw 'repeated apply was not idempotent' }
+          $badZip=Join-Path $env:RUNNER_TEMP 'qwen-bad.zip'
+          [IO.File]::WriteAllText($badZip, 'corrupted')
+          $bad=@{ManifestPath=$manifest;ArchivePath=$badZip;Root=$root;Mode='SyntheticCI'}
+          $failPlan=(& $script -Phase Plan @bad | ConvertFrom-Json)
+          if($failPlan.state -ne 'BLOCKED') { throw 'bad source hash not blocked' }
+          $rollback=(& $script -Phase Rollback @common -ApprovePlanSha256 $p.planSha256 | ConvertFrom-Json)
+          if($rollback.result -ne 'OWNED_GENERATION_ABSENT') { throw 'rollback failed' }
+          $again=(& $script -Phase Rollback @common -ApprovePlanSha256 $p.planSha256 | ConvertFrom-Json)
+          if(Test-Path -LiteralPath (Join-Path $root 'active')) { throw 'rollback left guest payload' }
+          [void](New-Item -ItemType Directory -Path (Join-Path $root 'active') -Force)
+          $foreign=(& $script -Phase Plan @common | ConvertFrom-Json)
+          if($foreign.state -ne 'BLOCKED') { throw 'foreign root not detected' }
+          $refused=$false
+          try { & $script -Phase Rollback @common -ApprovePlanSha256 $p.planSha256 | Out-Null } catch { $refused=$true }
+          if(-not $refused -or -not (Test-Path -LiteralPath (Join-Path $root 'active'))) { throw 'foreign data deleted' }
+          Write-Host 'PASS: native Windows PS5.1 release/deny/idempotence/rollback/foreign-resource synthetic checks'
+
+      - name: Assemble immutable public-safe ZIP kit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python qualification/qwencode_public/kit.py assemble --platform $env:QWEN_PUBLIC_PLATFORM --archive $env:QWEN_ARCHIVE --out $env:QWEN_KIT
+          if ($LASTEXITCODE -ne 0) { throw 'portable kit assembly failed' }
+          $release=Get-Content qualification/qwencode_public/release-manifest.json -Raw | ConvertFrom-Json
+          $record=[ordered]@{
+            schema='qwencode-public-ci-receipt/v1'
+            class='PUBLIC_SYNTHETIC'
+            source_sha=$env:GITHUB_SHA
+            release=$release.version
+            platform=$env:QWEN_PUBLIC_PLATFORM
+            run_id=$env:GITHUB_RUN_ID
+            native_version='PASS'
+            hash_and_archive='PASS'
+            guest_payload=$(if($env:QWEN_PUBLIC_PLATFORM -eq 'windows-x64'){'SYNTHETIC_GHA_PASS'}else{'NOT_RUN_WINDOWS_ONLY'})
+            physical_hyperv='NOT_TESTED'
+            provider_calls='NOT_TESTED'
+            real_admission='NOT_TESTED'
+            artifact_sha256=(Get-FileHash -LiteralPath $env:QWEN_KIT -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $record | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $env:QWEN_RECEIPT -Encoding UTF8
+          Write-Host ('KIT_SHA256=' + $record.artifact_sha256)
+
+      - name: Publish ephemeral public kit and scoped evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-public-capsule-${{ matrix.platform }}-${{ github.run_id }}
+          path: |
+            ${{ env.QWEN_KIT }}
+            ${{ env.QWEN_RECEIPT }}
+          retention-days: 14
+          if-no-files-found: error
