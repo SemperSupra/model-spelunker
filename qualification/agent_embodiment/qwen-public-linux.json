@@ -1,0 +1,43 @@
+{
+  "schema": "agent-embodiment-profile/v1",
+  "identity": {
+    "framework": "qwen-code",
+    "framework_version": "0.28.3",
+    "embodiment": "disposable-linux-x64",
+    "classification": "public-synthetic",
+    "authority": "NO_PRODUCTION_ADMISSION"
+  },
+  "artifact": {
+    "manifest": "qualification/qwencode_public/release-manifest.json",
+    "platform": "linux-x64"
+  },
+  "model": {
+    "provider": "ollama-openai-compatible",
+    "model": "qwen3:1.7b",
+    "base_url": "http://127.0.0.1:11434/v1",
+    "context_window": 32768,
+    "max_output_tokens": 256,
+    "env_key": "OLLAMA_API_KEY",
+    "reasoning_effort": "none"
+  },
+  "tools": {
+    "allowlist": [
+      "read_file"
+    ],
+    "mcp_servers": {},
+    "approval_mode": "default"
+  },
+  "memory": {
+    "managed_auto_memory": false,
+    "managed_auto_dream": false,
+    "team_memory": false
+  },
+  "workcell": {
+    "root_kind": "runner-temp",
+    "network_scope": "loopback-only",
+    "credential_source": "environment-reference",
+    "self_authorize": false,
+    "retention": "ephemeral",
+    "external_admission_required": true
+  }
+}
