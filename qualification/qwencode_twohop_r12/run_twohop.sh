@@ -67,9 +67,9 @@ python3 - <<'PY'
 import pathlib,os,secrets,json
 p=pathlib.Path(os.environ["RUNNER_TEMP"],"qwen-r12-twohop")
 target="a.txt" if secrets.randbelow(2)==0 else "b.txt"
-(p/"task/index.txt").write_text("TARGET="+target+"\\n".replace("\\\\n","\\n"))
-(p/"task/a.txt").write_text("VALUE="+secrets.token_hex(16)+"\\n".replace("\\\\n","\\n"))
-(p/"task/b.txt").write_text("VALUE="+secrets.token_hex(16)+"\\n".replace("\\\\n","\\n"))
+(p/"task/index.txt").write_text("TARGET="+target+"\n")
+(p/"task/a.txt").write_text("VALUE="+secrets.token_hex(16)+"\n")
+(p/"task/b.txt").write_text("VALUE="+secrets.token_hex(16)+"\n")
 settings={
   "security":{"auth":{"selectedType":"openai"}},
   "model":{"name":"qwen3:1.7b"},
