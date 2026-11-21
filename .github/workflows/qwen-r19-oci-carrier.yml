@@ -1,0 +1,52 @@
+name: Qwen R19 Reuse Existing Rootless OCI Harness Foundry
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/**'
+      - '.github/workflows/qwen-r19-oci-carrier.yml'
+permissions:
+  contents: read
+jobs:
+  offline-source-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m qualification.agent_embodiment.qwen_oci self-test
+          python3 -m qualification.agent_embodiment.qwen_embody self-test
+  official-release-oci-pack-rehydrate-reuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download exact publisher source-verified release
+        run: python3 qualification/qwencode_public/kit.py fetch --platform linux-x64 --archive "$RUNNER_TEMP/qwen-code-linux-x64.tar.gz"
+      - name: Package with existing daemonless OCI packer, rehydrate and independently install
+        run: |
+          set -Eeuo pipefail
+          out="$RUNNER_TEMP/qwen-oci-layout"
+          rehydrated="$RUNNER_TEMP/qwen-oci-rehydrated"
+          workcell="$RUNNER_TEMP/qwen-oci-reused-cell"
+          sha="$(git rev-parse HEAD)"
+          python3 -m qualification.agent_embodiment.qwen_oci build --archive "$RUNNER_TEMP/qwen-code-linux-x64.tar.gz" --output "$out" --source-commit "$sha"
+          python3 -m qualification.agent_embodiment.qwen_oci verify --output "$out"
+          python3 -m qualification.agent_embodiment.qwen_oci build --archive "$RUNNER_TEMP/qwen-code-linux-x64.tar.gz" --output "$out" --source-commit "$sha"
+          python3 qualification/hydrate_oci_layout.py "$out/oci" "$rehydrated" --ref-name artifact
+          # Use *the rehydrated payload's installer*, not the repository-local installer.
+          embedded="$rehydrated/artifact/qualification/agent_embodiment/qwen_embody.py"
+          official="$rehydrated/artifact/upstream/qwen-code-linux-x64.tar.gz"
+          python3 "$embedded" stage --archive "$official" --root "$workcell"
+          python3 "$embedded" verify --root "$workcell"
+          python3 "$embedded" remove --root "$workcell"
+          test ! -e "$workcell"
+          # Directly mutate exact local artifact and enforce fail-closed rehydrate admission.
+          printf '\nTEST_CORRUPTION' >> "$out/payload/qualification/agent_embodiment/qwen-public-linux.json"
+          if python3 -m qualification.agent_embodiment.qwen_oci verify --output "$out"; then
+            echo 'FAIL corrupted payload accepted'; exit 1
+          fi
+          echo 'PASS OCI local pack/re-hydrate/independent installer and corrupt payload rejection; GHCR NOT published'
