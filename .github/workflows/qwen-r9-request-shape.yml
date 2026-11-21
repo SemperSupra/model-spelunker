@@ -5,6 +5,10 @@ on:
     paths:
       - 'qualification/qwencode_protocol_r9/**'
       - '.github/workflows/qwen-r9-request-shape.yml'
+  pull_request:
+    paths:
+      - 'qualification/qwencode_protocol_r9/**'
+      - '.github/workflows/qwen-r9-request-shape.yml'
   workflow_dispatch:
 permissions:
   contents: read
