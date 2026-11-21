@@ -1,0 +1,47 @@
+name: Qwen R23 Anonymous GHCR Fresh-Workcell Reuse Qualification
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/qwen_oci_anonymous_consumer.py'
+      - '.github/workflows/qwen-r23-ghcr-anonymous.yml'
+permissions:
+  contents: read
+jobs:
+  offline-false-admission-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m qualification.agent_embodiment.qwen_oci_anonymous_consumer self-test
+          python3 -m py_compile qualification/agent_embodiment/qwen_oci_anonymous_consumer.py
+  actual-credential-free-ghcr-reuse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch pinned regctl standalone with source recorded release SHA
+        run: |
+          set -Eeuo pipefail
+          curl -fL --silent --show-error --retry 3 --retry-delay 2 \
+            https://github.com/regclient/regclient/releases/download/v0.11.6/regctl-linux-amd64 \
+            -o "$RUNNER_TEMP/regctl-linux-amd64"
+          echo "8e0e62a497fcdb8048d18aa927a139613176ba0531f412bc541044e28f9856bd  $RUNNER_TEMP/regctl-linux-amd64" | sha256sum -c -
+          chmod 700 "$RUNNER_TEMP/regctl-linux-amd64"
+      - name: Anonymous exact SHA Qwen GHCR pull, independent hydration and native version
+        run: |
+          set -Eeuo pipefail
+          python3 -m qualification.agent_embodiment.qwen_oci_anonymous_consumer probe \
+            --regctl "$RUNNER_TEMP/regctl-linux-amd64" | tee "$RUNNER_TEMP/qwen-anonymous-ghcr-receipt.json"
+      - name: Retain only allowlisted public read-access observation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwen-r23-public-registry-access-${{ github.run_id }}
+          path: ${{ runner.temp }}/qwen-anonymous-ghcr-receipt.json
+          if-no-files-found: ignore
+          retention-days: 7
