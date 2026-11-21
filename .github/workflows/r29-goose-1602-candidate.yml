@@ -1,0 +1,67 @@
+name: R29 Goose 1.60.2 Source-Pinned Rust Native OCI Candidate
+on:
+  pull_request:
+    paths:
+      - 'qualification/harness_refresh/goose_1602.py'
+      - '.github/workflows/r29-goose-1602-candidate.yml'
+permissions:
+  contents: read
+jobs:
+  source-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          python3 -m py_compile qualification/harness_refresh/goose_1602.py
+          python3 -m qualification.harness_refresh.goose_1602 self-test
+  pinned-native-build-and-local-oci:
+    needs: [source-critic]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 42
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exact tagged source and upstream Rust 1.99.0, no unreviewed model/runtime
+        run: |
+          set -Eeuo pipefail
+          src="$RUNNER_TEMP/goose-1602-source"
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/aaif-goose/goose.git "$src"
+          git -C "$src" checkout --quiet --detach fb55b5a6d7f5b5df96c8f817f1cde6a81880d9f1
+          test "$(git -C "$src" rev-parse HEAD)" = fb55b5a6d7f5b5df96c8f817f1cde6a81880d9f1
+          python3 -c 'from pathlib import Path; from qualification.harness_refresh.goose_1602 import git_source; import os; git_source(Path(os.environ["RUNNER_TEMP"])/"goose-1602-source")'
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup override set 1.99.0 --path "$src"
+      - name: Compile the actual upstream Goose CLI with least optional features
+        run: |
+          set -Eeuo pipefail
+          export CARGO_TARGET_DIR="$RUNNER_TEMP/goose-1602-target"
+          cd "$RUNNER_TEMP/goose-1602-source"
+          cargo +1.99.0 build --locked --release -p goose-cli --bin goose --no-default-features --features rustls-tls,disable-update
+          test -x "$CARGO_TARGET_DIR/release/goose"
+          "$CARGO_TARGET_DIR/release/goose" --version
+          "$CARGO_TARGET_DIR/release/goose" --help >/dev/null
+          python3 "$GITHUB_WORKSPACE/qualification/harness_refresh/goose_1602.py" stage \
+            --source "$RUNNER_TEMP/goose-1602-source" \
+            --binary "$CARGO_TARGET_DIR/release/goose" \
+            --output "$RUNNER_TEMP/goose-1602-candidate"
+          python3 "$GITHUB_WORKSPACE/qualification/harness_refresh/goose_1602.py" verify --output "$RUNNER_TEMP/goose-1602-candidate"
+          cp "$RUNNER_TEMP/goose-1602-candidate/payload/build-receipt.json" "$RUNNER_TEMP/goose-1602-build-receipt.json"
+          cp "$RUNNER_TEMP/goose-1602-candidate/layout-receipt.json" "$RUNNER_TEMP/goose-1602-oci-layout-receipt.json"
+      - name: Retain source-only OCI local evidence and no package-write claims
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: goose-1602-candidate-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/goose-1602-build-receipt.json
+            ${{ runner.temp }}/goose-1602-oci-layout-receipt.json
+          retention-days: 14
+          if-no-files-found: ignore
