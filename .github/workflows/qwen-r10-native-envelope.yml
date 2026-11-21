@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        mode: [compact_schema, compact_schema_budget]
+        mode: [compact_all_prompt, compact_all_prompt_budget]
     env:
       PYTHONDONTWRITEBYTECODE: '1'
       QWEN_R10_MODE: ${{ matrix.mode }}
