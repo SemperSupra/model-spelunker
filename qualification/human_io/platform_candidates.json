@@ -1,0 +1,3016 @@
+{
+  "schema": "actor-human-io-candidate-platforms/v1",
+  "note": "Unknown-by-default profiles only; not evidence of installed or supported devices.",
+  "profiles": [
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "win-desktop",
+      "platform": "windows",
+      "environment": "physical-device",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "macos-desktop",
+      "platform": "macos",
+      "environment": "physical-device",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "linux-desktop",
+      "platform": "linux",
+      "environment": "physical-device",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "android-mobile",
+      "platform": "android",
+      "environment": "physical-device",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "ios-mobile",
+      "platform": "ios",
+      "environment": "physical-device",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "ipados-tablet",
+      "platform": "ipados",
+      "environment": "physical-device",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "linux-headless",
+      "platform": "server-headless",
+      "environment": "container",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "linux-vm",
+      "platform": "linux",
+      "environment": "vm-guest",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "web-remote",
+      "platform": "browser",
+      "environment": "remote-session",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    },
+    {
+      "schema": "actor-human-io-observation/v1",
+      "profile_id": "xr-headset",
+      "platform": "xr",
+      "environment": "physical-device",
+      "entries": [
+        {
+          "channel": "keyboard",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "mouse",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackpad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "trackball",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "touch",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "pen",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "stylus",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "graphics-tablet",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "gamepad",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "joystick",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "wheel-pedals",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "switch-access",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "adaptive-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "braille-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-reader",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "screen-magnifier",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "eye-gaze",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "head-tracking",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "hand-gesture",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "motion-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "spatial-xr",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "voice",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "speech-recognition",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "microphone",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "camera",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "photo-picker",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "document-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "barcode-scanner",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "midi-controller",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "haptic-feedback",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "audio-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "visual-display",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "captioning",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "led-status",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "tactile-output",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        },
+        {
+          "channel": "sip-puff",
+          "transport": "none",
+          "state": "unknown",
+          "scope": "unavailable",
+          "evidence_sha256": null,
+          "permission": "not-requested"
+        }
+      ],
+      "authority": {
+        "allows_injected_human_approval": false,
+        "grants_tool_authority": false,
+        "production_admitted": false
+      }
+    }
+  ]
+}
