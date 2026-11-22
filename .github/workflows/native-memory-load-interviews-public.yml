@@ -1,0 +1,118 @@
+name: Native Memory Load Interviews Public CPU
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-memory-load-interviews-public.yml'
+      - 'qualification/native_memory_load_interview.py'
+      - 'qualification/memory_hierarchy_cpu_bakeoff.py'
+      - 'qualification/fixtures/memory_dle_cpe_synthetic_v1.json'
+permissions:
+  contents: read
+concurrency:
+  group: native-memory-load-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  source-critic:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Synthetic provenance and determinism guard
+        run: |
+          python3 qualification/memory_hierarchy_cpu_bakeoff.py --self-test
+          python3 qualification/native_memory_load_interview.py --self-test
+
+  native-provider:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - provider: engram
+            decoys: 100
+          - provider: engram
+            decoys: 1000
+          - provider: reme
+            decoys: 100
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      GIT_TERMINAL_PROMPT: '0'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      ENGRAM_SOURCE_SHA: 380d513841f0cc96f87088b837156d758bd1ee4c
+      REME_SOURCE_SHA: 54fa3381d7fec4cdabb1b4092f5e755d7f62c769
+      PROVIDER: ${{ matrix.provider }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        if: matrix.provider == 'engram'
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Pin and verify upstream source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$PROVIDER" in
+            engram) repo=Gentleman-Programming/engram; sha="$ENGRAM_SOURCE_SHA" ;;
+            reme) repo=agentscope-ai/ReMe; sha="$REME_SOURCE_SHA" ;;
+            *) exit 3 ;;
+          esac
+          mkdir -p "$RUNNER_TEMP/memory-upstream"
+          git -C "$RUNNER_TEMP/memory-upstream" init -q
+          git -C "$RUNNER_TEMP/memory-upstream" -c protocol.version=2 fetch -q --depth=1 --no-tags "https://github.com/$repo.git" "$sha"
+          git -C "$RUNNER_TEMP/memory-upstream" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/memory-upstream" rev-parse HEAD)" = "$sha"
+          echo "MEMORY_UPSTREAM=$RUNNER_TEMP/memory-upstream" >> "$GITHUB_ENV"
+          echo "BAKEOFF_SOURCE_SHA=$sha" >> "$GITHUB_ENV"
+      - name: Build native Engram local Go CLI
+        if: matrix.provider == 'engram'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$MEMORY_UPSTREAM"
+          go build -trimpath -o "$RUNNER_TEMP/engram" ./cmd/engram
+          echo "ENGRAM_BIN=$RUNNER_TEMP/engram" >> "$GITHUB_ENV"
+      - name: Install native ReMe local HTTP service in disposable venv
+        if: matrix.provider == 'reme'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/reme-venv"
+          "$RUNNER_TEMP/reme-venv/bin/python" -m pip install "$MEMORY_UPSTREAM[as]"
+          echo "$RUNNER_TEMP/reme-venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/reme-venv/bin/python" -m pip freeze > "$RUNNER_TEMP/pip-freeze.txt"
+      - name: Execute real vendor adapter with load and common eight-question oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python qualification/native_memory_load_interview.py --provider "$PROVIDER" \
+            --decoys ${{ matrix.decoys }} --seed 11 --out "$RUNNER_TEMP/native-memory-load.json"
+          python - <<'PY'
+          import json,os,pathlib
+          a=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'native-memory-load.json').read_text())
+          assert a['native_provider_executed'] and a['positives']==6
+          assert a['agent_task_accepted'] is False and a['memory_lift_qualified'] is False
+          assert a['source_authority_unchanged'] and a['synthetic_only']
+          assert a['meta']['native_write_count'] >= a['decoys']
+          print('PASS vendor executed; metrics are observations, not task acceptance')
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: native-memory-${{ matrix.provider }}-${{ matrix.decoys }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/native-memory-load.json
+            ${{ runner.temp }}/pip-freeze.txt
+          retention-days: 14
+          if-no-files-found: ignore
