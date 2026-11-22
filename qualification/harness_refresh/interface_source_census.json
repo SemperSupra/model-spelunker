@@ -1,0 +1,88 @@
+{
+  "schema": "agent-harness-interface-source-census/v1",
+  "authority": "PUBLIC_SOURCE_ONLY",
+  "runtime_qualified": false,
+  "production_admitted": false,
+  "candidates": [
+    {
+      "id": "pi",
+      "upstream": "earendil-works/pi",
+      "aliases": [
+        "badlogic/pi-mono",
+        "earendil-works/pi-mono"
+      ],
+      "source_commit": "780bf31fcaeb252fa9b68df3964c735eae75bde3",
+      "source_files": [
+        {
+          "path": "packages/coding-agent/docs/rpc.md",
+          "blob_sha": "211bfb81c742d3a6293a0736e6c2d8d6874da77f",
+          "surface": "jsonl-rpc",
+          "proof": "SOURCE_OBSERVED"
+        }
+      ],
+      "human": "TERMINAL_NATIVE_SOURCE",
+      "automation": "JSONL_RPC_SOURCE",
+      "agent": "ADAPTER_REQUIRED_UNVERIFIED",
+      "caveats": [
+        "RPC session API is not MCP server",
+        "Physical device and model task not qualified"
+      ]
+    },
+    {
+      "id": "opencode",
+      "upstream": "anomalyco/opencode",
+      "aliases": [],
+      "source_commit": "4d4a95a3239c14ceb4aaa8d6b955b0cdd6f1908c",
+      "source_files": [
+        {
+          "path": "packages/server/src/api.ts",
+          "blob_sha": "2e137d08e02de5bdd9d4dbf8b47d0afa7023cc5f",
+          "surface": "http-api-source",
+          "proof": "SOURCE_OBSERVED"
+        },
+        {
+          "path": "packages/sdk/src/index.ts",
+          "blob_sha": "937560cf47985585580a76963dcb76e5bc9563c1",
+          "surface": "sdk-source",
+          "proof": "SOURCE_OBSERVED"
+        }
+      ],
+      "human": "TERMINAL_NATIVE_SOURCE",
+      "automation": "API_SOURCE",
+      "agent": "ADAPTER_REQUIRED_UNVERIFIED",
+      "caveats": [
+        "MCP client not equal to MCP server",
+        "Server security and tool approval require independent assessment"
+      ]
+    },
+    {
+      "id": "aider",
+      "upstream": "Aider-AI/aider",
+      "aliases": [],
+      "source_commit": "5dc9490bb35f9729ef2c95d00a19ccd30c26339c",
+      "source_files": [
+        {
+          "path": "aider/website/docs/scripting.md",
+          "blob_sha": "71bb3282a5901e3c0107a646322d90d3867551d5",
+          "surface": "scripted-cli-source",
+          "proof": "SOURCE_OBSERVED"
+        },
+        {
+          "path": "aider/io.py",
+          "blob_sha": "ed6f22d51ae1b1dee249be67f6750498cbf0e905",
+          "surface": "approval-eof-source",
+          "proof": "SOURCE_OBSERVED"
+        }
+      ],
+      "human": "TERMINAL_NATIVE_SOURCE",
+      "automation": "CLI_SOURCE_UNADMITTED",
+      "agent": "ADAPTER_REQUIRED_UNVERIFIED",
+      "caveats": [
+        "--yes may bypass prompts; never enable by default",
+        "Closed stdin approval behavior must be independently negative-tested",
+        "No ambient shell or auto commit in protected workcells",
+        "Upstream io.py confirm_ask(default='y') handles EOFError by res=default; closed stdin can imply yes without interactive authorization; HARD HOLD until fail-closed wrapper/source repair and live negative oracle"
+      ]
+    }
+  ]
+}
