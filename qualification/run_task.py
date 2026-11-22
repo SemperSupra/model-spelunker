@@ -756,6 +756,12 @@ def main() -> int:
         default=[],
         help="Environment variable name to pass explicitly in minimal mode; may be repeated.",
     )
+    parser.add_argument(
+        "--timeout-override",
+        type=int,
+        default=None,
+        help="Optional wall-seconds timeout override for expanded horizon evaluation.",
+    )
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
@@ -786,7 +792,7 @@ def main() -> int:
             "design_block": experiment_doc.get("design_block"),
             "primary_responses": experiment_doc["primary_responses"],
         }
-    timeout = int(task["limits"]["wall_seconds"])
+    timeout = args.timeout_override if args.timeout_override is not None else int(task["limits"]["wall_seconds"])
 
     with tempfile.TemporaryDirectory(prefix="model-spelunker-qual-") as temp:
         workdir = Path(temp) / "work"

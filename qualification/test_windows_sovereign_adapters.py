@@ -26,14 +26,14 @@ def run_adapter(adapter_name: str, stdin_text: str, env: dict[str, str]) -> subp
 
 
 def test_missing_instructions() -> None:
-    for adapter in ("aider_cli.py", "vibe_cli.py", "opencode_cli.py", "qwen_cli.py", "pi_cli.py"):
+    for adapter in ("aider_cli.py", "vibe_cli.py", "opencode_cli.py", "qwen_cli.py", "pi_cli.py", "hermes_cli.py"):
         res = run_adapter(adapter, "", os.environ.copy())
         assert res.returncode == 2, f"{adapter} expected 2 on empty instruction, got {res.returncode}"
         assert "missing task instruction on stdin" in res.stderr
 
 
 def test_forbidden_credentials() -> None:
-    for adapter in ("aider_cli.py", "vibe_cli.py", "opencode_cli.py", "qwen_cli.py", "pi_cli.py"):
+    for adapter in ("aider_cli.py", "vibe_cli.py", "opencode_cli.py", "qwen_cli.py", "pi_cli.py", "hermes_cli.py"):
         env = dict(os.environ)
         env["OPENROUTER_API_KEY"] = "sk-fake-openrouter"
         res = run_adapter(adapter, "Do something", env)
@@ -290,6 +290,55 @@ def test_qwen_dry_run() -> None:
         assert "-m qwen3-coder-30b" in out
 
 
+
+def test_hermes_dry_run() -> None:
+    with tempfile.TemporaryDirectory() as temp:
+        fake_bin = Path(temp) / "fake_hermes.exe"
+        fake_bin.write_text("", encoding="utf-8")
+        cfg_file = Path(temp) / "config.yaml"
+        cfg_file.write_text(
+            "providers:\n  bigmac:\n    base_url: http://192.168.178.105:8080/v1\n",
+            encoding="utf-8",
+        )
+        env = dict(os.environ)
+        for k in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+            env.pop(k, None)
+        env.update({
+            "HERMES_BIN": str(fake_bin),
+            "HERMES_CONFIG": str(cfg_file),
+            "HERMES_MOCK_DRY_RUN": "1",
+            "HERMES_PROVIDER": "bigmac",
+            "MODEL_SPELUNKER_MODEL": "qwen3-coder-30b",
+        })
+        res = run_adapter("hermes_cli.py", "Fix the bug", env)
+        assert res.returncode == 0, f"Hermes dry-run failed: {res.stderr}"
+        out = res.stdout
+        assert "chat -q Fix the bug" in out
+        assert "--provider bigmac" in out
+        assert "-m qwen3-coder-30b" in out
+        assert "--yolo" in out
+        assert "--oneshot" in out
+
+def test_hermes_whitespace_sanitization() -> None:
+    if str(ADAPTERS_DIR) not in sys.path:
+        sys.path.insert(0, str(ADAPTERS_DIR))
+    from hermes_cli import sanitize_workspace_trailing_whitespace
+    with tempfile.TemporaryDirectory() as temp:
+        temp_path = Path(temp)
+        double_newline_file = temp_path / "value.txt"
+        double_newline_file.write_text("READY\n\n", encoding="utf-8")
+        crlf_double_file = temp_path / "crlf.txt"
+        crlf_double_file.write_bytes(b"READY\r\n\r\n")
+        clean_file = temp_path / "clean.py"
+        clean_file.write_text("print('hello')\n", encoding="utf-8")
+
+        sanitize_workspace_trailing_whitespace(temp_path)
+
+        assert double_newline_file.read_text(encoding="utf-8") == "READY\n"
+        assert crlf_double_file.read_text(encoding="utf-8") == "READY\n"
+        assert clean_file.read_text(encoding="utf-8") == "print('hello')\n"
+
+
 if __name__ == "__main__":
     test_missing_instructions()
     test_forbidden_credentials()
@@ -301,4 +350,5 @@ if __name__ == "__main__":
     test_opencode_dry_run()
     test_pi_dry_run()
     test_qwen_dry_run()
-    print("PASS Windows sovereign actor adapter contract tests (Aider, Vibe, OpenCode, Pi, Qwen Code, PROVIDER-SELECT)")
+    test_hermes_dry_run()
+    print("PASS Windows sovereign actor adapter contract tests (Aider, Vibe, OpenCode, Pi, Qwen Code, Hermes, PROVIDER-SELECT)")

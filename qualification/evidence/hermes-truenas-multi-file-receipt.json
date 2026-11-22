@@ -1,0 +1,70 @@
+{
+  "candidate": {
+    "build": {
+      "default_features": false,
+      "features": [],
+      "kind": "user-local-git",
+      "profile": "windows-x64",
+      "source_revision": "v0.22.5",
+      "toolchain": "python-3.14"
+    },
+    "configuration_digest": "sha256:ee7de597cb83a433111607035613bea6bb07d5063fa47b640d5d7151d8bec23c",
+    "harness": {
+      "name": "hermes",
+      "version": "0.22.5"
+    },
+    "model": {
+      "artifact_ref": "ollama-sha256:44a6f898f22f9b1d8e6cdfe9dc5936088752118e93e50f093fe4cbc46e04f73b",
+      "id": "qwen3.6:35b-a3b",
+      "provider": "ollama"
+    },
+    "toolset": [
+      "developer"
+    ]
+  },
+  "evidence_digest": "sha256:13be96c050076690963ed31c060b810d7d3efd4adc2e13767be1b47c265fdfd6",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": null,
+    "failure_signals": [],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": null,
+    "state_changed": true,
+    "success": true,
+    "termination_class": "semantic-success",
+    "timed_out": false,
+    "tool_calls": null,
+    "verifier_exit_code": 0,
+    "wall_seconds": 62.469,
+    "workload": {
+      "model_calls_started": 0,
+      "model_rounds": 0
+    }
+  },
+  "resources": {
+    "cpu_model": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 12,
+    "memory_total_bytes": null
+  },
+  "run_id": "20261024T093934Z-cf812c45",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "2022d3b5fdcf534d12ba2bd0306a16b64a22bcb4",
+    "profile_id": "local-windows-11-x64"
+  },
+  "task": {
+    "id": "multi-file-refactor-v0",
+    "package_digest": "sha256:bad36c18c64671cfab28f9dee1e2fe9f02842dacd5ed806c838d21fc5e9bfa9c",
+    "source_commit": "2022d3b5fdcf534d12ba2bd0306a16b64a22bcb4",
+    "task_class": "software.multi-file-refactoring"
+  }
+}

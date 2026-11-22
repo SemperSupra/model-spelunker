@@ -1,0 +1,12 @@
+{
+  "admitted_completion": true,
+  "artifact_valid": true,
+  "candidate_completed": true,
+  "candidate_stderr_chars": 84,
+  "candidate_stderr_tail": "\nsession_id: local-2beff9d3f764339932c5ab85a74f91aac3b97709ad85c72dcda420ea83236559\n",
+  "candidate_stdout_chars": 215,
+  "candidate_stdout_tail": "\u001b[2m\u2502\u001b[0m \u001b[1mresult.json\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;139;134;130m@@ -0,0 +1 @@\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;19;87;20m+{\"entrypoint\": \"python scripts/validate.py\"}\u001b[0m\n{\"entrypoint\": \"python scripts/validate.py\"}\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": "",
+  "within_wall_budget": true
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "hermes-qwen3.8-27b-uncensored-windows-truenas",
+  "harness": {
+    "name": "hermes",
+    "version": "0.22.5",
+    "artifact_ref": null,
+    "admission_ref": null
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3.8-uncensored:27b",
+    "realization": "local-artifact",
+    "artifact_ref": "ollama-sha256:4c5e2db039e9325ac7724c8846c71356a24ad1cdfa28002d73ecb6be645f9675",
+    "foundry_ref": "orcarouter/Qwen3.8-27B-Uncensored-GGUF"
+  },
+  "execution_environment": {
+    "venue": "local-workstation/windows-x64",
+    "inference_route": "local:truenas-ollama-v1",
+    "substrate_profile": "local-windows-11-x64"
+  },
+  "toolset": [
+    "developer"
+  ],
+  "configuration": {
+    "provider": "truenas",
+    "oneshot": true,
+    "yolo": true,
+    "harness_delivery": "user-local-git"
+  },
+  "authority_profile": "task-scoped-workcell"
+}

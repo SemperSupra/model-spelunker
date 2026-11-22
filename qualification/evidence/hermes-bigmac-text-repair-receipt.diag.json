@@ -1,0 +1,12 @@
+{
+  "admitted_completion": true,
+  "artifact_valid": true,
+  "candidate_completed": true,
+  "candidate_stderr_chars": 84,
+  "candidate_stderr_tail": "\nsession_id: local-978f5e2f1b095be65c4c916399a14562c68e12b34a912966371b6145f9a56a21\n",
+  "candidate_stdout_chars": 406,
+  "candidate_stdout_tail": "\u001b[2m\u2502\u001b[0m \u001b[1mvalue.txt\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;139;134;130m@@ -1 +1,2 @@\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;119;20;20m-BROKEN\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;19;87;20m+READY\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;19;87;20m+\u001b[0m\nReplaced the contents of value.txt with \"READY\" followed by a newline. The file now contains only \"READY\" and a newline character, replacing the previous content \"BROKEN\".\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": "PASS ok\n",
+  "within_wall_budget": true
+}

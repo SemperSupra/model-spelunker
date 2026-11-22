@@ -1,0 +1,12 @@
+{
+  "admitted_completion": true,
+  "artifact_valid": true,
+  "candidate_completed": true,
+  "candidate_stderr_chars": 84,
+  "candidate_stderr_tail": "\nsession_id: local-44e61c1fe2fe175fa2f8f731521bbf244192160536e571f293eb585c6d3ae83b\n",
+  "candidate_stdout_chars": 592,
+  "candidate_stdout_tail": "\u001b[2m\u2502\u001b[0m \u001b[1mresult.json\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;139;134;130m@@ -0,0 +1 @@\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;19;87;20m+{\"entrypoint\": \"python scripts/validate.py\"}\u001b[0m\nDone. `result.json` created at `C:\\Users\\Mark\\AppData\\Local\\Temp\\model-spelunker-qual-4vxa2wpy\\work\\result.json` with content:\n\n```json\n{\"entrypoint\": \"python scripts/validate.py\"}\n```\n\nThis is the exact command cited in `docs/VALIDATION.md` as the canonical local validation entrypoint. It runs substantive checks (as opposed to `scripts/quick_check.sh`, which the repo explicitly documents as only a fast syntax check).\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": "",
+  "within_wall_budget": true
+}

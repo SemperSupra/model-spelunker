@@ -1,0 +1,72 @@
+{
+  "candidate": {
+    "build": {
+      "default_features": false,
+      "features": [],
+      "kind": "user-local-git",
+      "profile": "windows-x64",
+      "source_revision": "v0.22.5",
+      "toolchain": "python-3.14"
+    },
+    "configuration_digest": "sha256:f8f51e441cf2d9f428999e84a6c429c072218e9e28cc3eb582633f77511ee304",
+    "harness": {
+      "name": "hermes",
+      "version": "0.22.5"
+    },
+    "model": {
+      "artifact_ref": "gguf-sha256:qwen3-coder-30b-a3b-instruct-q8_0",
+      "id": "qwen3-coder-30b",
+      "provider": "llama-server"
+    },
+    "toolset": [
+      "developer"
+    ]
+  },
+  "evidence_digest": "sha256:e3dc819a0d655b466e0a0ac01e5208be1e357065b90ecdee6b3d9acc9bb41236",
+  "observation": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "candidate_exit_code": 0,
+    "cost": null,
+    "engine_error_types": [],
+    "failure_class": "false-completion",
+    "failure_signals": [
+      "false-completion"
+    ],
+    "human_interventions": 0,
+    "input_tokens": null,
+    "mobile_action_count": 0,
+    "mobile_actions": [],
+    "output_tokens": null,
+    "state_changed": true,
+    "success": false,
+    "termination_class": "semantic-failure",
+    "timed_out": false,
+    "tool_calls": null,
+    "verifier_exit_code": 1,
+    "wall_seconds": 62.546,
+    "workload": {
+      "model_calls_started": 0,
+      "model_rounds": 0
+    }
+  },
+  "resources": {
+    "cpu_model": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+    "cpu_quota_cores": null,
+    "cpuset_cpus_effective": null,
+    "logical_cpus_visible": 12,
+    "memory_total_bytes": null
+  },
+  "run_id": "20261024T093722Z-6303ec1e",
+  "schema_version": 1,
+  "substrate": {
+    "profile_commit": "2022d3b5fdcf534d12ba2bd0306a16b64a22bcb4",
+    "profile_id": "local-windows-11-x64"
+  },
+  "task": {
+    "id": "repository-reconciliation-v0",
+    "package_digest": "sha256:b77e18a9294d2b4328d7bd0a586fa9f76a287720290a06b1cc4a5ecdf045c9b7",
+    "source_commit": "2022d3b5fdcf534d12ba2bd0306a16b64a22bcb4",
+    "task_class": "repository.state-reconciliation"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "admitted_completion": true,
+  "artifact_valid": true,
+  "candidate_completed": true,
+  "candidate_stderr_chars": 84,
+  "candidate_stderr_tail": "\nsession_id: local-34115a4e239f71ff083d1d84c2190f32da850f97a5182eddf1abbc8e406e258a\n",
+  "candidate_stdout_chars": 1653,
+  "candidate_stdout_tail": "\u001b[2m\u2502\u001b[0m \u001b[1msrc\\retry.py\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;139;134;130m@@ -1,5 +1,5 @@\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;184;134;11m def backoff_seconds(attempt: int, base: int = 2, cap: int = 30) -> int:\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;184;134;11m     \"\"\"Return the bounded exponential retry delay in seconds.\"\"\"\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;119;20;20m-    if attempt < 0:\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;119;20;20m-        raise ValueError(\"attempt must not be negative\")\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;119;20;20m-    return min(cap, base ** attempt)\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;19;87;20m+    if attempt <= 0:\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;19;87;20m+        raise ValueError(\"attempt must be a positive integer\")\u001b[0m\n\u001b[2m\u2502\u001b[0m \u001b[38;2;255;255;255;48;2;19;87;20m+    return min(cap, base ** (attempt - 1))\u001b[0m\nI've updated the `backoff_seconds` function in `src/retry.py` to follow the repository retry policy exactly:\n\n1. Changed the validation from `attempt < 0` to `attempt <= 0` to properly reject zero and negative attempts\n2. Updated the calculation from `base ** attempt` to `base ** (attempt - 1)` to use 1-based attempt numbers as documented\n3. Preserved the public function signature and return type\n4. Kept the policy documentation unchanged\n\nThe fix ensures:\n- Attempt 0 and negative values raise ValueError\n- For attempt=1: returns 2^(1-1) = 1 second\n- For attempt=2: returns 2^(2-1) = 2 seconds  \n- For attempt=3: returns 2^(3-1) = 4 seconds\n- Results are properly capped at the `cap` value (default 30)\n\nThis matches the documented policy in `docs/RETRY.md` which specifies 1-based attempts with the formula `base ** (attempt - 1)`.\n",
+  "verifier_stderr_tail": "",
+  "verifier_stdout_tail": "",
+  "within_wall_budget": true
+}

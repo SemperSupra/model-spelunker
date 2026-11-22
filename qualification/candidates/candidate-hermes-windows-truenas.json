@@ -1,0 +1,22 @@
+{
+  "harness": {
+    "name": "hermes",
+    "version": "0.22.5"
+  },
+  "model": {
+    "provider": "ollama",
+    "id": "qwen3.6:35b-a3b",
+    "artifact_ref": "ollama-sha256:44a6f898f22f9b1d8e6cdfe9dc5936088752118e93e50f093fe4cbc46e04f73b"
+  },
+  "toolset": [
+    "developer"
+  ],
+  "build": {
+    "kind": "user-local-git",
+    "profile": "windows-x64",
+    "source_revision": "v0.22.5",
+    "toolchain": "python-3.14",
+    "default_features": false,
+    "features": []
+  }
+}
