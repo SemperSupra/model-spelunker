@@ -1,0 +1,27 @@
+name: R44 Adaptive Presentation Contract
+on:
+  pull_request:
+    paths:
+      - 'qualification/human_io/presentation_contract.py'
+      - 'qualification/test_presentation_contract.py'
+      - '.github/workflows/r44-presentation.yml'
+permissions:
+  contents: read
+jobs:
+  presentation:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025, macos-26]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Device-shape, multi-monitor, accessibility and invariant tests
+        run: python -m qualification.test_presentation_contract
