@@ -147,8 +147,40 @@ def test_aider_dry_run() -> None:
         assert "--openai-api-base http://192.168.178.105:8080/v1" in out
         assert "--model openai/qwen3-coder-30b" in out
         assert "--no-git" in out
-        assert "--yes-always" in out
+        assert "--dry-run" in out
+        assert "--yes-always" not in out
         assert "--no-auto-commits" in out
+
+
+
+def test_aider_unattended_never_executes() -> None:
+    """An env flag cannot approve an unsafe closed-stdin Aider subprocess."""
+    with tempfile.TemporaryDirectory() as td:
+        executable = Path(td) / "fake_aider.exe"
+        marker = Path(td) / "invoked.txt"
+        executable.write_text(
+            "#!/usr/bin/env python3\\n"
+            "from pathlib import Path\\n"
+            f"Path({str(marker)!r}).write_text('EXECUTED')\\n",
+            encoding="utf-8",
+        )
+        executable.chmod(0o755)
+        env = dict(os.environ)
+        for k in ("OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+            env.pop(k, None)
+        env.update({
+            "AIDER_BIN": str(executable),
+            "AIDER_OPENAI_API_BASE": "http://127.0.0.1:8080/v1",
+            "AIDER_ALLOW_UNATTENDED": "1",
+            "AIDER_YES_ALWAYS": "1",
+        })
+        env.pop("AIDER_MOCK_DRY_RUN", None)
+        for i in range(2):
+            result = run_adapter("aider_cli.py", "Modify file", env)
+            assert result.returncode == 2, result
+            assert "unattended Aider invocation is HOLD" in result.stderr
+            assert not marker.exists(), "unadmitted Aider process executed"
+    print("PASS: Aider unsafe live invocation refuses caller-supplied approvals")
 
 
 def test_vibe_dry_run() -> None:
@@ -264,6 +296,7 @@ if __name__ == "__main__":
     test_private_route_enforcement()
     test_provider_select_negative_cases()
     test_aider_dry_run()
+    test_aider_unattended_never_executes()
     test_vibe_dry_run()
     test_opencode_dry_run()
     test_pi_dry_run()
