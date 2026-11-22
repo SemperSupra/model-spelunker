@@ -16,13 +16,11 @@ if str(ROOT) not in sys.path:
 try:
     from qualification.endpoint_policy import (
         validate_sovereign_endpoint,
-        resolve_sovereign_api_key,
         FORBIDDEN_CLOUD_CREDENTIALS,
     )
 except ImportError:
     from endpoint_policy import (
         validate_sovereign_endpoint,
-        resolve_sovereign_api_key,
         FORBIDDEN_CLOUD_CREDENTIALS,
     )
 
@@ -68,8 +66,6 @@ def main() -> int:
         print(f"fail-closed: target model base URL must be local/private: {exc}", file=sys.stderr)
         return 2
 
-    api_key = resolve_sovereign_api_key(("AIDER_OPENAI_API_KEY",))
-
     model_name = (
         os.environ.get("AIDER_MODEL")
         or os.environ.get("MODEL_SPELUNKER_MODEL")
@@ -98,7 +94,7 @@ def main() -> int:
         "--edit-format",
         edit_format,
         "--no-git",
-        "--yes-always",
+        "--dry-run",
         "--no-auto-commits",
         "--no-analytics",
         "--no-check-update",
@@ -109,19 +105,22 @@ def main() -> int:
         command.extend(target_files)
 
     if os.environ.get("AIDER_MOCK_DRY_RUN") == "1":
+        # This is a command-projection test, not live invocation or admission.
         print(" ".join(command))
         return 0
 
-    env = dict(os.environ)
-    env["OPENAI_API_BASE"] = base_url
-    env["OPENAI_API_KEY"] = api_key
-
-    completed = subprocess.run(
-        command,
-        env=env,
-        stdin=subprocess.DEVNULL,
+    # Pinned upstream Aider confirm_ask(default="y") maps EOF to its
+    # default, which can silently approve even WITHOUT --yes-always.
+    # A user-provided env flag or a local text receipt must never authorize
+    # a protected run. Hold live execution until an independently enforced
+    # deny-default approval boundary and executable negative oracle exist.
+    print(
+        "fail-closed: unattended Aider invocation is HOLD; "
+        "upstream EOF can accept default-yes approval, external trusted "
+        "admission and fail-closed approval transport not implemented",
+        file=sys.stderr,
     )
-    return completed.returncode
+    return 2
 
 
 if __name__ == "__main__":
