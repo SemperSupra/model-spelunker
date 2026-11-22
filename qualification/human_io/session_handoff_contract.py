@@ -67,17 +67,17 @@ def check_snapshot(s: dict) -> dict:
     if not _hex(session["context_digest"]) or session["context_digest"] != manifest_digest(manifest):
         raise ValueError("context digest mismatch")
     presentation = s["presentation"]
-    if not isinstance(presentation, dict) or set(presentation) != {
+    if (not isinstance(presentation, dict) or set(presentation) != {
             "portable", "device_local_preferences", "content_truncated"} or
             presentation["portable"] is not True or
             presentation["device_local_preferences"] is not True or
-            presentation["content_truncated"] is not False:
+            presentation["content_truncated"] is not False):
         raise ValueError("device-bound or truncated session content")
     admission = s["admission"]
-    if not isinstance(admission, dict) or set(admission) != {
+    if (not isinstance(admission, dict) or set(admission) != {
             "authenticated_by_external_service", "grants_tool_authority",
             "carries_approval_token", "production_admitted"} or
-            any(value is not False for value in admission.values()):
+            any(value is not False for value in admission.values())):
         raise ValueError("snapshot cannot grant trust")
     return {"schema": "actor-session-snapshot-critic/v1",
             "state": "CONTEXT_MANIFEST_CONSISTENT",
