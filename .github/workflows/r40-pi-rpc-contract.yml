@@ -1,0 +1,29 @@
+name: R40 Pi RPC Three-Audience Transport Contract
+on:
+  pull_request:
+    paths:
+      - 'qualification/adapters/pi_rpc_protocol.py'
+      - 'qualification/test_pi_rpc_protocol.py'
+      - '.github/workflows/r40-pi-rpc-contract.yml'
+permissions:
+  contents: read
+jobs:
+  bounded-rpc-contract:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, windows-2025]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Validate synthetic JSONL command parity and async lifecycle
+        run: |
+          python -m py_compile qualification/adapters/pi_rpc_protocol.py qualification/test_pi_rpc_protocol.py
+          python -m qualification.test_pi_rpc_protocol
