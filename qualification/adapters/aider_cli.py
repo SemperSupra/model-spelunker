@@ -16,13 +16,11 @@ if str(ROOT) not in sys.path:
 try:
     from qualification.endpoint_policy import (
         validate_sovereign_endpoint,
-        resolve_sovereign_api_key,
         FORBIDDEN_CLOUD_CREDENTIALS,
     )
 except ImportError:
     from endpoint_policy import (
         validate_sovereign_endpoint,
-        resolve_sovereign_api_key,
         FORBIDDEN_CLOUD_CREDENTIALS,
     )
 
@@ -67,8 +65,6 @@ def main() -> int:
     except ValueError as exc:
         print(f"fail-closed: target model base URL must be local/private: {exc}", file=sys.stderr)
         return 2
-
-    api_key = resolve_sovereign_api_key(("AIDER_OPENAI_API_KEY",))
 
     model_name = (
         os.environ.get("AIDER_MODEL")
