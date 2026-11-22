@@ -48,6 +48,9 @@ def rejects(action):
     raise AssertionError("unsafe replay or unauthorized session operation accepted")
 
 def main():
+    golden_context = {name: {"ref": name + ":fixture", "digest": "0"*64, "revision": 1}
+                      for name in CONTEXT_SLOTS}
+    assert manifest_digest(golden_context) == "4efd6a3938e52fe4d782f75b201a82070399b1dea7481c1f0634654fc6465c6a", "cross-language context fixture drift"
     s = snapshot()
     assert check_snapshot(s)["context_slots"] == 9
     phone = make_reattach(s, 0)
