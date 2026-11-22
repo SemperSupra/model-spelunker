@@ -39,7 +39,7 @@ SUBJECTS=(
   {"id":"opencode","repo":"anomalyco/opencode","upstream":"major2_release",
    "baseline_version":None,"baseline_sha":None,"admission":None,
    "realization":None,"class":"CANDIDATE_NOT_BUILT"},
-  {"id":"pi","repo":"earendil-works/pi-mono","upstream":"stable_release",
+  {"id":"pi","repo":"earendil-works/pi","upstream":"stable_release",
    "baseline_version":None,"baseline_sha":None,"admission":None,
    "realization":None,"class":"CANDIDATE_NOT_BUILT"},
   {"id":"aider","repo":"Aider-AI/aider","upstream":"stable_release",
@@ -48,6 +48,7 @@ SUBJECTS=(
 )
 def expect_subjects():
     ids=[v["id"] for v in SUBJECTS]
+    assert next(v for v in SUBJECTS if v["id"]=="pi")["repo"]=="earendil-works/pi", "Pi upstream redirect not canonical"
     if len(set(ids))!=len(ids):raise ValueError("duplicate harness")
     for v in SUBJECTS:
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",v["repo"]):
