@@ -182,8 +182,7 @@ func main(){
  if err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(2)}
  if err:=json.NewEncoder(f).Encode(receipt);err!=nil {f.Close();fmt.Fprintln(os.Stderr,err);os.Exit(2)}
  if err:=f.Close();err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(2)}
- fmt.Printf("NATIVE_MODEL_CTX=%d, SYNTHETIC_POLICY_CAP=%d, EVICITED_EVIDENCE=%d, RECOVERY_VERIFIED=YES
-",
-   receipt.RuntimeContextTokens,receipt.PolicyContextCap,len(receipt.EvictedSourceIDs))
+ fmt.Println(fmt.Sprintf("NATIVE_MODEL_CTX=%d, SYNTHETIC_POLICY_CAP=%d, EVICTED_EVIDENCE=%d, RECOVERY_VERIFIED=YES",
+   receipt.RuntimeContextTokens,receipt.PolicyContextCap,len(receipt.EvictedSourceIDs)))
  fmt.Println("MODEL_INFERENCE=NOT_RUN_BY_GO; PHYSICAL_KV_CACHE=UNKNOWN; FULL_AGENT_TASK=NOT_RUN")
 }
