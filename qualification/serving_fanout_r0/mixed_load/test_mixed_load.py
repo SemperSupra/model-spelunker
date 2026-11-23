@@ -26,7 +26,7 @@ class MockModel(BaseHTTPRequestHandler):
             self.send_response(200);self.end_headers()
             replies=[{"response":"safe","done":False},
                      {"done":True,"prompt_eval_count":30 if kind=="interactive" else 1300,
-                      "eval_count":4 if kind=="interactive" else 45,
+                      "eval_count":8 if kind=="interactive" else 32,
                       "prompt_eval_duration":2000000,"eval_duration":3000000}]
             if type(self).reject:replies=replies[:1]
             for reply in replies:
@@ -52,6 +52,11 @@ class PolicyTests(unittest.TestCase):
             self.assertGreater(obj["interactive_ttft_ms"],0)
             self.assertGreater(obj["wall_ms"],0)
             self.assertTrue(all(j["output_tokens"]>0 for j in obj["jobs"]))
+    def test_invalid_output_budget_is_rejected(self):
+        a=r.trial(self.client,self.url,"qwen3:1.7b","burst2_then_interactive",1,3168100)
+        b=r.trial(self.client,self.url,"qwen3:1.7b","soft_reserve1",1,3168110)
+        a["jobs"][0]["output_tokens"]=5
+        with self.assertRaises(ValueError):r.validate_pair(a,b)
     def test_reject_forged_token_parity_and_treatment(self):
         a=r.trial(self.client,self.url,"qwen3:1.7b","burst2_then_interactive",1,3168100)
         b=r.trial(self.client,self.url,"qwen3:1.7b","soft_reserve1",1,3168110)
