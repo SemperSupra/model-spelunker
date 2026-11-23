@@ -1,0 +1,125 @@
+name: serving-fanout-r13-public-mtls-cert-admission
+on:
+  pull_request:
+    paths:
+      - 'qualification/serving_fanout_r0/mtls_ingress/**'
+      - '.github/workflows/serving-fanout-r13-mtls-public.yml'
+permissions:
+  contents: read
+concurrency:
+  group: serving-fanout-r13-mtls-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  live-mtls-certificate-and-global-quota:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_SHA: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-r13-models'
+      CERT_DIR: '/tmp/model-spelunker-r13-certs'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Offline RED/BLUE authentication and independent quota counterexamples
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest discover -s qualification/serving_fanout_r0/mtls_ingress -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/mtls_ingress/mtls_probe.py
+      - name: Install exact published Ollama and record existing nginx identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" --output "$archive"
+          echo "$OLLAMA_SHA  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends nginx openssl
+          nginx -v 2>&1 | tee "$RUNNER_TEMP/nginx-version.txt"
+          dpkg-query -W -f='${Package} ${Version}\n' nginx | tee "$RUNNER_TEMP/nginx-package.txt"
+      - name: Generate ephemeral local synthetic CA and three client certificates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          mkdir -p "$CERT_DIR"
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 -subj '/CN=R13 Public Synthetic CA' -keyout "$CERT_DIR/ca.key" -out "$CERT_DIR/ca.crt" >/dev/null 2>&1
+          openssl req -new -newkey rsa:2048 -nodes -sha256 -subj '/CN=localhost' -keyout "$CERT_DIR/server.key" -out "$CERT_DIR/server.csr" >/dev/null 2>&1
+          printf 'subjectAltName=IP:127.0.0.1,DNS:localhost\nextendedKeyUsage=serverAuth\nkeyUsage=digitalSignature,keyEncipherment\n' > "$CERT_DIR/server.ext"
+          openssl x509 -req -sha256 -days 1 -in "$CERT_DIR/server.csr" -CA "$CERT_DIR/ca.crt" -CAkey "$CERT_DIR/ca.key" -CAcreateserial -out "$CERT_DIR/server.crt" -extfile "$CERT_DIR/server.ext" >/dev/null 2>&1
+          printf 'extendedKeyUsage=clientAuth\nkeyUsage=digitalSignature\n' > "$CERT_DIR/client.ext"
+          for name in alpha beta gamma; do
+            openssl req -new -newkey rsa:2048 -nodes -sha256 -subj "/CN=r13-public-$name" -keyout "$CERT_DIR/$name.key" -out "$CERT_DIR/$name.csr" >/dev/null 2>&1
+            openssl x509 -req -sha256 -days 1 -in "$CERT_DIR/$name.csr" -CA "$CERT_DIR/ca.crt" -CAkey "$CERT_DIR/ca.key" -CAcreateserial -out "$CERT_DIR/$name.crt" -extfile "$CERT_DIR/client.ext" >/dev/null 2>&1
+          done
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 -subj '/CN=Untrusted R13 CA' -keyout "$CERT_DIR/rogue-ca.key" -out "$CERT_DIR/rogue-ca.crt" >/dev/null 2>&1
+          openssl req -new -newkey rsa:2048 -nodes -sha256 -subj '/CN=rogue-client' -keyout "$CERT_DIR/rogue.key" -out "$CERT_DIR/rogue.csr" >/dev/null 2>&1
+          openssl x509 -req -sha256 -days 1 -in "$CERT_DIR/rogue.csr" -CA "$CERT_DIR/rogue-ca.crt" -CAkey "$CERT_DIR/rogue-ca.key" -CAcreateserial -out "$CERT_DIR/rogue.crt" -extfile "$CERT_DIR/client.ext" >/dev/null 2>&1
+          echo 'EPHEMERAL_SYNTHETIC_CA_CREATED_NO_KEYS_ARCHIVED'
+      - name: Start hot Ollama with native queue deliberately not trusted, plus mTLS nginx
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_QUEUE=1 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=2048 ollama serve > "$RUNNER_TEMP/ollama-r13.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull qwen3:1.7b
+          python3 - <<'PY'
+          import json,urllib.request
+          with urllib.request.urlopen("http://127.0.0.1:11434/api/tags",timeout=15) as r:
+            rows=json.load(r)["models"]
+          item=next(x for x in rows if x["name"]=="qwen3:1.7b")
+          assert item["digest"].removeprefix("sha256:")=="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+          print("PINNED_MODEL_RUNTIME_DIGEST_VERIFIED")
+          PY
+          conf="$GITHUB_WORKSPACE/qualification/serving_fanout_r0/mtls_ingress/nginx-r13.conf"
+          sudo nginx -t -c "$conf"
+          sudo nginx -c "$conf"
+          for i in $(seq 1 30); do
+            if curl -fsS --cacert "$CERT_DIR/ca.crt" --cert "$CERT_DIR/alpha.crt" --key "$CERT_DIR/alpha.key" https://127.0.0.1:18443/api/tags >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS --cacert "$CERT_DIR/ca.crt" --cert "$CERT_DIR/alpha.crt" --key "$CERT_DIR/alpha.key" https://127.0.0.1:18443/api/tags >/dev/null
+      - name: Real two-stage separate per-cert and multi-cert global overload trials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/r13-evidence"
+          python3 qualification/serving_fanout_r0/mtls_ingress/mtls_probe.py --cert-dir "$CERT_DIR" --out "$RUNNER_TEMP/r13-evidence/mtls-results.json"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"r13-evidence"
+          obj=json.loads((root/"mtls-results.json").read_text())
+          assert obj["evidence_class"]=="PUBLIC_CPU_REAL_MTLS_CERT_ADMISSION_EXPLORATORY"
+          assert obj["configured_per_certificate"]==2 and obj["configured_global"]==4
+          assert len(obj["single_cert_probe"])==3 and len(obj["mixed_cert_probe"])==9
+          assert sum(x["http_status"]==200 for x in obj["single_cert_probe"])==2
+          assert sum(x["http_status"]==200 for x in obj["mixed_cert_probe"])==4
+          assert obj["result"]=="MTLS_CERT_AND_GLOBAL_CAP_SCREEN_PASS",obj["result"]
+          assert all(x["denied"] for x in obj["observed_authorization_negatives"].values())
+          assert obj["production_admission"]=="NO_PROMOTION"
+          print("R13_AUTHENTICATED_CERT_AND_GLOBAL_QUOTAS_SCREEN_PASS")
+          PY
+          cp "$RUNNER_TEMP/nginx-version.txt" "$RUNNER_TEMP/r13-evidence/"
+          cp "$RUNNER_TEMP/nginx-package.txt" "$RUNNER_TEMP/r13-evidence/"
+          sha256sum qualification/serving_fanout_r0/mtls_ingress/nginx-r13.conf | tee "$RUNNER_TEMP/r13-evidence/nginx-config-sha256.txt"
+          test ! -e "$RUNNER_TEMP/r13-evidence/ca.key"
+      - name: Preserve sanitized observations, never any generated certificates or keys
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r13-mtls-${{ github.run_id }}
+          path: ${{ runner.temp }}/r13-evidence/*
+          retention-days: 14
+          if-no-files-found: ignore
