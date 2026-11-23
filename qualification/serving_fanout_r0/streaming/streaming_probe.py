@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Public-loopback Ollama streaming timing probe. Direct model only; no agent validation."""
 import argparse
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -97,7 +97,7 @@ def condition(client,base,model,rep,concurrent,kind,cohort):
     if concurrent==1:
         results=[stream_one(client,base,model,cohort,i,kind) for i in range(4)]
     else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrent) as pool:
+        with ThreadPoolExecutor(max_workers=concurrent) as pool:
             results=list(pool.map(lambda i:stream_one(client,base,model,cohort,i,kind),range(4)))
     return {"replicate":rep,"client_concurrency":concurrent,"prefix_kind":kind,"cohort":cohort,
             "wall_ms":(time.monotonic_ns()-started)/1e6,"samples":results}
