@@ -1,0 +1,109 @@
+name: Compass Disposable OCI Registry Transport Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/compass-http/**'
+      - 'cmd/model-compass/**'
+      - 'deploy/model-compass/**'
+      - '.github/workflows/compass-oci-loopback-registry.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compass-registry-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-only-registry:
+    name: local registry upload, immutable pull and isolated container
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source without durable credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Start isolated HTTP registry bound exclusively to runner loopback
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name compass-ephemeral-registry \
+            -p 127.0.0.1:15000:5000 registry:2
+          ready=0
+          for rep in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:15000/v2/ >/dev/null;then ready=1;break;fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+      - name: Build, push ONLY to loopback and pull by immutable registry digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          img="127.0.0.1:15000/compass-oci:synthetic"
+          docker build -f deploy/model-compass/Dockerfile \
+            --build-arg SOURCE_REVISION="$GITHUB_SHA" \
+            -t "$img" .
+          docker push "$img"
+          ref="$(docker image inspect "$img" --format '{{index .RepoDigests 0}}')"
+          test -n "$ref"
+          echo "$ref" | grep -Eq '^127[.]0[.]0[.]1:15000/compass-oci@sha256:[a-f0-9]{64}$'
+          printf '%s\n' "$ref" > "$RUNNER_TEMP/compass-registry-exact-ref.txt"
+          # Verify the pull works by the content-addressed digest, not the tag.
+          docker image rm -f "$img" || true
+          docker pull "$ref"
+          docker image inspect "$ref" --format '{{.Id}}' | grep -Eq '^sha256:[a-f0-9]{64}$'
+          # Wrong digest must not be available in the temporary registry.
+          if docker pull '127.0.0.1:15000/compass-oci@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >/dev/null 2>&1;then
+            echo 'SECURITY FAILURE: unknown digest returned an image'
+            exit 1
+          fi
+      - name: Run pulled-by-digest container against external synthetic data
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="$(cat "$RUNNER_TEMP/compass-registry-exact-ref.txt")"
+          base="$RUNNER_TEMP/compass-registry-fixture"
+          mkdir -p "$base/state"
+          printf '%s\n' '{"schema":"synthetic","receipt":"immutable-digest-verified"}' > "$base/state/snapshot.json"
+          printf '%064d\n' 7 > "$base/token"
+          printf 'Authorization: Bearer %064d\n' 7 > "$base/auth-header"
+          sudo chown -R 65532:65532 "$base/state" "$base/token"
+          sudo chmod 0400 "$base/token"
+          docker run -d --name compass-pulled-rdte \
+            --read-only --user 65532:65532 --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --pids-limit 64 --memory 256m \
+            -p 127.0.0.1:18099:8088 \
+            -v "$base/state:/state:ro" \
+            -v "$base/token:/run/secrets/compass_token:ro" \
+            "$ref"
+          ready=0
+          for rep in $(seq 1 30);do
+            if curl -fsS --max-time 2 http://127.0.0.1:18099/healthz >/dev/null;then ready=1;break;fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18099/v1/snapshot)"
+          test "$code" = '401'
+          curl -fsS -H @"$base/auth-header" http://127.0.0.1:18099/v1/snapshot | grep -q immutable-digest-verified
+          test "$(docker inspect compass-pulled-rdte --format '{{.HostConfig.ReadonlyRootfs}}')" = true
+          docker rm -f compass-pulled-rdte
+          test "$(cat "$base/state/snapshot.json")" = '{"schema":"synthetic","receipt":"immutable-digest-verified"}'
+          echo "PASS: source-pinned immutable OCI registry digest served from runner loopback only; no external publish"
+      - name: Remove temporary registry and experimental resources
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f compass-pulled-rdte compass-ephemeral-registry 2>/dev/null || true
+          test "$(docker ps --filter name=compass-ephemeral-registry --format '{{.Names}}' | wc -l)" -eq 0
+      - name: Retain sanitized exact digest identity, not any secrets
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compass-runner-only-registry-receipt-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/compass-registry-exact-ref.txt
+          if-no-files-found: error
+          retention-days: 7

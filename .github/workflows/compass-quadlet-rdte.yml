@@ -1,0 +1,98 @@
+name: Model Compass Rootless Podman Quadlet Disposable RDTE
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/compass-http/**'
+      - 'cmd/model-compass/**'
+      - 'deploy/model-compass/**'
+      - '.github/workflows/compass-quadlet-rdte.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compass-quadlet-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rootless-podman-quadlet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - name: Checkout exact product source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install disposable stock Podman from hosted Ubuntu package repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq podman
+          podman --version
+      - name: Render rootless Quadlet to generated systemd service without enabling it
+        shell: bash
+        run: |
+          set -euo pipefail
+          testdir="$RUNNER_TEMP/compass-quadlet"
+          mkdir -p "$testdir"
+          cp deploy/model-compass/model-compass.container "$testdir/model-compass.container"
+          sed -i 's#^Image=.*#Image=localhost/model-compass:rdte#' "$testdir/model-compass.container"
+          generator=""
+          for candidate in /usr/lib/systemd/system-generators/podman-system-generator /usr/libexec/podman/quadlet /usr/lib/systemd/user-generators/podman-user-generator; do
+            if test -x "$candidate"; then generator="$candidate";break;fi
+          done
+          if [ -z "$generator" ]; then echo "BLOCKED: no installed Quadlet generator";exit 1;fi
+          if ! QUADLET_UNIT_DIRS="$testdir" "$generator" --user --dryrun > "$RUNNER_TEMP/generated-quadlet.log" 2>&1; then
+            cat "$RUNNER_TEMP/generated-quadlet.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/generated-quadlet.log"
+          grep -q 'model-compass' "$RUNNER_TEMP/generated-quadlet.log"
+          grep -q -- '--read-only' "$RUNNER_TEMP/generated-quadlet.log"
+          grep -q -- '--publish' "$RUNNER_TEMP/generated-quadlet.log"
+          grep -q -- 'no-new-privileges' "$RUNNER_TEMP/generated-quadlet.log"
+          echo "PASS: rootless Quadlet generator translated source policy (not installed/enabled)"
+      - name: Build exact OCI source and load into rootless Podman
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --pull -f deploy/model-compass/Dockerfile -t localhost/model-compass:rdte .
+          docker save localhost/model-compass:rdte -o "$RUNNER_TEMP/compass-image.tar"
+          podman load -i "$RUNNER_TEMP/compass-image.tar"
+          podman info --format '{{.Host.Security.Rootless}}' | grep -qx 'true'
+      - name: Twice recreate under rootless Podman, preserve external state
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/compass-quadlet-runtime"
+          mkdir -p "$root/state"
+          printf '%s\n' '{"schema":"synthetic","immutable_receipt":"quadlet-retained"}' > "$root/state/snapshot.json"
+          printf '%064d\n' 2 > "$root/token"
+          chmod 0600 "$root/token"
+          printf 'Authorization: Bearer %064d\n' 2 > "$root/auth-header"
+          for rep in 1 2; do
+            podman run -d --name compass-rootless-rdte \
+              --userns=keep-id --user "$(id -u):$(id -g)" \
+              --read-only --read-only-tmpfs=false \
+              --cap-drop=ALL --security-opt no-new-privileges \
+              --pids-limit 64 --memory 256m \
+              -p 127.0.0.1:18089:8088 \
+              -v "$root/state:/state:ro" \
+              -v "$root/token:/run/secrets/compass_token:ro" \
+              localhost/model-compass:rdte
+            ready=0
+            for i in $(seq 1 30); do
+              if curl -fsS --max-time 2 http://127.0.0.1:18089/healthz >/dev/null;then ready=1;break;fi
+              sleep 1
+            done
+            if [ "$ready" -ne 1 ];then podman logs compass-rootless-rdte||true;exit 1;fi
+            code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18089/v1/snapshot)
+            test "$code" = '401'
+            curl -fsS -H @"$root/auth-header" http://127.0.0.1:18089/v1/snapshot | grep -q quadlet-retained
+            podman rm -f compass-rootless-rdte
+          done
+          test "$(cat "$root/state/snapshot.json")" = '{"schema":"synthetic","immutable_receipt":"quadlet-retained"}'
+          echo "PASS: rootless Podman runtime + external state survive 2 disposals (not full systemd boot qualification)"

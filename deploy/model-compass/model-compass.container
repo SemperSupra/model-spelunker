@@ -1,0 +1,41 @@
+# Rootless standalone Linux / Oracle free-VPS target. NOT a TrueNAS SCALE
+# Apps or Foundry-accepted target without exact Quadlet adapter/profile evidence.
+# Before use: replace IMAGE with exact immutable OCI sha256 ref.
+# Precreate $HOME/.local/share/model-compass/state and
+# $HOME/.config/model-compass/compass_token mode 0600 as the current user.
+# Install in $HOME/.config/containers/systemd/model-compass.container and
+# systemctl --user daemon-reload && systemctl --user start model-compass.service.
+[Unit]
+Description=Standalone Model Compass (external-state, rootless)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=REPLACE_WITH_APPROVED_IMAGE@sha256:REPLACE_WITH_64_HEX_DIGEST
+ContainerName=model-compass
+PublishPort=127.0.0.1:18088:8088
+Volume=%h/.local/share/model-compass/state:/state:ro
+Volume=%h/.config/model-compass/compass_token:/run/secrets/compass_token:ro
+Environment=COMPASS_LISTEN=:8088
+Environment=COMPASS_TOKEN_FILE=/run/secrets/compass_token
+Environment=COMPASS_SNAPSHOT_FILE=/state/snapshot.json
+ReadOnly=true
+ReadOnlyTmpfs=false
+NoNewPrivileges=true
+DropCapability=all
+PidsLimit=64
+# Podman 4.9 Quadlet has no Memory= key; keep a bounded Podman cgroup budget.
+PodmanArgs=--memory=256m
+UserNS=keep-id
+User=%U
+Group=%G
+Pull=never
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,98 @@
+name: Model Compass Immutable OCI Multiarch Source Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/compass-http/**'
+      - 'cmd/model-compass/**'
+      - 'deploy/model-compass/Dockerfile'
+      - '.github/workflows/compass-oci-multiarch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compass-multiarch-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-amd64-arm64-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Exact proposed source checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Build both architectures from digest-pinned builder without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx create --name compass-disposable-build --driver docker-container --use
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -f deploy/model-compass/Dockerfile \
+            --build-arg SOURCE_REVISION="${GITHUB_SHA}" \
+            --output type=oci,dest="$RUNNER_TEMP/compass-multiarch.oci.tar" .
+      - name: Assert immutable OCI manifest includes only supported architectures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP/compass-multiarch.oci.tar" <<'PY'
+          import hashlib,json,sys,tarfile
+          with tarfile.open(sys.argv[1],mode="r") as t:
+              index=json.load(t.extractfile("index.json"))
+              seen=set()
+              platforms=set()
+              descriptor_count=0
+              def blob(desc):
+                  digest=desc["digest"]
+                  algorithm,sep,expected=digest.partition(":")
+                  assert sep and algorithm=="sha256" and len(expected)==64
+                  assert all(ch in "0123456789abcdef" for ch in expected)
+                  name="blobs/sha256/"+expected
+                  member=t.getmember(name)
+                  assert member.isfile() and member.size<5*1024*1024, name
+                  data=t.extractfile(member).read()
+                  assert hashlib.sha256(data).hexdigest()==expected, name
+                  return json.loads(data)
+              def walk(desc,depth=0):
+                  global descriptor_count
+                  assert depth<=8, "unexpected nested OCI index depth"
+                  digest=desc["digest"]
+                  if digest in seen:
+                      return
+                  seen.add(digest)
+                  descriptor_count+=1
+                  assert descriptor_count<=64, "unbounded OCI descriptors"
+                  obj=blob(desc)
+                  if "manifests" in obj:
+                      for child in obj["manifests"]:
+                          walk(child,depth+1)
+                      return
+                  assert "config" in obj and "layers" in obj, "unknown OCI object"
+                  config=blob(obj["config"])
+                  os_name=config.get("os")
+                  arch=config.get("architecture")
+                  if os_name=="linux":
+                      assert arch in {"amd64","arm64"}, (os_name,arch)
+                      platforms.add(arch)
+                  else:
+                      # BuildKit may embed attestation manifests with empty
+                      # platform metadata. They do not count as runtime images.
+                      assert os_name in (None,"unknown"),(os_name,arch)
+              for desc in index["manifests"]:
+                  walk(desc)
+              assert platforms=={"amd64","arm64"},(platforms,len(seen))
+              print("PASS: verified digests and linux/amd64+linux/arm64 OCI image configs")
+              print("SOURCE_ONLY: registry publication, signatures and native TrueNAS HIL NOT_RUN")
+          PY
+      - name: Archive exact-source disposable OCI image for downstream Foundry RDTE
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: compass-multiarch-oci-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/compass-multiarch.oci.tar
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
