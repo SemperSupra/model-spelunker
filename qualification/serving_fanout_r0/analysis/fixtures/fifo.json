@@ -1,0 +1,52 @@
+{
+  "schema": "serving-fanout-receipt-r0/v1",
+  "evidence_class": "SYNTHETIC_SIMULATION_NOT_HARDWARE",
+  "policy": "fifo",
+  "fixture_sha256": "fbd04936ff273cb75a6bc60981977c05964fd9a39399cafd76848f5d965d65c9",
+  "slots": 2,
+  "reserved_interactive": 1,
+  "interactive": {
+    "count": 2,
+    "p95_queue_wait_ticks": 49,
+    "makespan_ticks": 50
+  },
+  "batch": {
+    "count": 2,
+    "p95_queue_wait_ticks": 0,
+    "makespan_ticks": 50
+  },
+  "observations": [
+    {
+      "id": "b1",
+      "kind": "batch",
+      "arrival_tick": 0,
+      "started_tick": 0,
+      "finished_tick": 50,
+      "queue_wait_ticks": 0
+    },
+    {
+      "id": "b2",
+      "kind": "batch",
+      "arrival_tick": 0,
+      "started_tick": 0,
+      "finished_tick": 50,
+      "queue_wait_ticks": 0
+    },
+    {
+      "id": "i1",
+      "kind": "interactive",
+      "arrival_tick": 1,
+      "started_tick": 50,
+      "finished_tick": 51,
+      "queue_wait_ticks": 49
+    },
+    {
+      "id": "i2",
+      "kind": "interactive",
+      "arrival_tick": 2,
+      "started_tick": 50,
+      "finished_tick": 51,
+      "queue_wait_ticks": 48
+    }
+  ]
+}
