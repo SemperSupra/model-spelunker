@@ -4,6 +4,7 @@ package hmrc
 
 import (
     "encoding/json"
+    "encoding/hex"
     "errors"
     "fmt"
     "os"
@@ -75,6 +76,12 @@ func clone(s Snapshot) Snapshot {
     return s
 }
 
+func validDigest(d string) bool {
+    if !strings.HasPrefix(d,"sha256:") || len(d)!=71 { return false }
+    _,err:=hex.DecodeString(strings.TrimPrefix(d,"sha256:"))
+    return err==nil
+}
+
 func validate(s Snapshot) error {
     if s.Schema != "hmrc-r0" || s.Generation == 0 ||
         s.EffectiveCapacity <= 0 || s.Scope == "" || s.OpenToolTransactions < 0 {
@@ -87,11 +94,19 @@ func validate(s Snapshot) error {
             return ErrInvalid
         }
         if u.Kind == "historical" && u.Verified &&
-            (u.SourceID == "" || !strings.HasPrefix(u.SourceDigest, "sha256:") ||
-             len(u.SourceDigest) != 71) {
+            (u.SourceID == "" || !validDigest(u.SourceDigest)) {
             return ErrInvalid
         }
         seen[u.ID] = true
+    }
+    seenEvicted:=make(map[string]bool)
+    for _,e:=range s.Evicted {
+        if e.ID=="" || seen[e.ID] || seenEvicted[e.ID] ||
+           e.SourceID=="" || !validDigest(e.SourceDigest) ||
+           e.AtGeneration<2 || e.AtGeneration>s.Generation {
+            return ErrInvalid
+        }
+        seenEvicted[e.ID]=true
     }
     return nil
 }
@@ -164,6 +179,9 @@ type Manager struct {
 
 func NewManager(path string, s Snapshot) (*Manager,error) {
     if err := validate(s); err != nil { return nil,err }
+    // Creation must not erase a previously committed recovery checkpoint.
+    // Cross-process initialization must additionally hold an external lease.
+    if _,err := os.Lstat(path); err==nil { return nil,ErrStale } else if !errors.Is(err,os.ErrNotExist) { return nil,err }
     if err := writeAtomic(path,s); err != nil { return nil,err }
     return &Manager{path:path,state:clone(s)},nil
 }
