@@ -1,0 +1,46 @@
+name: HMRC R8 actual HTTP synthetic tool side-effect recovery
+# Strict loopback-only synthetic HTTP server; real subprocess client SIGKILL
+# and persisted external idempotency witness. No production remote system,
+# network filesystem, real agent credentials or private runner minutes.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_http_r8/**'
+      - '.github/workflows/hmrc-r8-http-recovery-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  blue-real-http:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Verify actual HTTP client crash after external ledger persistence
+        working-directory: qualification/hmrc_http_r8
+        run: |
+          set -euo pipefail
+          go vet ./...
+          go test -v -count=1 ./...
+  red-concurrent-network-loss:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Repeat real HTTP response loss, tampered witness and 24-client races
+        working-directory: qualification/hmrc_http_r8
+        run: |
+          set -euo pipefail
+          go test -race -count=4 -run 'TestActualClientSIGKILLAfterHTTPExternalEffect|TestLostHTTPResponseCannotProveNoSideEffect|TestTwentyFourConcurrentIdenticalPOSTsAreIdempotent|TestCorruptExternalWitnessAndUnreachableToolFailClosed' ./...
