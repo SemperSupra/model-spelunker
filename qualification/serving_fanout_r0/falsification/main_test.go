@@ -13,8 +13,8 @@ func TestUnsafeMissingDestinationIdempotency(t *testing.T){
  _,_,trace,err:=boundedCheck(9,false)
  if err==nil {t.Fatal("unsafe destination unexpectedly accepted")}
  path:=strings.Join(trace," ")
- if !strings.Contains(path,"crash")||strings.Count(path,"effect")<2 {
-  t.Fatalf("expected crash-between-effect-and-commit counterexample, got %v: %v",trace,err)
+ if strings.Count(path,"effect")<2 {
+  t.Fatalf("expected first possible duplicate-effect counterexample, got %v: %v",trace,err)
  }
 }
 func TestStaleLeaseCannotEffectAfterCrash(t *testing.T){
@@ -51,4 +51,13 @@ func TestRejectInvalidBounds(t *testing.T){
  for _,n:=range []int{0,-1,13}{
   if _,_,_,err:=boundedCheck(n,true);err==nil{t.Fatalf("accepted depth %d",n)}
  }
+}
+
+func TestUnsafeCrashReplayEvenIfOperationSinglePerLease(t *testing.T){
+ s:=initial()
+ for _,op:=range []string{"admit","start","effect","crash","start","effect"}{
+  s=step(s,op,false)
+ }
+ if s.Effects!=2{t.Fatalf("expected a second effect after crash without persistent destination dedupe, got %+v",s)}
+ if err:=invariant(s);err==nil{t.Fatal("unsafe crash replay was not rejected")}
 }
