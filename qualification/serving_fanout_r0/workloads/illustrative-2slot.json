@@ -1,0 +1,43 @@
+{
+  "schema": "serving-fanout-r0/v1",
+  "slots": 2,
+  "reserved_interactive": 1,
+  "tasks": [
+    {
+      "id": "b1",
+      "tenant": "tenantA",
+      "kind": "batch",
+      "arrival_tick": 0,
+      "service_ticks": 50,
+      "context_tokens": 4000,
+      "prefix_group": "none"
+    },
+    {
+      "id": "b2",
+      "tenant": "tenantA",
+      "kind": "batch",
+      "arrival_tick": 0,
+      "service_ticks": 50,
+      "context_tokens": 4000,
+      "prefix_group": "none"
+    },
+    {
+      "id": "i1",
+      "tenant": "tenantB",
+      "kind": "interactive",
+      "arrival_tick": 1,
+      "service_ticks": 1,
+      "context_tokens": 4000,
+      "prefix_group": "shared"
+    },
+    {
+      "id": "i2",
+      "tenant": "tenantC",
+      "kind": "interactive",
+      "arrival_tick": 2,
+      "service_ticks": 1,
+      "context_tokens": 4000,
+      "prefix_group": "shared"
+    }
+  ]
+}
