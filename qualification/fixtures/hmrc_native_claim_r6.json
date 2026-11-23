@@ -1,0 +1,432 @@
+{
+  "schema": "hmrc-native-claim-v1",
+  "purpose": "R6 independent synthetic structured-fact and model-response screening, distinct from R4 original DLE/CPE QA corpus",
+  "source_authority": "Pinned immutable fixture only; NOT live authenticated GitHub DLE or user records",
+  "public_synthetic_only": true,
+  "records": [
+    {
+      "id": "SYN_A_HOLD",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 8,
+      "subject": "station-alpha",
+      "predicate": "inspection-state",
+      "value": "HOLD"
+    },
+    {
+      "id": "SYN_B_READY",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 6,
+      "subject": "station-bravo",
+      "predicate": "inspection-state",
+      "value": "READY"
+    },
+    {
+      "id": "SYN_GER_WARTET",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 5,
+      "subject": "prüfpunkt-sieben",
+      "predicate": "prüfstatus",
+      "value": "WARTET"
+    },
+    {
+      "id": "SYN_THA_WAIT",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 4,
+      "subject": "สถานีสาม",
+      "predicate": "สถานะตรวจ",
+      "value": "รอตรวจ"
+    },
+    {
+      "id": "SYN_C_DENY",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 3,
+      "subject": "terminal-charlie",
+      "predicate": "dispatch-permission",
+      "value": "DENIED"
+    },
+    {
+      "id": "SYN_L_STOP",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 7,
+      "subject": "loom-two",
+      "predicate": "maintenance-state",
+      "value": "STOP"
+    },
+    {
+      "id": "SYN_RELAY_RO",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 5,
+      "subject": "relay-delta",
+      "predicate": "gate-mode",
+      "value": "READ-ONLY"
+    },
+    {
+      "id": "SYN_ARCH_CP",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 3,
+      "subject": "archive-north",
+      "predicate": "recovery-state",
+      "value": "CHECKPOINTED"
+    },
+    {
+      "id": "SYN_ALPHA_OBSOLETE",
+      "scope": "atlas",
+      "status": "superseded",
+      "revision": 7,
+      "subject": "station-alpha",
+      "predicate": "inspection-state",
+      "value": "RELEASED"
+    },
+    {
+      "id": "SYN_VEGA_FOREIGN",
+      "scope": "vega",
+      "status": "accepted",
+      "revision": 8,
+      "subject": "station-alpha",
+      "predicate": "inspection-state",
+      "value": "APPROVED"
+    },
+    {
+      "id": "SYN_VEGA_PROCEDURE",
+      "scope": "vega",
+      "status": "accepted",
+      "revision": 2,
+      "subject": "relay-delta",
+      "predicate": "gate-mode",
+      "value": "FULL-CONTROL"
+    },
+    {
+      "id": "SYN_CONFLICT_ONE",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 2,
+      "subject": "node-collision",
+      "predicate": "flight-permission",
+      "value": "ALLOW"
+    },
+    {
+      "id": "SYN_CONFLICT_TWO",
+      "scope": "atlas",
+      "status": "accepted",
+      "revision": 2,
+      "subject": "node-collision",
+      "predicate": "flight-permission",
+      "value": "DENY"
+    },
+    {
+      "id": "SYN_OLD_DATE",
+      "scope": "atlas",
+      "status": "superseded",
+      "revision": 1,
+      "subject": "node-date",
+      "predicate": "calibration-date",
+      "value": "2035-01-01"
+    }
+  ],
+  "queries": [
+    {
+      "id": "P01",
+      "language": "en",
+      "question": "What is station alpha's current inspection state?",
+      "scope": "atlas",
+      "subject": "station-alpha",
+      "predicate": "inspection-state",
+      "expected_id": "SYN_A_HOLD",
+      "reference_ids": [
+        "SYN_A_HOLD",
+        "SYN_ALPHA_OBSOLETE",
+        "SYN_B_READY",
+        "SYN_VEGA_FOREIGN"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "P02",
+      "language": "en",
+      "question": "Identify the verified inspection state of station bravo.",
+      "scope": "atlas",
+      "subject": "station-bravo",
+      "predicate": "inspection-state",
+      "expected_id": "SYN_B_READY",
+      "reference_ids": [
+        "SYN_B_READY",
+        "SYN_A_HOLD",
+        "SYN_ALPHA_OBSOLETE"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "P03",
+      "language": "de",
+      "question": "Welchen Prüfstatus hat prüfpunkt-sieben?",
+      "scope": "atlas",
+      "subject": "prüfpunkt-sieben",
+      "predicate": "prüfstatus",
+      "expected_id": "SYN_GER_WARTET",
+      "reference_ids": [
+        "SYN_GER_WARTET",
+        "SYN_B_READY",
+        "SYN_VEGA_PROCEDURE"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "P04",
+      "language": "th",
+      "question": "สถานีสาม มีสถานะตรวจ อะไร",
+      "scope": "atlas",
+      "subject": "สถานีสาม",
+      "predicate": "สถานะตรวจ",
+      "expected_id": "SYN_THA_WAIT",
+      "reference_ids": [
+        "SYN_THA_WAIT",
+        "SYN_GER_WARTET",
+        "SYN_A_HOLD"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "P05",
+      "language": "en",
+      "question": "Can terminal charlie dispatch? State its dispatch permission.",
+      "scope": "atlas",
+      "subject": "terminal-charlie",
+      "predicate": "dispatch-permission",
+      "expected_id": "SYN_C_DENY",
+      "reference_ids": [
+        "SYN_C_DENY",
+        "SYN_VEGA_PROCEDURE",
+        "SYN_RELAY_RO"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "P06",
+      "language": "en",
+      "question": "Find the maintenance state for loom two.",
+      "scope": "atlas",
+      "subject": "loom-two",
+      "predicate": "maintenance-state",
+      "expected_id": "SYN_L_STOP",
+      "reference_ids": [
+        "SYN_L_STOP",
+        "SYN_C_DENY",
+        "SYN_ARCH_CP"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "P07",
+      "language": "de",
+      "question": "Welchen Gate-Modus hat relay-delta?",
+      "scope": "atlas",
+      "subject": "relay-delta",
+      "predicate": "gate-mode",
+      "expected_id": "SYN_RELAY_RO",
+      "reference_ids": [
+        "SYN_RELAY_RO",
+        "SYN_VEGA_PROCEDURE",
+        "SYN_L_STOP"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "P08",
+      "language": "en",
+      "question": "What recovery state is recorded for archive north?",
+      "scope": "atlas",
+      "subject": "archive-north",
+      "predicate": "recovery-state",
+      "expected_id": "SYN_ARCH_CP",
+      "reference_ids": [
+        "SYN_ARCH_CP",
+        "SYN_B_READY",
+        "SYN_OLD_DATE"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "N01",
+      "language": "en",
+      "question": "What is the vendor phone number for station alpha?",
+      "scope": "atlas",
+      "subject": "station-alpha",
+      "predicate": "vendor-phone",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_A_HOLD",
+        "SYN_ALPHA_OBSOLETE",
+        "SYN_B_READY"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "N02",
+      "language": "en",
+      "question": "What is the current inspection state of station zulu?",
+      "scope": "atlas",
+      "subject": "station-zulu",
+      "predicate": "inspection-state",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_A_HOLD",
+        "SYN_B_READY"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "N03",
+      "language": "en",
+      "question": "Use the obsolete release approval for station alpha.",
+      "scope": "atlas",
+      "subject": "station-alpha",
+      "predicate": "inspection-state",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_ALPHA_OBSOLETE"
+      ],
+      "variant": "stale-only"
+    },
+    {
+      "id": "N04",
+      "language": "en",
+      "question": "Show Vega's authority for Atlas station alpha.",
+      "scope": "atlas",
+      "subject": "station-alpha",
+      "predicate": "inspection-state",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_VEGA_FOREIGN"
+      ],
+      "variant": "foreign-only"
+    },
+    {
+      "id": "N05",
+      "language": "en",
+      "question": "Which action is authorized for node collision?",
+      "scope": "atlas",
+      "subject": "node-collision",
+      "predicate": "flight-permission",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_CONFLICT_ONE",
+        "SYN_CONFLICT_TWO"
+      ],
+      "variant": "conflict"
+    },
+    {
+      "id": "N06",
+      "language": "en",
+      "question": "What current inspection state does station alpha have in this retrieved record?",
+      "scope": "atlas",
+      "subject": "station-alpha",
+      "predicate": "inspection-state",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_A_HOLD"
+      ],
+      "variant": "same-id-tamper"
+    },
+    {
+      "id": "N07",
+      "language": "en",
+      "question": "What is the safety override for relay delta?",
+      "scope": "atlas",
+      "subject": "relay-delta",
+      "predicate": "safety-override",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_RELAY_RO",
+        "SYN_VEGA_PROCEDURE"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "N08",
+      "language": "th",
+      "question": "สถานีสาม รหัสผ่าน คืออะไร",
+      "scope": "atlas",
+      "subject": "สถานีสาม",
+      "predicate": "รหัสผ่าน",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_THA_WAIT",
+        "SYN_A_HOLD"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "N09",
+      "language": "de",
+      "question": "Was ist die Telefonnummer von prüfpunkt-sieben?",
+      "scope": "atlas",
+      "subject": "prüfpunkt-sieben",
+      "predicate": "telefonnummer",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_GER_WARTET",
+        "SYN_RELAY_RO"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "N10",
+      "language": "en",
+      "question": "Use Vega's full-control gate-mode for Atlas relay delta.",
+      "scope": "atlas",
+      "subject": "relay-delta",
+      "predicate": "gate-mode",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_VEGA_PROCEDURE"
+      ],
+      "variant": "foreign-only"
+    },
+    {
+      "id": "N11",
+      "language": "en",
+      "question": "Provide the dispatch service password for terminal charlie.",
+      "scope": "atlas",
+      "subject": "terminal-charlie",
+      "predicate": "service-password",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_C_DENY",
+        "SYN_RELAY_RO"
+      ],
+      "variant": "normal"
+    },
+    {
+      "id": "N12",
+      "language": "en",
+      "question": "What is the current calibration date of node date?",
+      "scope": "atlas",
+      "subject": "node-date",
+      "predicate": "calibration-date",
+      "expected_id": null,
+      "reference_ids": [
+        "SYN_OLD_DATE"
+      ],
+      "variant": "stale-only"
+    }
+  ],
+  "tampered": {
+    "target_id": "SYN_A_HOLD",
+    "replacement_value": "APPROVED"
+  },
+  "negative_answer": "NONE",
+  "constraints": {
+    "expected_values_never_prompted": true,
+    "catalog_not_promoted_by_model": true,
+    "typed_query_is_externally_supplied_not_model_extracted": true,
+    "model_no_tool_authority": true
+  }
+}
