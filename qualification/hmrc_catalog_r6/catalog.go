@@ -29,6 +29,7 @@ const (
 )
 var ErrPin=errors.New("pinned source identity or allowed origin mismatch")
 var ErrResponse=errors.New("source response invalid, ambiguous or oversized")
+var ErrUnavailable=errors.New("public GitHub Contents API unavailable (no trust verdict)")
 type Result struct {
  Schema string `json:"schema"`
  Repository string `json:"repository"`
@@ -36,6 +37,7 @@ type Result struct {
  Path string `json:"path"`
  BlobSHA1 string `json:"git_blob_sha1"`
  BodySHA256 string `json:"source_sha256"`
+ FetchMethod string `json:"fetch_method,omitempty"`
  ByteCount int `json:"source_bytes"`
  PublicSyntheticOnly bool `json:"public_synthetic_only"`
  ProductionDLEAuthenticated bool `json:"production_dle_authenticated"`
@@ -110,6 +112,9 @@ func LoadPublic(ctx context.Context, client *http.Client,p Pin)(Result,error){
  resp,err:=bounded.Do(req)
  if err!=nil{return Result{},err}
  defer resp.Body.Close()
+ if resp.StatusCode==http.StatusForbidden||resp.StatusCode==http.StatusTooManyRequests||resp.StatusCode>=500{
+  return Result{},ErrUnavailable
+ }
  if resp.StatusCode!=http.StatusOK{return Result{},ErrResponse}
  raw,err:=io.ReadAll(io.LimitReader(resp.Body,MaxResponse+1))
  if err!=nil||len(raw)>MaxResponse{return Result{},ErrResponse}
@@ -125,5 +130,44 @@ func LoadPublic(ctx context.Context, client *http.Client,p Pin)(Result,error){
     data.Encoding!="base64"{return Result{},ErrResponse}
  decoded,err:=base64.StdEncoding.DecodeString(data.Content)
  if err!=nil||len(decoded)>MaxSource{return Result{},ErrResponse}
- return VerifyLocal(p,decoded)
+ result,err:=VerifyLocal(p,decoded)
+ if err!=nil{return Result{},err}
+ result.FetchMethod="github-contents-api"
+ return result,nil
+}
+
+
+// LoadPinnedRaw is an explicit *second* fixed trusted public Git blob source,
+// used only if GitHub Contents API is unavailable (403/429/5xx). It does not
+// accept model-provided URLs, credentials, redirects or unpinned content.
+func LoadPinnedRaw(ctx context.Context,client *http.Client,p Pin)(Result,error){
+ if err:=validatePin(p);err!=nil{return Result{},err}
+ u:=url.URL{Scheme:"https",Host:"raw.githubusercontent.com",
+  Path:"/"+Repo+"/"+Commit+"/"+Path}
+ if client==nil{client=&http.Client{Timeout:15*time.Second}}
+ bounded:=*client
+ bounded.CheckRedirect=func(*http.Request,[]*http.Request)error{
+  return http.ErrUseLastResponse
+ }
+ req,err:=http.NewRequestWithContext(ctx,http.MethodGet,u.String(),nil)
+ if err!=nil{return Result{},err}
+ req.Header.Set("User-Agent","semper-supra-hmrc-public-catalog-r6")
+ resp,err:=bounded.Do(req)
+ if err!=nil{return Result{},err}
+ defer resp.Body.Close()
+ if resp.StatusCode!=http.StatusOK{return Result{},ErrResponse}
+ raw,err:=io.ReadAll(io.LimitReader(resp.Body,MaxSource+1))
+ if err!=nil||len(raw)>MaxSource{return Result{},ErrResponse}
+ result,err:=VerifyLocal(p,raw)
+ if err!=nil{return Result{},err}
+ result.FetchMethod="pinned-github-raw"
+ return result,nil
+}
+// FetchPinned chooses Contents API first and falls back only on API
+// availability; a 200/mismatched blob or redirect MUST fail without fallback.
+func FetchPinned(ctx context.Context,client *http.Client,p Pin)(Result,error){
+ result,err:=LoadPublic(ctx,client,p)
+ if err==nil{return result,nil}
+ if !errors.Is(err,ErrUnavailable){return Result{},err}
+ return LoadPinnedRaw(ctx,client,p)
 }
