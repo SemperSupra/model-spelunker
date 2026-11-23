@@ -1,0 +1,43 @@
+name: Standalone Model Compass MCP Stdio Contract
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/model-compass/**'
+      - '.github/workflows/compass-mcp-stdio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compass-mcp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-mcp:
+    name: offline-mcp (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-26]
+    steps:
+      - name: Checkout exact PR source without persistent token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Use module-pinned Go toolchain
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: 'cmd/model-compass/go.mod'
+          cache: false
+      - name: Execute pure in-process stdio fixtures without network
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd cmd/model-compass
+          GOPROXY=off GOSUMDB=off go test -count=3 -v -run '^TestMCP' ./...
+          GOPROXY=off GOSUMDB=off go vet ./...

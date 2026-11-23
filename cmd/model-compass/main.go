@@ -624,6 +624,9 @@ func getCatalogByVenue(venueID string) (ServerVenue, []ModelProfile, bool) {
 
 func handleMCP(reader io.Reader, writer io.Writer) {
 	scanner := bufio.NewScanner(reader)
+	// The default 64KiB Scanner limit silently drops valid MCP requests.
+	// Bound the transport to 1MiB and report any oversized frame explicitly.
+	scanner.Buffer(make([]byte, 64*1024), 1<<20)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -631,6 +634,15 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 		}
 		var req JSONRPCRequest
 		if err := json.Unmarshal(line, &req); err != nil {
+			fmt.Fprintln(writer, `{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}`)
+			continue
+		}
+		if req.JSONRPC != "2.0" || req.Method == "" {
+			fmt.Fprintln(writer, `{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"Invalid Request"}}`)
+			continue
+		}
+		// A JSON-RPC notification has no id and MUST NOT receive a response.
+		if req.ID == nil {
 			continue
 		}
 
@@ -639,6 +651,8 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 		resp.ID = req.ID
 
 		switch req.Method {
+		case "ping":
+			resp.Result = map[string]interface{}{}
 		case "initialize":
 			resp.Result = map[string]interface{}{
 				"protocolVersion": "2024-11-05",
@@ -776,6 +790,10 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 		outBytes, _ := json.Marshal(resp)
 		writer.Write(outBytes)
 		writer.Write([]byte("\n"))
+	}
+	if err := scanner.Err(); err != nil {
+		// Never silently strand an MCP client on a truncated/oversized frame.
+		fmt.Fprintln(writer, `{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"MCP input frame exceeds bound or failed"}}`)
 	}
 }
 
