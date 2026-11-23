@@ -33,6 +33,22 @@ func TestFailClosedMutations(t *testing.T){
  }
  for _,tt:=range tests {t.Run(tt.name,func(t *testing.T){in:=fixture();tt.mutate(&in);d:=Evaluate(in,now);if d.Eligible||d.Identity!=tt.identity||d.Qualification!=tt.qualification{t.Fatalf("not fail-closed: %+v",d)}})}
 }
-func TestManagedNeedsSeparateAdmission(t *testing.T){in:=fixture();in.Mode="managed";d:=Evaluate(in,time.Date(2026,11,23,0,0,0,0,time.UTC));if d.Eligible||d.Admission!="NOT_GRANTED"{t.Fatal(d)};yes:=true;in.Admission=&yes;if d=Evaluate(in,time.Date(2026,11,23,0,0,0,0,time.UTC));!d.Eligible||d.Admission!="GRANTED"{t.Fatal(d)}}
+func TestManagedCannotUseUnverifiedBoolean(t *testing.T){
+ in:=fixture()
+ in.Mode="managed"
+ yes:=true
+ in.Admission=&yes
+ d:=Evaluate(in,time.Date(2026,11,23,0,0,0,0,time.UTC))
+ if d.Eligible||d.Admission!="EXTERNAL_AUTHORITY_REQUIRED" {t.Fatalf("unverified managed admission became authority: %+v",d)}
+}
+func TestApprovalNamespaceSeparation(t *testing.T) {
+ in:=fixture()
+ when:=time.Date(2026,11,23,0,0,0,0,time.UTC)
+ private:=Evaluate(in,when)
+ if private.Approval!="PRIVATE_ADOPTED"||!private.Eligible {t.Fatalf("private adoption conflated with public approval: %+v",private)}
+ in.Registry.Status="approved"
+ public:=Evaluate(in,when)
+ if public.Approval!="PUBLIC_APPROVED"||!public.Eligible {t.Fatalf("public approval lost independent label: %+v",public)}
+}
 func TestUnknownModeAndNoImplicitFallback(t *testing.T){in:=fixture();in.Mode="unexpected";d:=Evaluate(in,time.Now());if d.Eligible||d.Admission!="INVALID_MODE"{t.Fatal(d)}}
 func TestOpaqueAliasNoAuthority(t *testing.T){in:=fixture();in.Observed.Alias=strings.Repeat("approved",20);in.Registry=nil;d:=Evaluate(in,time.Date(2026,11,23,0,0,0,0,time.UTC));if d.Eligible{t.Fatal(d)}}
