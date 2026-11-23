@@ -59,7 +59,9 @@ type Input struct {
     Observed Observed `json:"observed"`
     Registry *Registry `json:"registry"`
     Interview *Interview `json:"interview"`
-    Admission *bool `json:"admission"`
+    // Deprecated: retained only to prove that a caller-supplied Boolean cannot grant admission.
+    // Real managed execution requires separately authenticated, authority-bound enforcement.
+    Admission *bool `json:"admission,omitempty"`
 }
 type Decision struct {
     Presence string `json:"presence"`
@@ -99,7 +101,7 @@ func Evaluate(in Input,now time.Time) Decision {
     } else if !sameArtifact(o.Artifact,in.Registry.Artifact)||o.FileSHA256!=in.Registry.FileSHA256 {
         d.Identity="DIGEST_MISMATCH";fail("bytes_or_representation_differ")
     } else {d.Identity="VERIFIED_MATCH"}
-    if in.Registry!=nil {switch in.Registry.Status {case "approved","privately_adopted":d.Approval="APPROVED";default:d.Approval="NOT_APPROVED";fail("artifact_not_approved")}}
+    if in.Registry!=nil {switch in.Registry.Status {case "approved":d.Approval="PUBLIC_APPROVED";case "privately_adopted":d.Approval="PRIVATE_ADOPTED";default:d.Approval="NOT_APPROVED";fail("artifact_not_approved")}}
     if in.Interview==nil {d.Qualification="UNQUALIFIED";fail("interview_missing")
     } else if !complete(o,*in.Interview)||!sameBinding(o,*in.Interview) {d.Qualification="MISMATCH";fail("interview_binding_mismatch")
     } else if in.Interview.Outcome!="PASS" {d.Qualification="NOT_QUALIFIED";fail("interview_not_pass")
@@ -107,10 +109,10 @@ func Evaluate(in Input,now time.Time) Decision {
     } else {d.Qualification="QUALIFIED"}
     switch in.Mode {
     case "direct": d.Admission="NOT_REQUIRED_FOR_DIRECT_MODEL_ACCESS"
-    case "managed": if in.Admission!=nil&&*in.Admission {d.Admission="GRANTED"} else {d.Admission="NOT_GRANTED";fail("managed_route_not_admitted")}
+    case "managed": d.Admission="EXTERNAL_AUTHORITY_REQUIRED";fail("managed_admission_must_be_authenticated_outside_oracle")
     default: d.Admission="INVALID_MODE";fail("mode_invalid")
     }
-    d.Eligible=d.Presence!="CONFIGURED_NOT_PRESENT"&&!(o.InUse&&!o.Loaded)&&d.Identity=="VERIFIED_MATCH"&&d.Approval=="APPROVED"&&d.Qualification=="QUALIFIED"&&(d.Admission=="GRANTED"||d.Admission=="NOT_REQUIRED_FOR_DIRECT_MODEL_ACCESS")
+    d.Eligible=d.Presence!="CONFIGURED_NOT_PRESENT"&&!(o.InUse&&!o.Loaded)&&d.Identity=="VERIFIED_MATCH"&&(d.Approval=="PUBLIC_APPROVED"||d.Approval=="PRIVATE_ADOPTED")&&d.Qualification=="QUALIFIED"&&d.Admission=="NOT_REQUIRED_FOR_DIRECT_MODEL_ACCESS"
     if !d.Eligible&&len(d.Reasons)==0 {fail("requirements_not_satisfied")}
     return d
 }
