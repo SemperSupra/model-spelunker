@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: serving-fanout-r2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   exact-public-cpu:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -74,12 +77,14 @@ jobs:
           import json,os,pathlib
           r=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"serving-fanout-live-cpu.json").read_text())
           assert r["evidence_class"]=="LIVE_PUBLIC_CPU_DIRECT_INFERENCE_EXPLORATORY"
-          assert len(r["conditions"])==6
+          assert len(r["conditions"])==18
+          assert set(c["replicate"] for c in r["conditions"])=={1,2,3}
+          assert len(set(c["cohort"] for c in r["conditions"]))==18
           assert all(len(c["samples"])==4 for c in r["conditions"])
           assert set(c["client_concurrency"] for c in r["conditions"])=={1,2,4}
           assert r["agent_task_validity"]=="NOT_TESTED_DIRECT_COMPLETION_ONLY"
           assert r["ttft"]=="NOT_OBSERVABLE_NONSTREAMING_API"
-          print("REAL CPU direct Ollama throughput measurement PASS; no agent/hardware qualification")
+          print("REAL CPU controlled-replication screening PASS; no agent/M2-Ultra qualification")
           for c in r["conditions"]:
               print("concurrency=%s prefix=%s wall_ms=%.1f p95_ms=%.1f"%
                     (c["client_concurrency"],c["prefix_pattern"],c["wall_ms"],c["p95_request_ms"]))
