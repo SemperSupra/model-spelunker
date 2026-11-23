@@ -1,0 +1,80 @@
+name: serving-fanout-r5-public-streaming-ttft
+on:
+  pull_request:
+    paths:
+      - 'qualification/serving_fanout_r0/streaming/**'
+      - '.github/workflows/serving-fanout-r5-streaming-public.yml'
+permissions:
+  contents: read
+concurrency:
+  group: serving-fanout-r5-stream-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  cpu-streaming-evidence:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_SHA: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-r5-stream-models'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Source-only stream and negative controls
+        run: |
+          python3 -m unittest discover -s qualification/serving_fanout_r0/streaming -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/streaming/streaming_probe.py
+      - name: Install pinned public CPU Ollama
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" --output "$archive"
+          echo "$OLLAMA_SHA  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+      - name: Hydrate pinned model in disposable loopback Ollama
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_NUM_PARALLEL=4 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=2048 ollama serve > "$RUNNER_TEMP/ollama-stream.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull qwen3:1.7b
+      - name: Execute real streamed CPU model requests and host fingerprint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 qualification/serving_fanout_r0/streaming/streaming_probe.py --out "$RUNNER_TEMP/streaming-evidence.json"
+          python3 - <<'PY'
+          import json,os,pathlib,statistics
+          r=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"streaming-evidence.json").read_text())
+          assert r["evidence_class"]=="REAL_PUBLIC_CPU_STREAMING_DIRECT_INFERENCE_EXPLORATORY"
+          assert len(r["conditions"])==12
+          assert all(len(c["samples"])==4 for c in r["conditions"])
+          assert all(s["ttft_ms"]>0 and s["elapsed_ms"]>=s["ttft_ms"] for c in r["conditions"] for s in c["samples"])
+          assert set(c["client_concurrency"] for c in r["conditions"])=={1,2,4}
+          assert r["agent_task_validity"]=="NOT_TESTED"
+          assert r["kv_cache_hit_rate"]=="NOT_OBSERVED"
+          for c in r["conditions"]:
+              print("EXPLORATORY rep=%s concurrent=%s prefix=%s total_ms=%.1f median_TTFT_ms=%.1f prompt_tokens=%s" %
+                (c["replicate"],c["client_concurrency"],c["prefix_kind"],c["wall_ms"],
+                 statistics.median(s["ttft_ms"] for s in c["samples"]),
+                 [s["prompt_tokens"] for s in c["samples"]]))
+          PY
+      - name: Preserve evidence even when a condition fails
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r5-streaming-${{ github.run_id }}
+          path: ${{ runner.temp }}/streaming-evidence.json
+          retention-days: 14
+          if-no-files-found: ignore
