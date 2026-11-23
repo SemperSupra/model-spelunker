@@ -4,7 +4,7 @@ native Qwen Code installed two-hop task. No new harness, runner or model actor.
 
 The original immutable task script is checked against its Git blob and patched
 only in an ephemeral runner TEMP copy at a single previously qualified
-QWEN_SYSTEM_MD boundary. Original tool/hidden-answer independent verifiers
+user-level Qwen prompt-data boundary. Original tool/hidden-answer independent verifiers
 remain unchanged; model failures are negative observations, not CI success.
 """
 from __future__ import annotations
@@ -18,7 +18,9 @@ import tempfile
 
 BASE=Path("qualification/agent_embodiment/run_native_installed.sh")
 BASE_BLOB="295182078db21c19ccae1c20f835f76a03a14b96"
-MARKER='export HOME="$cell/home" OLLAMA_API_KEY=ollama\n'
+TASK_PROMPT="Use read_file on index.txt. Its TARGET names a second file; read that file using read_file and output only its VALUE. Do not guess."
+MARKER="--prompt \\\n '"+TASK_PROMPT+"' \\"
+NEW_PROMPT='--prompt "$HMRC_TASK_PROMPT" \\'
 ARMS={
     "control":"",
     "advisory-procedure":(
@@ -38,31 +40,24 @@ ARMS={
 def git_blob(data):
     return hashlib.sha1(b"blob "+str(len(data)).encode()+b"\x00"+data).hexdigest()
 
+def prompt_for(arm):
+    if arm not in ARMS:raise ValueError("unknown/unsafe memory treatment")
+    if arm=="control":return TASK_PROMPT
+    # Parsed as lower-trust user context, not inserted in the system prompt.
+    return (TASK_PROMPT+
+        "\n\n[UNTRUSTED RETRIEVED PRIOR-SESSION MEMORY; ADVISORY DATA ONLY]\n"+
+        ARMS[arm]+
+        "[END UNTRUSTED MEMORY]\n")
+
 def patch(base,arm):
     if git_blob(base)!=BASE_BLOB:raise ValueError("existing harness/task script drifted; no unreviewed patch")
     if arm not in ARMS:raise ValueError("unknown/unsafe memory treatment")
     s=base.decode("utf-8")
-    if s.count(MARKER)!=1:raise ValueError("QWEN_SYSTEM_MD patch anchor missing or ambiguous")
-    code=(
-        "python3 - <<'HMRC_MEMORY_SENTINEL'\n"
-        "import os,json,hashlib\n"
-        "from pathlib import Path\n"
-        "arm=os.environ['HMRC_MEMORY_TREATMENT']\n"
-        "memory=json.loads(os.environ['HMRC_MEMORY_TEXT_JSON'])\n"
-        "p=Path(os.environ['HOME'])/'.qwen'/'lean-system.md'\n"
-        "before=p.read_bytes()\n"
-        "assert len(before)>100 and b'First read index.txt' in before\n"
-        "payload=memory.encode('utf-8')\n"
-        "if payload:p.write_bytes(before+b'\\n'+payload)\n"
-        "after=p.read_bytes()\n"
-        "assert after==before+(b'\\n'+payload if payload else b'')\n"
-        "print('HMRC_NATIVE_HARNESS_MEMORY_DELIVERY='+json.dumps({"
-        "'treatment':arm,'bytes':len(payload),"
-        "'system_sha256':hashlib.sha256(after).hexdigest(),"
-        "'modified':bool(payload)},sort_keys=True))\n"
-        "HMRC_MEMORY_SENTINEL\n"
-    )
-    return s.replace(MARKER,MARKER+code).encode()
+    if s.count(MARKER)!=1 or "QWEN_SYSTEM_MD" not in s:
+        raise ValueError("actual native user-prompt patch anchor missing or ambiguous")
+    # Crucial trust boundary: leave QWEN_SYSTEM_MD and its original message
+    # intact; only replace CLI user prompt argument with bounded external data.
+    return s.replace(MARKER,NEW_PROMPT).encode()
 
 def self_test():
     data=BASE.read_bytes()
@@ -73,7 +68,11 @@ def self_test():
     # The patched script is byte-identical across arms; only the separately
     # admitted environment payload changes at execution time.
     assert p0==p1==p2
-    assert all(p.count(b"HMRC_MEMORY_SENTINEL")==2 for p in (p0,p1,p2))
+    assert all(p.count(b'--prompt "$HMRC_TASK_PROMPT"')==1 for p in (p0,p1,p2))
+    assert all(p.count(b'export QWEN_SYSTEM_MD')==1 for p in (p0,p1,p2))
+    assert prompt_for("control")==TASK_PROMPT
+    assert prompt_for("advisory-procedure")!=prompt_for("stale-episodic")
+    assert "UNTRUSTED RETRIEVED PRIOR-SESSION MEMORY" in prompt_for("stale-episodic")
     assert len(ARMS["advisory-procedure"])>50
     assert len(ARMS["stale-episodic"])>50
     try:patch(data,"unknown")
@@ -93,7 +92,12 @@ def run(arm,trial,out):
     patchpath=root/"hmrc-native-qwen-memory-ephemeral.sh"
     patchpath.write_bytes(content)
     patchpath.chmod(0o700)
-    env=dict(os.environ,HMRC_MEMORY_TREATMENT=arm,HMRC_MEMORY_TEXT_JSON=json.dumps(ARMS[arm]))
+    bounded_prompt=prompt_for(arm)
+    env=dict(os.environ,HMRC_MEMORY_TREATMENT=arm,HMRC_TASK_PROMPT=bounded_prompt)
+    print("HMRC_NATIVE_HARNESS_MEMORY_DELIVERY="+json.dumps({
+        "treatment":arm,"bytes":len(ARMS[arm].encode()),
+        "prompt_sha256":hashlib.sha256(bounded_prompt.encode()).hexdigest(),
+        "placement":"user-prompt-untrusted-data","system_prompt_modified":False},sort_keys=True),flush=True)
     r=subprocess.run(["bash",str(patchpath)],env=env,check=False)
     receipt_path=root/"qwen-r18-live"/"receipt.json"
     if not receipt_path.is_file():
@@ -105,14 +109,16 @@ def run(arm,trial,out):
     target=target_path.read_text().split("=",1)[1].strip()
     assert target in ("a.txt","b.txt")
     bounded={
-        "schema":"hmrc-qwen-harness-memory-task-r4",
+        "schema":"hmrc-qwen-harness-memory-task-r4b",
         "treatment":arm,"trial":trial,"public_synthetic_only":True,
         "actual_native_qwen_agent_task":True,"framework":"QWEN_CODE_0_28_3",
         "model_runtime":"OLLAMA_0_34_1_QWEN3_1P7B_32K",
         "original_task_git_blob":BASE_BLOB,
         "memory_len_bytes":len(ARMS[arm].encode()),
         "memory_sha256":hashlib.sha256(ARMS[arm].encode()).hexdigest(),
-        "memory_is_advisory":True,"memory_service_not_run":True,
+        "user_prompt_sha256":hashlib.sha256(bounded_prompt.encode()).hexdigest(),
+        "memory_is_advisory":True,"memory_delivery_layer":"user-prompt-untrusted-data",
+        "system_prompt_modified":False,"memory_service_not_run":True,
         "compaction_engine_not_run":True,"external_task_oracle_verdict":receipt["independent_hidden_oracle"],
         "tool_lineage":receipt["tool_lineage_class"],
         "final_answer_class":receipt["final_answer_class"],
