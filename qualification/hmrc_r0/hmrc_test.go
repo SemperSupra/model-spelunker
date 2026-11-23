@@ -193,3 +193,33 @@ func BenchmarkPropose(b *testing.B) {
         if _,err:=Propose(s,f);err!=nil {b.Fatal(fmt.Sprint(err))}
     }
 }
+
+func TestRejectAccidentalCheckpointOverwrite(t *testing.T) {
+    path:=filepath.Join(t.TempDir(),"state.json")
+    m,err:=NewManager(path,fixture())
+    if err!=nil {t.Fatal(err)}
+    d,err:=Propose(m.Read(),demand())
+    if err!=nil {t.Fatal(err)}
+    if _,err:=m.Apply(d);err!=nil {t.Fatal(err)}
+    if _,err:=NewManager(path,fixture());!errors.Is(err,ErrStale) {t.Fatalf("existing durable state overwritten: %v",err)}
+    recovered,err:=Recover(path)
+    if err!=nil {t.Fatal(err)}
+    if recovered.Read().Generation!=2 {t.Fatal("checkpoint was reset on initialization")}
+}
+
+func TestRejectNonHexEvidenceDigest(t *testing.T) {
+    s:=fixture()
+    s.Units[2].SourceDigest="sha256:"+strings.Repeat("g",64)
+    if _,err:=Propose(s,demand());!errors.Is(err,ErrInvalid) {
+        t.Fatalf("invalid evidence was accepted: %v",err)
+    }
+}
+
+func TestRejectTaintedEvictionRecovery(t *testing.T) {
+    s:=fixture()
+    s.Generation=2
+    s.Evicted=[]Eviction{{ID:"task",SourceID:"SYN_FAKE",SourceDigest:"sha256:"+strings.Repeat("a",64),AtGeneration:2}}
+    if _,err:=NewManager(filepath.Join(t.TempDir(),"state.json"),s);!errors.Is(err,ErrInvalid) {
+        t.Fatalf("active source reappeared as evicted record: %v",err)
+    }
+}
