@@ -79,7 +79,11 @@ func Probe(ctx context.Context, client *http.Client,c Config) (Observation,error
     target:=u.ResolveReference(&url.URL{Path:endpoint})
     req,err:=http.NewRequestWithContext(ctx,http.MethodGet,target.String(),nil)
     if err!=nil {return Observation{},err}
-    r,err:=client.Do(req)
+    // Disable redirects: a native server may not redirect telemetry to a
+    // different endpoint or metadata service under our admitted host identity.
+    bounded:=*client
+    bounded.CheckRedirect=func(*http.Request,[]*http.Request)error{return http.ErrUseLastResponse}
+    r,err:=bounded.Do(req)
     if err!=nil {return Observation{},err}
     defer r.Body.Close()
     if r.StatusCode!=http.StatusOK {return Observation{},fmt.Errorf("%w: status=%d",ErrMalformed,r.StatusCode)}
