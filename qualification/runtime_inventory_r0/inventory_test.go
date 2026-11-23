@@ -49,7 +49,7 @@ func TestBadAndStaleInputsRefused(t *testing.T){
   {"tags_too_old",func(x *Input){x.TagsAt=x.TagsAt.Add(-time.Hour)}},
   {"running_future",func(x *Input){x.RunningAt=x.RunningAt.Add(time.Second)}},
   {"running_missing",func(x *Input){x.Running=nil}},
-  {"unsafe_provider_digest",func(x *Input){x.Tags=[]byte(`{"models":[{"name":"good:1","digest":"bad\\nvalue"}]}`)}},
+  {"unsafe_provider_digest",func(x *Input){x.Tags=[]byte(`{"models":[{"name":"good:1","digest":"bad\nvalue"}]}`)}},
  }
  for _,tc:=range tests {t.Run(tc.name,func(t *testing.T){x:=base;tc.change(&x);_,err:=Reconcile(x);if err==nil{t.Fatal("unsafe input accepted")}})}
 }
