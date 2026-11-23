@@ -23,7 +23,7 @@ WORDS="amber cobalt cedar lunar river vector field pixel orbit datum signal mapl
 def one_request(target,model,index,gate,origin):
     handler=base.opener() # each worker has independent HTTP state
     prompt=("Synthetic queue probe cohort %08d, request %02d. "%(31610000,index) +
-             " ".join(WORDS)*35 + " Write a detailed numbered reliability review of twelve design options.")
+             (" ".join(WORDS)+" ")*35 + " Write a detailed numbered reliability review of twelve design options.")
     payload={"model":model,"prompt":prompt,"stream":True,"think":False,
              "keep_alive":"10m","options":{"num_ctx":2048,"num_predict":64,"temperature":0}}
     body=json.dumps(payload).encode()
