@@ -24,7 +24,8 @@ ReadOnlyTmpfs=false
 NoNewPrivileges=true
 DropCapability=all
 PidsLimit=64
-Memory=268435456
+# Podman 4.9 Quadlet has no Memory= key; keep a bounded Podman cgroup budget.
+PodmanArgs=--memory=256m
 UserNS=keep-id
 User=%U
 Group=%G
