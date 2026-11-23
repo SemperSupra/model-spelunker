@@ -1,0 +1,71 @@
+name: HMRC R5 repeated installed-agent a/b memory stress
+# Existing exact SHA-checked installed Qwen Code 0.28.3 and Ollama Qwen3 1.7B
+# hard tool task with ORIGINAL hidden final/lineage verifier. 12 independent
+# public-free GHA actual model-tool tasks: 3 arms x 2 targets x 2 fresh nonces.
+# No modification to harness, model, question, evaluator or system prompt.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/hmrc-r5-harness-repeats-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-oracle-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Original harness patch, unchanged independent verification, no high-trust memory injection
+        run: |
+          set -euo pipefail
+          python3 qualification/hmrc_harness_memory_r4.py --self-test
+          python3 -m qualification.agent_embodiment.classify_reliability_trial self-test
+          bash -n qualification/agent_embodiment/run_native_installed.sh
+  native-task:
+    needs: independent-oracle-critic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        arm: [control, advisory-procedure, stale-episodic]
+        trial: [1, 2]
+        repeat: [1, 2]
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Fresh randomized synthetic VALUE and pinned model/agent task
+        shell: bash
+        env:
+          HMRC_ARM: ${{ matrix.arm }}
+          HMRC_TRIAL: ${{ matrix.trial }}
+          HMRC_REPEAT: ${{ matrix.repeat }}
+        run: |
+          set -euo pipefail
+          python3 qualification/hmrc_harness_memory_r4.py \
+            --arm "$HMRC_ARM" --trial "$HMRC_TRIAL" \
+            --out "hmrc-r5-$HMRC_ARM-$HMRC_TRIAL-$HMRC_REPEAT.json"
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open(f"hmrc-r5-{os.environ['HMRC_ARM']}-{os.environ['HMRC_TRIAL']}-{os.environ['HMRC_REPEAT']}.json"))
+          assert d["actual_native_qwen_agent_task"] is True
+          assert d["system_prompt_modified"] is False
+          assert d["memory_delivery_layer"]=="user-prompt-untrusted-data"
+          assert d["original_task_git_blob"]=="295182078db21c19ccae1c20f835f76a03a14b96"
+          assert d["pre_registered_target"]==("a.txt" if int(os.environ["HMRC_TRIAL"])==1 else "b.txt")
+          assert d["task_verdict"] in ("PASS","FAIL")
+          assert d["tool_lineage"] in ("PASS","WRONG_TOOL_COUNT","WRONG_TOOL_SEQUENCE","NO_TOOL_USE")
+          print("ACTUAL_AGENT_TASK_VERDICT="+d["task_verdict"]+"; INFRA_PASS_IS_NOT_TASK_PASS")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: hmrc-r5-${{ matrix.arm }}-${{ matrix.trial }}-${{ matrix.repeat }}
+          path: hmrc-r5-*.json
+          retention-days: 14
+          if-no-files-found: ignore
