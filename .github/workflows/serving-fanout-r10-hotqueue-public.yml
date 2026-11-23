@@ -1,0 +1,79 @@
+name: serving-fanout-r10-public-hot-queue-negative
+on:
+  pull_request:
+    paths:
+      - 'qualification/serving_fanout_r0/hot_queue/**'
+      - '.github/workflows/serving-fanout-r10-hotqueue-public.yml'
+permissions:
+  contents: read
+concurrency:
+  group: serving-fanout-r10-hotqueue-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  live-bounded-queue-red-control:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_SHA: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-r10-hot-queue'
+      OLLAMA_MAX_QUEUE: '1'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Offline RED and BLUE queue-boundary assertions
+        run: |
+          python3 -m unittest discover -s qualification/serving_fanout_r0/hot_queue -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/hot_queue/hot_queue_probe.py
+      - name: Verify exact public Ollama version with pinned SHA-256
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" --output "$archive"
+          echo "$OLLAMA_SHA  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+      - name: Start hot-loaded local model with intentionally narrow native queue
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_MAX_QUEUE="$OLLAMA_MAX_QUEUE" OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL" OLLAMA_MAX_LOADED_MODELS="$OLLAMA_MAX_LOADED_MODELS" OLLAMA_CONTEXT_LENGTH=2048 ollama serve > "$RUNNER_TEMP/ollama-r10.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull qwen3:1.7b
+      - name: Six near-simultaneous real streams on hot model
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 qualification/serving_fanout_r0/hot_queue/hot_queue_probe.py --out "$RUNNER_TEMP/hot-queue-receipt.json"
+          python3 - <<'PY'
+          import json,os,pathlib
+          obj=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"hot-queue-receipt.json").read_text())
+          assert obj["evidence_class"]=="REAL_PUBLIC_CPU_HOT_LOADED_OLLAMA_QUEUE_LIMIT_EXPLORATORY"
+          assert obj["expected_parallel"]==1 and obj["configured_max_queue"]==1
+          assert len(obj["observations"])==6
+          assert obj["production_decision"]=="NO_PROMOTION"
+          assert obj["overload_result"] in ("EXCESS_REQUESTS_COMPLETED_OUTSIDE_GLOBAL_1_PLUS_1_BOUND","GLOBAL_BOUND_COMPATIBLE_FOR_THIS_TRIAL","INCONCLUSIVE","INCONCLUSIVE_ARRIVAL_OVERLAP")
+          assert obj["kv_cache_hit_rate"]=="NOT_OBSERVED"
+          print("HOT_MODEL_QUEUE_ADMISSION_EVIDENCE="+obj["overload_result"])
+          print("ACTUAL_HTTP_STATUSES="+repr([r["http_status"] for r in obj["observations"]]))
+          PY
+      - name: Preserve machine-readable positive and negative evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r10-hotqueue-${{ github.run_id }}
+          path: ${{ runner.temp }}/hot-queue-receipt.json
+          retention-days: 14
+          if-no-files-found: ignore
