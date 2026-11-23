@@ -13,7 +13,7 @@ import(
 func main(){
  ctx,cancel:=context.WithTimeout(context.Background(),20*time.Second)
  defer cancel()
- receipt,err:=catalog.LoadPublic(ctx,nil,catalog.PublicPin())
+ receipt,err:=catalog.FetchPinned(ctx,nil,catalog.PublicPin())
  if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
  if err:=json.NewEncoder(os.Stdout).Encode(receipt);err!=nil{
   fmt.Fprintln(os.Stderr,err);os.Exit(3)
