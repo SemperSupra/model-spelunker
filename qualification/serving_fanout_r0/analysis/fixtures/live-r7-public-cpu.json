@@ -1,0 +1,20 @@
+{
+  "schema": "serving-fanout-g2-screen/v1",
+  "evidence_class": "PUBLIC_CPU_CONFIGURED_AGENT",
+  "source_sha": "184a079bfe92596b8b1541a95d1b07a13da80ca3",
+  "artifact_sha256": "0904c7f87f6e6b2abd2f3124eee2e579d08426a6bbe0b768d0a9532b6a74110e",
+  "runtime_model_sha256": "8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7",
+  "distinct_task_classes": 1,
+  "attempted_tasks": 24,
+  "independently_verified_tasks": 24,
+  "independent_host_reps": 1,
+  "reps_per_condition": 2,
+  "independent_task_oracle": true,
+  "physical_host_admitted": false,
+  "full_model_artifact_admitted": false,
+  "streaming_ttft_observed": false,
+  "measured_memory_pressure": false,
+  "tenant_identity_verified": false,
+  "backend_bypass_closed": false,
+  "admission_invariant_violations": 0
+}
