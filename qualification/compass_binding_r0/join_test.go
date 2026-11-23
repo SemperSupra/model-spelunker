@@ -4,8 +4,8 @@ const shaA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 const shaB="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 func fixture() Input {
  a:=Artifact{Kind:"content-manifest",Digest:"sha256:"+shaA}
- o:=Observed{Alias:"not-an-identity",Artifact:a,FileSHA256:shaA,Installed:true,Loaded:true,InUse:true,Runtime:"ollama",RuntimeVersion:"0.test",ConfigDigest:shaA,HostProfileDigest:shaA,Harness:"goose",HarnessVersion:"1.test",ToolProfileDigest:shaA,TaskClass:"bugfix",ProcessGeneration:"g1",AttestedGeneration:"g1"}
- return Input{Mode:"direct",Observed:o,Registry:&Registry{Artifact:a,FileSHA256:shaA,Status:"privately_adopted"},Interview:&Interview{Artifact:a,Runtime:o.Runtime,RuntimeVersion:o.RuntimeVersion,ConfigDigest:o.ConfigDigest,HostProfileDigest:o.HostProfileDigest,Harness:o.Harness,HarnessVersion:o.HarnessVersion,ToolProfileDigest:o.ToolProfileDigest,TaskClass:o.TaskClass,Outcome:"PASS",ExpiresAt:"2030-01-01T00:00:00Z"}}
+ o:=Observed{Alias:"not-an-identity",ObservationEvidenceRef:"synthetic-observation-r0",Artifact:a,FileSHA256:shaA,Installed:true,Loaded:true,InUse:true,Runtime:"ollama",RuntimeVersion:"0.test",ConfigDigest:shaA,HostProfileDigest:shaA,Harness:"goose",HarnessVersion:"1.test",ToolProfileDigest:shaA,TaskClass:"bugfix",ProcessGeneration:"g1",AttestedGeneration:"g1"}
+ return Input{Mode:"direct",Observed:o,Registry:&Registry{Artifact:a,FileSHA256:shaA,Status:"privately_adopted",EvidenceRef:"synthetic-registry-r0"},Interview:&Interview{Artifact:a,Runtime:o.Runtime,RuntimeVersion:o.RuntimeVersion,ConfigDigest:o.ConfigDigest,HostProfileDigest:o.HostProfileDigest,Harness:o.Harness,HarnessVersion:o.HarnessVersion,ToolProfileDigest:o.ToolProfileDigest,TaskClass:o.TaskClass,Outcome:"PASS",EvidenceRef:"synthetic-interview-r0",ExpiresAt:"2030-01-01T00:00:00Z"}}
 }
 func TestDirectDoesNotRequireAgentDispatch(t *testing.T){d:=Evaluate(fixture(),time.Date(2026,11,23,0,0,0,0,time.UTC));if !d.Eligible||d.Admission!="NOT_REQUIRED_FOR_DIRECT_MODEL_ACCESS"{t.Fatalf("unexpected: %+v",d)}}
 func TestFailClosedMutations(t *testing.T){
@@ -26,6 +26,10 @@ func TestFailClosedMutations(t *testing.T){
  {"uninstalled",func(x *Input){x.Observed.Installed=false},"UNKNOWN","QUALIFIED"},
  {"inconsistent_usage",func(x *Input){x.Observed.Loaded=false},"VERIFIED_MATCH","QUALIFIED"},
  {"missing_join_dimension",func(x *Input){x.Observed.ToolProfileDigest=""},"VERIFIED_MATCH","MISMATCH"},
+ {"missing_observation_evidence",func(x *Input){x.Observed.ObservationEvidenceRef=""},"UNKNOWN","QUALIFIED"},
+ {"missing_registry_evidence",func(x *Input){x.Registry.EvidenceRef=""},"UNKNOWN","QUALIFIED"},
+ {"missing_interview_evidence",func(x *Input){x.Interview.EvidenceRef=""},"VERIFIED_MATCH","MISMATCH"},
+ {"malformed_config_digest",func(x *Input){x.Observed.ConfigDigest="garbage";x.Interview.ConfigDigest="garbage"},"VERIFIED_MATCH","MISMATCH"},
  }
  for _,tt:=range tests {t.Run(tt.name,func(t *testing.T){in:=fixture();tt.mutate(&in);d:=Evaluate(in,now);if d.Eligible||d.Identity!=tt.identity||d.Qualification!=tt.qualification{t.Fatalf("not fail-closed: %+v",d)}})}
 }
