@@ -56,7 +56,7 @@ jobs:
               assert all(not r[k] for r in d["records"] for k in ("protected_evict","active_evict","foreign_evict","unverified_evict"))
           print("EXACT_SOURCE_NATIVE_OPENVIKING_MODULE=PASS; FULL_VENDOR_PLATFORM=NOT_RUN")
           PY
-      - uses: actions/upload-artifact@e0ed3f6b3dd8f4d628c74e3db1ad6483bc287e78 # v4.6.2
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: hmrc-openviking-native-${{ matrix.policy }}
