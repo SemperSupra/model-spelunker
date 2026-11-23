@@ -8,6 +8,7 @@ import (
  "net/http/httptest"
  "os"
  "path/filepath"
+ "runtime"
  "strings"
  "testing"
  "time"
@@ -69,6 +70,7 @@ func TestPersistedExternalStateAndRotation(t *testing.T){
  if x:=call(t,second,"GET","/v1/snapshot","","Bearer "+strings.Repeat("C",64));x.Code!=200{t.Fatal("fresh token rejected")}
 }
 func TestTokenFilePermissionsFailClosed(t *testing.T){
+ if runtime.GOOS=="windows"{t.Skip("POSIX host file mode enforced on TrueNAS/Linux runtime; Win32 ACL semantics differ")}
  s,tokenFile,_:=fixtureService(t)
  if err:=os.Chmod(tokenFile,0644);err!=nil{t.Fatal(err)}
  if _,err:=tokenFromFile(tokenFile);err==nil{t.Fatal("world-readable secret accepted")}
