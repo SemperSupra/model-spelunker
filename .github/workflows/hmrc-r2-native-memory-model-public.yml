@@ -1,0 +1,122 @@
+name: HMRC R2 native model memory after-reset screening
+
+# Public source-neutral only; reuses pinned Ollama 0.34.1/Qwen3:1.7b recipe
+# from existing openworker qualification. This is model-backed evidence recall,
+# NOT qualified full agent/tool or autonomous compaction. No private GHA spend.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_native_memory_r2.py'
+      - '.github/workflows/hmrc-r2-native-memory-model-public.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-critic:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fixture/prompt provenance and oracle isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile qualification/hmrc_native_memory_r2.py
+          python3 qualification/hmrc_native_memory_r2.py --self-test
+
+  native-model:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify synthetic oracle before live model
+        run: python3 qualification/hmrc_native_memory_r2.py --self-test
+      - name: Hydrate verified public runner-only runtime/model
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error \
+            "https://github.com/ollama/ollama/releases/download/v$OLLAMA_VERSION/ollama-linux-amd64.tar.zst" \
+            --output "$archive"
+          printf '%s  %s\n' "$OLLAMA_ARCHIVE_SHA256" "$archive" | sha256sum -c -
+          mkdir -p "$runtime" "$RUNNER_TEMP/hmrc-models"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+      - name: Start pinned native Ollama and check model identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OLLAMA_MODELS="$RUNNER_TEMP/hmrc-models"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" \
+             OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH" \
+             OLLAMA_NUM_PARALLEL="$OLLAMA_NUM_PARALLEL" \
+             OLLAMA_MAX_LOADED_MODELS="$OLLAMA_MAX_LOADED_MODELS" \
+             ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          for n in $(seq 1 60); do
+            if curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+          python3 - <<'PY'
+          import json,os,urllib.request
+          with urllib.request.urlopen("http://127.0.0.1:11434/api/tags",timeout=10) as r:
+              m=json.load(r)["models"]
+          model=next((v for v in m if v["name"]==os.environ["OLLAMA_MODEL_TAG"]),None)
+          assert model and model["digest"].removeprefix("sha256:").startswith(os.environ["OLLAMA_MODEL_DIGEST_PREFIX"])
+          print("PINNED_NATIVE_QWEN_IDENTITY=PASS")
+          PY
+      - name: Model-backed equal-task memory treatment crossover
+        shell: bash
+        run: |
+          set -euo pipefail
+          for seed in 11 29 47; do
+            python3 qualification/hmrc_native_memory_r2.py \
+              --decoys 100 --seed "$seed" --out "hmrc-native-model-memory-$seed.json"
+          done
+          python3 - <<'PY'
+          import json
+          results=[]
+          for seed in (11,29,47):
+              with open(f"hmrc-native-model-memory-{seed}.json") as f:
+                  d=json.load(f)
+              assert d["seed"]==seed and d["public_only_synthetic"] is True
+              assert d["native_model_inference_executed"] is True
+              assert d["harness_agent_tool_task_qualified"] is False
+              assert d["physical_kv_cache_qualified"] is False
+              assert len(d["rows"])==24
+              assert set(d["summary"])=={"no-recall","raw-fts","source-scoped-fts"}
+              assert all(d["summary"][arm]["scored"]==8 for arm in d["summary"])
+              assert all(x["expected"]=="NONE" or x["expected"].startswith("SYN_ATLAS_") for x in d["rows"])
+              results.append(d)
+          totals={arm:sum(d["summary"][arm]["correct"] for d in results)
+                  for arm in ("no-recall","raw-fts","source-scoped-fts")}
+          print("PAIRED_MODEL_BACKED_3_SEED_TOTALS="+json.dumps(totals,sort_keys=True))
+          print("MODEL_RETRIEVAL_BAKEOFF=EVIDENCE_ONLY; NO_AUTONOMOUS_MEMORY_ADMISSION")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: hmrc-r2-native-model-memory
+          path: hmrc-native-model-memory-*.json
+          if-no-files-found: ignore
+          retention-days: 14
