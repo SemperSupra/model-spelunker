@@ -1,0 +1,83 @@
+name: serving-fanout-r15-validated-goodput-public
+# Existing real R6/R7 task receipts; NO new inference, model, harness, or runner.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/serving-fanout-r15-goodput-public.yml'
+      - 'qualification/serving_fanout_r0/verified_goodput_r15/**'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  independent-source-oracle:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: RED/BLUE original 24-task verification and negatives
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest discover -s qualification/serving_fanout_r0/verified_goodput_r15 -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/verified_goodput_r15/*.py
+  immutable-public-r6-r7-artifact:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_ARTIFACT_ID: '14818028151'
+      SOURCE_RUN_ID: '45173592480'
+      ORIGINAL_ARCHIVE_SHA256: '0904c7f87f6e6b2abd2f3124eee2e579d08426a6bbe0b768d0a9532b6a74110e'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Independently run strict identity and negative tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest discover -s qualification/serving_fanout_r0/verified_goodput_r15 -p 'test_*.py' -v
+      - name: Read existing exact public R6/R7 GitHub task artifact, not model inference
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl --fail --location --silent --show-error --retry 2 --max-time 90 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/SemperSupra/model-spelunker/actions/artifacts/$SOURCE_ARTIFACT_ID/zip" \
+            --output "$RUNNER_TEMP/original-r6-r7.zip"
+          printf '%s  %s\n' "$ORIGINAL_ARCHIVE_SHA256" "$RUNNER_TEMP/original-r6-r7.zip" | sha256sum -c -
+      - name: Independently join all 24 original v1 task receipts and reduce goodput
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 qualification/serving_fanout_r0/verified_goodput_r15/reduce.py \
+            --artifact "$RUNNER_TEMP/original-r6-r7.zip" \
+            --out "$RUNNER_TEMP/verified-goodput-r15.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          r=json.loads((Path(os.environ['RUNNER_TEMP'])/'verified-goodput-r15.json').read_text())
+          assert r['github_run_id']==os.environ['SOURCE_RUN_ID']
+          assert r['total_validated_task_receipts']==24 and r['total_independently_verified_successes']==24
+          assert len(r['cells'])==8 and len(r['paired_comparisons'])==4
+          assert r['observed_resource_reserve'] is None and r['prefill_decode_join'] is None
+          assert r['promotion'].startswith('HOLD_')
+          print('R15_TRUE_TASK_GOODPUT_SOURCE_RECONCILED=PASS')
+          PY
+      - name: Retain derived metadata only; original raw artifact remains under source run
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r15-existing-task-goodput
+          path: ${{ runner.temp }}/verified-goodput-r15.json
+          if-no-files-found: ignore
+          retention-days: 14
