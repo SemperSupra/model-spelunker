@@ -58,7 +58,9 @@ def patch(base,arm):
     if s.count(MARKER)!=1 or s.count(TARGET_MARKER)!=1 or "QWEN_SYSTEM_MD" not in s:
         raise ValueError("actual native user-prompt patch anchor missing or ambiguous")
     # Crucial trust boundary: leave QWEN_SYSTEM_MD and its original message
-    # intact; only replace CLI user prompt argument with bounded external data.
+    # intact. Replace CLI user prompt only for advisory data; separately pin
+    # synthetic target choice to balance a/b trials, never the value/nonce
+    # or the original hidden independent verifier.
     return s.replace(MARKER,NEW_PROMPT).replace(TARGET_MARKER,TARGET_REPLACEMENT).encode()
 
 def self_test():
