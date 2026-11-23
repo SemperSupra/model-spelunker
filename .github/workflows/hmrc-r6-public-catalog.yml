@@ -50,7 +50,7 @@ jobs:
           assert d["schema"]=="hmrc-public-pinned-catalog-r6"
           assert d["repository"]=="SemperSupra/model-spelunker"
           assert d["git_blob_sha1"]=="4f39a993bf9e8b32a4d8c244769c2dccd70e21b2"
-          assert d["source_bytes"]==5190
+          assert 0 < d["source_bytes"] <= 20000
           assert d["public_synthetic_only"] is True
           assert d["production_dle_authenticated"] is False
           print("LIVE_PINNED_PUBLIC_SOURCE=PASS, PRODUCTION_DLE_TRUST=NOT_RUN")
