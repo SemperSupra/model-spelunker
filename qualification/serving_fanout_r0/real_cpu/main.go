@@ -44,6 +44,8 @@ type sample struct {
 type condition struct {
  Concurrency int `json:"client_concurrency"`
  PrefixPattern string `json:"prefix_pattern"`
+ Strategy string `json:"strategy"`
+ MaxConcurrentRequests int `json:"max_inflight"`
  Replicate int `json:"replicate"`
  Cohort int `json:"cohort"`
  WallMS float64 `json:"wall_ms"`
@@ -161,9 +163,33 @@ func runCondition(client *http.Client,base,model string,concurrency,n int,patter
  for i:=0;i<n;i++{jobs<-i}
  close(jobs);wg.Wait()
  for i,err:=range errorsByJob{if err!=nil{return condition{},fmt.Errorf("job %d: %w",i,err)}}
- return condition{Concurrency:concurrency,PrefixPattern:pattern,Replicate:replicate,Cohort:cohort,
+ return condition{Concurrency:concurrency,PrefixPattern:pattern,Strategy:"burst",MaxConcurrentRequests:concurrency,Replicate:replicate,Cohort:cohort,
   WallMS:float64(time.Since(start).Microseconds())/1000,
   P95RequestMS:p95(results),Samples:results},nil
+}
+// Primed fan-out serially completes one shared-prefix request, then concurrently
+// launches the other three. It is a treatment, not server-side KV manipulation.
+func runPrimed(client *http.Client,base,model string,cohort,replicate int)(condition,error){
+ start:=time.Now()
+ result:=make([]sample,4)
+ first,err:=infer(client,base,model,"shared",0,cohort)
+ if err!=nil{return condition{},fmt.Errorf("prime: %w",err)}
+ result[0]=first
+ errs:=make([]error,4)
+ var wg sync.WaitGroup
+ for i:=1;i<4;i++{
+  wg.Add(1)
+  go func(i int){
+   defer wg.Done()
+   result[i],errs[i]=infer(client,base,model,"shared",i,cohort)
+  }(i)
+ }
+ wg.Wait()
+ for i:=1;i<4;i++{if errs[i]!=nil{return condition{},fmt.Errorf("fan job %d: %w",i,errs[i])}}
+ return condition{Concurrency:4,PrefixPattern:"shared",Strategy:"prime1_then_fan3",
+  MaxConcurrentRequests:3,Replicate:replicate,Cohort:cohort,
+  WallMS:float64(time.Since(start).Microseconds())/1000,
+  P95RequestMS:p95(result),Samples:result},nil
 }
 func execute(base,model,prefix string,seed int64)(output,error){
  if err:=loopbackOnly(base);err!=nil{return output{},err}
@@ -172,12 +198,14 @@ func execute(base,model,prefix string,seed int64)(output,error){
  if err!=nil{return output{},err}
  // Real warm-up does not become a reported benchmark request.
  if _,err:=infer(client,base,model,"shared",999,-1);err!=nil{return output{},fmt.Errorf("warmup: %w",err)}
- jobs:=[]struct{concurrency int;pattern string}{}
+ type jobSpec struct{concurrency int;pattern string;strategy string}
+ jobs:=[]jobSpec{}
  for _,n:=range []int{1,2,4}{
   for _,pattern:=range []string{"shared","distinct"}{
-   jobs=append(jobs,struct{concurrency int;pattern string}{n,pattern})
+   jobs=append(jobs,jobSpec{n,pattern,"burst"})
   }
  }
+ jobs=append(jobs,jobSpec{4,"shared","prime1_then_fan3"})
  rng:=rand.New(rand.NewSource(seed))
  report:=output{EvidenceClass:"LIVE_PUBLIC_CPU_DIRECT_INFERENCE_EXPLORATORY",Backend:"ollama",
   BackendVersion:os.Getenv("OLLAMA_VERSION"),ModelTag:model,
@@ -186,19 +214,27 @@ func execute(base,model,prefix string,seed int64)(output,error){
   SourceSHA:os.Getenv("GITHUB_SHA"),StartedUTC:time.Now().UTC().Format(time.RFC3339Nano),Seed:seed,
   TTFT:"NOT_OBSERVABLE_NONSTREAMING_API",KVCacheMetrics:"NOT_OBSERVED",
   AgentTaskValidity:"NOT_TESTED_DIRECT_COMPLETION_ONLY",
-  ExperimentalDesign:"3 randomized blocks, unique per-condition cohort prefixes, approximate matched token vocabulary; not independent hosts"}
+  ExperimentalDesign:"3 randomized blocks, 7 policies, unique cohort prefixes, matched token vocabulary; not independent hosts"}
  for replicate:=1;replicate<=3;replicate++ {
   rng.Shuffle(len(jobs),func(i,j int){jobs[i],jobs[j]=jobs[j],jobs[i]})
   matched:=map[int]map[string]float64{}
   for _,job:=range jobs {
    patternID:=0;if job.pattern=="distinct"{patternID=1}
+   if job.strategy=="prime1_then_fan3"{patternID=2}
    cohort:=int(seed%1000)*1000+replicate*100+job.concurrency*10+patternID
-   c,err:=runCondition(client,base,model,job.concurrency,4,job.pattern,cohort,replicate)
-   if err!=nil{return output{},fmt.Errorf("rep %d concurrency %d prefix %s: %w",replicate,job.concurrency,job.pattern,err)}
-   var tokens float64
-   for _,sample:=range c.Samples{tokens+=float64(sample.PromptTokens)}
-   if matched[job.concurrency]==nil{matched[job.concurrency]=map[string]float64{}}
-   matched[job.concurrency][job.pattern]=tokens/float64(len(c.Samples))
+   var c condition;var err error
+   if job.strategy=="prime1_then_fan3"{
+    c,err=runPrimed(client,base,model,cohort,replicate)
+   }else{
+    c,err=runCondition(client,base,model,job.concurrency,4,job.pattern,cohort,replicate)
+   }
+   if err!=nil{return output{},fmt.Errorf("rep %d concurrency %d prefix %s strategy %s: %w",replicate,job.concurrency,job.pattern,job.strategy,err)}
+   if job.strategy=="burst"{
+    var tokens float64
+    for _,sample:=range c.Samples{tokens+=float64(sample.PromptTokens)}
+    if matched[job.concurrency]==nil{matched[job.concurrency]=map[string]float64{}}
+    matched[job.concurrency][job.pattern]=tokens/float64(len(c.Samples))
+   }
    report.Conditions=append(report.Conditions,c)
   }
   for concurrency,pairs:=range matched{
