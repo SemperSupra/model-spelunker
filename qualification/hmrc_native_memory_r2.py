@@ -15,7 +15,7 @@ import sqlite3
 import tempfile
 import time
 import urllib.request
-from qualification.memory_stress_fts_baseline import load_fixture, make_decoys, search
+from memory_stress_fts_baseline import load_fixture, make_decoys, search
 
 ARMS = ("no-recall", "raw-fts", "source-scoped-fts")
 MODEL = "qwen3:1.7b"
