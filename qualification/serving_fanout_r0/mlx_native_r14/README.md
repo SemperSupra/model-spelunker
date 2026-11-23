@@ -1,0 +1,13 @@
+# R14 — Public M1 MLX native prefill/decode phase observatory
+
+Owner: SemperSupra/model-spelunker#316. Independent of R13 and R5 branches.
+
+Use a small public MLX Qwen3 0.6B 4-bit model (rather than a memory-unsafe 8B model) on a free, standard GitHub Actions macos-15 M1/7GB runner. Use Python MLX-LM public load/stream_generate interfaces, source-inspected at ml-explore/mlx-lm generate.py revision 1bf8da05a1ef30a3eb2e8a634180be6557fd3ca0. The model snapshot is downloaded at the exact Hugging Face revision observed during the run and the installed weight/config components are SHA256-hashed. The Python package resolution is retained for later exact-version pinning; this is a feasibility/RDT&E candidate, not a qualified release artifact.
+
+Observations: MLX-native prompt_tokens, generation_tokens, prompt_tps, generation_tps, peak_memory, finish reason; wall-clock TTFT/E2E from monotonic clock; active and cached MLX allocator bytes after each request. Warm-up is discarded. Four short synthetic observations (two prompt sizes × two repetitions). No raw generated text, prompts, hidden reasoning, API keys, or private models are retained. Prefill/decode phase times are explicitly DERIVED from native token counts/TPS rather than separately measured kernel spans; they must not be conflated with client-observed TTFT or end-to-end.
+
+The tested host is an M1, not M2 Ultra. Any memory/clock/power/saturation or allocator conclusion requires BigMac-specific source/host calibration and ownership in private IaC #672. The 0.6B model and MLX quantization are not equivalent to BigMac/TrueNAS installed representations. Goodput for validated agent tasks, routing qualification and surge-reserve proof remain UNKNOWN.
+
+Bounded source-only Linux/Mac unit tests run without model/HF/network dependencies. Physical model testing is only on public M1 runner and should stop on insufficient memory/disk, unsupported Metal device, asset size overflow, missing weight bytes or invalid native response telemetry.
+
+Pending gates: verify public M1 feasibility and captured exact source/model revision; pin dependencies after source test; compare with separately admitted BigMac/TrueNAS telemetry only with model representation and task controls; join independently validated agent receipts from existing #139 rather than inventing a second quality evaluator. No merge, production serving, new registry, router or private-GHA spend.
