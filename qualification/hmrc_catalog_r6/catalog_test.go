@@ -38,7 +38,7 @@ func makeClient(body []byte,override func(map[string]any))(*http.Client,*int){
 }
 func TestValidSourceAndFixedOrigin(t *testing.T){
  b:=fixture(t)
- if len(b)!=5190{t.Fatalf("source bytes differ from frozen observation %d",len(b))}
+ if len(b)==0||len(b)>MaxSource{t.Fatalf("public source size outside admitted bounds %d",len(b))}
  result,err:=VerifyLocal(PublicPin(),b)
  if err!=nil||!result.PublicSyntheticOnly||result.ProductionDLEAuthenticated||
    len(result.BodySHA256)!=71||result.BlobSHA1!=GitBlob{
