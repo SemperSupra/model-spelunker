@@ -165,7 +165,7 @@ func TestSyntheticPressureCrossover(t *testing.T) {
             s:=fixture()
             // 70..90% current context; next request 6..20%, reserve 5%.
             current:=700+rng.Intn(201)
-            s.Units[4].Tokens+=current-total(s)
+            s.Units[2].Tokens+=current-total(s)
             f:=Forecast{NextTurnTokens:60+rng.Intn(141),ReserveTokens:50}
             predicted:=total(s)+f.NextTurnTokens+f.ReserveTokens
             currentOnlyTrigger:=total(s)>=s.EffectiveCapacity*85/100
