@@ -99,7 +99,7 @@ def reduce_bytes(data,expected_zip_sha=ZIP_SHA256,expected_run_id=RUN_ID,expecte
                 require(name in names and name not in used_names,"missing or reused independently validated receipt")
                 used_names.add(name)
                 raw=strict_json(archive.read(name))
-                require(raw.get("schema_version")==1,"not original v1 receipt")
+                require(type(raw.get("schema_version")) is int and raw["schema_version"]==1,"not original integer v1 receipt")
                 task=raw.get("task")
                 require(isinstance(task,dict) and task.get("id")=="text-repair-v0" and
                         task.get("task_class")=="software.bounded-repair" and
