@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-TASKS=("text-repair-v0","api-boundary-classification-v1")
+TASKS=(("agentA","text-repair-v0"),("agentB","text-repair-v0"))
 HARNESS_DIGEST="e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83"
 HARNESS_REF="ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:"+HARNESS_DIGEST
 ADMISSION_REF="github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json"
@@ -64,8 +64,8 @@ def cmd(task,receipt,diag,venv):
       str(root/"qualification/adapters/openworker_projected.py"),
     ]
 
-def execute_one(task,mode,block,outdir,venv):
-    prefix="%s-block%d-%s"%(mode,block,task)
+def execute_one(slot,task,mode,block,outdir,venv):
+    prefix="%s-block%d-%s"%(mode,block,slot)
     receipt=outdir/(prefix+"-task.json")
     diagnostic=outdir/(prefix+"-diagnostics.json")
     started=time.monotonic()
@@ -78,7 +78,7 @@ def execute_one(task,mode,block,outdir,venv):
     valid=check_receipt(body,task,proc.returncode,os.environ.get("OLLAMA_MODEL_TAG","qwen3:1.7b"))
     # Logs are omitted, not re-exported as model evidence. Raw stdout digest is
     # an external troubleshooting aid for these synthetic public fixtures only.
-    return {"task":task,"mode":mode,"block":block,"process_exit":proc.returncode,
+    return {"task":task,"workcell":slot,"mode":mode,"block":block,"process_exit":proc.returncode,
             "client_wall_seconds":round(wall,6),
             "stdout_sha256":"sha256:"+hashlib.sha256(proc.stdout).hexdigest(),
             "stderr_sha256":"sha256:"+hashlib.sha256(proc.stderr).hexdigest(),
@@ -95,7 +95,7 @@ def run(outdir,venv):
             "run_id":os.environ.get("GITHUB_RUN_ID","UNKNOWN"),
             "shared_server_parallel_slots":2,
             "server_localhost_only":True,
-            "design":"2 blocks, reversed order, same pair of independently verified task packages",
+            "design":"2 blocks, reversed serial/parallel order, identical text-repair-v0 task in isolated agentA/agentB workcells",
             "phases":[]}
     for block in (1,2):
         # Paired comparison has task/context warmness carry-over and sample-size caveats.
@@ -103,11 +103,11 @@ def run(outdir,venv):
         for mode in modes:
             started=time.monotonic()
             if mode=="serial":
-                jobs=[execute_one(t,mode,block,outdir,venv) for t in TASKS]
+                jobs=[execute_one(slot,t,mode,block,outdir,venv) for slot,t in TASKS]
             else:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-                    futures={t:ex.submit(execute_one,t,mode,block,outdir,venv) for t in TASKS}
-                    jobs=[futures[t].result() for t in TASKS]
+                    futures={slot:ex.submit(execute_one,slot,t,mode,block,outdir,venv) for slot,t in TASKS}
+                    jobs=[futures[slot].result() for slot,t in TASKS]
             assert len(set(x["run_id"] for x in jobs))==len(jobs),"duplicate run ids"
             report["phases"].append({
                 "block":block,"mode":mode,"elapsed_wall_seconds":round(time.monotonic()-started,6),
