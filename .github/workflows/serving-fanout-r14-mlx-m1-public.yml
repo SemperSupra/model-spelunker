@@ -57,7 +57,13 @@ jobs:
           set -Eeuo pipefail
           python3 -m venv "$RUNNER_TEMP/r14-venv"
           source "$RUNNER_TEMP/r14-venv/bin/activate"
-          python3 -m pip install --no-cache-dir 'mlx-lm>=0.28,<1.0' 'huggingface-hub>=0.27,<2.0'
+          python3 -m pip install --no-cache-dir -r qualification/serving_fanout_r0/mlx_native_r14/requirements-r14-lock.txt
+          python3 -m pip check
+          python3 - <<'PY'
+          from importlib.metadata import version
+          assert version('mlx-lm')=='0.32.2' and version('mlx')=='0.32.4' and version('huggingface_hub')=='1.33.0'
+          print('R14_OBSERVED_M1_DEPENDENCIES_LOCKED=YES')
+          PY
           python3 -m pip freeze > /tmp/r14-pip-versions.txt
           echo "$RUNNER_TEMP/r14-venv/bin" >> "$GITHUB_PATH"
       - name: Run exact-snapshot Qwen3 0.6B public MLX native phase characterization
@@ -70,6 +76,9 @@ jobs:
           r=json.load(open("/tmp/r14-mlx-observation.json"))
           assert r["schema"]=="mlx-hosted-m1-phase-r14/v1" and len(r["samples"])==4
           assert r["model_hf_revision"] and r["model_file_manifest"]["weight_file_count"]>=1
+          assert r['model_hf_revision']=='73e3e38d981303bc594367cd910ea6eb48349da8'
+          assert r['model_file_manifest']['component_manifest_sha256']=='a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d'
+          assert r['release_source_equivalence']=='NOT_PROVEN_FROM_PYPI_PACKAGE_ALONE'
           assert all(s["prompt_tps_native"]>0 and s["decode_tps_native"]>0 for s in r["samples"])
           assert r["validated_tasks_per_hour"] is None and r["memory_headroom_for_surge"] is None
           assert r["hardware_equivalence_to_m2_ultra"]=="NOT_CLAIMED"
