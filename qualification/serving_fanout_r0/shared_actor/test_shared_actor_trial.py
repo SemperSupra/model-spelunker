@@ -40,6 +40,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual([x[1] for x in a.TASKS],["text-repair-v0","text-repair-v0"])
         self.assertEqual(len(set(x[0] for x in a.TASKS)),2)
         self.assertEqual(len(a.HARNESS_DIGEST),64)
+        self.assertEqual(len(a.FOUR_TASKS),4)
+        self.assertEqual(len(set(slot for slot,task in a.FOUR_TASKS)),4)
+        self.assertTrue(all(task=="text-repair-v0" for slot,task in a.FOUR_TASKS))
+
     def test_runner_command_is_existing_task_runner(self):
         with tempfile.TemporaryDirectory() as tmp:
             previous=os.environ.get("CANDIDATE_META")
