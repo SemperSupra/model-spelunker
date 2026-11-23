@@ -1,0 +1,54 @@
+name: serving-fanout-r9-public-cross-task-configured-actor
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/serving-fanout-r9-diverse-actor-public.yml'
+      - 'qualification/serving_fanout_r0/diverse_actor/**'
+permissions:
+  contents: read
+  packages: read
+jobs:
+  source-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Admit frozen distinct task classes and preexisting verifier boundaries
+        run: |
+          python3 - <<'PY'
+          import json,pathlib
+          tasks=["boundary-bugfix-v0","dle-cold-start-recovery-v0"]
+          classes=[]
+          for name in tasks:
+              d=pathlib.Path("qualification/tasks")/name
+              t=json.loads((d/"task.json").read_text())
+              assert t["id"]==name
+              assert t["projected_tools"]==["list_files","read_file","write_file"]
+              assert (d/"verify.py").is_file()
+              assert t["limits"]["wall_seconds"]<=120
+              classes.append(t["task_class"])
+          assert len(set(classes))==len(classes)
+          print("SOURCE_ADMISSION_OK: public synthetic task classes, independent validators")
+          PY
+  different-task-independent-agents:
+    needs: [source-admission]
+    strategy:
+      fail-fast: false
+      max-parallel: 1 # Bound concurrent public runners while independent R8 mixed-load lane executes
+      matrix:
+        include:
+          - task: boundary-bugfix-v0
+            treatment: r9-hidden-debugging
+            rounds: '6'
+          - task: dle-cold-start-recovery-v0
+            treatment: r9-memory-authority
+            rounds: '6'
+    uses: ./.github/workflows/openworker-prebuilt-ollama-qualification.yml
+    with:
+      artifact_ref: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
+      admission_ref: 'github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json'
+      task: ${{ matrix.task }}
+      treatment_id: ${{ matrix.treatment }}
+      max_iterations: ${{ matrix.rounds }}
