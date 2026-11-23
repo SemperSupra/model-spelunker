@@ -16,7 +16,7 @@ func fake(t *testing.T,empty bool)(*httptest.Server,*atomic.Int64){
   w.Header().Set("Content-Type","application/json")
   switch r.URL.Path{
   case "/api/tags":
-   fmt.Fprintf(w,§{"models":[{"name":"qwen3:1.7b","digest":"%s"}]}§, "8f68893c685c"+strings.Repeat("a",52))
+   fmt.Fprintf(w,`{"models":[{"name":"qwen3:1.7b","digest":"%s"}]}`, "8f68893c685c"+strings.Repeat("a",52))
   case "/api/generate":
    var req map[string]any
    if err:=json.NewDecoder(r.Body).Decode(&req);err!=nil{http.Error(w,"invalid request",400);return}
@@ -24,8 +24,8 @@ func fake(t *testing.T,empty bool)(*httptest.Server,*atomic.Int64){
    options,ok:=req["options"].(map[string]any)
    if !ok||options["num_ctx"]!=float64(2048){http.Error(w,"unexpected context",400);return}
    count.Add(1)
-   if empty{fmt.Fprint(w,§{"done":true,"eval_count":0,"prompt_eval_count":8}§);return}
-   fmt.Fprint(w,§{"response":"test","done":true,"total_duration":10000000,"load_duration":0,"prompt_eval_count":40,"prompt_eval_duration":5000000,"eval_count":8,"eval_duration":5000000}§)
+   if empty{fmt.Fprint(w,`{"done":true,"eval_count":0,"prompt_eval_count":8}`);return}
+   fmt.Fprint(w,`{"response":"test","done":true,"total_duration":10000000,"load_duration":0,"prompt_eval_count":40,"prompt_eval_duration":5000000,"eval_count":8,"eval_duration":5000000}`)
   default:http.NotFound(w,r)
   }
  }))
