@@ -45,7 +45,11 @@ jobs:
             if test -x "$candidate"; then generator="$candidate";break;fi
           done
           if [ -z "$generator" ]; then echo "BLOCKED: no installed Quadlet generator";exit 1;fi
-          QUADLET_UNIT_DIRS="$testdir" "$generator" --user --dryrun > "$RUNNER_TEMP/generated-quadlet.log" 2>&1
+          if ! QUADLET_UNIT_DIRS="$testdir" "$generator" --user --dryrun > "$RUNNER_TEMP/generated-quadlet.log" 2>&1; then
+            cat "$RUNNER_TEMP/generated-quadlet.log"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/generated-quadlet.log"
           grep -q 'model-compass' "$RUNNER_TEMP/generated-quadlet.log"
           grep -q -- '--read-only' "$RUNNER_TEMP/generated-quadlet.log"
           grep -q -- '--publish' "$RUNNER_TEMP/generated-quadlet.log"
