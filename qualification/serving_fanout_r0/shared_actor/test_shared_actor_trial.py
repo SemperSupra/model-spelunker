@@ -6,16 +6,16 @@ import shared_actor_trial as a
 
 def receipt(task="text-repair-v0",success=True):
     return {
-      "task":{"id":task},"candidate":{
+      "task":{"id":task,"package_digest":a.TASK_PACKAGE_DIGEST},"candidate":{
         "harness":{"name":"openworker","artifact_ref":a.HARNESS_REF,
                    "admission_ref":a.ADMISSION_REF},
-        "model":{"id":"qwen3:1.7b","provider":"ollama"}},
+        "model":{"id":"qwen3:1.7b","provider":"ollama","artifact_ref":a.PUBLIC_MODEL_ARTIFACT}},
       "evidence_digest":"sha256:"+("b"*64),
       "run_id":"synthetic-test-id",
       "observation":{"success":success,
           "termination_class":"semantic-success" if success else "semantic-failure",
           "failure_class":None if success else "false-completion",
-          "wall_seconds":1.5,"verifier_exit_code":0 if success else 1,
+          "wall_seconds":1.5,"verifier_exit_code":0 if success else 1,"candidate_exit_code":0 if success else 1,"timed_out":False,
           "tool_calls":1}
     }
 
@@ -53,4 +53,22 @@ class ContractTests(unittest.TestCase):
             finally:
                 if previous is None:os.environ.pop("CANDIDATE_META",None)
                 else:os.environ["CANDIDATE_META"]=previous
+    def test_forged_verifier_and_representation_rejected(self):
+        import copy
+        original=receipt()
+        mutations=[
+           ("model-drift",lambda p:p["candidate"]["model"].update(artifact_ref="ollama-sha256:"+"f"*64)),
+           ("fixture-drift",lambda p:p["task"].update(package_digest="sha256:"+"f"*64)),
+           ("verifier-forgery",lambda p:p["observation"].update(verifier_exit_code=1)),
+           ("candidate-forgery",lambda p:p["observation"].update(candidate_exit_code=1)),
+           ("timeout-forgery",lambda p:p["observation"].update(timed_out=True)),
+           ("missing-run",lambda p:p.update(run_id=None)),
+           ("bad-digest",lambda p:p.update(evidence_digest="sha256:bad")),
+        ]
+        for label,change in mutations:
+            p=copy.deepcopy(original)
+            change(p)
+            with self.subTest(label=label):
+                with self.assertRaises(ValueError):
+                    a.check_receipt(p,"text-repair-v0",0,"qwen3:1.7b")
 if __name__=="__main__":unittest.main()
