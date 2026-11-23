@@ -67,6 +67,11 @@ func decodeFact(body []byte) (Fact,error) {
  if err:=d.Decode(&trailing);err!=io.EOF{return f,ErrInvalid}
  if f.Schema!="hmrc-fact-v1"||!safeText(f.Subject)||!safeText(f.Predicate)||
   !safeText(f.Value) {return f,ErrInvalid}
+ // The immutable catalog authenticates bytes, but different JSON parsers
+ // must not assign conflicting meaning to duplicate keys or encodings.
+ // Require a single canonical typed representation at ingestion.
+ canonical,err:=json.Marshal(f)
+ if err!=nil||!bytes.Equal(canonical,body){return f,ErrInvalid}
  return f,nil
 }
 // Decide is read-only; it enforces exact source-byte identity AND an already
