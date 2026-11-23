@@ -115,6 +115,49 @@ jobs:
           cp "$RUNNER_TEMP/nginx-package.txt" "$RUNNER_TEMP/r13-evidence/"
           sha256sum qualification/serving_fanout_r0/mtls_ingress/nginx-r13.conf | tee "$RUNNER_TEMP/r13-evidence/nginx-config-sha256.txt"
           test ! -e "$RUNNER_TEMP/r13-evidence/ca.key"
+      - name: R15 source-only RED/BLUE priority admission and forged-role controls
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest discover -s qualification/serving_fanout_r0/mtls_ingress/priority -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/mtls_ingress/priority/priority_probe.py
+      - name: Start parallel existing nginx priority experiment with same pinned backend and CA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          conf="$GITHUB_WORKSPACE/qualification/serving_fanout_r0/mtls_ingress/priority/nginx-r15.conf"
+          sudo nginx -t -c "$conf"
+          sudo nginx -c "$conf"
+          for port in 18444 18445; do
+            for i in $(seq 1 30); do
+              if curl -fsS --cacert "$CERT_DIR/ca.crt" --cert "$CERT_DIR/alpha.crt" --key "$CERT_DIR/alpha.key" "https://127.0.0.1:$port/api/tags" >/dev/null; then break; fi
+              sleep 1
+            done
+            curl -fsS --cacert "$CERT_DIR/ca.crt" --cert "$CERT_DIR/alpha.crt" --key "$CERT_DIR/alpha.key" "https://127.0.0.1:$port/api/tags" >/dev/null
+            curl -fsS --cacert "$CERT_DIR/ca.crt" --cert "$CERT_DIR/beta.crt" --key "$CERT_DIR/beta.key" "https://127.0.0.1:$port/api/tags" >/dev/null
+          done
+          status=$(curl -sS --cacert "$CERT_DIR/ca.crt" --cert "$CERT_DIR/gamma.crt" --key "$CERT_DIR/gamma.key" -o /dev/null -w '%{http_code}' 'https://127.0.0.1:18445/api/tags')
+          test "$status" = 403
+      - name: Real R15 paired client-certificate-bound interactive reservation against no-reserve baseline
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 qualification/serving_fanout_r0/mtls_ingress/priority/priority_probe.py --cert-dir "$CERT_DIR" --out "$RUNNER_TEMP/r13-evidence/r15-priority.json"
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"r13-evidence"
+          r=json.loads((root/"r15-priority.json").read_text())
+          assert r["evidence_class"]=="PUBLIC_CPU_REAL_CERT_BOUND_CLASS_RESERVATION_EXPLORATORY"
+          assert r["production_admission"]=="NO_PROMOTION"
+          assert len(r["pairs"])==3
+          assert all(p["result"]=="CERT_BOUND_INTERACTIVE_ADMISSION_SCREEN_PASS" for p in r["pairs"]),r["pairs"]
+          assert r["negative_auth"]["unmapped_trusted_cert"]["status"]==403
+          assert r["negative_auth"]["no_client_cert"]["denied"]
+          assert r["negative_auth"]["wrong_ca"]["denied"]
+          assert r["tenant_governance"]=="NOT_QUALIFIED"
+          print("R15_CLASS_RESERVATION_EXPLORATORY_PASS_NOT_PRIORITY_SLO")
+          PY
+          sha256sum qualification/serving_fanout_r0/mtls_ingress/priority/nginx-r15.conf | tee "$RUNNER_TEMP/r13-evidence/r15-config-sha256.txt"
       - name: Preserve sanitized observations, never any generated certificates or keys
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
