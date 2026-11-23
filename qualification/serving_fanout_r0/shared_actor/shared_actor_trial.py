@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 TASKS=(("agentA","text-repair-v0"),("agentB","text-repair-v0"))
+FOUR_TASKS=TASKS+(("agentC","text-repair-v0"),("agentD","text-repair-v0"))
 HARNESS_DIGEST="e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83"
 HARNESS_REF="ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:"+HARNESS_DIGEST
 PUBLIC_MODEL_ARTIFACT="ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
@@ -104,7 +105,7 @@ def run(outdir,venv):
             "run_id":os.environ.get("GITHUB_RUN_ID","UNKNOWN"),
             "shared_server_parallel_slots":2,
             "server_localhost_only":True,
-            "design":"2 blocks, reversed serial/parallel order, identical text-repair-v0 task in isolated agentA/agentB workcells",
+            "design":"R6 2-agent serial/parallel and R7 4-agent two-waves2/burst4 in two reversed-order blocks; same frozen task in isolated workcells",
             "phases":[]}
     for block in (1,2):
         # Paired comparison has task/context warmness carry-over and sample-size caveats.
@@ -122,6 +123,29 @@ def run(outdir,venv):
                 "block":block,"mode":mode,"elapsed_wall_seconds":round(time.monotonic()-started,6),
                 "tasks":jobs,"verified_successes":sum(x["verified_task_success"] for x in jobs)
             })
+    # R7 physical/server saturation screening. Four real agents share just two
+    # Ollama serving slots. Each treatment admits four *identical* tasks.
+    for block in (1,2):
+        modes=("two_waves2","burst4") if block==1 else ("burst4","two_waves2")
+        for mode in modes:
+            started=time.monotonic()
+            if mode=="two_waves2":
+                jobs=[]
+                for wave in (FOUR_TASKS[:2],FOUR_TASKS[2:]):
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                        futures={slot:ex.submit(execute_one,slot,t,mode,block,outdir,venv)
+                                 for slot,t in wave}
+                        jobs.extend(futures[slot].result() for slot,t in wave)
+            else:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+                    futures={slot:ex.submit(execute_one,slot,t,mode,block,outdir,venv)
+                             for slot,t in FOUR_TASKS}
+                    jobs=[futures[slot].result() for slot,t in FOUR_TASKS]
+            assert len(jobs)==4 and len(set(x["run_id"] for x in jobs))==4,"invalid saturated workcell identities"
+            report["phases"].append({
+                "block":block,"mode":mode,"elapsed_wall_seconds":round(time.monotonic()-started,6),
+                "tasks":jobs,"verified_successes":sum(x["verified_task_success"] for x in jobs)
+            })
     return report
 
 def main():
@@ -133,7 +157,7 @@ def main():
     path=args.outdir/"shared-actor-summary.json"
     path.write_text(json.dumps(r,indent=2,sort_keys=True)+"\n")
     for p in r["phases"]:
-        print("SHARED_ACTOR mode=%s block=%s wall=%.2f accepted=%d/2"%(p["mode"],p["block"],p["elapsed_wall_seconds"],p["verified_successes"]))
+        print("SHARED_ACTOR mode=%s block=%s wall=%.2f accepted=%d/%d"%(p["mode"],p["block"],p["elapsed_wall_seconds"],p["verified_successes"],len(p["tasks"])))
     print("TASK_SUCCESS_NOT_INFERRED_FROM_CI_STATUS")
 if __name__=="__main__":
     main()
