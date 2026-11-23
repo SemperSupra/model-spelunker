@@ -107,6 +107,11 @@ def run(outdir,venv):
             "server_localhost_only":True,
             "design":"R6 2-agent serial/parallel and R7 4-agent two-waves2/burst4 in two reversed-order blocks; same frozen task in isolated workcells",
             "phases":[]}
+    sampler=None
+    if os.environ.get("MODEL_SPELUNKER_RESOURCE_R16")=="1":
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"agent_resource_r16"))
+        from sampler import ResourceSampler
+        sampler=ResourceSampler().start()
     for block in (1,2):
         # Paired comparison has task/context warmness carry-over and sample-size caveats.
         modes=("serial","parallel") if block==1 else ("parallel","serial")
@@ -123,6 +128,8 @@ def run(outdir,venv):
                 "block":block,"mode":mode,"elapsed_wall_seconds":round(time.monotonic()-started,6),
                 "tasks":jobs,"verified_successes":sum(x["verified_task_success"] for x in jobs)
             })
+            if sampler:
+                report["phases"][-1]["phase_resource_r16"]=sampler.window(started,time.monotonic())
     # R7 physical/server saturation screening. Four real agents share just two
     # Ollama serving slots. Each treatment admits four *identical* tasks.
     for block in (1,2):
@@ -146,6 +153,10 @@ def run(outdir,venv):
                 "block":block,"mode":mode,"elapsed_wall_seconds":round(time.monotonic()-started,6),
                 "tasks":jobs,"verified_successes":sum(x["verified_task_success"] for x in jobs)
             })
+            if sampler:
+                report["phases"][-1]["phase_resource_r16"]=sampler.window(started,time.monotonic())
+    if sampler:
+        sampler.stop()
     return report
 
 def main():
