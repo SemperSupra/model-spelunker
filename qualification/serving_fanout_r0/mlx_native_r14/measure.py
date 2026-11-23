@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 
 MODEL_ID = "mlx-community/Qwen3-0.6B-4bit"
+MODEL_HF_REVISION = "73e3e38d981303bc594367cd910ea6eb48349da8"
+EXPECTED_COMPONENT_MANIFEST_SHA256 = "a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d"
 SOURCE_SHA = "1bf8da05a1ef30a3eb2e8a634180be6557fd3ca0"
 WORDS = "amber cedar pixel vector orbit lunar".split()
 
@@ -112,6 +114,9 @@ def run_live(model_dir, revision):
             samples.append({"replicate":rep,"synthetic_repeat":repeat,**project_response(
                 last,(first-started)*1000,(ended-started)*1000,
                 mx.get_active_memory()/1e9,mx.get_cache_memory()/1e9)})
+    actual_manifest=manifest(model_dir)
+    if actual_manifest["component_manifest_sha256"]!=EXPECTED_COMPONENT_MANIFEST_SHA256:
+        raise InvalidModelObservation("exact frozen model components differ from baseline")
     return {
         "schema":"mlx-hosted-m1-phase-r14/v1",
         "evidence_class":"REAL_PUBLIC_M1_MLX_DIRECT_INFERENCE_NOT_AGENT_QUALIFICATION",
@@ -119,7 +124,8 @@ def run_live(model_dir, revision):
         "mlx_lm_version":importlib.metadata.version("mlx-lm"),
         "mlx_version":importlib.metadata.version("mlx"),
         "model_id":MODEL_ID,"model_hf_revision":revision,
-        "model_file_manifest":manifest(model_dir),
+        "model_file_manifest":actual_manifest,
+        "release_source_equivalence":"NOT_PROVEN_FROM_PYPI_PACKAGE_ALONE",
         "metal_device":device,
         "host_arch":platform.machine(),
         "source_sha":os.environ.get("GITHUB_SHA","UNKNOWN"),
@@ -134,7 +140,9 @@ def run_live(model_dir, revision):
 
 def fetch_snapshot(dst):
     from huggingface_hub import HfApi,snapshot_download
-    info=HfApi().model_info(MODEL_ID,files_metadata=True)
+    info=HfApi().model_info(MODEL_ID,revision=MODEL_HF_REVISION,files_metadata=True)
+    if info.sha!=MODEL_HF_REVISION:
+        raise InvalidModelObservation("immutable HF snapshot revision mismatch")
     size=sum(int(f.size or 0) for f in info.siblings)
     free=shutil.disk_usage(dst.parent).free
     if not info.sha or size <=0 or size>2*1024**3 or size+2*1024**3>free:
