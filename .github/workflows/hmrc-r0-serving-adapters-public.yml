@@ -1,0 +1,47 @@
+name: HMRC R0 public serving telemetry qualification
+# Issue #306 separate workcell. Public httptest fixtures only; no sovereign
+# model connection, credentials, paid model API, physical KV actions or actuator.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_telemetry_r0/**'
+      - '.github/workflows/hmrc-r0-serving-adapters-public.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Source-only API and telemetry fidelity
+        working-directory: qualification/hmrc_telemetry_r0
+        run: |
+          go vet ./...
+          go test -v -count=1 ./...
+
+  adversarial:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Race and repeated negative contract tests
+        working-directory: qualification/hmrc_telemetry_r0
+        run: go test -race -v -count=10 -run 'TestReject|TestDoNot|TestCancel|TestUnknown' ./...
