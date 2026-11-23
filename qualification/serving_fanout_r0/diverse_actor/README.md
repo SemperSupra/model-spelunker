@@ -1,0 +1,7 @@
+# R9 public configured-actor cross-task qualification
+
+Authority: [RDTE #316](https://github.com/SemperSupra/model-spelunker/issues/316), existing configured-actor task/verifier owner #139 and parent memory coordination #306. Two distinct *actual* OpenWorker+Qwen3:1.7b trials reuse the repository's already admitted prebuilt harness OCI, pinned Ollama backend and exact independent deterministic verification path. No new agent or model runtime, no private runner minutes, no Agent Dispatch requirement.
+
+Tasks: (1) `boundary-bugfix-v0` hidden boundary tests of code repair and (2) `dle-cold-start-recovery-v0` hidden precedence of current durable authority over stale memory. These are intentionally more demanding than `text-repair-v0`; they exercise distinct task-class ability and may FAIL. Their execution results must be classified from per-job task receipts, not from GitHub job SUCCESS. Separate disposable public runners and separate Ollama model instances mean no **shared-server** scheduling measurement in this particular workcell. Shared-model-server fan-out remains R7 PR #337. Each job has its own independent immutable receipt and task id.
+
+No production gates promote model admission, tenant safety or memory compaction from this lane. Failed semantic tasks count as negative quality evidence, never hidden or downgraded to infrastructure failures. All task data is already public synthetic with bounded 120-second task budget. Source-only admission validates canonical task refs/verifiers before model-harness hydration.
