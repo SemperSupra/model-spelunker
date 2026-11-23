@@ -36,7 +36,7 @@ jobs:
     needs: [source-admission]
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1 # Bound concurrent public runners while independent R8 mixed-load lane executes
       matrix:
         include:
           - task: boundary-bugfix-v0
