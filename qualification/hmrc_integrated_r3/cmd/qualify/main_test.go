@@ -14,7 +14,7 @@ import (
 
 func testSource(t *testing.T)(string,error){
     t.Helper()
-    return "../../fixtures/memory_dle_cpe_synthetic_v1.json",nil
+    return "../../../fixtures/memory_dle_cpe_synthetic_v1.json",nil
 }
 func mockObservation() telemetry.Observation {
     n:=32768
