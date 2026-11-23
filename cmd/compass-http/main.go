@@ -17,6 +17,7 @@ import (
  "os/exec"
  "path/filepath"
  "regexp"
+ "runtime"
  "strings"
  "time"
 )
@@ -64,7 +65,7 @@ func tokenFromFile(path string)([]byte,error){
  if !fi.Mode().IsRegular()||fi.Size()>maxToken {return nil,errors.New("token file invalid")}
  // Do not allow world-readable credentials. On ACL-based platforms configure
  // the secret bind mount for the container service user.
- if fi.Mode().Perm()&0007!=0 {return nil,errors.New("token file must not be world-accessible")}
+ if runtime.GOOS!="windows" && fi.Mode().Perm()&0007!=0 {return nil,errors.New("token file must not be world-accessible")}
  b,err:=os.ReadFile(path);if err!=nil{return nil,err}
  b=bytes.TrimSpace(b)
  if len(b)<32||len(b)>maxToken||bytes.IndexByte(b,0)>=0{return nil,errors.New("token length/encoding invalid")}
