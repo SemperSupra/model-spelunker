@@ -38,291 +38,430 @@ type CallToolParams struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-// Domain structures
+// ServerVenue represents an independent server/provider realm
+type ServerVenue struct {
+	ID               string `json:"id"`                 // bigmac, truenas, openrouter, gemini, deepseek
+	Name             string `json:"name"`               // Display Name
+	Type             string `json:"type"`               // local_sovereign, cloud_byok, cloud_free, subscription
+	Endpoint         string `json:"endpoint"`           // Base API URL
+	AuthEnvKey       string `json:"auth_env_key"`       // Env var holding API key
+	HealthCheckURL   string `json:"health_check_url"`   // Endpoint to ping for readiness
+	Description      string `json:"description"`
+}
+
+// ModelProfile represents an individual model asset hosted on a specific venue
 type ModelProfile struct {
-	ID                 string   `json:"id"`
-	Target             string   `json:"target"` // bigmac, truenas
-	ProviderEndpoint   string   `json:"provider_endpoint"`
-	MaxContext         int      `json:"max_context"`
-	Quantization       string   `json:"quantization"`
-	TokPerSec          float64  `json:"tok_per_sec"`
-	Uncensored         bool     `json:"uncensored"`
-	TaskFamilies       []string `json:"task_families"`
-	ToolDialect        string   `json:"tool_dialect"`
-	PreferredEditStyle string   `json:"preferred_edit_style"`
-	ThinkingMode       string   `json:"thinking_mode"`
-	Skills             []string `json:"skills"`
+	ID                 string            `json:"id"`
+	VenueID            string            `json:"venue_id"`       // links to ServerVenue.ID
+	ProviderModelName  string            `json:"provider_model_name"` // Exact identifier passed to API
+	Tier               string            `json:"tier"`           // local, subscription, free, commercial_api
+	MaxContext         int               `json:"max_context"`
+	CostPer1MInput     float64           `json:"cost_per_1m_input"` // $0.0 for local/free
+	TokPerSecEst       float64           `json:"tok_per_sec_est"`
+	Uncensored         bool              `json:"uncensored"`
+	SommelierSpecial   bool              `json:"sommelier_special"` // Chef's Special / Waiter highlight
+	SpecialPitch       string            `json:"special_pitch"`    // The waiter's table pitch
+	TaskFamilies       []string          `json:"task_families"`
+	ToolDialect        string            `json:"tool_dialect"`
+	PreferredEditStyle string            `json:"preferred_edit_style"`
+	ThinkingMode       string            `json:"thinking_mode"`
+	Skills             []string          `json:"skills"`
 	HarnessFlags       map[string]string `json:"harness_flags"`
-	CommonPitfalls     []string `json:"common_pitfalls"`
+	CommonPitfalls     []string          `json:"common_pitfalls"`
+}
+
+type Recommendation struct {
+	Rank               int               `json:"rank"`
+	ModelID            string            `json:"model_id"`
+	VenueID            string            `json:"venue_id"`
+	VenueName          string            `json:"venue_name"`
+	Endpoint           string            `json:"endpoint"`
+	ProviderModel      string            `json:"provider_model"`
+	AvailableContext   int               `json:"available_context"`
+	CostTier           string            `json:"cost_tier"`
+	TokPerSec          float64           `json:"tok_per_sec"`
+	IsSpecial          bool              `json:"is_special"`
+	WaiterPitch        string            `json:"waiter_pitch"`
+	ToolDialect        string            `json:"tool_dialect"`
+	ThinkingMode       string            `json:"thinking_mode"`
+	RecommendedSkills  []string          `json:"recommended_skills"`
+	HarnessFlags       map[string]string `json:"harness_flags"`
+	Rationale          string            `json:"rationale"`
 }
 
 type RecommendRequest struct {
-	TaskFamily             string `json:"task_family"`
-	EstimatedContextTokens int    `json:"estimated_context_tokens"`
-	RequiresUncensored     bool   `json:"requires_uncensored"`
-	PreferredTarget        string `json:"preferred_target,omitempty"`
+	TaskFamily             string   `json:"task_family"`
+	EstimatedContextTokens int      `json:"estimated_context_tokens"`
+	RequiresUncensored     bool     `json:"requires_uncensored"`
+	OnlySovereignLocal     bool     `json:"only_sovereign_local"` // Filter out cloud endpoints
+	AllowedVenues          []string `json:"allowed_venues"`       // e.g. ["bigmac", "truenas", "openrouter"]
+	MaxResults             int      `json:"max_results"`
 }
 
-type RecommendResponse struct {
-	RecommendedModel string            `json:"recommended_model"`
-	Target           string            `json:"target"`
-	Endpoint         string            `json:"endpoint"`
-	AvailableContext int               `json:"available_context"`
-	TokPerSec        float64           `json:"tok_per_sec"`
-	ToolDialect      string            `json:"tool_dialect"`
-	ThinkingMode     string            `json:"thinking_mode"`
-	RecommendedSkills []string         `json:"recommended_skills"`
-	HarnessFlags     map[string]string `json:"harness_flags"`
-	Rationale        string            `json:"rationale"`
+// Global Venues Definitions
+var Venues = map[string]ServerVenue{
+	"bigmac": {
+		ID:             "bigmac",
+		Name:           "BigMac (Apple M2 Ultra 128GB)",
+		Type:           "local_sovereign",
+		Endpoint:       "http://192.168.178.105:8080/v1",
+		AuthEnvKey:     "BIGMAC_API_KEY",
+		HealthCheckURL: "http://192.168.178.105:8080/v1/models",
+		Description:    "Local sovereign node with 128GB unified memory, FlashAttention Metal acceleration, up to 256K context.",
+	},
+	"truenas": {
+		ID:             "truenas",
+		Name:           "TrueNAS SCALE (Dual RTX A5000 48GB)",
+		Type:           "local_sovereign",
+		Endpoint:       "http://192.168.178.49:30068/v1",
+		AuthEnvKey:     "",
+		HealthCheckURL: "http://192.168.178.49:30068/api/tags",
+		Description:    "Dual NVIDIA RTX A5000 GPU server with Q8_0 KV cache and layer spreading across 48GB VRAM.",
+	},
+	"strata": {
+		ID:             "strata",
+		Name:           "Strata MoE Engine (BigMac)",
+		Type:           "local_sovereign",
+		Endpoint:       "http://192.168.178.105:8085/v1",
+		AuthEnvKey:     "",
+		HealthCheckURL: "http://192.168.178.105:8085/v1/models",
+		Description:    "Native Strata streaming latent-MoE engine with continuous batching and DSpark drafting.",
+	},
+	"openrouter": {
+		ID:             "openrouter",
+		Name:           "OpenRouter (Free Tier & Router)",
+		Type:           "cloud_free",
+		Endpoint:       "https://openrouter.ai/api/v1",
+		AuthEnvKey:     "OPENROUTER_API_KEY",
+		HealthCheckURL: "https://openrouter.ai/api/v1/models",
+		Description:    "Multi-provider cloud gateway offering zero-cost community tiers and commercial routing.",
+	},
+	"gemini": {
+		ID:             "gemini",
+		Name:           "Google AI Studio (Gemini Pro/Flash)",
+		Type:           "subscription",
+		Endpoint:       "https://generativelanguage.googleapis.com/v1beta/openai",
+		AuthEnvKey:     "GEMINI_API_KEY",
+		HealthCheckURL: "",
+		Description:    "Google AI Studio subscription models with massive 1M-2M token context windows.",
+	},
+	"deepseek": {
+		ID:             "deepseek",
+		Name:           "DeepSeek Cloud Direct",
+		Type:           "commercial_api",
+		Endpoint:       "https://api.deepseek.com/v1",
+		AuthEnvKey:     "DEEPSEEK_API_KEY",
+		HealthCheckURL: "",
+		Description:    "High-throughput commercial API for DeepSeek V3 / R1 reasoning and coding.",
+	},
 }
 
+// Global Catalog Array across All Venues
 var Catalog = []ModelProfile{
+	// ==================== BIGMAC (LOCAL SOVEREIGN) ====================
 	{
-		ID:                 "qwen3.6-35b",
-		Target:             "bigmac",
-		ProviderEndpoint:   "http://192.168.178.105:8080/v1",
-		MaxContext:         262144,
-		Quantization:       "Q8_0",
-		TokPerSec:          30.0,
-		Uncensored:         false,
-		TaskFamilies:       []string{"code_refactor", "large_repo_ingest", "architecture_audit", "general_dev"},
-		ToolDialect:        "posix_shell_and_unified_diff",
+		ID:                "qwen3.6-35b",
+		VenueID:           "bigmac",
+		ProviderModelName: "bigmac-mixed",
+		Tier:              "local",
+		MaxContext:        262144,
+		TokPerSecEst:      30.0,
+		Uncensored:        false,
+		SommelierSpecial:  true,
+		SpecialPitch:      "\"This evening the chef recommends our 256K sovereign Qwen 3.6 35B — preloaded in unified memory, zero layer spill, perfect for ingesting entire repositories at once.\"",
+		TaskFamilies:      []string{"code_refactor", "large_repo_ingest", "architecture_audit", "general_dev"},
+		ToolDialect:       "posix_shell_and_unified_diff",
 		PreferredEditStyle: "diff",
-		ThinkingMode:       "off",
-		Skills:             []string{"git", "ast_search", "patch_verify"},
+		ThinkingMode:      "off",
+		Skills:            []string{"git", "ast_search", "patch_verify"},
 		HarnessFlags: map[string]string{
 			"aider":    "--model openai/bigmac-mixed --edit-format diff",
 			"hermes":   "-p bigmac -m bigmac-mixed",
 			"opencode": "-m bigmac/bigmac-mixed",
 		},
 		CommonPitfalls: []string{
-			"Disable reasoning stream (think: false) during diff application to prevent parse failures.",
-			"Use Q8_0 KV cache in unified memory for >100K token sessions.",
+			"Disable reasoning stream (think: false) during diff application.",
+			"Leverages Q8_0 KV cache in unified memory.",
 		},
 	},
 	{
-		ID:                 "swift-1.5-qwen3.8-27b",
-		Target:             "bigmac",
-		ProviderEndpoint:   "http://192.168.178.105:8080/v1",
-		MaxContext:         262144,
-		Quantization:       "Q8_0",
-		TokPerSec:          42.0,
-		Uncensored:         false,
-		TaskFamilies:       []string{"fast_coding", "multi_file_patch", "vision_inspection"},
-		ToolDialect:        "posix_shell_and_unified_diff",
+		ID:                "swift-1.5-qwen3.8-27b",
+		VenueID:           "bigmac",
+		ProviderModelName: "swift-1.5-qwen3.8-27b",
+		Tier:              "local",
+		MaxContext:        262144,
+		TokPerSecEst:      42.0,
+		Uncensored:        false,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"A delightfully crisp 42 tok/s pairing DFlash2 speculative decoding with 256K context for fast multi-file diffing.\"",
+		TaskFamilies:      []string{"fast_coding", "multi_file_patch", "vision_inspection"},
+		ToolDialect:       "posix_shell_and_unified_diff",
 		PreferredEditStyle: "diff",
-		ThinkingMode:       "off",
-		Skills:             []string{"git", "dflash_speculative_stream", "image_diff"},
+		ThinkingMode:      "off",
+		Skills:            []string{"git", "dflash_speculative_stream", "image_diff"},
 		HarnessFlags: map[string]string{
 			"aider":    "--model openai/swift-1.5-qwen3.8-27b --edit-format diff",
 			"hermes":   "-p bigmac -m swift-1.5-qwen3.8-27b",
 			"opencode": "-m bigmac/swift-1.5-qwen3.8-27b",
 		},
-		CommonPitfalls: []string{
-			"Leverages DFlash2 speculative decoding window; ensure batch size >= 2048.",
-		},
+		CommonPitfalls: []string{"Requires batch size >= 2048 to saturate speculative drafting."},
 	},
 	{
-		ID:                 "qwen3.8-27b-uncensored",
-		Target:             "bigmac",
-		ProviderEndpoint:   "http://192.168.178.105:8080/v1",
-		MaxContext:         262144,
-		Quantization:       "Q6_K",
-		TokPerSec:          27.0,
-		Uncensored:         true,
-		TaskFamilies:       []string{"red_team", "unfiltered_audit", "reverse_engineering", "vulnerability_remediation"},
-		ToolDialect:        "posix_shell_and_unified_diff",
+		ID:                "qwen3.8-27b-uncensored",
+		VenueID:           "bigmac",
+		ProviderModelName: "qwen3.8-27b-uncensored",
+		Tier:              "local",
+		MaxContext:        262144,
+		TokPerSecEst:      27.0,
+		Uncensored:        true,
+		SommelierSpecial:  true,
+		SpecialPitch:      "\"For the discerning connoisseur of unrestricted analysis: our surgical Q6_K uncensored Qwen, completely unfiltered with full 256K context memory.\"",
+		TaskFamilies:      []string{"red_team", "unfiltered_audit", "reverse_engineering", "vulnerability_remediation"},
+		ToolDialect:       "posix_shell_and_unified_diff",
 		PreferredEditStyle: "diff",
-		ThinkingMode:       "off",
-		Skills:             []string{"git", "binary_analysis", "sandbox_eval"},
+		ThinkingMode:      "off",
+		Skills:            []string{"git", "binary_analysis", "sandbox_eval"},
 		HarnessFlags: map[string]string{
 			"aider":    "--model openai/qwen3.8-27b-uncensored --edit-format diff",
 			"hermes":   "-p bigmac -m qwen3.8-27b-uncensored",
 			"opencode": "-m bigmac/qwen3.8-27b-uncensored",
 		},
-		CommonPitfalls: []string{
-			"Abliterated weights bypass corporate refusal filters; enforce external task-scoped isolation.",
-		},
+		CommonPitfalls: []string{"Bypasses all standard safety refusals; enforce strict local isolation."},
 	},
 	{
-		ID:                 "gemma-4-31b-heretic",
-		Target:             "bigmac",
-		ProviderEndpoint:   "http://192.168.178.105:8080/v1",
-		MaxContext:         131072,
-		Quantization:       "Q4_K_M",
-		TokPerSec:          32.0,
-		Uncensored:         true,
-		TaskFamilies:       []string{"coder_unfiltered", "complex_refactor", "tool_orchestration"},
-		ToolDialect:        "openai_strict_json",
+		ID:                "gemma-4-31b-heretic",
+		VenueID:           "bigmac",
+		ProviderModelName: "gemma-4-31b-heretic",
+		Tier:              "local",
+		MaxContext:        131072,
+		TokPerSecEst:      32.0,
+		Uncensored:        true,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"A robust coder3101 heretic abliteration with 128K context, crafted for unrestricted code patching.\"",
+		TaskFamilies:      []string{"coder_unfiltered", "complex_refactor", "tool_orchestration"},
+		ToolDialect:       "openai_strict_json",
 		PreferredEditStyle: "whole_file_or_patch",
-		ThinkingMode:       "none",
-		Skills:             []string{"git", "json_tools", "patch_verify"},
+		ThinkingMode:      "none",
+		Skills:            []string{"git", "json_tools", "patch_verify"},
 		HarnessFlags: map[string]string{
 			"aider":    "--model openai/gemma-4-31b-heretic --edit-format diff",
 			"hermes":   "-p bigmac -m gemma-4-31b-heretic",
 			"opencode": "-m bigmac/gemma-4-31b-heretic",
 		},
-		CommonPitfalls: []string{
-			"Do not enclose function parameters in markdown backticks.",
-		},
+		CommonPitfalls: []string{"Do not enclose JSON tool arguments in markdown fences."},
 	},
+
+	// ==================== TRUENAS (LOCAL DUAL GPU) ====================
 	{
-		ID:                 "deepseek-r1:32b",
-		Target:             "truenas",
-		ProviderEndpoint:   "http://192.168.178.49:30068/v1",
-		MaxContext:         32768,
-		Quantization:       "Q4_K_M",
-		TokPerSec:          29.5,
-		Uncensored:         false,
-		TaskFamilies:       []string{"deep_reasoning", "algorithmic_proof", "root_cause_diagnosis", "math"},
-		ToolDialect:        "chain_of_thought_then_tool",
+		ID:                "deepseek-r1:32b",
+		VenueID:           "truenas",
+		ProviderModelName: "deepseek-r1:32b",
+		Tier:              "local",
+		MaxContext:        32768,
+		TokPerSecEst:      29.5,
+		Uncensored:        false,
+		SommelierSpecial:  true,
+		SpecialPitch:      "\"Tonight from the dual A5000 cellar: 100% GPU-resident DeepSeek R1 32B at ~30 tok/s. Unmatched mathematical and algorithmic deduction.\"",
+		TaskFamilies:      []string{"deep_reasoning", "algorithmic_proof", "root_cause_diagnosis", "math"},
+		ToolDialect:       "chain_of_thought_then_tool",
 		PreferredEditStyle: "diff",
-		ThinkingMode:       "cot_thinking_tags",
-		Skills:             []string{"symbolic_math", "formal_verification", "test_runner"},
+		ThinkingMode:      "cot_thinking_tags",
+		Skills:            []string{"symbolic_math", "formal_verification", "test_runner"},
 		HarnessFlags: map[string]string{
 			"aider":    "--model ollama_chat/deepseek-r1:32b --edit-format diff",
 			"hermes":   "-p truenas -m deepseek-r1:32b",
 			"opencode": "-m truenas/deepseek-r1:32b",
 		},
-		CommonPitfalls: []string{
-			"Requires sufficient token budget for reasoning traces (<think>...</think>).",
-			"In Aider, think traces must not spill into diff chunks.",
-		},
+		CommonPitfalls: []string{"Requires thinking token headroom; ensure diff generator omits <think> tokens."},
 	},
 	{
-		ID:                 "qwen3.8-uncensored:27b",
-		Target:             "truenas",
-		ProviderEndpoint:   "http://192.168.178.49:30068/v1",
-		MaxContext:         32768,
-		Quantization:       "Q4_K_M",
-		TokPerSec:          34.7,
-		Uncensored:         true,
-		TaskFamilies:       []string{"red_team", "unfiltered_audit", "rapid_patching"},
-		ToolDialect:        "posix_shell_and_unified_diff",
+		ID:                "qwen3.8-uncensored:27b",
+		VenueID:           "truenas",
+		ProviderModelName: "qwen3.8-uncensored:27b",
+		Tier:              "local",
+		MaxContext:        32768,
+		TokPerSecEst:      34.7,
+		Uncensored:        true,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"Dual-GPU balanced uncensored Qwen at a rapid 35 tok/s pace.\"",
+		TaskFamilies:      []string{"red_team", "unfiltered_audit", "rapid_patching"},
+		ToolDialect:       "posix_shell_and_unified_diff",
 		PreferredEditStyle: "diff",
-		ThinkingMode:       "off",
-		Skills:             []string{"git", "sandbox_eval"},
+		ThinkingMode:      "off",
+		Skills:            []string{"git", "sandbox_eval"},
 		HarnessFlags: map[string]string{
 			"aider":    "--model ollama_chat/qwen3.8-uncensored:27b --edit-format diff",
 			"hermes":   "-p truenas -m qwen3.8-uncensored:27b",
 			"opencode": "-m truenas/qwen3.8-uncensored:27b",
 		},
-		CommonPitfalls: []string{
-			"Context ceiling is 32768 tokens to ensure 100% GPU residence across dual A5000s.",
-		},
+		CommonPitfalls: []string{"32K context cap preserves dual-GPU allocation ceiling."},
 	},
 	{
-		ID:                 "qwen3.5:9b",
-		Target:             "truenas",
-		ProviderEndpoint:   "http://192.168.178.49:30068/v1",
-		MaxContext:         32768,
-		Quantization:       "Q4_K_M",
-		TokPerSec:          88.5,
-		Uncensored:         false,
-		TaskFamilies:       []string{"subsecond_edit", "quick_lookup", "lightweight_triage"},
-		ToolDialect:        "posix_shell",
+		ID:                "llama3.3:70b",
+		VenueID:           "truenas",
+		ProviderModelName: "llama3.3:70b",
+		Tier:              "local",
+		MaxContext:        32768,
+		TokPerSecEst:      11.5,
+		Uncensored:        false,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"Flagship 70B parameter weight across both cards for high-adherence planning and policy formulation.\"",
+		TaskFamilies:      []string{"flagship_general", "complex_planning", "policy_design"},
+		ToolDialect:       "openai_strict_json",
 		PreferredEditStyle: "diff",
-		ThinkingMode:       "off",
-		Skills:             []string{"git", "file_finder"},
+		ThinkingMode:      "off",
+		Skills:            []string{"system_design", "governance"},
+		HarnessFlags: map[string]string{
+			"aider":    "--model ollama_chat/llama3.3:70b --edit-format diff",
+			"hermes":   "-p truenas -m llama3.3:70b",
+			"opencode": "-m truenas/llama3.3:70b",
+		},
+		CommonPitfalls: []string{"Larger footprint limits throughput to ~11.5 tok/s."},
+	},
+	{
+		ID:                "qwen3.5:9b",
+		VenueID:           "truenas",
+		ProviderModelName: "qwen3.5:9b",
+		Tier:              "local",
+		MaxContext:        32768,
+		TokPerSecEst:      88.5,
+		Uncensored:        false,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"Sub-second lightning speed: 88 tok/s for rapid triage, single-file scripts, and instant lookups.\"",
+		TaskFamilies:      []string{"subsecond_edit", "quick_lookup", "lightweight_triage"},
+		ToolDialect:       "posix_shell",
+		PreferredEditStyle: "diff",
+		ThinkingMode:      "off",
+		Skills:            []string{"git", "file_finder"},
 		HarnessFlags: map[string]string{
 			"aider":    "--model ollama_chat/qwen3.5:9b --edit-format diff",
 			"hermes":   "-p truenas -m qwen3.5:9b",
 			"opencode": "-m truenas/qwen3.5:9b",
 		},
-		CommonPitfalls: []string{
-			"Lower parameter count; not intended for deep multi-module refactoring.",
+		CommonPitfalls: []string{"Not intended for deep multi-module refactoring."},
+	},
+
+	// ==================== STRATA (BIGMAC MOE) ====================
+	{
+		ID:                "strata-inkling",
+		VenueID:           "strata",
+		ProviderModelName: "strata-inkling",
+		Tier:              "local",
+		MaxContext:        32768,
+		TokPerSecEst:      25.0,
+		Uncensored:        false,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"Thinking Machines Inkling-2-Mini with native DSpark Block-8 drafter and o200k byte BPE tokenizer.\"",
+		TaskFamilies:      []string{"streaming_agent", "rapid_turnaround", "latent_moe"},
+		ToolDialect:       "o200k_structured_xml",
+		PreferredEditStyle: "diff",
+		ThinkingMode:      "none",
+		Skills:            []string{"streaming_eval"},
+		HarnessFlags: map[string]string{
+			"aider":    "--model openai/strata-inkling --edit-format diff",
+			"hermes":   "-p strata -m strata-inkling",
+			"opencode": "-m strata/strata-inkling",
 		},
+		CommonPitfalls: []string{"Thinking mode is strictly off (enforced by tokenizer)."},
+	},
+
+	// ==================== OPENROUTER (FREE TIER SPECIALS) ====================
+	{
+		ID:                "nemotron-3-nano-omni:free",
+		VenueID:           "openrouter",
+		ProviderModelName: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+		Tier:              "free",
+		MaxContext:        65536,
+		TokPerSecEst:      45.0,
+		Uncensored:        false,
+		SommelierSpecial:  true,
+		SpecialPitch:      "\"And this evening on OpenRouter's complimentary menu: the NVIDIA Nemotron 3 Nano Omni 30B reasoning model — zero cost, high reasoning density!\"",
+		TaskFamilies:      []string{"deep_reasoning", "free_cloud_compute", "code_refactor"},
+		ToolDialect:       "openai_strict_json",
+		PreferredEditStyle: "diff",
+		ThinkingMode:      "cot_thinking_tags",
+		Skills:            []string{"git", "test_runner"},
+		HarnessFlags: map[string]string{
+			"aider":    "--model openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free --edit-format diff",
+			"hermes":   "-p openrouter -m nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+			"opencode": "-m openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+		},
+		CommonPitfalls: []string{"Subject to provider rate-limiting during peak cloud hours."},
+	},
+	{
+		ID:                "gemma-4-31b:free",
+		VenueID:           "openrouter",
+		ProviderModelName: "google/gemma-4-31b-it:free",
+		Tier:              "free",
+		MaxContext:        65536,
+		TokPerSecEst:      35.0,
+		Uncensored:        false,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"Google's dense Gemma-4 31B served complimentary via OpenRouter with 64K context.\"",
+		TaskFamilies:      []string{"general_dev", "tool_orchestration", "free_cloud_compute"},
+		ToolDialect:       "openai_strict_json",
+		PreferredEditStyle: "diff",
+		ThinkingMode:      "none",
+		Skills:            []string{"git", "json_tools"},
+		HarnessFlags: map[string]string{
+			"aider":    "--model openrouter/google/gemma-4-31b-it:free --edit-format diff",
+			"hermes":   "-p openrouter -m google/gemma-4-31b-it:free",
+			"opencode": "-m openrouter/google/gemma-4-31b-it:free",
+		},
+		CommonPitfalls: []string{"Rate-limited if multiple agent sub-threads trigger simultaneously."},
+	},
+
+	// ==================== SUBSCRIPTION & COMMERCIAL API ====================
+	{
+		ID:                "gemini-3.5-flash",
+		VenueID:           "gemini",
+		ProviderModelName: "google/gemini-3.5-flash",
+		Tier:              "subscription",
+		MaxContext:        1048576,
+		TokPerSecEst:      95.0,
+		Uncensored:        false,
+		SommelierSpecial:  true,
+		SpecialPitch:      "\"From Google AI Studio: Gemini 3.5 Flash boasting a 1,000,000 token context window and 95 tok/s generation for macro architecture ingestion.\"",
+		TaskFamilies:      []string{"macro_architecture_audit", "whole_monorepo_analysis", "massive_context"},
+		ToolDialect:       "openai_strict_json",
+		PreferredEditStyle: "diff",
+		ThinkingMode:      "off",
+		Skills:            []string{"git", "monorepo_indexer"},
+		HarnessFlags: map[string]string{
+			"aider":    "--model openrouter/google/gemini-3.5-flash --edit-format diff",
+			"hermes":   "-p openrouter -m google/gemini-3.5-flash",
+			"opencode": "-m openrouter/google/gemini-3.5-flash",
+		},
+		CommonPitfalls: []string{"Requires network egress; do not route sovereign-isolated air-gapped tasks here."},
+	},
+	{
+		ID:                "deepseek-chat",
+		VenueID:           "deepseek",
+		ProviderModelName: "deepseek/deepseek-chat",
+		Tier:              "commercial_api",
+		MaxContext:        131072,
+		TokPerSecEst:      55.0,
+		Uncensored:        false,
+		SommelierSpecial:  false,
+		SpecialPitch:      "\"Commercial DeepSeek V3 direct: ultra-low cost ($0.14/1M) with high coding and reasoning benchmark scores.\"",
+		TaskFamilies:      []string{"code_refactor", "general_dev", "cost_efficient_cloud"},
+		ToolDialect:       "openai_strict_json",
+		PreferredEditStyle: "diff",
+		ThinkingMode:      "off",
+		Skills:            []string{"git", "ast_search"},
+		HarnessFlags: map[string]string{
+			"aider":    "--model openrouter/deepseek/deepseek-chat --edit-format diff",
+			"hermes":   "-p openrouter -m deepseek/deepseek-chat",
+			"opencode": "-m openrouter/deepseek/deepseek-chat",
+		},
+		CommonPitfalls: []string{"Cloud API subject to standard latency jitter."},
 	},
 }
 
-func recommendModel(req RecommendRequest) RecommendResponse {
-	var candidates []ModelProfile
-	for _, m := range Catalog {
-		if req.RequiresUncensored && !m.Uncensored {
-			continue
-		}
-		if req.EstimatedContextTokens > 0 && m.MaxContext < req.EstimatedContextTokens {
-			continue
-		}
-		if req.PreferredTarget != "" && m.Target != req.PreferredTarget {
-			continue
-		}
-		candidates = append(candidates, m)
-	}
-
-	if len(candidates) == 0 {
-		// Fallback to highest context general model
-		return RecommendResponse{
-			RecommendedModel: "qwen3.6-35b",
-			Target:           "bigmac",
-			Endpoint:         "http://192.168.178.105:8080/v1",
-			AvailableContext: 262144,
-			TokPerSec:        30.0,
-			ToolDialect:      "posix_shell_and_unified_diff",
-			ThinkingMode:     "off",
-			RecommendedSkills: []string{"git", "ast_search"},
-			HarnessFlags: map[string]string{
-				"aider":  "--model openai/bigmac-mixed --edit-format diff",
-				"hermes": "-p bigmac -m bigmac-mixed",
-			},
-			Rationale: "Fallback to default sovereign workhorse (qwen3.6-35b on BigMac, 256K context).",
-		}
-	}
-
-	// Score candidates based on task family alignment and speed
-	type scoredCandidate struct {
-		model ModelProfile
-		score int
-	}
-	var scored []scoredCandidate
-	for _, c := range candidates {
-		s := 0
-		for _, fam := range c.TaskFamilies {
-			if strings.EqualFold(fam, req.TaskFamily) {
-				s += 100
-			}
-		}
-		if req.EstimatedContextTokens > 65536 && c.MaxContext >= 262144 {
-			s += 50
-		}
-		if req.EstimatedContextTokens <= 32768 && c.TokPerSec > 35.0 {
-			s += 30
-		}
-		scored = append(scored, scoredCandidate{model: c, score: s})
-	}
-
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].score > scored[j].score
-	})
-
-	best := scored[0].model
-	rationale := fmt.Sprintf("Selected %s on %s: matches task family '%s', supports %d context, runs at ~%.1f tok/s.",
-		best.ID, best.Target, req.TaskFamily, best.MaxContext, best.TokPerSec)
-
-	return RecommendResponse{
-		RecommendedModel:  best.ID,
-		Target:            best.Target,
-		Endpoint:          best.ProviderEndpoint,
-		AvailableContext:  best.MaxContext,
-		TokPerSec:         best.TokPerSec,
-		ToolDialect:       best.ToolDialect,
-		ThinkingMode:      best.ThinkingMode,
-		RecommendedSkills: best.Skills,
-		HarnessFlags:      best.HarnessFlags,
-		Rationale:         rationale,
-	}
-}
-
-func getModelHints(modelID string) (ModelProfile, bool) {
-	for _, m := range Catalog {
-		if strings.EqualFold(m.ID, modelID) {
-			return m, true
-		}
-	}
-	return ModelProfile{}, false
-}
-
 func checkEndpointHealth(url string, timeout time.Duration) bool {
+	if url == "" {
+		return true // Assumed reachable if no specific health probe URL
+	}
 	client := http.Client{Timeout: timeout}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -332,20 +471,155 @@ func checkEndpointHealth(url string, timeout time.Duration) bool {
 	return resp.StatusCode < 500
 }
 
-func getLiveCatalog() map[string]interface{} {
-	bigmacOK := checkEndpointHealth("http://192.168.178.105:8080/v1/models", 2*time.Second)
-	truenasOK := checkEndpointHealth("http://192.168.178.49:30068/api/tags", 2*time.Second)
-	strataOK := checkEndpointHealth("http://192.168.178.105:8085/v1/models", 2*time.Second)
-
-	return map[string]interface{}{
-		"endpoints": map[string]bool{
-			"bigmac_llama_server": bigmacOK,
-			"truenas_ollama":      truenasOK,
-			"bigmac_strata":       strataOK,
-		},
-		"catalog_size": len(Catalog),
-		"models":       Catalog,
+func checkVenueHealth(v ServerVenue) bool {
+	if v.HealthCheckURL == "" {
+		return true
 	}
+	return checkEndpointHealth(v.HealthCheckURL, 2*time.Second)
+}
+
+func recommendModels(req RecommendRequest) []Recommendation {
+	if req.MaxResults <= 0 {
+		req.MaxResults = 3
+	}
+
+	// Step 1: Probe venue readiness if venue is local
+	venueStatus := make(map[string]bool)
+	for id, v := range Venues {
+		if v.Type == "local_sovereign" {
+			venueStatus[id] = checkVenueHealth(v)
+		} else {
+			venueStatus[id] = true // Assume cloud venues ready unless explicitly excluded
+		}
+	}
+
+	// Step 2: Filter candidates
+	type scoredCandidate struct {
+		model ModelProfile
+		venue ServerVenue
+		score int
+	}
+	var candidates []scoredCandidate
+
+	for _, m := range Catalog {
+		v, exists := Venues[m.VenueID]
+		if !exists {
+			continue
+		}
+		// Check venue alive status
+		if isAlive, ok := venueStatus[m.VenueID]; ok && !isAlive {
+			continue // Venue is currently down
+		}
+		// Sovereignty filter
+		if req.OnlySovereignLocal && v.Type != "local_sovereign" {
+			continue
+		}
+		// Venue whitelist filter
+		if len(req.AllowedVenues) > 0 {
+			allowed := false
+			for _, av := range req.AllowedVenues {
+				if strings.EqualFold(av, m.VenueID) {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				continue
+			}
+		}
+		// Uncensored constraint
+		if req.RequiresUncensored && !m.Uncensored {
+			continue
+		}
+		// Context capacity constraint
+		if req.EstimatedContextTokens > 0 && m.MaxContext < req.EstimatedContextTokens {
+			continue
+		}
+
+		// Calculate fit score
+		score := 0
+		// Task family match
+		for _, fam := range m.TaskFamilies {
+			if strings.EqualFold(fam, req.TaskFamily) {
+				score += 100
+			}
+		}
+		// Specials boost
+		if m.SommelierSpecial {
+			score += 35
+		}
+		// Local preference over cloud for sovereign workloads
+		if v.Type == "local_sovereign" {
+			score += 20
+		}
+		// Free tier bonus
+		if m.Tier == "free" {
+			score += 15
+		}
+		// Big context match
+		if req.EstimatedContextTokens > 65536 && m.MaxContext >= 262144 {
+			score += 40
+		}
+		// High throughput match
+		if m.TokPerSecEst > 35.0 {
+			score += 10
+		}
+
+		candidates = append(candidates, scoredCandidate{
+			model: m,
+			venue: v,
+			score: score,
+		})
+	}
+
+	// Sort by score descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+
+	var results []Recommendation
+	for i, c := range candidates {
+		if i >= req.MaxResults {
+			break
+		}
+		rationale := fmt.Sprintf("Rank #%d: %s on %s matches '%s' with %d max context at ~%.1f tok/s.",
+			i+1, c.model.ID, c.venue.Name, req.TaskFamily, c.model.MaxContext, c.model.TokPerSecEst)
+
+		results = append(results, Recommendation{
+			Rank:              i + 1,
+			ModelID:           c.model.ID,
+			VenueID:           c.model.VenueID,
+			VenueName:         c.venue.Name,
+			Endpoint:          c.venue.Endpoint,
+			ProviderModel:     c.model.ProviderModelName,
+			AvailableContext:  c.model.MaxContext,
+			CostTier:          c.model.Tier,
+			TokPerSec:         c.model.TokPerSecEst,
+			IsSpecial:         c.model.SommelierSpecial,
+			WaiterPitch:       c.model.SpecialPitch,
+			ToolDialect:       c.model.ToolDialect,
+			ThinkingMode:      c.model.ThinkingMode,
+			RecommendedSkills: c.model.Skills,
+			HarnessFlags:      c.model.HarnessFlags,
+			Rationale:         rationale,
+		})
+	}
+
+	return results
+}
+
+func getCatalogByVenue(venueID string) (ServerVenue, []ModelProfile, bool) {
+	v, exists := Venues[venueID]
+	if !exists {
+		return ServerVenue{}, nil, false
+	}
+	var models []ModelProfile
+	for _, m := range Catalog {
+		if m.VenueID == venueID {
+			models = append(models, m)
+		}
+	}
+	return v, models, true
 }
 
 func handleMCP(reader io.Reader, writer io.Writer) {
@@ -370,7 +644,7 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 				"protocolVersion": "2024-11-05",
 				"serverInfo": map[string]string{
 					"name":    "model-compass",
-					"version": "1.0.0",
+					"version": "2.0.0",
 				},
 				"capabilities": map[string]interface{}{
 					"tools": map[string]bool{"listChanged": false},
@@ -382,8 +656,8 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 			resp.Result = map[string]interface{}{
 				"tools": []map[string]interface{}{
 					{
-						"name":        "recommend_model",
-						"description": "Recommends the best local sovereign model, target endpoint, and tuned harness flags for a specific task family, context size, and censorship requirements.",
+						"name":        "recommend_models",
+						"description": "Returns a prioritized menu of model recommendations across all venues (local, cloud, free-tier specials) matching the task family, context demand, and censorship constraints.",
 						"inputSchema": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
@@ -393,37 +667,46 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 								},
 								"estimated_context_tokens": map[string]interface{}{
 									"type":        "integer",
-									"description": "Estimated total context tokens needed (up to 262144).",
+									"description": "Estimated total context tokens needed (up to 1,000,000).",
 								},
 								"requires_uncensored": map[string]interface{}{
 									"type":        "boolean",
-									"description": "True if the task requires abliterated/uncensored reasoning without safety filter refusals.",
+									"description": "True if the task requires abliterated/uncensored weights without safety refusal triggers.",
 								},
-								"preferred_target": map[string]interface{}{
-									"type":        "string",
-									"description": "Optional host target constraint: 'bigmac' or 'truenas'.",
+								"only_sovereign_local": map[string]interface{}{
+									"type":        "boolean",
+									"description": "True to restrict recommendations strictly to local sovereign hardware (BigMac / TrueNAS).",
+								},
+								"allowed_venues": map[string]interface{}{
+									"type":        "array",
+									"items":       map[string]string{"type": "string"},
+									"description": "Optional filter to allow only specific venues: ['bigmac', 'truenas', 'strata', 'openrouter', 'gemini', 'deepseek'].",
+								},
+								"max_results": map[string]interface{}{
+									"type":        "integer",
+									"description": "Number of ranked options to return (default: 3).",
 								},
 							},
 							"required": []string{"task_family"},
 						},
 					},
 					{
-						"name":        "get_model_hints",
-						"description": "Returns model-specific prompt engineering hints, wire tool-calling dialect, recommended skills, and common failure modes.",
+						"name":        "get_venue_catalog",
+						"description": "Returns the model catalog and live operational readiness for a specific server venue (e.g. 'bigmac', 'truenas', 'openrouter', 'gemini').",
 						"inputSchema": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
-								"model_name": map[string]interface{}{
+								"venue_id": map[string]interface{}{
 									"type":        "string",
-									"description": "Identifier of the model (e.g. 'qwen3.6-35b', 'gemma-4-31b-heretic', 'deepseek-r1:32b').",
+									"description": "Venue identifier: 'bigmac', 'truenas', 'strata', 'openrouter', 'gemini', 'deepseek'.",
 								},
 							},
-							"required": []string{"model_name"},
+							"required": []string{"venue_id"},
 						},
 					},
 					{
-						"name":        "list_available_models",
-						"description": "Lists the full catalog of sovereign models, their context limits, tok/s throughput, and live health status across BigMac and TrueNAS.",
+						"name":        "get_sommelier_specials",
+						"description": "Lists the featured 'Chef's Specials' across local hardware and cloud free tiers (highlighted recommendations with their waiter pitches).",
 						"inputSchema": map[string]interface{}{
 							"type": "object",
 						},
@@ -437,37 +720,49 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 				break
 			}
 			switch callParams.Name {
-			case "recommend_model":
+			case "recommend_models":
 				var recReq RecommendRequest
 				if err := json.Unmarshal(callParams.Arguments, &recReq); err != nil {
 					resp.Error = &RPCError{Code: -32602, Message: err.Error()}
 					break
 				}
-				rec := recommendModel(recReq)
-				outText, _ := json.MarshalIndent(rec, "", "  ")
+				recs := recommendModels(recReq)
+				outText, _ := json.MarshalIndent(recs, "", "  ")
 				resp.Result = map[string]interface{}{
 					"content": []map[string]string{{"type": "text", "text": string(outText)}},
 				}
-			case "get_model_hints":
-				var hintReq struct {
-					ModelName string `json:"model_name"`
+			case "get_venue_catalog":
+				var vReq struct {
+					VenueID string `json:"venue_id"`
 				}
-				if err := json.Unmarshal(callParams.Arguments, &hintReq); err != nil {
+				if err := json.Unmarshal(callParams.Arguments, &vReq); err != nil {
 					resp.Error = &RPCError{Code: -32602, Message: err.Error()}
 					break
 				}
-				hints, ok := getModelHints(hintReq.ModelName)
+				venue, models, ok := getCatalogByVenue(vReq.VenueID)
 				if !ok {
-					resp.Error = &RPCError{Code: -32602, Message: fmt.Sprintf("Model '%s' not found in catalog", hintReq.ModelName)}
+					resp.Error = &RPCError{Code: -32602, Message: fmt.Sprintf("Unknown venue ID: '%s'", vReq.VenueID)}
 					break
 				}
-				outText, _ := json.MarshalIndent(hints, "", "  ")
+				isAlive := checkVenueHealth(venue)
+				res := map[string]interface{}{
+					"venue":       venue,
+					"is_alive":    isAlive,
+					"model_count": len(models),
+					"models":      models,
+				}
+				outText, _ := json.MarshalIndent(res, "", "  ")
 				resp.Result = map[string]interface{}{
 					"content": []map[string]string{{"type": "text", "text": string(outText)}},
 				}
-			case "list_available_models":
-				live := getLiveCatalog()
-				outText, _ := json.MarshalIndent(live, "", "  ")
+			case "get_sommelier_specials":
+				var specials []ModelProfile
+				for _, m := range Catalog {
+					if m.SommelierSpecial {
+						specials = append(specials, m)
+					}
+				}
+				outText, _ := json.MarshalIndent(specials, "", "  ")
 				resp.Result = map[string]interface{}{
 					"content": []map[string]string{{"type": "text", "text": string(outText)}},
 				}
@@ -486,9 +781,12 @@ func handleMCP(reader io.Reader, writer io.Writer) {
 
 func main() {
 	mcpMode := flag.Bool("mcp", false, "Run in MCP JSON-RPC stdio mode")
-	recommendMode := flag.String("recommend", "", "Recommend model for task family (e.g. code_refactor, red_team)")
+	recommendMode := flag.String("recommend", "", "Recommend model menu for task family (e.g. code_refactor, deep_reasoning)")
+	venueFlag := flag.String("venue", "", "Query catalog for a specific venue (bigmac, truenas, strata, openrouter, gemini, deepseek)")
 	contextTokens := flag.Int("context", 0, "Estimated context token demand")
 	uncensored := flag.Bool("uncensored", false, "Require uncensored/abliterated weights")
+	sovereignOnly := flag.Bool("sovereign", false, "Enforce strict local sovereign hardware only")
+	specialsOnly := flag.Bool("specials", false, "Show this evening's featured chef/sommelier specials")
 	flag.Parse()
 
 	if *mcpMode {
@@ -496,23 +794,64 @@ func main() {
 		return
 	}
 
+	if *specialsOnly {
+		fmt.Printf("=============================================================================\n")
+		fmt.Printf("   MODEL COMPASS — THIS EVENING'S SOMMELIER SPECIALS & CHEF'S RECOMMENDATIONS \n")
+		fmt.Printf("=============================================================================\n\n")
+		for _, m := range Catalog {
+			if m.SommelierSpecial {
+				v := Venues[m.VenueID]
+				fmt.Printf("★ [%s] %s (%s, %d context, ~%.1f tok/s)\n", v.Name, m.ID, m.Tier, m.MaxContext, m.TokPerSecEst)
+				fmt.Printf("  %s\n\n", m.SpecialPitch)
+			}
+		}
+		return
+	}
+
+	if *venueFlag != "" {
+		venue, models, ok := getCatalogByVenue(*venueFlag)
+		if !ok {
+			fmt.Printf("Error: Unknown venue '%s'. Available: bigmac, truenas, strata, openrouter, gemini, deepseek\n", *venueFlag)
+			os.Exit(1)
+		}
+		isAlive := checkVenueHealth(venue)
+		fmt.Printf("Venue: %s (%s)\n", venue.Name, venue.Type)
+		fmt.Printf("Endpoint: %s | Active/Alive: %t\n", venue.Endpoint, isAlive)
+		fmt.Printf("Description: %s\n\n", venue.Description)
+		fmt.Printf("Models (%d):\n", len(models))
+		for _, m := range models {
+			fmt.Printf("• %-26s | Ctx: %7d | Tok/s: %4.1f | Tier: %-12s | Dialect: %s\n",
+				m.ID, m.MaxContext, m.TokPerSecEst, m.Tier, m.ToolDialect)
+		}
+		return
+	}
+
 	if *recommendMode != "" {
-		res := recommendModel(RecommendRequest{
+		recs := recommendModels(RecommendRequest{
 			TaskFamily:             *recommendMode,
 			EstimatedContextTokens: *contextTokens,
 			RequiresUncensored:     *uncensored,
+			OnlySovereignLocal:     *sovereignOnly,
+			MaxResults:             3,
 		})
-		out, _ := json.MarshalIndent(res, "", "  ")
+		out, _ := json.MarshalIndent(recs, "", "  ")
 		fmt.Println(string(out))
 		return
 	}
 
-	// Default CLI output: display live catalog summary
-	fmt.Printf("Model Compass Sovereign Router (v1.0.0)\n")
-	fmt.Printf("Registered Models: %d\n\n", len(Catalog))
-	for _, m := range Catalog {
-		fmt.Printf("• %-26s | Target: %-7s | Ctx: %6d | Tok/s: %4.1f | Uncensored: %-5t | Dialect: %s\n",
-			m.ID, m.Target, m.MaxContext, m.TokPerSec, m.Uncensored, m.ToolDialect)
+	// Default CLI output: display venue breakdown and summary
+	fmt.Printf("=============================================================================\n")
+	fmt.Printf(" Model Compass Multi-Venue Sovereign & Cloud Router (v2.0.0)\n")
+	fmt.Printf("=============================================================================\n\n")
+	fmt.Printf("Configured Venues (%d):\n", len(Venues))
+	for id, v := range Venues {
+		alive := checkVenueHealth(v)
+		fmt.Printf("  [%-10s] %-36s | Type: %-15s | Ready: %t\n", id, v.Name, v.Type, alive)
 	}
-	fmt.Printf("\nUsage:\n  model-compass -recommend <task_family> [-context <tokens>] [-uncensored]\n  model-compass -mcp (Run Model Context Protocol server over stdio)\n")
+	fmt.Printf("\nTotal Models across all menus: %d\n\n", len(Catalog))
+	fmt.Printf("CLI Usage:\n")
+	fmt.Printf("  model-compass -specials\n")
+	fmt.Printf("  model-compass -venue <venue_id>   (bigmac, truenas, openrouter, gemini, deepseek)\n")
+	fmt.Printf("  model-compass -recommend <task> [-context <tokens>] [-uncensored] [-sovereign]\n")
+	fmt.Printf("  model-compass -mcp (JSON-RPC 2.0 stdio)\n")
 }
