@@ -2,7 +2,7 @@
 """R15 independent reducer for existing #139-validated R6/R7 agent task receipts.
 
 Consumes the ORIGINAL 25-file public GitHub Actions ZIP; never executes an agent.
-Checks all 24 task v2 receipts against the R6/R7 phase summary, pins full model,
+Checks all 24 task v1 receipts against the R6/R7 phase summary, pins full model,
 harness, task and source provenance, then computes observed completed-valid
 tasks per hour. This does not infer hardware spare capacity or sustained SLOs.
 """
@@ -99,7 +99,7 @@ def reduce_bytes(data,expected_zip_sha=ZIP_SHA256,expected_run_id=RUN_ID,expecte
                 require(name in names and name not in used_names,"missing or reused independently validated receipt")
                 used_names.add(name)
                 raw=strict_json(archive.read(name))
-                require(raw.get("schema_version")==2,"not existing v2 receipt")
+                require(raw.get("schema_version")==1,"not original v1 receipt")
                 task=raw.get("task")
                 require(isinstance(task,dict) and task.get("id")=="text-repair-v0" and
                         task.get("task_class")=="software.bounded-repair" and
