@@ -35,11 +35,16 @@ func TestDirectExploratoryReceipts(t *testing.T){
  s,count:=fake(t,false);defer s.Close()
  r,err:=execute(s.URL,"qwen3:1.7b","8f68893c685c",316)
  if err!=nil{t.Fatal(err)}
- if len(r.Conditions)!=6||count.Load()!=25 {t.Fatalf("unexpected conditions/calls: %d / %d",len(r.Conditions),count.Load())}
+ if len(r.Conditions)!=18||count.Load()!=73 {t.Fatalf("unexpected conditions/calls: %d / %d",len(r.Conditions),count.Load())}
  if r.TTFT!="NOT_OBSERVABLE_NONSTREAMING_API"||r.AgentTaskValidity!="NOT_TESTED_DIRECT_COMPLETION_ONLY"||r.ExactFoundryIdentity!="UNKNOWN" {
   t.Fatal("unsupported inferred assurance claim")
  }
- for _,c:=range r.Conditions{if len(c.Samples)!=4||c.P95RequestMS<0 {t.Fatalf("invalid condition %+v",c)}}
+ cohorts:=map[int]bool{}
+ for _,c:=range r.Conditions{
+  if len(c.Samples)!=4||c.P95RequestMS<0 {t.Fatalf("invalid condition %+v",c)}
+  if cohorts[c.Cohort]{t.Fatalf("cache cohort repeated across conditions: %+v",c)}
+  cohorts[c.Cohort]=true
+ }
  b,_:=json.Marshal(r)
  if strings.Contains(string(b),"Synthetic workload,") {t.Fatal("raw prompts must not be emitted in receipt")}
 }
@@ -55,5 +60,27 @@ func TestMissingModelCountersRejected(t *testing.T){
  s,_:=fake(t,true);defer s.Close()
  if _,err:=execute(s.URL,"qwen3:1.7b","8f68893c685c",316);err==nil {
   t.Fatal("empty model output silently accepted")
+ }
+}
+
+func TestPromptCohortIsolationAndLexicalParity(t *testing.T){
+ a:=prompt(0,"shared",3161)
+ b:=prompt(1,"shared",3161)
+ c:=prompt(0,"distinct",3161)
+ d:=prompt(0,"shared",3162)
+ if a==b||a==c||a==d{t.Fatal("unexpected prompt reuse")}
+ // Shared prompts must differ only in a short terminal request field.
+ if !strings.HasPrefix(a,"Synthetic cohort 00003161. amber cobalt"){
+  t.Fatalf("shared prompt prefix malformed: %s",a[:80])
+ }
+ if len(a)-len(c)>80||len(c)-len(a)>80{t.Fatal("prefix treatment changes payload size materially")}
+}
+func TestRedirectCannotEscapeLoopback(t *testing.T){
+ s:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  http.Redirect(w,r,"https://example.org/private",http.StatusFound)
+ }))
+ defer s.Close()
+ if _,err:=execute(s.URL,"qwen3:1.7b","8f68893c685c",316);err==nil{
+  t.Fatal("outbound redirect followed despite loopback-only policy")
  }
 }
