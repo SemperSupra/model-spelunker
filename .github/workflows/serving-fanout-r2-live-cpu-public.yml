@@ -1,0 +1,100 @@
+name: serving-fanout-r2-live-public-ollama-cpu
+on:
+  pull_request:
+    paths:
+      - 'qualification/serving_fanout_r0/real_cpu/**'
+      - '.github/workflows/serving-fanout-r2-live-cpu-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: serving-fanout-r2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact-public-cpu:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-fanout-ollama-models'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1 Node24
+        with:
+          persist-credentials: false
+      - name: Source-only Go negative and provenance tests
+        working-directory: qualification/serving_fanout_r0/real_cpu
+        run: |
+          go version
+          go test -count=3 ./...
+      - name: Install exact archived Ollama release ephemeral to runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 \
+            "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" -o "$archive"
+          echo "$OLLAMA_ARCHIVE_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          test -x "$RUNNER_TEMP/ollama-runtime/bin/ollama"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+      - name: Start private-loopback ephemeral Ollama and hydrate existing public model
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" \
+            OLLAMA_NUM_PARALLEL=4 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=2048 \
+            ollama serve >"$RUNNER_TEMP/ollama-fanout.log" 2>&1 &
+          for n in $(seq 1 60); do
+            if curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+          python3 - <<'PY'
+          import json,os,urllib.request
+          url="http://"+os.environ["OLLAMA_HOST"]+"/api/tags"
+          with urllib.request.urlopen(url,timeout=10) as f:
+              models=json.load(f).get("models",[])
+          model=next((x for x in models if x.get("name")==os.environ["OLLAMA_MODEL_TAG"]),None)
+          assert model is not None
+          digest=str(model.get("digest","")).removeprefix("sha256:")
+          assert len(digest)==64 and digest.startswith(os.environ["OLLAMA_MODEL_DIGEST_PREFIX"])
+          print("Admitted for *exploratory CPU timing only*, source model digest:", digest)
+          PY
+      - name: Execute bounded real-model 1/2/4 client concurrency crossover
+        working-directory: qualification/serving_fanout_r0/real_cpu
+        run: |
+          set -Eeuo pipefail
+          go run . -out "$RUNNER_TEMP/serving-fanout-live-cpu.json"
+          python3 - <<'PY'
+          import json,os,pathlib
+          r=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"serving-fanout-live-cpu.json").read_text())
+          assert r["evidence_class"]=="LIVE_PUBLIC_CPU_DIRECT_INFERENCE_EXPLORATORY"
+          assert len(r["conditions"])==21
+          assert set(c["replicate"] for c in r["conditions"])=={1,2,3}
+          assert len(set(c["cohort"] for c in r["conditions"]))==21
+          assert sum(c["strategy"]=="prime1_then_fan3" for c in r["conditions"])==3
+          assert all(len(c["samples"])==4 for c in r["conditions"])
+          assert set(c["client_concurrency"] for c in r["conditions"])=={1,2,4}
+          assert r["agent_task_validity"]=="NOT_TESTED_DIRECT_COMPLETION_ONLY"
+          assert r["ttft"]=="NOT_OBSERVABLE_NONSTREAMING_API"
+          print("REAL CPU controlled-replication screening PASS; no agent/M2-Ultra qualification")
+          for c in r["conditions"]:
+              print("strategy=%s concurrency=%s prefix=%s wall_ms=%.1f p95_ms=%.1f"%
+                    (c["strategy"],c["client_concurrency"],c["prefix_pattern"],c["wall_ms"],c["p95_request_ms"]))
+          PY
+      - name: Upload evidence even if an experimental condition fails
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r2-public-cpu-${{ github.run_id }}
+          path: ${{ runner.temp }}/serving-fanout-live-cpu.json
+          retention-days: 14
+          if-no-files-found: ignore
