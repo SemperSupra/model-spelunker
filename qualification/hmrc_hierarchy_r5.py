@@ -52,7 +52,7 @@ def load_upstream_levels() -> tuple[type,str]:
     namespace={"Enum":Enum}
     module=ast.Module(body=[node],type_ignores=[])
     ast.fix_missing_locations(module)
-    exec(compile(module,UPSTREAM_FILE,"exec"),{"__builtins__":{"int":int},"Enum":Enum},namespace)
+    exec(compile(module,UPSTREAM_FILE,"exec"),{"__builtins__":{"int":int},"__name__":"hmrc_native_upstream","Enum":Enum},namespace)
     cls=namespace["ContextLevel"]
     got={x.name:x.value for x in cls}
     if got!={"ABSTRACT":0,"OVERVIEW":1,"DETAIL":2}:
@@ -163,10 +163,8 @@ def self_test():
 def run(out:Path,seed:int):
     native,hash_source=load_upstream_levels()
     original,hash_fixture=read_fixture()
-    db=db_for(original)
-    try:
-        rows=[]
-        for q in original["questions"]:
+    rows=[]
+    for q in original["questions"]:
             chosen,left=page(original,native,q,budget=MAX_BUDGET)
             baseline=[{**x,"level":native.ABSTRACT.value,
                        "text":make_levels(next(d for d in original["corpus"] if d["id"]==x["id"]),native)[native.ABSTRACT]}
@@ -184,7 +182,6 @@ def run(out:Path,seed:int):
                 "l0_only_bytes":sum(len(x["text"].encode()) for x in baseline),
                 "actual_bytes":MAX_BUDGET-left,
             })
-    finally:db.close()
     report={
         "schema":"hmrc-r5-source-native-contextlevel-and-independent-paging",
         "upstream_repo":"volcengine/OpenViking","source_commit":UPSTREAM_COMMIT,
