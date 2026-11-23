@@ -7,3 +7,11 @@ Design: two blocks with reversed order, each comparing a serial pair of two **id
 Source/model/harness pins must be checked before hydration. Public OpenWorker artifact digest full 64 hex, approved admission link, Ollama archive SHA256, model runtime digest matched to exact expected live tag. Do not infer full Foundry model representation or security policy from runtime tags.
 
 This explores shared CPU-server contention on one public free-tier runner; sample size is tiny, CPU model and task difficulty vary, context warmness carries between phases, no physical KV hit signals, and this does not qualify BigMac/TrueNAS HIL. Fail closed on missing receipt or evidence mismatch. Preserve negatives and do not merge/promote before independent review.
+
+## R7 extension: four actor clients / two server slots
+
+The initial R6 public GHA result [45172050185](https://github.com/SemperSupra/model-spelunker/actions/runs/45172050185) showed 8/8 independent task verifier PASS, a 24.97% combined serial-to-parallel wall reduction across two reversed-order blocks. Hardened follow-on [45172928322](https://github.com/SemperSupra/model-spelunker/actions/runs/45172928322) again had 8/8 PASS and a 27.87% reduction, with checks for exact task package, full model digest and external verifier exit code.
+
+R7 reuses the same admitted harness/model/validator and adds four independently isolated workcells A/B/C/D using the *same* frozen text-repair task. With the server held at two inference slots, compare two consecutive waves of two agents against one burst of four agents in reversed-order blocks. This estimates whether extra harness fan-out beyond physical server slots improves accepted-goodput, hurts individual response time, creates model/tool failures, or merely queues requests. Exactly 24 task receipts are expected across the combined R6+R7 trial. A model task failure remains recorded and must not be inferred from the workflow conclusion.
+
+Evidence is public-CPU, one ephemeral runner per workflow, 2 blocks only, with warm-cache/order and GPU-platform extrapolation explicitly UNKNOWN. No change is made to host services, model routing, Model-Compass, or sovereign worksets.
