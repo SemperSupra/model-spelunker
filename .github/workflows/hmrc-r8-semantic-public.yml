@@ -1,0 +1,117 @@
+name: HMRC R8 semantic paraphrase OOD native Qwen and strict source gate
+# 28 novel EN/DE/TH paraphrases (12 positive/16 negative); two order
+# seeds, actual Ollama 0.34.1/Qwen3:1.7B and original R5 canonical Go gate.
+# Open ontology vocabulary disclosed; blinded answers withheld from prompts.
+on:
+  pull_request:
+    paths:
+      - 'qualification/fixtures/hmrc_r8_semantic_paraphrases.json'
+      - 'qualification/hmrc_paraphrase_r8.py'
+      - '.github/workflows/hmrc-r8-semantic-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-source-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Blind semantic paraphrase OOD corpus, untouched R7 grammar and source oracle
+        run: |
+          set -euo pipefail
+          python3 -m py_compile qualification/hmrc_paraphrase_r8.py
+          python3 qualification/hmrc_paraphrase_r8.py --self-test
+  actual-native-qwen:
+    needs: independent-source-critic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 21
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        seed: [19, 53]
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_CONTEXT_LENGTH: '32768'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
+      HMRC_SEED: ${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Build original canonical Go source verifier and freeze fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd qualification/hmrc_claim_r6 && go build -o "$RUNNER_TEMP/hmrc-claim-admit" ./cmd/admit)
+          python3 qualification/hmrc_paraphrase_r8.py --self-test
+      - name: Install pinned Ollama and native Qwen3 1.7B
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          runtime="$RUNNER_TEMP/ollama-runtime"
+          curl --fail --location --silent --show-error \
+            "https://github.com/ollama/ollama/releases/download/v$OLLAMA_VERSION/ollama-linux-amd64.tar.zst" --output "$archive"
+          printf '%s  %s\n' "$OLLAMA_ARCHIVE_SHA256" "$archive" | sha256sum -c -
+          mkdir -p "$runtime" "$RUNNER_TEMP/hmrc-r8-models"
+          zstd -d --stdout "$archive" | tar -xf - -C "$runtime"
+          echo "$runtime/bin" >> "$GITHUB_PATH"
+      - name: Start exact pinned public Qwen runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          export OLLAMA_MODELS="$RUNNER_TEMP/hmrc-r8-models"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" \
+            OLLAMA_CONTEXT_LENGTH="$OLLAMA_CONTEXT_LENGTH" OLLAMA_NUM_PARALLEL=1 \
+            OLLAMA_MAX_LOADED_MODELS=1 ollama serve >"$RUNNER_TEMP/hmrc-r8-ollama.log" 2>&1 &
+          for n in $(seq 1 60); do
+            if curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+          python3 - <<'PY'
+          import json,os,urllib.request
+          with urllib.request.urlopen("http://127.0.0.1:11434/api/tags",timeout=10) as r:
+              models=json.load(r)["models"]
+          m=next((x for x in models if x["name"]==os.environ["OLLAMA_MODEL_TAG"]),None)
+          assert m and m["digest"].removeprefix("sha256:").startswith(os.environ["OLLAMA_MODEL_DIGEST_PREFIX"])
+          print("EXACT_PINNED_QWEN3_MODEL=YES")
+          PY
+      - name: Execute 28 unseen semantic questions against original source-bound verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/hmrc_paraphrase_r8.py --seed "$HMRC_SEED" \
+            --admit "$RUNNER_TEMP/hmrc-claim-admit" --out "hmrc-r8-paraphrase-$HMRC_SEED.json"
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open(f"hmrc-r8-paraphrase-{os.environ['HMRC_SEED']}.json"))
+          assert d["model_calls"]==28
+          assert d["native_qwen_inference"] and d["actual_go_source_verifier"]
+          assert d["model_can_execute_tools"] is False and d["production_catalog_authenticated"] is False
+          assert len(d["rows"])==28
+          assert sum(x["expected_state"]=="ABSTAIN" for x in d["rows"])==16
+          assert "negatives" in d["grammar_plus_go"] and d["model_plus_go"]["total"]<=28
+          print("REAL_QWEN_OOD_EXTRACT_OBSERVED=YES; CI_SUCCESS_NOT_MODEL_PASS")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: hmrc-r8-ood-semantic-${{ matrix.seed }}
+          path: hmrc-r8-paraphrase-*.json
+          if-no-files-found: ignore
+          retention-days: 14
