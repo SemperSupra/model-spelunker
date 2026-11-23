@@ -1,0 +1,33 @@
+name: Compass Binding Public-Safe Contract Oracle
+
+on:
+  pull_request:
+    paths:
+      - 'qualification/compass_binding_r0/**'
+      - '.github/workflows/compass-binding-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compass-oracle-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-go-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact PR source (no credentials retained)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Public, offline, Go stdlib negative-oracle tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          go version
+          cd qualification/compass_binding_r0
+          GOPROXY=off GOSUMDB=off go test -count=3 -v ./...
+          GOPROXY=off GOSUMDB=off go vet ./...
