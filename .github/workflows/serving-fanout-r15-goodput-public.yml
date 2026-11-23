@@ -55,7 +55,7 @@ jobs:
             "https://api.github.com/repos/SemperSupra/model-spelunker/actions/artifacts/$SOURCE_ARTIFACT_ID/zip" \
             --output "$RUNNER_TEMP/original-r6-r7.zip"
           printf '%s  %s\n' "$ORIGINAL_ARCHIVE_SHA256" "$RUNNER_TEMP/original-r6-r7.zip" | sha256sum -c -
-      - name: Independently join all 24 original v2 task receipts and reduce goodput
+      - name: Independently join all 24 original v1 task receipts and reduce goodput
         shell: bash
         run: |
           set -Eeuo pipefail
