@@ -174,7 +174,7 @@ def resource_projection(resource, keys, required, reserve_fraction):
     return results
 
 def reduce(report, resources=None, *, required=("cpu", "memory"), reserve=.25, ttft_slo_ms=3000):
-    if not 0 < reserve < 1 or not ttft_slo_ms > 0 or any(r not in FIELDS for r in required) or not required:
+    if not 0 < reserve < 1 or not ttft_slo_ms > 0 or any(r not in FIELDS for r in required) or not required or len(set(required)) != len(required):
         raise InvalidReceipt("invalid reservation/SLO dimensions")
     cells, digest = reduce_phase(report)
     res = resource_projection(resources, {c["cell_id"] for c in cells}, required, reserve)
