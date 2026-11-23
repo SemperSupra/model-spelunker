@@ -1,0 +1,37 @@
+# TrueNAS Foundry-owned Custom App target, NOT a stand-alone lifecycle executor.
+# Native Foundry first qualifies a pinned exact image/profile before materializing.
+# Required values: immutable OCI image, pre-existing owner-approved ZFS dataset,
+# pre-existing restricted token file. Host interface deliberately loopback ONLY.
+services:
+  model-compass:
+    image: ${MODEL_COMPASS_IMAGE:?pin_release_oci_sha256_digest}
+    user: "65532:65532"
+    read_only: true
+    init: false
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MODEL_COMPASS_PORT:-18088}:8088"
+    environment:
+      COMPASS_LISTEN: ":8088"
+      COMPASS_TOKEN_FILE: "/run/secrets/compass_token"
+      COMPASS_SNAPSHOT_FILE: "/state/snapshot.json"
+      COMPASS_MODEL_BIN: "/usr/local/bin/model-compass"
+    volumes:
+      - type: bind
+        source: ${MODEL_COMPASS_STATE_DIR:?precreate_owned_external_zfs_dataset}
+        target: /state
+        read_only: true
+      - type: bind
+        source: ${MODEL_COMPASS_TOKEN_FILE:?precreate_mode_0400_owner_65532}
+        target: /run/secrets/compass_token
+        read_only: true
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    mem_limit: 268435456
+    cpus: 1.0
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=8m"
+    stop_grace_period: 10s
