@@ -27,7 +27,7 @@ def make_fixture():
                 obs={"success":True,"termination_class":"semantic-success","verifier_exit_code":0,
                      "candidate_exit_code":0,"timed_out":False,"state_changed":True,
                      "wall_seconds":2.5,"tool_calls":1}
-                raw={"schema_version":2,"run_id":run_id,"evidence_digest":digest,
+                raw={"schema_version":1,"run_id":run_id,"evidence_digest":digest,
                      "task":{"id":"text-repair-v0","task_class":"software.bounded-repair",
                              "package_digest":TASK_DIGEST,"source_commit":SOURCE_SHA},
                      "candidate":{"model":{"artifact_ref":MODEL_REF,"id":"qwen3:1.7b","provider":"ollama"},
