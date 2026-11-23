@@ -148,7 +148,15 @@ func read(path string)(receipt,error){
 func main(){
  baseline:=flag.String("baseline","","path to synthetic FIFO receipt JSON")
  candidate:=flag.String("candidate","","path to synthetic reservation receipt JSON")
+ live:=flag.String("live-gate","","optional source-labeled exploratory live evidence screen JSON")
  flag.Parse()
+ if *live!=""{
+  c,err:=readLive(*live);if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  r,err:=screenLive(c);if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  enc:=json.NewEncoder(os.Stdout);enc.SetIndent("","  ")
+  if err:=enc.Encode(r);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  return
+ }
  if *baseline==""||*candidate==""{fmt.Fprintln(os.Stderr,"both -baseline and -candidate required");os.Exit(2)}
  a,err:=read(*baseline);if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
  b,err:=read(*candidate);if err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
