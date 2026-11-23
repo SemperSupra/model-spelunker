@@ -17,6 +17,7 @@ type Artifact struct {
 }
 type Observed struct {
     Alias string `json:"alias"`
+    ObservationEvidenceRef string `json:"observation_evidence_ref"`
     Artifact Artifact `json:"artifact"`
     FileSHA256 string `json:"file_sha256"`
     Installed bool `json:"installed"`
@@ -73,8 +74,9 @@ func validArtifact(a Artifact) bool { return (a.Kind=="oci" || a.Kind=="content-
 func sameArtifact(a,b Artifact) bool {return validArtifact(a)&&validArtifact(b)&&a.Kind==b.Kind&&a.Digest==b.Digest}
 func validHash(h string) bool {return digestRE.MatchString("sha256:"+h)}
 func complete(o Observed,r Interview) bool {
-    fields:=[]string{o.Runtime,o.RuntimeVersion,o.ConfigDigest,o.HostProfileDigest,o.Harness,o.HarnessVersion,o.ToolProfileDigest,o.TaskClass,r.Runtime,r.RuntimeVersion,r.ConfigDigest,r.HostProfileDigest,r.Harness,r.HarnessVersion,r.ToolProfileDigest,r.TaskClass}
+    fields:=[]string{o.Runtime,o.RuntimeVersion,o.ConfigDigest,o.HostProfileDigest,o.Harness,o.HarnessVersion,o.ToolProfileDigest,o.TaskClass,r.Runtime,r.RuntimeVersion,r.ConfigDigest,r.HostProfileDigest,r.Harness,r.HarnessVersion,r.ToolProfileDigest,r.TaskClass,r.EvidenceRef}
     for _,s:=range fields {if strings.TrimSpace(s)=="" {return false}}
+    for _,h:=range []string{o.ConfigDigest,o.HostProfileDigest,o.ToolProfileDigest,r.ConfigDigest,r.HostProfileDigest,r.ToolProfileDigest} {if !validHash(h) {return false}}
     return true
 }
 func sameBinding(o Observed,r Interview) bool {
@@ -88,11 +90,11 @@ func Evaluate(in Input,now time.Time) Decision {
     o:=in.Observed
     if !o.Installed {d.Presence="CONFIGURED_NOT_PRESENT"} else if o.InUse {d.Presence="OBSERVED_IN_USE"} else if o.Loaded {d.Presence="LOADED_NOT_USED"} else {d.Presence="PRESENT_NOT_LOADED"}
     if o.InUse && !o.Loaded {fail("in_use_without_loaded")}
-    if !o.Installed||!validArtifact(o.Artifact)||!validHash(o.FileSHA256)||o.ProcessGeneration==""||o.AttestedGeneration==""||o.ProcessGeneration!=o.AttestedGeneration {
+    if !o.Installed||!validArtifact(o.Artifact)||!validHash(o.FileSHA256)||strings.TrimSpace(o.ObservationEvidenceRef)==""||o.ProcessGeneration==""||o.AttestedGeneration==""||o.ProcessGeneration!=o.AttestedGeneration {
         d.Identity="UNKNOWN";fail("unverified_runtime_or_artifact")
     } else if in.Registry==nil {
         d.Identity="UNREGISTERED";fail("registry_missing")
-    } else if !validArtifact(in.Registry.Artifact)||!validHash(in.Registry.FileSHA256) {
+    } else if !validArtifact(in.Registry.Artifact)||!validHash(in.Registry.FileSHA256)||strings.TrimSpace(in.Registry.EvidenceRef)=="" {
         d.Identity="UNKNOWN";fail("registry_identity_invalid")
     } else if !sameArtifact(o.Artifact,in.Registry.Artifact)||o.FileSHA256!=in.Registry.FileSHA256 {
         d.Identity="DIGEST_MISMATCH";fail("bytes_or_representation_differ")
