@@ -16,10 +16,10 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "streaming"))
 import streaming_probe as base
 
-CLIENTS=("alpha","beta")
+CLIENTS=("alpha","beta","gamma")
 PER_CERT_LIMIT=2
 GLOBAL_LIMIT=4
-REQUESTS_PER_CERT=4
+REQUESTS_PER_CERT=3
 EXPECTED_DIGEST="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -46,7 +46,7 @@ def one_request(target,client,client_name,index,gate,origin):
              "keep_alive":"10m","options":{"num_ctx":2048,"num_predict":64,"temperature":0}}
     body=json.dumps(payload).encode()
     # Deliberate hostile header: it cannot change TLS certificate fingerprint.
-    claimed="beta" if client_name=="alpha" else "alpha"
+    claimed={"alpha":"beta","beta":"gamma","gamma":"alpha"}[client_name]
     req=urllib.request.Request(target+"/api/generate",data=body,
         headers={"Content-Type":"application/json","X-Tenant":claimed})
     try:
@@ -92,31 +92,48 @@ def auth_rejection(target,client):
         # TLS alerts / abrupt close are also fail-closed; do not record secrets.
         return {"denied":True,"kind":"TLS_CONNECTION_REJECTED","exception":type(err).__name__}
 
-def verdict(rows,auth):
-    n=REQUESTS_PER_CERT*len(CLIENTS)
-    if len(rows)!=n or len({x["request_index"] for x in rows})!=n:
+def validate_overlap(rows,expected_labels):
+    if len(rows)!=len(expected_labels) or len({x["request_index"] for x in rows})!=len(rows):
         raise ValueError("missing or duplicate offered request")
+    if sorted(x["client_certificate_label"] for x in rows)!=sorted(expected_labels):
+        raise ValueError("forged certificate-label coverage")
     for row in rows:
         if row["client_certificate_label"] not in CLIENTS:raise ValueError("unknown cert identity")
         if row["http_status"] not in (200,503):raise ValueError("unrecognized status")
         if row["finished_offset_ms"]<=row["offered_offset_ms"]:raise ValueError("clock inversion")
         if row["http_status"]==200 and (row["output_tokens"]<1 or row["ttft_ms"] is None):
             raise ValueError("accepted response missing completion")
+    offered=[x["offered_offset_ms"] for x in rows]
+    return max(offered)-min(offered)<=500 and min(x["finished_offset_ms"] for x in rows)>max(offered)
+
+def verdict(solo,mixed,auth):
+    solo_overlap=validate_overlap(solo,["alpha"]*3)
+    mixed_overlap=validate_overlap(mixed,[c for c in CLIENTS for _ in range(3)])
     if not all(x.get("denied") is True for x in auth.values()):
         return "FAIL_CREDENTIAL_AUTHENTICATION"
-    allstart=[x["offered_offset_ms"] for x in rows]
-    if max(allstart)-min(allstart)>500 or min(x["finished_offset_ms"] for x in rows)<=max(allstart):
+    if not solo_overlap or not mixed_overlap:
         return "INCONCLUSIVE_NONOVERLAPPING_OFFERS"
-    per={c:sum(x["http_status"]==200 and x["client_certificate_label"]==c for x in rows)
-         for c in CLIENTS}
-    admitted=sum(per.values())
-    if any(v>PER_CERT_LIMIT for v in per.values()):
+    one=sum(x["http_status"]==200 for x in solo)
+    if one>PER_CERT_LIMIT:return "FAIL_PER_CERT_LIMIT"
+    if one<PER_CERT_LIMIT:return "INCONCLUSIVE_SINGLE_CERT_UNDERUTILIZATION"
+    multi={c:sum(x["http_status"]==200 and x["client_certificate_label"]==c for x in mixed)
+           for c in CLIENTS}
+    if any(v>PER_CERT_LIMIT for v in multi.values()):
         return "FAIL_PER_CERT_LIMIT"
-    if admitted>GLOBAL_LIMIT:
-        return "FAIL_GLOBAL_LIMIT"
-    if per=={"alpha":2,"beta":2} and admitted==4 and sum(x["http_status"]==503 for x in rows)==4:
+    admitted=sum(multi.values())
+    if admitted>GLOBAL_LIMIT:return "FAIL_GLOBAL_LIMIT"
+    if admitted==4 and sum(x["http_status"]==503 for x in mixed)==5:
         return "MTLS_CERT_AND_GLOBAL_CAP_SCREEN_PASS"
-    return "INCONCLUSIVE_UNDERUTILIZED_ADMISSION"
+    return "INCONCLUSIVE_GLOBAL_UNDERUTILIZATION"
+
+def burst(target,clients,assignments):
+    gate=threading.Barrier(len(assignments))
+    started=time.monotonic()
+    with ThreadPoolExecutor(max_workers=len(assignments)) as executor:
+        futures=[executor.submit(one_request,target,clients[c],c,i,gate,started)
+                 for i,c in assignments]
+        rows=[f.result() for f in futures]
+    return sorted(rows,key=lambda x:x["request_index"])
 
 def experiment(cert_dir,target):
     if target!="https://127.0.0.1:18443":
@@ -129,14 +146,11 @@ def experiment(cert_dir,target):
       "untrusted_client_certificate":auth_rejection(
           target,tls_opener(ca,cert_dir/"rogue.crt",cert_dir/"rogue.key")),
     }
-    gate=threading.Barrier(8)
-    started=time.monotonic()
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures=[executor.submit(one_request,target,clients[c],c,k,gate,started)
-          for c in CLIENTS for k in range((0 if c=="alpha" else 4),(4 if c=="alpha" else 8))]
-        rows=[f.result() for f in futures]
-    rows.sort(key=lambda x:x["request_index"])
-    state=verdict(rows,auth)
+    # Two independent falsification trials, SAME ingress + actual backend.
+    solo=burst(target,clients,[(i,"alpha") for i in range(3)])
+    mixed=burst(target,clients,[(i,c) for i,c in enumerate(
+        tuple(label for label in CLIENTS for _ in range(3)))])
+    state=verdict(solo,mixed,auth)
     return {"evidence_class":"PUBLIC_CPU_REAL_MTLS_CERT_ADMISSION_EXPLORATORY",
        "source_sha":os.getenv("GITHUB_SHA","UNKNOWN"),
        "run_id":os.getenv("GITHUB_RUN_ID","UNKNOWN"),
@@ -148,7 +162,8 @@ def experiment(cert_dir,target):
        "model_runtime_digest":EXPECTED_DIGEST,
        "raw_certificates_and_keys":"NEVER_LOGGED_OR_ARCHIVED",
        "observed_authorization_negatives":auth,
-       "observations":rows,"result":state,"production_admission":"NO_PROMOTION"}
+       "single_cert_probe":solo,
+       "mixed_cert_probe":mixed,"result":state,"production_admission":"NO_PROMOTION"}
 
 def main():
     p=argparse.ArgumentParser()
@@ -160,7 +175,7 @@ def main():
     data=json.dumps(report,sort_keys=True,indent=2)+"\n"
     args.out.write_text(data)
     print("R13_MTLS_RESULT="+report["result"])
-    print("R13_ADMITTED=%d REJECTED=%d"%(sum(r["http_status"]==200 for r in report["observations"]),sum(r["http_status"]==503 for r in report["observations"])))
+    print("R13_ADMITTED=%d REJECTED=%d"%(sum(r["http_status"]==200 for r in report["single_cert_probe"]+report["mixed_cert_probe"]),sum(r["http_status"]==503 for r in report["single_cert_probe"]+report["mixed_cert_probe"])))
     print("R13_RECEIPT_SHA256="+hashlib.sha256(data.encode()).hexdigest())
 if __name__=="__main__":
     main()
