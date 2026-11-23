@@ -1,0 +1,43 @@
+name: HMRC R7 actual synthetic tool-intent crash and reconciliation
+# Real SIGKILL subprocesses and external-witness reconciliation on public
+# disposable local Linux. No privileged tool, external target, NFS, private GHA.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_intent_r7/**'
+      - '.github/workflows/hmrc-r7-intent-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  blue-real-crash:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Check source, process crashes and exact witness recovery
+        working-directory: qualification/hmrc_intent_r7
+        run: |
+          go vet ./...
+          go test -count=1 -v ./...
+  red-independent-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Actual SIGKILL, tool receipt tamper and concurrency red repeats
+        working-directory: qualification/hmrc_intent_r7
+        run: |
+          go test -race -count=4 -run 'TestActualSIGKILLAtFourDurabilityBoundaries|TestForgedWitnessAndUnknownScopeNeverResume|TestNoConcurrentWritersAndNoImplicitReplay|TestCorruptedJournalFailsClosed' ./...
