@@ -13,7 +13,7 @@ Authority: Model Spelunker #316, consuming the existing #139 task runner and R6/
 
 ## Scientific gate
 
-Reducer rejects missing/extra/duplicate ZIP members, wrong total bytes/digest, wrong model/harness/task/provenance, duplicate task run identity, stale source, malformed independent v2 receipts, contradiction between external verifier status and R6 task summary, missing terminal actor result, implausible time accounting and nonfinite measurements. It derives observed, **short-run** successful tasks per hour from the original verified results divided by *whole phase* elapsed time. Two reversed-order blocks provide only exploratory paired ratios; does NOT claim robust sustained rates or statistical population P95.
+Reducer rejects missing/extra/duplicate ZIP members, wrong total bytes/digest, wrong model/harness/task/provenance, duplicate task run identity, stale source, malformed independent v1 receipts, contradiction between external verifier status and R6 task summary, missing terminal actor result, implausible time accounting and nonfinite measurements. It derives observed, **short-run** successful tasks per hour from the original verified results divided by *whole phase* elapsed time. Two reversed-order blocks provide only exploratory paired ratios; does NOT claim robust sustained rates or statistical population P95.
 
 Important: This operation validates existing task receipt consistency; it does NOT rerun the independent semantic verifier and does NOT promote the original claim beyond the original task/actor/substrate scope. Positive original task receipts have prior verifier exit code zero, semantic-success, state changed and matched evidence digest. No raw tool output, prompts, or hidden reasoning are exported in derived R15 summary.
 
@@ -23,7 +23,7 @@ R6/R7 task artifacts do not contain matching per-phase physical utilization or r
 
 ## Bounded free public CI
 
-Linux+macOS stdlib negative oracles; a third independent public Ubuntu job downloads the existing GitHub Actions artifact **once** using read-only GitHub Actions permission, verifies original ZIP sha, checks all 24 task v2 receipts, derives eight phase goodputs and four paired comparisons, and uploads only the sanitized derived record. No new Ollama, model, token spending, private Actions minutes, or actor execution. Original artifacts remain held at the prior GitHub run. PR is DRAFT, not a release/merge.
+Linux+macOS stdlib negative oracles; a third independent public Ubuntu job downloads the existing GitHub Actions artifact **once** using read-only GitHub Actions permission, verifies original ZIP sha, checks all 24 task v1 receipts, derives eight phase goodputs and four paired comparisons, and uploads only the sanitized derived record. No new Ollama, model, token spending, private Actions minutes, or actor execution. Original artifacts remain held at the prior GitHub run. PR is DRAFT, not a release/merge.
 
 ## Next discriminating experiment
 
