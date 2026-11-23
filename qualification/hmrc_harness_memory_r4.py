@@ -70,7 +70,9 @@ def self_test():
     p0=patch(data,"control")
     p1=patch(data,"advisory-procedure")
     p2=patch(data,"stale-episodic")
-    assert p0!=p1!=p2
+    # The patched script is byte-identical across arms; only the separately
+    # admitted environment payload changes at execution time.
+    assert p0==p1==p2
     assert all(p.count(b"HMRC_MEMORY_SENTINEL")==2 for p in (p0,p1,p2))
     assert len(ARMS["advisory-procedure"])>50
     assert len(ARMS["stale-episodic"])>50
