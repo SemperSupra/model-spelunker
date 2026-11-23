@@ -1,0 +1,48 @@
+name: Integrated Model Compass MCP OCI Disposable Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/compass-http/**'
+      - 'cmd/model-compass/**'
+      - 'deploy/model-compass/**'
+      - '.github/workflows/compass-integrated-mcp-oci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compass-integrated-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integrated-oci-mcp:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout exact proposed integration source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Assert integrated source includes upstream MCP correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'scanner.Buffer(make(\[\]byte, 64\*1024), 1<<20)' cmd/model-compass/main.go
+          grep -q 'MCP input frame exceeds bound' cmd/model-compass/main.go
+          grep -q 'TestMCPNotificationNeverReceivesResponse' cmd/model-compass/mcp_contract_test.go
+          grep -q 'backend RPC response ID or result shape invalid' cmd/compass-http/main.go
+          echo "PASS: exact composite source includes MCP stdio + HTTP correlation fences"
+      - name: Build disposable OCI container without registry publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f deploy/model-compass/Dockerfile \
+            --build-arg SOURCE_REVISION="${GITHUB_SHA}" \
+            -t model-compass:integration .
+      - name: Exercise bundled direct MCP + authenticated bridge across 2 recreations
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash deploy/model-compass/tests/verify-integrated-mcp.sh
