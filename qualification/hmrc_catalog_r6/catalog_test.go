@@ -46,7 +46,7 @@ func TestValidSourceAndFixedOrigin(t *testing.T){
  }
  client,count:=makeClient(b,nil)
  received,err:=LoadPublic(context.Background(),client,PublicPin())
- if err!=nil||*count!=1||received!=result{t.Fatalf("exact API source binding failed %+v %v",received,err)}
+ if err!=nil||*count!=1||received.BodySHA256!=result.BodySHA256||received.FetchMethod!="github-contents-api"{t.Fatalf("exact API source binding failed %+v %v",received,err)}
 }
 func TestRejectWrongPinAndMutation(t *testing.T){
  b:=fixture(t)
@@ -95,4 +95,48 @@ func TestRejectOversizedBody(t *testing.T){
   Header:make(http.Header),Request:req},nil
  })}
  if _,err:=LoadPublic(context.Background(),client,PublicPin());!errors.Is(err,ErrResponse){t.Fatal("oversized source accepted")}
+}
+
+func TestFallbackOnlyWhenPublicContentsUnavailable(t *testing.T){
+ raw:=fixture(t)
+ api:=0
+ secondary:=0
+ client:=&http.Client{Transport:roundTrip(func(req *http.Request)(*http.Response,error){
+  if req.Method!="GET"||req.URL.Scheme!="https"{return nil,errors.New("nonread/untls source")}
+  switch req.URL.Host {
+  case "api.github.com":
+   api++
+   return &http.Response{StatusCode:403,Body:io.NopCloser(strings.NewReader("rate limit")),
+     Header:make(http.Header),Request:req},nil
+  case "raw.githubusercontent.com":
+   secondary++
+   if req.URL.Path!="/"+Repo+"/"+Commit+"/"+Path{
+    return nil,errors.New("raw endpoint not pinned")
+   }
+   return &http.Response{StatusCode:200,Body:io.NopCloser(bytes.NewReader(raw)),
+     Header:make(http.Header),Request:req},nil
+  }
+  return nil,errors.New("unadmitted host")
+ })}
+ result,err:=FetchPinned(context.Background(),client,PublicPin())
+ if err!=nil||api!=1||secondary!=1||result.FetchMethod!="pinned-github-raw"||
+    result.BlobSHA1!=GitBlob{t.Fatalf("pinned failover not verified %+v %v",result,err)}
+}
+func TestTamperedApiMustNotFallback(t *testing.T){
+ raw:=fixture(t)
+ secondary:=0
+ client:=&http.Client{Transport:roundTrip(func(req *http.Request)(*http.Response,error){
+  if req.URL.Host!="api.github.com"{
+   secondary++
+   return nil,errors.New("unauthorized fallback")
+  }
+  data:=map[string]any{"type":"file","path":Path,"sha":GitBlob,"encoding":"base64",
+    "content":base64.StdEncoding.EncodeToString(append(raw,[]byte("tamper")...))}
+  body,_:=json.Marshal(data)
+  return &http.Response{StatusCode:200,Body:io.NopCloser(bytes.NewReader(body)),
+    Header:make(http.Header),Request:req},nil
+ })}
+ if _,err:=FetchPinned(context.Background(),client,PublicPin());!errors.Is(err,ErrPin)||secondary!=0{
+  t.Fatalf("integrity mismatch silently retried elsewhere: %v fallbacks=%d",err,secondary)
+ }
 }
