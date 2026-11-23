@@ -89,25 +89,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 qualification/hmrc_native_memory_r2.py \
-            --decoys 100 --seed 11 --out hmrc-native-model-memory-receipt.json
+          for seed in 11 29 47; do
+            python3 qualification/hmrc_native_memory_r2.py \
+              --decoys 100 --seed "$seed" --out "hmrc-native-model-memory-$seed.json"
+          done
           python3 - <<'PY'
           import json
-          d=json.load(open("hmrc-native-model-memory-receipt.json"))
-          assert d["public_only_synthetic"] is True
-          assert d["native_model_inference_executed"] is True
-          assert d["harness_agent_tool_task_qualified"] is False
-          assert d["physical_kv_cache_qualified"] is False
-          assert len(d["rows"])==24
-          assert set(d["summary"])=={"no-recall","raw-fts","source-scoped-fts"}
-          assert all(d["summary"][arm]["scored"]==8 for arm in d["summary"])
-          assert all(x["expected"]=="NONE" or x["expected"].startswith("SYN_ATLAS_") for x in d["rows"])
+          results=[]
+          for seed in (11,29,47):
+              with open(f"hmrc-native-model-memory-{seed}.json") as f:
+                  d=json.load(f)
+              assert d["seed"]==seed and d["public_only_synthetic"] is True
+              assert d["native_model_inference_executed"] is True
+              assert d["harness_agent_tool_task_qualified"] is False
+              assert d["physical_kv_cache_qualified"] is False
+              assert len(d["rows"])==24
+              assert set(d["summary"])=={"no-recall","raw-fts","source-scoped-fts"}
+              assert all(d["summary"][arm]["scored"]==8 for arm in d["summary"])
+              assert all(x["expected"]=="NONE" or x["expected"].startswith("SYN_ATLAS_") for x in d["rows"])
+              results.append(d)
+          totals={arm:sum(d["summary"][arm]["correct"] for d in results)
+                  for arm in ("no-recall","raw-fts","source-scoped-fts")}
+          print("PAIRED_MODEL_BACKED_3_SEED_TOTALS="+json.dumps(totals,sort_keys=True))
           print("MODEL_RETRIEVAL_BAKEOFF=EVIDENCE_ONLY; NO_AUTONOMOUS_MEMORY_ADMISSION")
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: hmrc-r2-native-model-memory
-          path: hmrc-native-model-memory-receipt.json
+          path: hmrc-native-model-memory-*.json
           if-no-files-found: ignore
           retention-days: 14
