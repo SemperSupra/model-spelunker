@@ -51,8 +51,15 @@ class PriorityTests(unittest.TestCase):
         self.assertIn("limit_conn r15_global_reserved 2;",config)
         self.assertIn("proxy_set_header X-Class \"\";",config)
         self.assertNotIn("map $http_x_class",config)
-    def test_mtls_negative_unknown_cert_is_not_counted_as_class(self):
-        # The source stage verifies actual HTTP 403 for known-CA cert gamma.
-        for item in ("unmapped_trusted_cert","wrong_ca","no_client_cert"):
-            self.assertIn(item,("unmapped_trusted_cert","wrong_ca","no_client_cert"))
+    def test_unknown_certificate_cannot_be_reclassified_as_interactive(self):
+        from unittest.mock import patch
+        def result(mode,_clients):return trial(mode)
+        # All two-class observations look successful, but a third valid-CA
+        # certificate obtaining HTTP 200 MUST invalidate that verdict.
+        negatives=[{"denied":False,"status":200},{"denied":True,"status":400},{"denied":True,"status":400}]
+        with patch.object(p.auth,"tls_opener",return_value=object()), \
+             patch.object(p.auth,"auth_rejection",side_effect=negatives), \
+             patch.object(p,"trial",side_effect=result):
+            with self.assertRaises(ValueError):
+                p.experiment("/tmp/ephemeral-source-only")
 if __name__=="__main__":unittest.main()
