@@ -1,0 +1,65 @@
+name: HMRC R4 OpenViking providerless native lifecycle bake-off
+# Source-pinned upstream AGPL hotness primitive only; full OpenViking
+# hierarchical retrieval and license clearance explicitly NOT claimed.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_openviking_native_r4.py'
+      - '.github/workflows/hmrc-r4-openviking-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-source-critic:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Synthetic and lifecycle treatment oracle
+        run: |
+          set -euo pipefail
+          python3 -m py_compile qualification/hmrc_openviking_native_r4.py
+          python3 qualification/hmrc_openviking_native_r4.py --self-test
+  native-source-primitive:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        policy: [hotness-only, source-first]
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Exact Git-blob-pinned native OpenViking source, no provider
+        shell: bash
+        env:
+          POLICY: ${{ matrix.policy }}
+        run: |
+          set -euo pipefail
+          python3 qualification/hmrc_openviking_native_r4.py --self-test
+          python3 qualification/hmrc_openviking_native_r4.py --policy "$POLICY" \
+            --out "hmrc-openviking-$POLICY.json"
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open(f"hmrc-openviking-{os.environ['POLICY']}.json"))
+          assert d["real_vendor_hotness_executed"] is True
+          assert d["full_openviking_platform_executed"] is False
+          assert d["l0_l1_l2_session_retrieval_executed"] is False
+          assert len(d["records"])==3
+          if d["policy"]=="source-first":
+              assert all(not r[k] for r in d["records"] for k in ("protected_evict","active_evict","foreign_evict","unverified_evict"))
+          print("EXACT_SOURCE_NATIVE_OPENVIKING_MODULE=PASS; FULL_VENDOR_PLATFORM=NOT_RUN")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: hmrc-openviking-native-${{ matrix.policy }}
+          path: hmrc-openviking-${{ matrix.policy }}.json
+          if-no-files-found: ignore
+          retention-days: 14
