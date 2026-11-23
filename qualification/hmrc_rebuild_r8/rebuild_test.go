@@ -3,7 +3,6 @@ package rebuild
 import(
  "bytes"
  "errors"
- "os"
  "path/filepath"
  "reflect"
  "sync"
