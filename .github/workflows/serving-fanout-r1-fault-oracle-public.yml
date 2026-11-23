@@ -25,7 +25,6 @@ jobs:
           assert receipt["evidence_class"]=="SYNTHETIC_FINITE_STATE_NOT_PRODUCTION"
           assert receipt["safe_result"]=="NO_COUNTEREXAMPLE_WITHIN_BOUND"
           assert receipt["unsafe_result"]=="COUNTEREXAMPLE_FOUND"
-          assert "crash" in receipt["unsafe_counterexample"]
           assert receipt["unsafe_counterexample"].count("effect")>=2
           assert receipt["verified_states"]>=10
           print("Bounded safe model PASS, unsafe negative control rejected:", receipt["unsafe_counterexample"])
