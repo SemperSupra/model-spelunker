@@ -83,6 +83,7 @@ jobs:
           printf '%064d\n' 1 > "$base/token"
           sudo chown -R 65532:65532 "$base"
           sudo chmod 0400 "$base/token"
+          printf "Authorization: Bearer %064d\\n" 1 > "$RUNNER_TEMP/compass-rdte-auth-header"
           source="$base/state"
           secret="$base/token"
           for rep in 1 2; do
@@ -102,9 +103,9 @@ jobs:
             if [ "$ready" -ne 1 ]; then docker logs compass-oci-rdte || true;exit 1;fi
             code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18088/v1/snapshot)
             test "$code" = 401
-            curl -fsS -H "Authorization: Bearer $(cat "$secret")" \
+            curl -fsS -H @"$RUNNER_TEMP/compass-rdte-auth-header" \
               http://127.0.0.1:18088/v1/snapshot | grep -q 'keep-between-recreates'
-            curl -fsS -H "Authorization: Bearer $(cat "$secret")" \
+            curl -fsS -H @"$RUNNER_TEMP/compass-rdte-auth-header" \
               -H 'Content-Type: application/json' \
               --data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
               http://127.0.0.1:18088/mcp | grep -q 'recommend_models'
