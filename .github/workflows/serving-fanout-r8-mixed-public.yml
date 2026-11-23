@@ -1,0 +1,82 @@
+name: serving-fanout-r8-public-mixed-interactive-batch
+on:
+  pull_request:
+    paths:
+      - 'qualification/serving_fanout_r0/mixed_load/**'
+      - '.github/workflows/serving-fanout-r8-mixed-public.yml'
+permissions:
+  contents: read
+concurrency:
+  group: serving-fanout-r8-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  mixed-load-two-slot-public:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_SHA: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-r8-mixed-models'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Offline policy negative controls and streaming contract
+        run: |
+          python3 -m unittest discover -s qualification/serving_fanout_r0/mixed_load -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/mixed_load/mixed_load.py
+      - name: Verify exact pinned public Ollama binary
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" --output "$archive"
+          echo "$OLLAMA_SHA  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+      - name: Start two-slot Ollama on loopback and hydrate public model
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_NUM_PARALLEL=2 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=4096 ollama serve > "$RUNNER_TEMP/ollama-mixed.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull qwen3:1.7b
+      - name: Real streaming mixed-load FIFO versus soft client reservation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 qualification/serving_fanout_r0/mixed_load/mixed_load.py --out "$RUNNER_TEMP/mixed-observation.json"
+          python3 - <<'PY'
+          import json,os,pathlib,statistics
+          r=json.loads((pathlib.Path(os.environ["RUNNER_TEMP"])/"mixed-observation.json").read_text())
+          assert r["evidence_class"]=="PUBLIC_CPU_LIVE_MIXED_ADMISSION_EXPLORATORY"
+          assert r["admission_policy_guarantee"]=="SOFT_CLIENT_SUBMISSION_ONLY_NOT_PHYSICAL_RESERVATION"
+          assert r["server_parallel_slots"]==2
+          assert len(r["blocks"])==3
+          assert sum(len(block["conditions"]) for block in r["blocks"])==6
+          for block in r["blocks"]:
+              assert {c["policy"] for c in block["conditions"]}=={"burst2_then_interactive","soft_reserve1"}
+              for c in block["conditions"]:
+                  assert len(c["jobs"])==3 and {j["job"] for j in c["jobs"]}=={"batch-A","batch-B","interactive"}
+                  assert c["interactive_ttft_ms"]>0
+                  assert all(j["output_tokens"]>0 and j["prompt_tokens"]>0 for j in c["jobs"])
+                  print("MIXED_PROFILE rep=%d policy=%s interactive_first_token_ms=%.1f all_jobs_ms=%.1f"%(
+                      block["replicate"],c["policy"],c["interactive_ttft_ms"],c["wall_ms"]))
+          print("REAL_CPU_MIXED_LOAD_EXPLORATORY_PASS; NOT_PRODUCTION_ADMISSION")
+          PY
+      - name: Retain synthetic-only public model observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r8-mixed-${{ github.run_id }}
+          path: ${{ runner.temp }}/mixed-observation.json
+          retention-days: 14
+          if-no-files-found: ignore
