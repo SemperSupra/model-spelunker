@@ -1,0 +1,53 @@
+name: HMRC R5 source-native L0/L1/L2 contract and bounded paging
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_hierarchy_r5.py'
+      - '.github/workflows/hmrc-r5-hierarchy-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-offline-source-critic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Freeze source fixture and verify invalid access/budget negatives
+        run: |
+          set -euo pipefail
+          python3 -m py_compile qualification/hmrc_hierarchy_r5.py
+          python3 qualification/hmrc_hierarchy_r5.py --self-test
+  native-upstream-hierarchy-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Verify exact upstream Git blob and exercise native class/independent pager
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/hmrc_hierarchy_r5.py --out hmrc-r5-hierarchy.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open("hmrc-r5-hierarchy.json"))
+          assert d["native_upstream_context_enum_executed"] is True
+          assert d["native_vendor_hierarchical_retriever_executed"] is False
+          assert d["actual_own_scoped_level_pager_executed"] is True
+          assert len(d["results"])==8
+          assert d["foreign_or_stale_exposure"]==0
+          assert all(0 <= x["actual_bytes"] <= d["byte_budget"] for x in d["results"])
+          assert all(x["scope_or_stale_exposure"] is False for x in d["results"])
+          print("EXACT_UPSTREAM_LEVEL_CONTRACT_PASS; FULL_OPENVIKING_ENGINE_NOT_RUN")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: hmrc-r5-native-level-source-contract
+          path: hmrc-r5-hierarchy.json
+          retention-days: 14
+          if-no-files-found: ignore
