@@ -52,7 +52,7 @@ def load_upstream_levels() -> tuple[type,str]:
     namespace={"Enum":Enum}
     module=ast.Module(body=[node],type_ignores=[])
     ast.fix_missing_locations(module)
-    exec(compile(module,UPSTREAM_FILE,"exec"),{"__builtins__":{"int":int},"__name__":"hmrc_native_upstream","Enum":Enum},namespace)
+    exec(compile(module,UPSTREAM_FILE,"exec"),{"__builtins__":{"int":int,"__build_class__":__build_class__},"__name__":"hmrc_native_upstream","Enum":Enum},namespace)
     cls=namespace["ContextLevel"]
     got={x.name:x.value for x in cls}
     if got!={"ABSTRACT":0,"OVERVIEW":1,"DETAIL":2}:
