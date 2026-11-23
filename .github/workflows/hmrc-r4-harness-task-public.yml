@@ -1,0 +1,76 @@
+name: HMRC R4 actual installed-agent memory task crossover
+# No new agent harness. Uses exact pinned existing Qwen R25 two-hop task and
+# original independent hidden verifier/lineage oracle, with only ephemeral
+# before-launch context conditioning. Public synthetic only, no private GHA.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_harness_memory_r4.py'
+      - '.github/workflows/hmrc-r4-harness-task-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-source-critic:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Reject harness drift, invalid patch and bad memory arms without model
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile qualification/hmrc_harness_memory_r4.py
+          python3 qualification/hmrc_harness_memory_r4.py --self-test
+          python3 -m qualification.agent_embodiment.classify_reliability_trial self-test
+          bash -n qualification/agent_embodiment/run_native_installed.sh
+  native-harness:
+    needs: independent-source-critic
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - {arm: control, trial: 1}
+          - {arm: control, trial: 2}
+          - {arm: advisory-procedure, trial: 1}
+          - {arm: advisory-procedure, trial: 2}
+          - {arm: stale-episodic, trial: 1}
+          - {arm: stale-episodic, trial: 2}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Real installed Qwen Code and pinned Qwen3:1.7b task oracle
+        shell: bash
+        env:
+          HMRC_ARM: ${{ matrix.arm }}
+          HMRC_TRIAL: ${{ matrix.trial }}
+        run: |
+          set -euo pipefail
+          python3 qualification/hmrc_harness_memory_r4.py --self-test
+          python3 qualification/hmrc_harness_memory_r4.py --arm "$HMRC_ARM" --trial "$HMRC_TRIAL" \
+            --out "hmrc-r4-harness-$HMRC_ARM-$HMRC_TRIAL.json"
+          python3 - <<'PY'
+          import json,os
+          d=json.load(open(f"hmrc-r4-harness-{os.environ['HMRC_ARM']}-{os.environ['HMRC_TRIAL']}.json"))
+          assert d["actual_native_qwen_agent_task"]
+          assert d["authority_granted"] is False and d["memory_service_not_run"] is True
+          assert d["task_verdict"] in ("PASS","FAIL")
+          assert d["external_task_oracle_verdict"] in ("PASS","FAIL")
+          print("NATIVE_TOOL_TASK_COMPLETED_EVIDENCE="+d["task_verdict"]+
+                "; CI_SUCCESS_DOES_NOT_MEAN_MODEL_TASK_PASS")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: hmrc-r4-harness-${{ matrix.arm }}-${{ matrix.trial }}
+          path: hmrc-r4-harness-*.json
+          if-no-files-found: ignore
+          retention-days: 14
