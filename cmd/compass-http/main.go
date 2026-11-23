@@ -130,8 +130,22 @@ func validToolCall(req rpcRequest)bool {
 func (s *service) runRPC(ctx context.Context,req rpcRequest)(json.RawMessage,error){
  body,err:=json.Marshal(req);if err!=nil{return nil,err}
  out,err:=s.execute(ctx,body);if err!=nil{return nil,err}
- var response struct {JSONRPC string `json:"jsonrpc"`;ID json.RawMessage `json:"id"`}
- if err:=json.Unmarshal(out,&response);err!=nil||response.JSONRPC!="2.0"{return nil,errors.New("malformed backend RPC response")}
+ var response struct {
+  JSONRPC string `json:"jsonrpc"`
+  ID json.RawMessage `json:"id"`
+  Result json.RawMessage `json:"result"`
+  Error json.RawMessage `json:"error"`
+ }
+ if err:=json.Unmarshal(out,&response);err!=nil||response.JSONRPC!="2.0"{
+  return nil,errors.New("malformed backend RPC response")
+ }
+ // The process is isolated but its output is not an authority: a mismatched,
+ // absent or ambiguous JSON-RPC result must never masquerade as this request.
+ if len(req.ID)==0||!bytes.Equal(bytes.TrimSpace(response.ID),bytes.TrimSpace(req.ID))||
+   (len(response.Result)>0)==(len(response.Error)>0)||
+   bytes.Equal(bytes.TrimSpace(response.Error),[]byte("null")){
+  return nil,errors.New("backend RPC response ID or result shape invalid")
+ }
  return json.RawMessage(out),nil
 }
 func makeCall(id int,name string,args interface{})(rpcRequest,error){
@@ -144,10 +158,10 @@ func makeCall(id int,name string,args interface{})(rpcRequest,error){
 func extractToolText(raw json.RawMessage)(json.RawMessage,error){
  var response struct {
   Error *struct{Code int `json:"code"`;Message string `json:"message"`} `json:"error"`
-  Result struct{Content []struct{Type string `json:"type"`;Text string `json:"text"`} `json:"content"`} `json:"result"`
+  Result struct{IsError bool `json:"isError"`;Content []struct{Type string `json:"type"`;Text string `json:"text"`} `json:"content"`} `json:"result"`
  }
  if err:=json.Unmarshal(raw,&response);err!=nil{return nil,err}
- if response.Error!=nil{return nil,errors.New("backend tool rejected request")}
+ if response.Error!=nil||response.Result.IsError{return nil,errors.New("backend tool rejected request")}
  if len(response.Result.Content)!=1||response.Result.Content[0].Type!="text"{return nil,errors.New("invalid tool content")}
  data:=[]byte(response.Result.Content[0].Text)
  if len(data)>maxResponse||!json.Valid(data){return nil,errors.New("invalid tool JSON")}
