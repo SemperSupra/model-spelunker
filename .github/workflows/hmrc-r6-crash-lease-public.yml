@@ -1,0 +1,43 @@
+name: HMRC R6 Linux process lease/crash qualification
+# Disposable local filesystem on public Ubuntu only; no claims about NFS,
+# distributed quorum, actual privileged tools or production admission.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_crash_r6/**'
+      - '.github/workflows/hmrc-r6-crash-lease-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  crash-fault-cases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Actual child processes: committed checkpoint crash and stale lease
+        working-directory: qualification/hmrc_crash_r6
+        run: |
+          go vet ./...
+          go test -v -count=1 ./...
+  splitbrain-adversarial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Repeat actual multi-process split-brain and symlink negatives
+        working-directory: qualification/hmrc_crash_r6
+        run: |
+          go test -race -count=3 -run 'TestConcurrentProcessesCannotSplitBrain|TestCrashAfterCommitIsDurableAndLeaseStale|TestSymlinkLeaseCannotBypassExclusiveCreation' ./...
