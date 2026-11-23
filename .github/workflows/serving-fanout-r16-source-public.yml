@@ -1,0 +1,30 @@
+name: serving-fanout-r16-same-window-resource-source
+# Source-only cross-platform tests; full original R6 agent run is separate workflow.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/serving-fanout-r16-source-public.yml'
+      - 'qualification/serving_fanout_r0/agent_resource_r16/**'
+      - 'qualification/serving_fanout_r0/shared_actor/shared_actor_trial.py'
+permissions:
+  contents: read
+jobs:
+  observer-source:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resource observer RED/BLUE, no model, no creds
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest discover -s qualification/serving_fanout_r0/agent_resource_r16 -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/agent_resource_r16/*.py
+          python3 -m py_compile qualification/serving_fanout_r0/shared_actor/shared_actor_trial.py
