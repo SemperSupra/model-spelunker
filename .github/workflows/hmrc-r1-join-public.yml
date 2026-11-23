@@ -1,0 +1,44 @@
+name: HMRC R1 cross-layer join oracle
+# Issue #306; no sovereign model, credential, cache actuation or task admission.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_join_r0/**'
+      - '.github/workflows/hmrc-r1-join-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-and-contract:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Exact model binding and context pressure oracle
+        working-directory: qualification/hmrc_join_r0
+        run: |
+          go vet ./...
+          go test -v -count=1 ./...
+          go test -run '^$' -bench '^BenchmarkAdvise$' -benchtime=100x ./...
+  red-team:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Independent repeated source/authority/digest red-team tests
+        working-directory: qualification/hmrc_join_r0
+        run: go test -race -v -count=10 -run 'TestReject|TestCachePressure|TestCrossLayer' ./...
