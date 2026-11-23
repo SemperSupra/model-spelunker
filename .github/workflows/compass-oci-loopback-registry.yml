@@ -49,7 +49,7 @@ jobs:
           docker push "$img"
           ref="$(docker image inspect "$img" --format '{{index .RepoDigests 0}}')"
           test -n "$ref"
-          echo "$ref" | grep -Eq '^127\\.0\\.0\\.1:15000/compass-oci@sha256:[a-f0-9]{64}$'
+          echo "$ref" | grep -Eq '^127[.]0[.]0[.]1:15000/compass-oci@sha256:[a-f0-9]{64}$'
           printf '%s\n' "$ref" > "$RUNNER_TEMP/compass-registry-exact-ref.txt"
           # Verify the pull works by the content-addressed digest, not the tag.
           docker image rm -f "$img" || true
