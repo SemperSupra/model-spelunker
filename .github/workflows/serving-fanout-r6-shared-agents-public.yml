@@ -1,4 +1,4 @@
-name: serving-fanout-r6-one-ollama-two-real-agents-public
+name: serving-fanout-r6-r7-one-ollama-2v4-real-agents-public
 on:
   pull_request:
     paths:
@@ -128,10 +128,11 @@ jobs:
           p=pathlib.Path(os.environ["RUNNER_TEMP"])/"shared-actor-r6"/"shared-actor-summary.json"
           r=json.loads(p.read_text())
           assert r["evidence_class"]=="REAL_PUBLIC_CPU_SHARED_SERVER_CONFIGURED_AGENT_SCREEN"
-          assert len(r["phases"])==4
-          assert sum(len(a["tasks"]) for a in r["phases"])==8
-          assert set(a["mode"] for a in r["phases"])=={"serial","parallel"}
-          assert all(len(set(t["run_id"] for t in a["tasks"]))==2 for a in r["phases"])
+          assert len(r["phases"])==8
+          assert sum(len(a["tasks"]) for a in r["phases"])==24
+          assert set(a["mode"] for a in r["phases"])=={"serial","parallel","two_waves2","burst4"}
+          assert all(len(a["tasks"])==4 for a in r["phases"] if a["mode"] in ("two_waves2","burst4"))
+          assert all(len(set(t["run_id"] for t in a["tasks"]))==len(a["tasks"]) for a in r["phases"])
           assert all(t["task"]=="text-repair-v0" for a in r["phases"] for t in a["tasks"])
           print("CONFIGURED_AGENT_RECEIPTS_RECONCILED; TASK_SUCCESS_READ_FROM_VERIFIER_NOT_WORKFLOW")
           PY
