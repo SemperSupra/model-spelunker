@@ -1,0 +1,61 @@
+name: HMRC R2 source-pinned memory component census
+# Public source/license/manifest inspection, no native vendor installation,
+# no model/API credentials, no source mutation or paid endpoints.
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_source_census_r2.py'
+      - '.github/workflows/hmrc-r2-memory-component-census.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  independent-source-critic:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          python3 -m py_compile qualification/hmrc_source_census_r2.py
+          python3 qualification/hmrc_source_census_r2.py --self-test
+  source-bakeoff:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        backend: [engram, reme, openviking, memos]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate immutable upstream code manifests and licensing
+        shell: bash
+        env:
+          BACKEND: ${{ matrix.backend }}
+        run: |
+          set -euo pipefail
+          python3 qualification/hmrc_source_census_r2.py --self-test
+          python3 qualification/hmrc_source_census_r2.py --backend "$BACKEND" \
+            --out "hmrc-source-$BACKEND.json"
+          python3 - <<'PY'
+          import json,os,pathlib
+          d=json.loads(pathlib.Path("hmrc-source-"+os.environ["BACKEND"]+".json").read_text())
+          assert d["source_only"] and d["source_pinned"]
+          assert not d["installed"] and not d["native_memory_executed"]
+          assert d["transitive_license_clearance"]=="UNKNOWN"
+          print("EXACT_SOURCE_LICENSE_AND_MANIFEST=PASS; NOT_NATIVE_RUNTIME")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: hmrc-memory-component-${{ matrix.backend }}
+          path: hmrc-source-${{ matrix.backend }}.json
+          if-no-files-found: ignore
+          retention-days: 14
