@@ -122,3 +122,30 @@ func TestMethodRestriction(t *testing.T){
  w:=call(t,s,http.MethodPut,"/healthz","","")
  if w.Code!=405{t.Fatal(w.Code)}
 }
+
+func TestBackendRPCResponseIDMustMatchRequest(t *testing.T){
+ s,_,_:=fixtureService(t)
+ s.execute=func(_ context.Context,_ []byte)([]byte,error){
+  return []byte(`{"jsonrpc":"2.0","id":999,"result":{}}`),nil
+ }
+ w:=call(t,s,"POST","/mcp",`{"jsonrpc":"2.0","id":5,"method":"ping"}`,"Bearer "+strings.Repeat("A",64))
+ if w.Code!=503{t.Fatalf("foreign backend reply accepted: %d %s",w.Code,w.Body)}
+}
+func TestBackendRPCCannotOmitResultAndError(t *testing.T){
+ s,_,_:=fixtureService(t)
+ s.execute=func(_ context.Context,_ []byte)([]byte,error){
+  return []byte(`{"jsonrpc":"2.0","id":1}`),nil
+ }
+ w:=call(t,s,"POST","/mcp",`{"jsonrpc":"2.0","id":1,"method":"ping"}`,"Bearer "+strings.Repeat("A",64))
+ if w.Code!=503{t.Fatalf("incomplete backend reply accepted: %d %s",w.Code,w.Body)}
+}
+func TestBackendToolErrorFlagCannotBeLaunderedAsRecommendation(t *testing.T){
+ s,_,_:=fixtureService(t)
+ s.execute=func(_ context.Context,raw []byte)([]byte,error){
+  var req rpcRequest
+  if err:=json.Unmarshal(raw,&req);err!=nil{return nil,err}
+  return []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":{"isError":true,"content":[{"type":"text","text":"[1]"}]}}`,req.ID)),nil
+ }
+ w:=call(t,s,"POST","/v1/recommend",`{"task_family":"code_refactor"}`,"Bearer "+strings.Repeat("A",64))
+ if w.Code!=422{t.Fatalf("failed backend tool result laundered into success: %d %s",w.Code,w.Body)}
+}
