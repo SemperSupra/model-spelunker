@@ -1,0 +1,42 @@
+name: HMRC R5 typed claim evidence/abstention red-blue
+on:
+  pull_request:
+    paths:
+      - 'qualification/hmrc_claim_r5/**'
+      - '.github/workflows/hmrc-r5-typed-claims-public.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  blue-source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Compile/vet/negative claim-support verification
+        working-directory: qualification/hmrc_claim_r5
+        run: |
+          go vet ./...
+          go test -v -count=1 ./...
+  red-mutators:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: '1.23.2'
+          cache: false
+      - name: Repeat source, cross-scope, ambiguous and forbidden action probes
+        working-directory: qualification/hmrc_claim_r5
+        run: |
+          go test -race -count=5 ./...
+          go test -run '^$' -bench BenchmarkSourceGrounded100 -benchmem -count=2 ./...
