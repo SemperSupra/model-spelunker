@@ -13,13 +13,10 @@ import re
 import statistics
 
 EVIDENCE = "REAL_PUBLIC_CPU_STREAMING_DIRECT_INFERENCE_EXPLORATORY"
-FIELDS = ("cpu", "memory", "gpu", "vram")
-SOURCES = {
-    "cpu": ("cgroup-v2-quota", "visible-cpu-proxy"),
-    "memory": ("cgroup-v2-limit", "host-meminfo-proxy"),
-    "gpu": ("verified-device-counter",),
-    "vram": ("verified-device-counter",),
-}
+FIELDS = ("cpu", "memory") + tuple("gpu%d" % i for i in range(8)) + tuple("vram%d" % i for i in range(8))
+SOURCES = {"cpu": ("cgroup-v2-quota", "visible-cpu-proxy"),
+           "memory": ("cgroup-v2-limit", "host-meminfo-proxy")}
+SOURCES.update({k: ("nvml-observed", "nvidia-smi-observed") for k in FIELDS if k not in SOURCES})
 
 class InvalidReceipt(ValueError):
     pass
@@ -137,6 +134,8 @@ def resource_projection(resource, keys, required, reserve_fraction):
             results[key] = {"status": "UNKNOWN_NO_MATCHED_RESOURCE_CELL"}
             continue
         readings = cell.get("readings")
+        if not isinstance(cell.get("sources"), dict):
+            raise InvalidReceipt("invalid resource source map")
         if not isinstance(readings, list) or len(readings) > 10000:
             raise InvalidReceipt("invalid resource readings")
         peak = {}
