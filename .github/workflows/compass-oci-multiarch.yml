@@ -1,0 +1,50 @@
+name: Model Compass Immutable OCI Multiarch Source Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/compass-http/**'
+      - 'cmd/model-compass/**'
+      - 'deploy/model-compass/Dockerfile'
+      - '.github/workflows/compass-oci-multiarch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compass-multiarch-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-amd64-arm64-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Exact proposed source checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Build both architectures from digest-pinned builder without publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx create --name compass-disposable-build --driver docker-container --use
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -f deploy/model-compass/Dockerfile \
+            --build-arg SOURCE_REVISION="${GITHUB_SHA}" \
+            --output type=oci,dest="$RUNNER_TEMP/compass-multiarch.oci.tar" .
+      - name: Assert immutable OCI manifest includes only supported architectures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP/compass-multiarch.oci.tar" <<'PY'
+          import json,sys,tarfile
+          with tarfile.open(sys.argv[1],mode="r") as t:
+              obj=json.load(t.extractfile("index.json"))
+              platforms={v.get("platform",{}).get("architecture") for v in obj.get("manifests",[])
+                         if v.get("platform",{}).get("os")=="linux"}
+              assert platforms=={"amd64","arm64"},platforms
+              print("PASS: exact-source OCI multiarch linux/amd64+linux/arm64 (not a registry release)")
+          PY
