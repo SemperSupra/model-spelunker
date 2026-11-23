@@ -44,6 +44,8 @@ type sample struct {
 type condition struct {
  Concurrency int `json:"client_concurrency"`
  PrefixPattern string `json:"prefix_pattern"`
+ Replicate int `json:"replicate"`
+ Cohort int `json:"cohort"`
  WallMS float64 `json:"wall_ms"`
  P95RequestMS float64 `json:"p95_request_ms"`
  Samples []sample `json:"samples"`
@@ -63,6 +65,7 @@ type output struct {
  TTFT string `json:"ttft"`
  KVCacheMetrics string `json:"kv_cache_metrics"`
  AgentTaskValidity string `json:"agent_task_validity"`
+ ExperimentalDesign string `json:"experimental_design"`
  Conditions []condition `json:"conditions"`
 }
 func loopbackOnly(raw string) error {
@@ -98,15 +101,25 @@ func modelDigest(client *http.Client,base,tag,prefix string)(string,error){
  }
  return "",errors.New("required model not installed")
 }
-func prompt(i int,pattern string)string {
- base:="Synthetic workload, no real user or proprietary information. "
- if pattern=="shared"{return strings.Repeat(base,24)+fmt.Sprintf("Request %02d: Write one short sentence about testing software.",i)}
- return strings.Repeat(fmt.Sprintf("Synthetic reference record number %02d, no real user information. ",i),24)+
- "Write one short sentence about testing software."
+func prompt(i int,pattern string,cohort int)string {
+ // Same vocabulary and word count in both treatments; rearrange prefix tokens
+ // to vary prefix reuse while keeping expected token length approximately matched.
+ words:=[]string{"amber","cobalt","cedar","river","field","lunar","pixel","vector","signal","orbit"}
+ var out strings.Builder
+ fmt.Fprintf(&out,"Synthetic cohort %08d. ",cohort)
+ for repeat:=0;repeat<16;repeat++ {
+  for j:=0;j<len(words);j++{
+   idx:=j
+   if pattern=="distinct"{idx=(j+i+1)%len(words)}
+   out.WriteString(words[idx]);out.WriteByte(' ')
+  }
+ }
+ fmt.Fprintf(&out,"Request %02d: Write one short sentence about testing software.",i)
+ return out.String()
 }
-func infer(client *http.Client,base,model,pattern string,i int)(sample,error){
+func infer(client *http.Client,base,model,pattern string,i,cohort int)(sample,error){
  payload:=map[string]any{
-  "model":model,"prompt":prompt(i,pattern),"stream":false,"think":false,
+  "model":model,"prompt":prompt(i,pattern,cohort),"stream":false,"think":false,
   "keep_alive":"10m",
   "options":map[string]any{"num_predict":16,"num_ctx":2048,"temperature":0},
  }
@@ -130,7 +143,7 @@ func p95(samples []sample)float64{
  for i,s:=range samples {xs[i]=s.ElapsedMS}
  sort.Float64s(xs);return xs[int(math.Ceil(.95*float64(len(xs))))-1]
 }
-func runCondition(client *http.Client,base,model string,concurrency,n int,pattern string)(condition,error){
+func runCondition(client *http.Client,base,model string,concurrency,n int,pattern string,cohort,replicate int)(condition,error){
  if concurrency<1||concurrency>8||n<1||n>32||(pattern!="shared"&&pattern!="distinct"){return condition{},errors.New("invalid bounded condition")}
  jobs:=make(chan int,n);results:=make([]sample,n)
  errorsByJob:=make([]error,n)
@@ -140,7 +153,7 @@ func runCondition(client *http.Client,base,model string,concurrency,n int,patter
   go func(){
    defer wg.Done()
    for i:=range jobs{
-    results[i],errorsByJob[i]=infer(client,base,model,pattern,i)
+    results[i],errorsByJob[i]=infer(client,base,model,pattern,i,cohort)
    }
   }()
  }
@@ -148,17 +161,17 @@ func runCondition(client *http.Client,base,model string,concurrency,n int,patter
  for i:=0;i<n;i++{jobs<-i}
  close(jobs);wg.Wait()
  for i,err:=range errorsByJob{if err!=nil{return condition{},fmt.Errorf("job %d: %w",i,err)}}
- return condition{Concurrency:concurrency,PrefixPattern:pattern,
+ return condition{Concurrency:concurrency,PrefixPattern:pattern,Replicate:replicate,Cohort:cohort,
   WallMS:float64(time.Since(start).Microseconds())/1000,
   P95RequestMS:p95(results),Samples:results},nil
 }
 func execute(base,model,prefix string,seed int64)(output,error){
  if err:=loopbackOnly(base);err!=nil{return output{},err}
- client:=&http.Client{Timeout:120*time.Second}
+ client:=&http.Client{Timeout:120*time.Second,CheckRedirect:func(req *http.Request,via []*http.Request)error{return http.ErrUseLastResponse}}
  full,err:=modelDigest(client,base,model,prefix)
  if err!=nil{return output{},err}
  // Real warm-up does not become a reported benchmark request.
- if _,err:=infer(client,base,model,"shared",999);err!=nil{return output{},fmt.Errorf("warmup: %w",err)}
+ if _,err:=infer(client,base,model,"shared",999,-1);err!=nil{return output{},fmt.Errorf("warmup: %w",err)}
  jobs:=[]struct{concurrency int;pattern string}{}
  for _,n:=range []int{1,2,4}{
   for _,pattern:=range []string{"shared","distinct"}{
@@ -166,18 +179,34 @@ func execute(base,model,prefix string,seed int64)(output,error){
   }
  }
  rng:=rand.New(rand.NewSource(seed))
- rng.Shuffle(len(jobs),func(i,j int){jobs[i],jobs[j]=jobs[j],jobs[i]})
  report:=output{EvidenceClass:"LIVE_PUBLIC_CPU_DIRECT_INFERENCE_EXPLORATORY",Backend:"ollama",
   BackendVersion:os.Getenv("OLLAMA_VERSION"),ModelTag:model,
   RuntimeModelDigest:full,ExactFoundryIdentity:"UNKNOWN",ArtifactAndLicenseAdmission:"NOT_ASSESSED_BY_THIS_PROBE",
   Platform:runtime.GOOS+"/"+runtime.GOARCH,
   SourceSHA:os.Getenv("GITHUB_SHA"),StartedUTC:time.Now().UTC().Format(time.RFC3339Nano),Seed:seed,
   TTFT:"NOT_OBSERVABLE_NONSTREAMING_API",KVCacheMetrics:"NOT_OBSERVED",
-  AgentTaskValidity:"NOT_TESTED_DIRECT_COMPLETION_ONLY"}
- for _,job:=range jobs{
-  c,err:=runCondition(client,base,model,job.concurrency,4,job.pattern)
-  if err!=nil{return output{},fmt.Errorf("concurrency %d prefix %s: %w",job.concurrency,job.pattern,err)}
-  report.Conditions=append(report.Conditions,c)
+  AgentTaskValidity:"NOT_TESTED_DIRECT_COMPLETION_ONLY",
+  ExperimentalDesign:"3 randomized blocks, unique per-condition cohort prefixes, approximate matched token vocabulary; not independent hosts"}
+ for replicate:=1;replicate<=3;replicate++ {
+  rng.Shuffle(len(jobs),func(i,j int){jobs[i],jobs[j]=jobs[j],jobs[i]})
+  matched:=map[int]map[string]float64{}
+  for _,job:=range jobs {
+   patternID:=0;if job.pattern=="distinct"{patternID=1}
+   cohort:=int(seed%1000)*1000+replicate*100+job.concurrency*10+patternID
+   c,err:=runCondition(client,base,model,job.concurrency,4,job.pattern,cohort,replicate)
+   if err!=nil{return output{},fmt.Errorf("rep %d concurrency %d prefix %s: %w",replicate,job.concurrency,job.pattern,err)}
+   var tokens float64
+   for _,sample:=range c.Samples{tokens+=float64(sample.PromptTokens)}
+   if matched[job.concurrency]==nil{matched[job.concurrency]=map[string]float64{}}
+   matched[job.concurrency][job.pattern]=tokens/float64(len(c.Samples))
+   report.Conditions=append(report.Conditions,c)
+  }
+  for concurrency,pairs:=range matched{
+   a,b:=pairs["shared"],pairs["distinct"]
+   if a==0||b==0||math.Abs(a-b)/math.Max(a,b)>.15{
+    return output{},fmt.Errorf("rep %d concurrency %d prompt-token parity failed: shared=%g distinct=%g",replicate,concurrency,a,b)
+   }
+  }
  }
  return report,nil
 }
