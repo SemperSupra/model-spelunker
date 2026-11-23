@@ -16,3 +16,7 @@ Run: `go test -count=3 ./...` and `go vet ./...`.
 Before use in any real model-compass or route authorization, add cryptographically bound trusted evidence-source verification, freshness/failure semantics, immutable catalog and Spelunker receipt adapters, real runtime startup attestation, and direct-lane network/tool policy enforcement. Approval of a model artifact cannot imply permission to execute an agent. This does **not** modify existing authority in MAF-private #6/#7/#11 or Agent Dispatch #104.
 
 Source authority: SemperSupra/model-spelunker#297, #139; private IaC #665/#668. No automatic DLE promotion or HIL claims.
+
+## R2 required evidence handles
+
+Even the synthetic matching oracle requires nonempty observation, registry and interview evidence references and SHA-256-shaped configuration/host/tool digests. A missing evidence reference is UNKNOWN or MISMATCH, not a verified route. **These handles and digest-shape checks are not authentication**; the private consumer must independently verify source trust, signature/catalog revision, timestamps, and component-hash completeness. An eligible result is only an evidence-conditioned recommendation, never permission to execute tools or proof that an unloaded model is currently serving.
