@@ -122,6 +122,9 @@ class VerifiedGoodputTests(unittest.TestCase):
         a["unapproved-extra.json"]={}
         mutants.append(a)
         a=copy.deepcopy(originals)
+        a["serial-block1-agentA-task.json"]["schema_version"]=True
+        mutants.append(a)
+        a=copy.deepcopy(originals)
         a["shared-actor-summary.json"]["source_sha"]="a"*40
         mutants.append(a)
         a=copy.deepcopy(originals)
