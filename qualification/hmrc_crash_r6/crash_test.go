@@ -87,8 +87,6 @@ func startHold(t *testing.T,path,mode string)*exec.Cmd{
  out,err:=c.StdoutPipe()
  if err!=nil{t.Fatal(err)}
  c.Stderr=os.Stderr
- c.Stdin=io.NopCloser(strings.NewReader("")) // overridden below: keep child stdin open with a pipe
- _=c.Stdin
  w,err:=c.StdinPipe()
  if err!=nil{t.Fatal(err)}
  // Prevent stdin EOF until parent has killed the child.
