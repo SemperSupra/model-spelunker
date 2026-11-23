@@ -13,24 +13,33 @@ from pathlib import Path
 TASKS=(("agentA","text-repair-v0"),("agentB","text-repair-v0"))
 HARNESS_DIGEST="e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83"
 HARNESS_REF="ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:"+HARNESS_DIGEST
+PUBLIC_MODEL_ARTIFACT="ollama-sha256:8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+TASK_PACKAGE_DIGEST="sha256:a51be2ffb8cbe2cacac72f038bb88a1649d491ff853244adb729981c9d6c24cc"
 ADMISSION_REF="github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json"
 
 def check_receipt(body,task,exitcode,expected_model):
     if body.get("task",{}).get("id")!=task:
         raise ValueError("task receipt identity mismatch")
+    if body.get("task",{}).get("package_digest") != TASK_PACKAGE_DIGEST:
+        raise ValueError("source task package digest drift")
     candidate=body.get("candidate",{})
     harness=candidate.get("harness",{})
     model=candidate.get("model",{})
     if harness.get("artifact_ref")!=HARNESS_REF or harness.get("admission_ref")!=ADMISSION_REF:
         raise ValueError("harness provenance mismatch")
-    if model.get("id")!=expected_model or model.get("provider")!="ollama":
+    if model.get("id")!=expected_model or model.get("provider")!="ollama" or model.get("artifact_ref")!=PUBLIC_MODEL_ARTIFACT:
         raise ValueError("model identity mismatch")
     observation=body.get("observation",{})
     success=observation.get("success")
     if not isinstance(success,bool) or exitcode!=(0 if success else 1):
         raise ValueError("verifier success and process result do not reconcile")
-    if not isinstance(body.get("evidence_digest"),str) or not body["evidence_digest"].startswith("sha256:"):
+    evidence=body.get("evidence_digest")
+    if not isinstance(evidence,str) or len(evidence)!=71 or not evidence.startswith("sha256:") or any(c not in "0123456789abcdef" for c in evidence[7:]):
         raise ValueError("missing independent receipt evidence digest")
+    if success and (observation.get("verifier_exit_code")!=0 or observation.get("candidate_exit_code")!=0 or observation.get("timed_out") is True):
+        raise ValueError("self-reported success contradicts independent verifier, actuator or timeout")
+    if not isinstance(body.get("run_id"),str) or not body["run_id"]:
+        raise ValueError("missing source-bound task run identifier")
     if observation.get("termination_class") not in (
        "semantic-success","semantic-failure","execution-error","timeout-censored","validator-invalid"):
         raise ValueError("unrecognized termination class")
