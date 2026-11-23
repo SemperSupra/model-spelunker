@@ -218,6 +218,7 @@ func execute(base,model,prefix string,seed int64)(output,error){
  for replicate:=1;replicate<=3;replicate++ {
   rng.Shuffle(len(jobs),func(i,j int){jobs[i],jobs[j]=jobs[j],jobs[i]})
   matched:=map[int]map[string]float64{}
+  primedTokens:=0.0
   for _,job:=range jobs {
    patternID:=0;if job.pattern=="distinct"{patternID=1}
    if job.strategy=="prime1_then_fan3"{patternID=2}
@@ -229,13 +230,19 @@ func execute(base,model,prefix string,seed int64)(output,error){
     c,err=runCondition(client,base,model,job.concurrency,4,job.pattern,cohort,replicate)
    }
    if err!=nil{return output{},fmt.Errorf("rep %d concurrency %d prefix %s strategy %s: %w",replicate,job.concurrency,job.pattern,job.strategy,err)}
+   var tokens float64
+   for _,sample:=range c.Samples{tokens+=float64(sample.PromptTokens)}
    if job.strategy=="burst"{
-    var tokens float64
-    for _,sample:=range c.Samples{tokens+=float64(sample.PromptTokens)}
     if matched[job.concurrency]==nil{matched[job.concurrency]=map[string]float64{}}
     matched[job.concurrency][job.pattern]=tokens/float64(len(c.Samples))
+   }else{
+    primedTokens=tokens/float64(len(c.Samples))
    }
    report.Conditions=append(report.Conditions,c)
+  }
+  refTokens:=matched[4]["shared"]
+  if primedTokens==0||refTokens==0||math.Abs(primedTokens-refTokens)/math.Max(primedTokens,refTokens)>.15 {
+   return output{},fmt.Errorf("rep %d primed vs burst prompt-token parity failed: primed=%g burst=%g",replicate,primedTokens,refTokens)
   }
   for concurrency,pairs:=range matched{
    a,b:=pairs["shared"],pairs["distinct"]
