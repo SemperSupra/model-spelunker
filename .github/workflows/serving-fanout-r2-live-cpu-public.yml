@@ -18,7 +18,7 @@ jobs:
       OLLAMA_MODEL_TAG: 'qwen3:1.7b'
       OLLAMA_MODEL_DIGEST_PREFIX: '8f68893c685c'
       OLLAMA_HOST: '127.0.0.1:11434'
-      OLLAMA_MODELS: '${{ runner.temp }}/ollama-fanout-models'
+      OLLAMA_MODELS: '/tmp/model-spelunker-fanout-ollama-models'
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1 Node24
         with:
