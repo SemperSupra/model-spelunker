@@ -27,14 +27,14 @@ def prompt(kind, cohort):
     if kind == "interactive":
         return prefix + "Interactive request: Give one short sentence about a healthy service."
     # Same byte/token shape for both batch jobs and both policies; no user data.
-    return prefix + (" ".join(WORDS) + " ") * 100 + "Batch synthesis request: Write a short summary."
+    return prefix + (" ".join(WORDS) + " ") * 100 + "Batch synthesis request: Explain twelve concrete reliability practices in detailed numbered clauses, with examples; continue until the response token budget is exhausted."
 
 def stream_work(client, target, model, label, cohort):
     kind = "interactive" if label=="interactive" else "batch"
     payload = {
       "model":model, "prompt":prompt(kind,cohort), "stream":True, "think":False,
       "keep_alive":"10m",
-      "options":{"num_ctx":4096,"num_predict":8 if kind=="interactive" else 48,
+      "options":{"num_ctx":4096,"num_predict":8 if kind=="interactive" else 32,
                  "temperature":0},
     }
     body=json.dumps(payload).encode()
@@ -58,6 +58,9 @@ def stream_work(client, target, model, label, cohort):
     if int(answer.get("prompt_eval_count") or 0)<1 or int(answer.get("eval_count") or 0)<1:
         raise RuntimeError("missing exact serving token accounting")
     if got_first>elapsed:raise RuntimeError("first-token timestamp after final")
+    required=8 if kind=="interactive" else 32
+    if int(answer["eval_count"])!=required:
+        raise RuntimeError("output-budget confound: expected %d tokens, observed %d"%(required,answer["eval_count"]))
     return {
       "job":label,"kind":kind,"ttft_ms":round(got_first,3),
       "wall_ms":round(elapsed,3),
@@ -105,6 +108,12 @@ def validate_pair(burst,reserved):
         b=next(x for x in reserved["jobs"] if x["job"]==role)
         if abs(a["prompt_tokens"]-b["prompt_tokens"])/max(a["prompt_tokens"],b["prompt_tokens"])>.05:
             raise ValueError("token confound across compared conditions: "+role)
+    for role in ("interactive","batch-A","batch-B"):
+        a=next(x for x in burst["jobs"] if x["job"]==role)
+        b=next(x for x in reserved["jobs"] if x["job"]==role)
+        required=8 if role=="interactive" else 32
+        if a["output_tokens"]!=required or b["output_tokens"]!=required:
+            raise ValueError("output completion budget not controlled for "+role)
     return True
 
 def experiment(endpoint,model="qwen3:1.7b"):
