@@ -35,13 +35,14 @@ func TestDirectExploratoryReceipts(t *testing.T){
  s,count:=fake(t,false);defer s.Close()
  r,err:=execute(s.URL,"qwen3:1.7b","8f68893c685c",316)
  if err!=nil{t.Fatal(err)}
- if len(r.Conditions)!=18||count.Load()!=73 {t.Fatalf("unexpected conditions/calls: %d / %d",len(r.Conditions),count.Load())}
+ if len(r.Conditions)!=21||count.Load()!=85 {t.Fatalf("unexpected conditions/calls: %d / %d",len(r.Conditions),count.Load())}
  if r.TTFT!="NOT_OBSERVABLE_NONSTREAMING_API"||r.AgentTaskValidity!="NOT_TESTED_DIRECT_COMPLETION_ONLY"||r.ExactFoundryIdentity!="UNKNOWN" {
   t.Fatal("unsupported inferred assurance claim")
  }
  cohorts:=map[int]bool{}
  for _,c:=range r.Conditions{
   if len(c.Samples)!=4||c.P95RequestMS<0 {t.Fatalf("invalid condition %+v",c)}
+  if c.Strategy=="prime1_then_fan3" && (c.MaxConcurrentRequests!=3||c.PrefixPattern!="shared"){t.Fatalf("invalid prime fanout declaration %+v",c)}
   if cohorts[c.Cohort]{t.Fatalf("cache cohort repeated across conditions: %+v",c)}
   cohorts[c.Cohort]=true
  }
@@ -82,5 +83,14 @@ func TestRedirectCannotEscapeLoopback(t *testing.T){
  defer s.Close()
  if _,err:=execute(s.URL,"qwen3:1.7b","8f68893c685c",316);err==nil{
   t.Fatal("outbound redirect followed despite loopback-only policy")
+ }
+}
+
+func TestPrimeOneThenFanThreeActuallyRunsFourRequests(t *testing.T){
+ s,n:=fake(t,false);defer s.Close()
+ c,err:=runPrimed(&http.Client{},s.URL,"qwen3:1.7b",4455,2)
+ if err!=nil{t.Fatal(err)}
+ if c.Strategy!="prime1_then_fan3"||c.MaxConcurrentRequests!=3||len(c.Samples)!=4||n.Load()!=4{
+  t.Fatalf("wrong primed branch %+v calls=%d",c,n.Load())
  }
 }
