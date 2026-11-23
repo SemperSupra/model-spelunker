@@ -31,8 +31,12 @@ def canonical(obj):
     return json.dumps(obj,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode()
 
 def fact(record):
-    return canonical({"schema":"hmrc-fact-v1",
-                      "subject":record["subject"],"predicate":record["predicate"],"value":record["value"]})
+    # Go R5 strict canonical Fact struct serializes fields in declaration
+    # order: schema, subject, predicate, value. Python sort_keys=True would
+    # deliberately fail that parser even with a matching source SHA256.
+    ordered={"schema":"hmrc-fact-v1",
+             "subject":record["subject"],"predicate":record["predicate"],"value":record["value"]}
+    return json.dumps(ordered,ensure_ascii=False,separators=(",",":")).encode("utf-8")
 def source_hash(record):
     return "sha256:"+hashlib.sha256(fact(record)).hexdigest()
 
