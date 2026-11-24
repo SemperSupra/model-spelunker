@@ -1,8 +1,9 @@
-name: Workbench resource integration R2
+name: Workbench plan integration R3
 on:
   pull_request:
     paths:
       - 'qualification/workbench_r0/**'
+      - 'qualification/workbench_plan_r0/**'
       - 'qualification/resource_join_r0/**'
       - '.github/workflows/workbench-r0.yml'
 permissions:
@@ -32,6 +33,9 @@ jobs:
       - name: Measured resource integration and browser parity
         if: runner.os == 'Linux'
         run: python qualification/workbench_r0/resource_proof.py resource-evidence
+      - name: Plan review and revised intent browser parity
+        if: runner.os == 'Linux'
+        run: python qualification/workbench_r0/plan_proof.py plan-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -39,4 +43,5 @@ jobs:
           path: |
             evidence
             resource-evidence
+            plan-evidence
           retention-days: 7
