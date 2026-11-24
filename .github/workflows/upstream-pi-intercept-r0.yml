@@ -1,0 +1,82 @@
+name: Pi native extension interception R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/upstream-pi-intercept-r0.yml'
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Install exact published Pi package
+        run: |
+          node --version
+          npm --version
+          mkdir -p "$RUNNER_TEMP/pi-install"
+          cd "$RUNNER_TEMP/pi-install"
+          npm view @earendil-works/pi-coding-agent@1.6.0 version dist.integrity gitHead --json > "$GITHUB_WORKSPACE/pi-package.json"
+          npm install --no-audit --no-fund --save-exact @earendil-works/pi-coding-agent@1.6.0
+          cp package-lock.json "$GITHUB_WORKSPACE/pi-package-lock.json"
+          ./node_modules/.bin/pi --version
+          ./node_modules/.bin/pi --help
+      - name: Native extension input and deterministic handled event
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess, tempfile, threading, time
+          from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          exe=root/"pi-install/node_modules/.bin/pi"
+          seen=[]
+          class Provider(BaseHTTPRequestHandler):
+              def log_message(self,*a): pass
+              def do_POST(self):
+                  q=json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                  seen.append(q)
+                  self.send_response(200);self.send_header("Content-Type","text/event-stream");self.end_headers()
+                  for delta,finish in [({"role":"assistant","content":"SYNTHETIC_ACK"},None),({},"stop")]:
+                      frame={"id":"chatcmpl-fixture","object":"chat.completion.chunk","created":1,"model":"fixture","choices":[{"index":0,"delta":delta,"finish_reason":finish}]}
+                      self.wfile.write(("data: "+json.dumps(frame)+"\n\n").encode())
+                  self.wfile.write(b"data: [DONE]\n\n")
+          server=ThreadingHTTPServer(("127.0.0.1",18763),Provider)
+          threading.Thread(target=server.serve_forever,daemon=True).start()
+          receipt={"package":"@earendil-works/pi-coding-agent@1.6.0","reviewed_source":"8209929fb553e7a8c91dc0894569f9ec43dd201f","scope":"native harness to synthetic provider, not inference","cases":[]}
+          try:
+              for arm in ("baseline","rewrite","bypass"):
+                  with tempfile.TemporaryDirectory(dir=root) as td:
+                      p=pathlib.Path(td)
+                      home=p/"home";home.mkdir()
+                      agent=p/"agent";agent.mkdir()
+                      marker=p/"hook.txt"
+                      (agent/"models.json").write_text(json.dumps({"providers":{"fixture":{"baseUrl":"http://127.0.0.1:18763/v1","api":"openai-completions","apiKey":"synthetic-not-a-secret","models":[{"id":"fixture","contextWindow":8192,"maxTokens":256}]}}}))
+                      ext=p/"intercept.ts"
+                      ext.write_text('import { appendFileSync } from "node:fs";\nexport default function(pi: any) { pi.on("input", async (event: any) => { appendFileSync('+json.dumps(str(marker))+', event.text+"\\n"); if(event.text==="fixture rewrite") return {action:"transform",text:"fixture transformed"}; if(event.text==="fixture bypass") return {action:"handled"}; return {action:"continue"}; }); }\n')
+                      env={**os.environ,"HOME":str(home),"PI_CODING_AGENT_DIR":str(agent),"CI":"true","NO_COLOR":"1"}
+                      args=[str(exe),"-p","--no-session","--no-tools","--provider","fixture","--model","fixture","--extension",str(ext),"fixture "+arm]
+                      before=len(seen);start=time.perf_counter()
+                      proc=subprocess.run(args,cwd=p,env=env,capture_output=True,text=True,timeout=90)
+                      requests=seen[before:]
+                      users=[m.get("content") for q in requests for m in q.get("messages",[]) if m.get("role")=="user"]
+                      expected="fixture transformed" if arm=="rewrite" else "fixture baseline"
+                      hook_seen=marker.exists() and marker.read_text().strip()=="fixture "+arm
+                      wire_ok=len(requests)==0 if arm=="bypass" else len(requests)==1 and any(expected==v or isinstance(v,list) and any(isinstance(x,dict) and x.get("text")==expected for x in v) for v in users)
+                      t={"arm":arm,"exit":proc.returncode,"hook_seen":hook_seen,"provider_requests":len(requests),"wire_ok":wire_ok,"ack":"SYNTHETIC_ACK" in proc.stdout,"elapsed_s":time.perf_counter()-start}
+                      receipt["cases"].append(t)
+                      print("PI_INTERCEPT="+json.dumps(t),flush=True)
+                      if proc.returncode: print("PI_ERROR="+proc.stderr[-2000:])
+          finally:
+              server.shutdown()
+              pathlib.Path("pi-intercept-receipt.json").write_text(json.dumps(receipt,indent=2))
+          assert all(c["exit"]==0 and c["hook_seen"] and c["wire_ok"] and (c["arm"]=="bypass" or c["ack"]) for c in receipt["cases"])
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: pi-intercept-r0
+          path: |
+            pi-intercept-receipt.json
+            pi-package.json
+            pi-package-lock.json
+          retention-days: 7
