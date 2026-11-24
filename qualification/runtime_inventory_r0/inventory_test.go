@@ -53,3 +53,26 @@ func TestBadAndStaleInputsRefused(t *testing.T){
  }
  for _,tc:=range tests {t.Run(tc.name,func(t *testing.T){x:=base;tc.change(&x);_,err:=Reconcile(x);if err==nil{t.Fatal("unsafe input accepted")}})}
 }
+
+
+func TestCanonicalFieldSpelling(t *testing.T) {
+ cases := []struct{name, raw string}{
+  {"root_collision", `{"models":[],"MODELS":[{"name":"unexpected"}]}`},
+  {"name_collision", `{"models":[{"name":"expected","NAME":"unexpected"}]}`},
+  {"digest_collision", `{"models":[{"name":"expected","digest":"good","DIGEST":"unexpected"}]}`},
+  {"model_collision", `{"models":[{"model":"expected","MODEL":"unexpected"}]}`},
+  {"root_variant_only", `{"MODELS":[]}`},
+  {"name_variant_only", `{"models":[{"NAME":"unexpected"}]}`},
+  {"unicode_fold", `{"models":[{"name":"expected","digeſt":"unexpected"}]}`},
+ }
+ for _,tc:=range cases {
+  t.Run(tc.name,func(t *testing.T){
+   if _,err:=Reconcile(inp(tc.raw,`{"models":[]}`));err==nil{t.Fatal("ambiguous recognized field accepted")}
+   if _,err:=Reconcile(inp(`{"models":[]}`,tc.raw));err==nil{t.Fatal("ambiguous recognized field accepted in running list")}
+  })
+ }
+}
+func TestCanonicalFieldsRetainForwardCompatibility(t *testing.T) {
+ out,err:=Reconcile(inp(`{"models":[{"model":"alpha:latest","future_field":{"NAME":"ignored"},"digest":"provider-digest"}],"future_metadata":true}`,`{"models":[]}`))
+ if err!=nil||len(out.Entries)!=1||out.Entries[0].Alias!="alpha:latest"||out.Entries[0].TagManifestDigest!="provider-digest"||out.Entries[0].Activity!="UNKNOWN"||out.Entries[0].RegisteredIdentity!="UNVERIFIED"{t.Fatalf("unexpected result: %+v %v",out,err)}
+}
