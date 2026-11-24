@@ -1,0 +1,24 @@
+name: Qualification resource receipt join R0
+on:
+  pull_request:
+    paths:
+      - 'qualification/resource_join_r0/**'
+      - '.github/workflows/qualification-resource-join-r0.yml'
+permissions:
+  contents: read
+jobs:
+  proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - run: python qualification/resource_join_r0/prove.py proof evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: resource-join-r0
+          path: evidence
+          retention-days: 7
