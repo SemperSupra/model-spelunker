@@ -1,0 +1,44 @@
+name: Public synthetic native prompt wording pilot
+on:
+  pull_request:
+    paths:
+      - 'qualification/public_prompt_form_r0.py'
+      - '.github/workflows/public-prompt-form-r0.yml'
+permissions:
+  contents: read
+jobs:
+  source-control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - run: python3 qualification/public_prompt_form_r0.py --self-test
+  native-paired-screen:
+    needs: source-control
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        order: [original-first, numbered-first]
+        target: [a.txt, b.txt]
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Actual native public synthetic task
+        env:
+          PILOT_ORDER: ${{ matrix.order }}
+          PILOT_TARGET: ${{ matrix.target }}
+        run: python3 qualification/public_prompt_form_r0.py --pair "$PILOT_ORDER" --target "$PILOT_TARGET" --out "public-prompt-pilot-$PILOT_ORDER-$PILOT_TARGET.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: public-prompt-pilot-${{ matrix.order }}-${{ matrix.target }}
+          path: public-prompt-pilot-*.json
+          if-no-files-found: ignore
+          retention-days: 7
