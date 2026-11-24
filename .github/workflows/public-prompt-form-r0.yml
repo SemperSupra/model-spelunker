@@ -19,12 +19,12 @@ jobs:
     needs: source-control
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 17
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       max-parallel: 2
       matrix:
-        arm: [original, numbered]
+        order: [original-first, numbered-first]
         target: [a.txt, b.txt]
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -32,13 +32,13 @@ jobs:
           persist-credentials: false
       - name: Actual native public synthetic task
         env:
-          PILOT_ARM: ${{ matrix.arm }}
+          PILOT_ORDER: ${{ matrix.order }}
           PILOT_TARGET: ${{ matrix.target }}
-        run: python3 qualification/public_prompt_form_r0.py --arm "$PILOT_ARM" --target "$PILOT_TARGET" --out "public-prompt-pilot-$PILOT_ARM-$PILOT_TARGET.json"
+        run: python3 qualification/public_prompt_form_r0.py --pair "$PILOT_ORDER" --target "$PILOT_TARGET" --out "public-prompt-pilot-$PILOT_ORDER-$PILOT_TARGET.json"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: public-prompt-pilot-${{ matrix.arm }}-${{ matrix.target }}
+          name: public-prompt-pilot-${{ matrix.order }}-${{ matrix.target }}
           path: public-prompt-pilot-*.json
           if-no-files-found: ignore
           retention-days: 7
