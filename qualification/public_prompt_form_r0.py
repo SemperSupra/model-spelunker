@@ -7,6 +7,10 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import re
+import tempfile
+from unittest.mock import patch as mock_patch
+from io import BytesIO
 
 BASE=Path("qualification/agent_embodiment/run_native_installed.sh")
 BLOB="295182078db21c19ccae1c20f835f76a03a14b96"
@@ -24,7 +28,7 @@ def patch(data):
     replacements=[
         ("'"+ORIGINAL+"'",'"$PILOT_PROMPT"'),
         ('target="a.txt" if secrets.randbelow(2)==0 else "b.txt"','target=os.environ["PILOT_TARGET"]'),
-        ('print("PASS pinned native model census")','open(os.environ["RUNNER_TEMP"]+"/pilot-model-digest.txt","w").write(match["digest"])\nprint("PASS pinned native model census")'),
+        ('print("PASS pinned native model census")','import os\nopen(os.environ["RUNNER_TEMP"]+"/pilot-model-digest.txt","w").write(match["digest"])\nprint("PASS pinned native model census")'),
         ('set +e\n(\n cd "$root/task"','set +e\nagent_start=$SECONDS\n(\n cd "$root/task"'),
         ('rc=$?\nset -e','rc=$?\nexport PILOT_AGENT_SECONDS=$((SECONDS-agent_start))\nset -e'),
         ('"cli_exit":int(os.environ["R18_EXIT"])','"pilot_agent_seconds_coarse":int(os.environ["PILOT_AGENT_SECONDS"]), "cli_exit":int(os.environ["R18_EXIT"])'),
@@ -41,6 +45,23 @@ def self_test():
     assert p.count("export QWEN_SYSTEM_MD")==1
     assert p.count("verify_selected(stdout,expected,decoy)") == data.decode().count("verify_selected(stdout,expected,decoy)")
     subprocess.run(["bash","-n"],input=p,text=True,check=True)
+    # Bash syntax checking alone missed an embedded Python runtime error.
+    # Execute the actual patched census heredoc with a simulated /api/tags reply.
+    blocks=re.findall(r"python3 - <<'PY'\n(.*?)\nPY",p,re.S)
+    assert len(blocks)==3
+    for i,block in enumerate(blocks):
+        compile(block,f"<native-heredoc-{i}>","exec")
+    digest="sha256:8f68893c685c"+"0"*52
+    with tempfile.TemporaryDirectory() as tmp:
+        response=json.dumps({"models":[{"name":"qwen3:1.7b","digest":digest}]}).encode()
+        with mock_patch.dict(os.environ,{"RUNNER_TEMP":tmp}), mock_patch("urllib.request.urlopen",return_value=BytesIO(response)):
+            exec(compile(blocks[0],"<census-sensor-test>","exec"),{})
+        assert (Path(tmp)/"pilot-model-digest.txt").read_text()==digest
+        wrong=json.dumps({"models":[{"name":"qwen3:1.7b","digest":"sha256:"+"0"*64}]}).encode()
+        with mock_patch.dict(os.environ,{"RUNNER_TEMP":tmp}), mock_patch("urllib.request.urlopen",return_value=BytesIO(wrong)):
+            try:exec(compile(blocks[0],"<wrong-digest-test>","exec"),{})
+            except AssertionError:pass
+            else:raise AssertionError("wrong model digest accepted")
     try:patch(data+b"x")
     except ValueError:pass
     else:raise AssertionError("drift not rejected")
