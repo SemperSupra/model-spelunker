@@ -1,0 +1,33 @@
+name: Actor DOE conditional configuration R0
+on:
+  pull_request:
+    paths:
+      - 'qualification/actor_doe_conditional_r0/**'
+      - '.github/workflows/actor-doe-conditional-r0.yml'
+permissions:
+  contents: read
+jobs:
+  proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Install pinned upstream library
+        run: |
+          python3 -m venv "$RUNNER_TEMP/exp"
+          "$RUNNER_TEMP/exp/bin/pip" install --disable-pip-version-check 'git+https://github.com/automl/ConfigSpace.git@74ddd4c286531778532d5fad5b79c4a1dbded2c5'
+          "$RUNNER_TEMP/exp/bin/pip" freeze > dependencies.txt
+      - name: Execute independent synthetic controls
+        run: |
+          "$RUNNER_TEMP/exp/bin/python" qualification/actor_doe_conditional_r0/prove.py evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: actor-doe-conditional-r0
+          path: |
+            evidence
+            dependencies.txt
+          retention-days: 7
