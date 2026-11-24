@@ -1,0 +1,79 @@
+name: Native FastMCP tool transformation R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/upstream-fastmcp-transform-r0.yml'
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Install exact upstream source
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fm"
+          "$RUNNER_TEMP/fm/bin/pip" install --disable-pip-version-check 'git+https://github.com/PrefectHQ/fastmcp.git@92f4c503cdbf9546f6ac1e251364a2b5a92e35ea'
+          "$RUNNER_TEMP/fm/bin/pip" freeze > dependencies.txt
+      - name: Actual MCP client and tool transformation
+        run: |
+          "$RUNNER_TEMP/fm/bin/python" - <<'PY'
+          import asyncio, json, time, importlib.metadata
+          from fastmcp import FastMCP, Client
+          from fastmcp.server.transforms import ToolTransform
+          from fastmcp.tools.tool_transform import ToolTransformConfig, ArgTransformConfig
+          async def main():
+              receipt={"upstream":"92f4c503cdbf9546f6ac1e251364a2b5a92e35ea","version":importlib.metadata.version("fastmcp"),"cases":[],"scope":"in-process MCP, no model or authorization promotion"}
+              for transformed in (False, True):
+                  calls=[]
+                  server=FastMCP("synthetic")
+                  @server.tool
+                  def verbose_internal_lookup(query_identifier: str, partition: str="public") -> str:
+                      """Read a synthetic record from a named partition."""
+                      calls.append((query_identifier,partition))
+                      if partition!="public": raise ValueError("partition denied")
+                      return "VALUE="+{"alpha":"blue","beta":"green"}[query_identifier]
+                  if transformed:
+                      server.add_transform(ToolTransform({"verbose_internal_lookup":ToolTransformConfig(name="lookup",description="Read a synthetic record.",arguments={"query_identifier":ArgTransformConfig(name="key"),"partition":ArgTransformConfig(hide=True,default="public")})}))
+                  async with Client(server) as client:
+                      ts=await client.list_tools()
+                      schema=[t.model_dump(mode="json",exclude_none=True) for t in ts]
+                      name="lookup" if transformed else "verbose_internal_lookup"
+                      arg="key" if transformed else "query_identifier"
+                      assert [t.name for t in ts]==[name]
+                      props=ts[0].inputSchema["properties"]
+                      assert arg in props and ("partition" in props)!=transformed
+                      t0=time.perf_counter()
+                      for key,expected in [("alpha","VALUE=blue"),("beta","VALUE=green")]:
+                          result=await client.call_tool(name,{arg:key})
+                          assert expected in [c.text for c in result.content if getattr(c,"type",None)=="text"]
+                      assert calls==[("alpha","public"),("beta","public")]
+                      cases=[(name,{arg:[]}), (name,{arg:"missing"})]
+                      if transformed:
+                          cases.extend([("verbose_internal_lookup",{"query_identifier":"alpha"}),(name,{"query_identifier":"alpha"}),(name,{arg:"alpha","partition":"private"})])
+                      negatives=[]
+                      for n,args in cases:
+                          before=len(calls)
+                          try:
+                              res=await client.call_tool(n,args)
+                              disposition="returned" if not getattr(res,"is_error",False) else "error"
+                          except Exception:
+                              disposition="error"
+                          effect=calls[before:]
+                          negatives.append({"case":n,"arg_keys":sorted(args),"disposition":disposition,"backend_calls":len(effect),"private_reached":any(p!="public" for _,p in effect)})
+                      receipt["cases"].append({"transformed":transformed,"schema_bytes":len(json.dumps(schema,separators=(",",":")).encode()),"positive_calls":2,"elapsed_s":time.perf_counter()-t0,"negative":negatives})
+              with open("fastmcp-receipt.json","w") as f: json.dump(receipt,f,indent=2)
+              print("FASTMCP_RECEIPT="+json.dumps(receipt))
+              assert not any(n["private_reached"] for c in receipt["cases"] for n in c["negative"]), "hidden argument reached private partition"
+              assert all(n["disposition"]=="error" and n["backend_calls"]==0 for n in receipt["cases"][1]["negative"] if n["arg_keys"] in (["query_identifier"],["key","partition"])), "transformed legacy or hidden-argument request not rejected before backend"
+          asyncio.run(main())
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: fastmcp-r0
+          path: |
+            fastmcp-receipt.json
+            dependencies.txt
+          retention-days: 7
