@@ -27,7 +27,7 @@ def load(root):
         rid=r["run_id"]; obs=r["observation"]
         if not isinstance(rid,str) or not rid or type(obs["success"]) is not bool: raise ValueError("invalid receipt fields")
         if type(obs["wall_seconds"]) not in (int,float) or not math.isfinite(obs["wall_seconds"]) or obs["wall_seconds"]<0: raise ValueError("invalid wall duration")
-        if obs["termination_class"] not in ("semantic-success","semantic-failure","timeout-censored","validator-invalid","execution-incomplete","execution-failure","infrastructure-error","candidate-error"): raise ValueError("unknown termination class")
+        if obs["termination_class"] not in ("semantic-success","semantic-failure","timeout-censored","validator-invalid","execution-error"): raise ValueError("unknown termination class")
         if obs["success"]!=(obs["termination_class"]=="semantic-success"): raise ValueError("inconsistent acceptance and termination")
         d="sha256:"+hashlib.sha256(raw).hexdigest()
         row={"run_id":rid,"task":r["task"]["id"],"candidate":r["candidate"]["harness"]["name"],"accepted":obs["success"],"termination":obs["termination_class"],"wall_seconds":obs["wall_seconds"],"receipt_sha256":d,"purpose":"FRAMEWORK_PROVING_ONLY","promotion":"NOT_AUTHORIZED"}
