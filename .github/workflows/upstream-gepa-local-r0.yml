@@ -1,0 +1,91 @@
+name: GEPA local reflective optimizer R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/upstream-gepa-local-r0.yml'
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Install pinned optimizer and provider
+        run: |
+          python3 -m venv "$RUNNER_TEMP/gepa"
+          "$RUNNER_TEMP/gepa/bin/pip" install --disable-pip-version-check 'git+https://github.com/gepa-ai/gepa.git@8b0ce6cd99a234f6b74daf37558a2ac0ce18f975'
+          "$RUNNER_TEMP/gepa/bin/pip" freeze > dependencies.txt
+          mkdir -p "$RUNNER_TEMP/ollama"
+          curl -fLsS --retry 3 https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-linux-amd64.tar.zst -o "$RUNNER_TEMP/ollama.tar.zst"
+          echo "f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034  $RUNNER_TEMP/ollama.tar.zst" | sha256sum -c -
+          zstd -dc "$RUNNER_TEMP/ollama.tar.zst" | tar -xf - -C "$RUNNER_TEMP/ollama"
+      - name: Actual local reflection and held-out outcome screen
+        env:
+          OLLAMA_HOST: 127.0.0.1:11434
+          OLLAMA_NUM_PARALLEL: '1'
+          OLLAMA_CONTEXT_LENGTH: '8192'
+        run: |
+          export PATH="$RUNNER_TEMP/ollama/bin:$PATH"
+          export OLLAMA_MODELS="$RUNNER_TEMP/models"
+          ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 1; done
+          ollama pull qwen3:1.7b
+          "$RUNNER_TEMP/gepa/bin/python" - <<'PY'
+          import json, urllib.request, time, hashlib, importlib.metadata
+          import gepa
+          from gepa.core.adapter import EvaluationBatch
+          base="http://127.0.0.1:11434"
+          digest="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+          with urllib.request.urlopen(base+"/api/tags",timeout=10) as r:
+              assert any(m["name"]=="qwen3:1.7b" and m["digest"].removeprefix("sha256:")==digest for m in json.load(r)["models"])
+          calls=[]
+          def generate(prompt, role):
+              if len(calls)>=32: raise RuntimeError("hard inference budget reached")
+              if not isinstance(prompt,str) or len(prompt)>24000: raise ValueError("prompt bound")
+              start=time.perf_counter()
+              req=urllib.request.Request(base+"/api/generate",data=json.dumps({"model":"qwen3:1.7b","prompt":prompt,"stream":False,"think":False,"options":{"temperature":0,"seed":19,"num_predict":256 if role=="reflection" else 48,"num_ctx":8192}}).encode(),headers={"Content-Type":"application/json"})
+              with urllib.request.urlopen(req,timeout=90) as r: out=json.load(r)
+              calls.append({"role":role,"wall_s":time.perf_counter()-start,**{k:out.get(k) for k in ("prompt_eval_count","eval_count","prompt_eval_duration","eval_duration","load_duration")}})
+              return out["response"].strip()
+          def task(n):
+              return {"input":f"Record: id=R{n}; COLOR=shade{n}; STATUS=ready. Extract COLOR.","expected":f"shade{n}"}
+          train=[task(n) for n in (11,12,13)]
+          val=[task(n) for n in (21,22)]
+          held=[task(n) for n in (31,32,33,34)]
+          seed={"instruction":"Extract the requested field."}
+          class Adapter:
+              def evaluate(self,batch,candidate,capture_traces=False):
+                  outputs=[]; scores=[]; traces=[]
+                  for x in batch:
+                      answer=generate(candidate["instruction"]+"\n"+x["input"],"task")
+                      outputs.append(answer); scores.append(float(answer==x["expected"]))
+                      traces.append({"Inputs":x["input"],"Generated Outputs":answer,"Feedback":"Exact match" if scores[-1] else "Expected exact field value only: "+x["expected"]})
+                  return EvaluationBatch(outputs=outputs,scores=scores,trajectories=traces if capture_traces else None)
+              def make_reflective_dataset(self,candidate,eval_batch,components_to_update):
+                  return {k:eval_batch.trajectories for k in components_to_update}
+          adapter=Adapter()
+          receipt={"source":"8b0ce6cd99a234f6b74daf37558a2ac0ce18f975","version":importlib.metadata.version("gepa"),"model_digest":digest,"scope":"toy exact-match task, not native agent qualification","status":"ERROR"}
+          try:
+              result=gepa.optimize(seed_candidate=seed,trainset=train,valset=val,adapter=adapter,reflection_lm=lambda prompt:generate(prompt,"reflection"),max_metric_calls=12,skip_perfect_score=False,seed=19,display_progress_bar=False,raise_on_exception=True)
+              best=result.best_candidate
+              receipt["candidate_sha256"]=hashlib.sha256(best["instruction"].encode()).hexdigest()
+              receipt["optimizer_calls"]=len(calls)
+              before=adapter.evaluate(held,seed)
+              after=adapter.evaluate(held,best)
+              receipt.update(status="OBSERVED",heldout_original=before.scores,heldout_optimized=after.scores)
+          finally:
+              receipt["calls"]=calls
+              with open("gepa-receipt.json","w") as f: json.dump(receipt,f,indent=2)
+              print("GEPA_RECEIPT="+json.dumps(receipt))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: gepa-r0
+          path: |
+            gepa-receipt.json
+            dependencies.txt
+          retention-days: 7
