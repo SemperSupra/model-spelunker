@@ -1,0 +1,113 @@
+name: FastMCP model-backed schema crossover R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/upstream-fastmcp-model-r0.yml'
+permissions:
+  contents: read
+jobs:
+  model:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Install pinned native components
+        run: |
+          python3 -m venv "$RUNNER_TEMP/fm"
+          "$RUNNER_TEMP/fm/bin/pip" install --disable-pip-version-check 'git+https://github.com/PrefectHQ/fastmcp.git@92f4c503cdbf9546f6ac1e251364a2b5a92e35ea'
+          "$RUNNER_TEMP/fm/bin/pip" freeze > dependencies.txt
+          mkdir -p "$RUNNER_TEMP/ollama"
+          curl -fLsS --retry 3 https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-linux-amd64.tar.zst -o "$RUNNER_TEMP/ollama.tar.zst"
+          echo "f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034  $RUNNER_TEMP/ollama.tar.zst" | sha256sum -c -
+          zstd -dc "$RUNNER_TEMP/ollama.tar.zst" | tar -xf - -C "$RUNNER_TEMP/ollama"
+      - name: Paired actual model to MCP execution
+        env:
+          OLLAMA_HOST: 127.0.0.1:11434
+          OLLAMA_NUM_PARALLEL: '1'
+          OLLAMA_CONTEXT_LENGTH: '8192'
+        run: |
+          export PATH="$RUNNER_TEMP/ollama/bin:$PATH"
+          export OLLAMA_MODELS="$RUNNER_TEMP/models"
+          ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 1; done
+          ollama pull qwen3:1.7b
+          "$RUNNER_TEMP/fm/bin/python" - <<'PY'
+          import asyncio, json, time, hashlib, urllib.request, importlib.metadata
+          from fastmcp import FastMCP, Client
+          from fastmcp.server.transforms import ToolTransform
+          from fastmcp.tools.tool_transform import ToolTransformConfig, ArgTransformConfig
+          base="http://127.0.0.1:11434"
+          digest="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+          with urllib.request.urlopen(base+"/api/tags",timeout=10) as r:
+              assert any(m["name"]=="qwen3:1.7b" and m["digest"].removeprefix("sha256:")==digest for m in json.load(r)["models"])
+          receipt={"upstream":"92f4c503cdbf9546f6ac1e251364a2b5a92e35ea","version":importlib.metadata.version("fastmcp"),"model_digest":digest,"scope":"native model plus in-process MCP, not configured-agent qualification","trials":[]}
+          def chat(messages,tools,seed):
+              q={"model":"qwen3:1.7b","messages":messages,"tools":tools,"stream":False,"think":False,"options":{"temperature":0,"seed":seed,"num_predict":120,"num_ctx":8192}}
+              req=urllib.request.Request(base+"/api/chat",data=json.dumps(q).encode(),headers={"Content-Type":"application/json"})
+              with urllib.request.urlopen(req,timeout=90) as r: return json.load(r)
+          async def trial(pair,transformed):
+              target="alpha" if pair%2==0 else "beta"
+              records={"index":"TARGET="+target,"alpha":"VALUE="+hashlib.sha256(f"{pair}:a".encode()).hexdigest()[:12],"beta":"VALUE="+hashlib.sha256(f"{pair}:b".encode()).hexdigest()[:12]}
+              effects=[]
+              server=FastMCP("synthetic")
+              @server.tool
+              def verbose_internal_lookup(query_identifier: str, partition: str="public") -> str:
+                  """Read a synthetic record from a named partition."""
+                  effects.append((query_identifier,partition))
+                  if partition!="public": raise ValueError("partition denied")
+                  return records[query_identifier]
+              if transformed:
+                  server.add_transform(ToolTransform({"verbose_internal_lookup":ToolTransformConfig(name="lookup",description="Read a synthetic record.",arguments={"query_identifier":ArgTransformConfig(name="key"),"partition":ArgTransformConfig(hide=True,default="public")})}))
+              t={"pair":pair,"arm":"transformed" if transformed else "original","calls":[],"tool_errors":0,"final_exact":False,"lineage":False,"status":"FAIL"}
+              start=time.perf_counter()
+              async with Client(server) as client:
+                  listed=await client.list_tools()
+                  tools=[{"type":"function","function":{"name":x.name,"description":x.description,"parameters":x.inputSchema}} for x in listed]
+                  t["schema_bytes"]=len(json.dumps(tools,separators=(",",":")).encode())
+                  messages=[{"role":"system","content":"Use only the listed read tool. Read index, then read the record named by TARGET. Return only its VALUE line. Never guess."},{"role":"user","content":"Look up index, follow its TARGET and return the selected VALUE line."}]
+                  for turn in range(4):
+                      result=chat(messages,tools,19+pair)
+                      t["calls"].append({k:result.get(k) for k in ("prompt_eval_count","eval_count","prompt_eval_duration","eval_duration","load_duration")})
+                      msg=result["message"]
+                      messages.append(msg)
+                      if not msg.get("tool_calls"):
+                          t["final_exact"]=msg.get("content","").strip()==records[target]
+                          break
+                      if len(msg["tool_calls"])!=1:
+                          t["tool_errors"]+=1; break
+                      f=msg["tool_calls"][0]["function"]
+                      try:
+                          out=await client.call_tool(f["name"],f["arguments"])
+                          content="\n".join(c.text for c in out.content if getattr(c,"type",None)=="text")
+                          if getattr(out,"is_error",False): t["tool_errors"]+=1
+                      except Exception:
+                          t["tool_errors"]+=1; break
+                      messages.append({"role":"tool","tool_name":f["name"],"content":content})
+                  t["lineage"]=effects==[("index","public"),(target,"public")]
+                  t["backend_call_count"]=len(effects)
+                  t["unauthorized_partition"]=any(p!="public" for _,p in effects)
+                  t["status"]="PASS" if t["final_exact"] and t["lineage"] and not t["tool_errors"] else "FAIL"
+              t["elapsed_s"]=time.perf_counter()-start
+              return t
+          async def main():
+              try:
+                  for pair in range(4):
+                      for arm in ((False,True) if pair in (0,3) else (True,False)):
+                          t=await trial(pair,arm);receipt["trials"].append(t)
+                          print("MCP_MODEL_TRIAL="+json.dumps(t),flush=True)
+              finally:
+                  with open("mcp-model-receipt.json","w") as f: json.dump(receipt,f,indent=2)
+              assert len(receipt["trials"])==8
+              assert not any(t["unauthorized_partition"] for t in receipt["trials"])
+          asyncio.run(main())
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: mcp-model-r0
+          path: |
+            mcp-model-receipt.json
+            dependencies.txt
+          retention-days: 7
