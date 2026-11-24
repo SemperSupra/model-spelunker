@@ -2,6 +2,7 @@
 All components are fictional labels; no live capability or authority admission.
 """
 import itertools, json, hashlib, pathlib, sys
+import numpy as np
 from ConfigSpace import ConfigurationSpace, Configuration, Categorical, EqualsCondition, ForbiddenAndConjunction, ForbiddenEqualsClause
 
 def canonical(x):
@@ -48,7 +49,7 @@ def main():
         actual=native_valid(cs,x)
         assert actual==want, (x,want,actual)
         (valid if want else invalid).append(x)
-    samples=[dict(c) for c in cs.sample_configuration(256)]
+    samples=[{k:(v.item() if isinstance(v,np.generic) else v) for k,v in dict(c).items()} for c in cs.sample_configuration(256)]
     assert all(expected(x) for x in samples)
     # Unknown keys, inactive fields and unknown value are explicitly rejected.
     default=dict(cs.get_default_configuration())
