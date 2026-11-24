@@ -68,22 +68,49 @@ func checkValue(d *json.Decoder, depth int) error {
  }
  return nil
 }
+// rejectFieldVariants prevents case-folded aliases of recognized wire fields.
+// Unknown extension fields remain permitted; authoritative fields are exact.
+func rejectFieldVariants(fields map[string]json.RawMessage, names ...string) error {
+ for key:=range fields {
+  for _,name:=range names {
+   if key!=name && strings.EqualFold(key,name) {return errors.New("noncanonical recognized JSON field")}
+  }
+ }
+ return nil
+}
+
 func parseList(raw []byte)([]record,error){
  if len(raw)==0||len(raw)>MaxInputBytes{return nil,errors.New("missing or oversized JSON observation")}
  scanner:=json.NewDecoder(bytes.NewReader(raw))
  if err:=checkValue(scanner,0);err!=nil{return nil,fmt.Errorf("untrusted JSON: %w",err)}
  if _,err:=scanner.Token();err!=io.EOF{return nil,errors.New("trailing JSON data")}
- var envelope struct { Models []record `json:"models"` }
- if err:=json.Unmarshal(raw,&envelope);err!=nil{return nil,err}
- // Empty models are valid; missing models is not a successful observation.
  var root map[string]json.RawMessage
  if err:=json.Unmarshal(raw,&root);err!=nil{return nil,err}
- if _,present:=root["models"];!present||root["models"]==nil||string(root["models"])=="null" {return nil,errors.New("models array missing")}
- if len(envelope.Models)>MaxModels{return nil,errors.New("too many model entries")}
- if bytes.Equal(bytes.TrimSpace(root["models"]),[]byte("[]")) {return []record{},nil}
- if envelope.Models==nil{return nil,errors.New("models must be an array")}
- for _,m:=range envelope.Models {if _,err:=canonicalAlias(m);err!=nil{return nil,err};if err:=validateReportedDigest(m.Digest);err!=nil{return nil,err}}
- return envelope.Models,nil
+ if err:=rejectFieldVariants(root,"models");err!=nil{return nil,err}
+ // Empty models are valid; missing/null models are not observations.
+ models,present:=root["models"]
+ if !present||bytes.Equal(bytes.TrimSpace(models),[]byte("null")){return nil,errors.New("models array missing")}
+ var entries []json.RawMessage
+ if err:=json.Unmarshal(models,&entries);err!=nil{return nil,err}
+ if entries==nil{return nil,errors.New("models must be an array")}
+ if len(entries)>MaxModels{return nil,errors.New("too many model entries")}
+ out:=make([]record,0,len(entries))
+ for _,entry:=range entries {
+  var fields map[string]json.RawMessage
+  if err:=json.Unmarshal(entry,&fields);err!=nil{return nil,err}
+  if fields==nil{return nil,errors.New("model entry must be an object")}
+  if err:=rejectFieldVariants(fields,"name","model","digest");err!=nil{return nil,err}
+  var m record
+  for _,field:=range []struct{name string; target *string}{{"name",&m.Name},{"model",&m.Model},{"digest",&m.Digest}} {
+   if v,ok:=fields[field.name];ok {
+    if err:=json.Unmarshal(v,field.target);err!=nil{return nil,err}
+   }
+  }
+  if _,err:=canonicalAlias(m);err!=nil{return nil,err}
+  if err:=validateReportedDigest(m.Digest);err!=nil{return nil,err}
+  out=append(out,m)
+ }
+ return out,nil
 }
 type record struct {
  Name string `json:"name"`
