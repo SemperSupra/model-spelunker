@@ -1,0 +1,98 @@
+name: serving-fanout-r14-public-M1-MLX-native-phases
+# Real SMALL public MLX model, not M2 Ultra HIL or task qualification.
+on:
+  pull_request:
+    paths:
+      - 'qualification/serving_fanout_r0/mlx_native_r14/**'
+      - '.github/workflows/serving-fanout-r14-mlx-m1-public.yml'
+permissions:
+  contents: read
+jobs:
+  source-oracles:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.host }}
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test independent source-derived phase reduction/manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s qualification/serving_fanout_r0/mlx_native_r14 -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/mlx_native_r14/*.py
+  real-small-mlx-m1:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-15
+    timeout-minutes: 28
+    env:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      HF_HOME: '/tmp/r14-public-hf-cache'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fail closed on non-Apple Silicon / insufficient 7GB M1 runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os,platform,shutil,subprocess
+          ram=int(subprocess.check_output(["sysctl","-n","hw.memsize"]).decode())
+          space=shutil.disk_usage(os.environ["RUNNER_TEMP"]).free
+          print("R14_CAPACITY_PREFLIGHT_ARCH="+platform.machine()+" RAM_GB="+str(round(ram/1e9,2)))
+          assert platform.system()=="Darwin" and platform.machine()=="arm64"
+          assert ram>=6*1024**3 and space>=4*1024**3
+          PY
+      - name: Install provisional MLX native runtime, record resolution
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m venv "$RUNNER_TEMP/r14-venv"
+          source "$RUNNER_TEMP/r14-venv/bin/activate"
+          python3 -m pip install --no-cache-dir -r qualification/serving_fanout_r0/mlx_native_r14/requirements-r14-lock.txt
+          python3 -m pip check
+          python3 - <<'PY'
+          from importlib.metadata import version
+          assert version('mlx-lm')=='0.32.2' and version('mlx')=='0.32.4' and version('huggingface_hub')=='1.33.0'
+          print('R14_OBSERVED_M1_DEPENDENCIES_LOCKED=YES')
+          PY
+          python3 -m pip freeze > /tmp/r14-pip-versions.txt
+          echo "$RUNNER_TEMP/r14-venv/bin" >> "$GITHUB_PATH"
+      - name: Run exact-snapshot Qwen3 0.6B public MLX native phase characterization
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 qualification/serving_fanout_r0/mlx_native_r14/measure.py --models-dir "$RUNNER_TEMP/r14-model" --out /tmp/r14-mlx-observation.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open("/tmp/r14-mlx-observation.json"))
+          assert r["schema"]=="mlx-hosted-m1-phase-r14/v1" and len(r["samples"])==4
+          assert r["model_hf_revision"] and r["model_file_manifest"]["weight_file_count"]>=1
+          assert r['model_hf_revision']=='73e3e38d981303bc594367cd910ea6eb48349da8'
+          assert r['model_file_manifest']['component_manifest_sha256']=='a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d'
+          assert r['release_source_equivalence']=='NOT_PROVEN_FROM_PYPI_PACKAGE_ALONE'
+          assert all(s["prompt_tps_native"]>0 and s["decode_tps_native"]>0 for s in r["samples"])
+          assert r["validated_tasks_per_hour"] is None and r["memory_headroom_for_surge"] is None
+          assert r["hardware_equivalence_to_m2_ultra"]=="NOT_CLAIMED"
+          print("R14_REAL_MLX_N4=PASS native_prompt_TPS="+str([s["prompt_tps_native"] for s in r["samples"]]))
+          print("R14_NATIVE_DECODE_TPS="+str([s["decode_tps_native"] for s in r["samples"]]))
+          print("R14_SURGE_RESERVE=UNKNOWN TASK_GOODPUT=UNKNOWN")
+          PY
+      - name: Preserve bounded evidence even if model run fails
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r14-public-small-mlx
+          path: |
+            /tmp/r14-mlx-observation.json
+            /tmp/r14-pip-versions.txt
+          retention-days: 14
+          if-no-files-found: ignore
