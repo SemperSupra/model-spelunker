@@ -1,0 +1,80 @@
+name: Upstream MIPROv2 offline framework smoke
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/upstream-mipro-offline-r0.yml'
+permissions:
+  contents: read
+jobs:
+  framework:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          repository: stanfordnlp/dspy
+          ref: 4e9db7a83e71e4c36315a2402ae7ffd0c6493404
+          path: upstream
+          persist-credentials: false
+      - name: Materialize source-pinned upstream and dependency inventory
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = 4e9db7a83e71e4c36315a2402ae7ffd0c6493404
+          python3 -m venv "$RUNNER_TEMP/mipro"
+          "$RUNNER_TEMP/mipro/bin/pip" install './upstream[optuna,numpy]'
+          "$RUNNER_TEMP/mipro/bin/pip" check
+          "$RUNNER_TEMP/mipro/bin/pip" freeze > mipro-dependencies.txt
+      - name: Actual upstream compile with deterministic DummyLM, no inference or network
+        run: |
+          "$RUNNER_TEMP/mipro/bin/python" - <<'PY'
+          import hashlib, importlib.metadata, json, socket, time
+          from pathlib import Path
+          from unittest.mock import patch
+          import dspy
+          from dspy.utils.dummies import DummyLM
+          from dspy.teleprompt.mipro_optimizer_v2 import MIPROv2
+          # Explicitly synthetic provider. No model/API/credentials and no hidden task.
+          def deny(*args, **kwargs):
+              raise RuntimeError("network prohibited during offline framework test")
+          def sample(label):
+              return dspy.Example(question=label, answer="OK").with_inputs("question")
+          def metric(example, prediction, trace=None):
+              return example.answer == prediction.answer
+          task=DummyLM([{"answer":"OK"}]*100)
+          proposer=DummyLM([{"proposed_instruction":"Return the literal OK."}]*100)
+          student=dspy.Predict("question -> answer")
+          train=[sample("train A"),sample("train B")]
+          val=[sample("validation A"),sample("validation B")]
+          held=[sample("held-out A"),sample("held-out B")]
+          start=time.monotonic()
+          receipt={"source":"4e9db7a83e71e4c36315a2402ae7ffd0c6493404","version":importlib.metadata.version("dspy"),"scope":"OFFLINE_FRAMEWORK_SMOKE_NOT_MODEL_INFERENCE","actual_inference_calls":0,"status":"ERROR"}
+          try:
+              with patch.object(socket.socket,"connect",deny), patch.object(socket,"create_connection",deny), dspy.context(lm=task):
+                  # Explicit budget rather than the auto preset; no bootstrap/demo confound.
+                  opt=MIPROv2(metric=metric,prompt_model=proposer,task_model=task,
+                      auto=None,num_candidates=2,max_bootstrapped_demos=0,
+                      max_labeled_demos=0,num_threads=1,seed=19,track_stats=True)
+                  compiled=opt.compile(student,trainset=train,valset=val,num_trials=3,
+                      minibatch=False,program_aware_proposer=False,data_aware_proposer=False,
+                      tip_aware_proposer=False,fewshot_aware_proposer=False)
+                  scores=[bool(metric(x,compiled(question=x.question))) for x in held]
+                  assert compiled is not student and all(scores)
+                  assert getattr(compiled,"trial_logs",None)
+                  receipt.update(status="OBSERVED",heldout_control_scores=scores,
+                      trial_log_count=len(compiled.trial_logs),task_history_count=len(task.history),
+                      selected_instruction_sha256=hashlib.sha256(compiled.signature.instructions.encode()).hexdigest())
+          finally:
+              receipt["wall_s"]=time.monotonic()-start
+              Path("mipro-receipt.json").write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
+              print("MIPRO_FRAMEWORK_RECEIPT="+json.dumps(receipt,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: mipro-offline-framework
+          path: |
+            mipro-dependencies.txt
+            mipro-receipt.json
+          if-no-files-found: ignore
+          retention-days: 7
