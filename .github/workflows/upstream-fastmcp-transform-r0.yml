@@ -22,7 +22,7 @@ jobs:
           import asyncio, json, time, importlib.metadata
           from fastmcp import FastMCP, Client
           from fastmcp.server.transforms import ToolTransform
-          from fastmcp.tools.tool_transform import ToolTransformConfig, ArgTransform
+          from fastmcp.tools.tool_transform import ToolTransformConfig, ArgTransformConfig
           async def main():
               receipt={"upstream":"92f4c503cdbf9546f6ac1e251364a2b5a92e35ea","version":importlib.metadata.version("fastmcp"),"cases":[],"scope":"in-process MCP, no model or authorization promotion"}
               for transformed in (False, True):
@@ -35,7 +35,7 @@ jobs:
                       if partition!="public": raise ValueError("partition denied")
                       return "VALUE="+{"alpha":"blue","beta":"green"}[query_identifier]
                   if transformed:
-                      server.add_transform(ToolTransform({"verbose_internal_lookup":ToolTransformConfig(name="lookup",description="Read a synthetic record.",transform_args={"query_identifier":ArgTransform(name="key"),"partition":ArgTransform(hide=True,default="public")})}))
+                      server.add_transform(ToolTransform({"verbose_internal_lookup":ToolTransformConfig(name="lookup",description="Read a synthetic record.",arguments={"query_identifier":ArgTransformConfig(name="key"),"partition":ArgTransformConfig(hide=True,default="public")})}))
                   async with Client(server) as client:
                       ts=await client.list_tools()
                       schema=[t.model_dump(mode="json",exclude_none=True) for t in ts]
@@ -66,6 +66,7 @@ jobs:
               with open("fastmcp-receipt.json","w") as f: json.dump(receipt,f,indent=2)
               print("FASTMCP_RECEIPT="+json.dumps(receipt))
               assert not any(n["private_reached"] for c in receipt["cases"] for n in c["negative"]), "hidden argument reached private partition"
+              assert all(n["disposition"]=="error" and n["backend_calls"]==0 for n in receipt["cases"][1]["negative"] if n["arg_keys"] in (["query_identifier"],["key","partition"])), "transformed legacy or hidden-argument request not rejected before backend"
           asyncio.run(main())
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
