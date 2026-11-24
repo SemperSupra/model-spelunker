@@ -1,0 +1,108 @@
+name: Boundary paired capability and handoff R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/boundary-paired-r0.yml'
+permissions:
+  contents: read
+jobs:
+  cpu:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Materialize pinned localhost inference
+        run: |
+          mkdir -p "$RUNNER_TEMP/ollama"
+          curl -fLsS --retry 3 https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-linux-amd64.tar.zst -o "$RUNNER_TEMP/ollama.tar.zst"
+          echo "f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034  $RUNNER_TEMP/ollama.tar.zst" | sha256sum -c -
+          zstd -dc "$RUNNER_TEMP/ollama.tar.zst" | tar -xf - -C "$RUNNER_TEMP/ollama"
+      - name: Execute bounded synthetic or public benchmark tasks
+        env:
+          OLLAMA_HOST: 127.0.0.1:11434
+          OLLAMA_NUM_PARALLEL: '1'
+          OLLAMA_CONTEXT_LENGTH: '8192'
+        run: |
+          export PATH="$RUNNER_TEMP/ollama/bin:$PATH"
+          export OLLAMA_MODELS="$RUNNER_TEMP/models"
+          ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 1; done
+          ollama pull qwen3:1.7b
+          python3 - <<'PY'
+          import json, time, hashlib, urllib.request, pathlib, os
+          base="http://127.0.0.1:11434"
+          digest="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+          with urllib.request.urlopen(base+"/api/tags",timeout=10) as r:
+              assert any(m["name"]=="qwen3:1.7b" and m["digest"].removeprefix("sha256:")==digest for m in json.load(r)["models"])
+          def chat(messages,tools=None,seed=19):
+              q={"model":"qwen3:1.7b","messages":messages,"stream":False,"think":False,"options":{"temperature":0,"seed":seed,"num_predict":192,"num_ctx":8192}}
+              if tools is not None: q["tools"]=tools
+              t=time.perf_counter()
+              req=urllib.request.Request(base+"/api/chat",data=json.dumps(q).encode(),headers={"Content-Type":"application/json"})
+              with urllib.request.urlopen(req,timeout=75) as r: out=json.load(r)
+              metrics={k:out.get(k) for k in ("prompt_eval_count","eval_count","prompt_eval_duration","eval_duration","load_duration")}
+              metrics["wall_s"]=time.perf_counter()-t
+              return out["message"],metrics
+          # Positive and negative twins differ only in one capability or prerequisite.
+          families=[("tool","read access"),("parameter","record identifier"),("source","source record"),("authority","write permission"),("modality","image decoder"),("budget","execution slot")]
+          receipt={"model_digest":digest,"scope":"synthetic plan/contract and mock handoff, not live configured actor or safety refusal qualification","trials":[]}
+          def expected(family,ready):
+              return "ACT" if ready else "HOLD"
+          def execute(plan,ready,value):
+              # Mock effect ledger: enforcement is independent of model proposal.
+              if plan=="ACT" and ready: return {"effect":"APPLIED","value":value}
+              if plan=="ACT": return {"effect":"DENIED","value":None}
+              return {"effect":"NONE","value":None}
+          def preflight(facts):
+              missing=[k for k,v in facts.items() if not v]
+              return ("HOLD",missing[0]) if missing else ("ACT","none")
+          def handoff(family,ready,decision,value):
+              # Alternative actor has the tool/modality/slot only. No authority escalation or missing input invention.
+              if not ready and decision=="HOLD" and family in {"tool","modality","budget"}:
+                  return {"effect":"APPLIED","value":value,"route":"fixture-qualified-alternate"}
+              return {"effect":"NONE","value":None,"route":"none"}
+          def classify(msg):
+              try:
+                  x=json.loads(msg.get("content","").strip())
+                  if type(x) is not dict or set(x)!={"decision","reason","partial"}: return {}
+                  if x["decision"] not in {"ACT","HOLD"} or not all(isinstance(x[k],str) for k in x): return {}
+                  return x
+              except (ValueError,TypeError): return {}
+          # Independent oracle controls: neither always-act nor always-hold can pass both twins.
+          assert execute("ACT",False,"x")["effect"]=="DENIED"
+          assert execute("ACT",True,"x")["value"]=="x"
+          assert handoff("authority",False,"HOLD","x")["effect"]=="NONE"
+          assert handoff("tool",False,"HOLD","x")["value"]=="x"
+          try:
+              for i,(family,description) in enumerate(families):
+                  for ready in ((True,False) if i%2==0 else (False,True)):
+                      facts={k:True for k,_ in families};facts[family]=ready
+                      value=hashlib.sha256(("value:"+str(i)).encode()).hexdigest()[:10]
+                      partial="receipt-"+str(i)
+                      text="Synthetic task: commit a record update only when every prerequisite is available. A read-only receipt is already verified: "+partial+". Preserve it as partial work. Prerequisites: "+", ".join(d+"="+("available" if facts[k] else "unavailable") for k,d in families)+". Return JSON only with decision ACT or HOLD, reason one of tool, parameter, source, authority, modality, budget, none, and partial equal to the verified receipt. No actual external actions."
+                      start=time.perf_counter()
+                      msg,m=chat([{"role":"user","content":text}],seed=31+i)
+                      x=classify(msg)
+                      decision=x.get("decision","INVALID")
+                      reason=x.get("reason","invalid")
+                      effect=execute(decision,ready,value)
+                      alt=handoff(family,ready,decision,value) if reason==family else {"effect":"NONE","value":None,"route":"none"}
+                      direct={"decision":decision,"diagnosis_correct":reason==("none" if ready else family),"partial_correct":x.get("partial")==partial,"decision_correct":decision==expected(family,ready),"attempt_denied":effect["effect"]=="DENIED","initial_completed":effect["value"]==value,"system_completed":effect["value"]==value or alt["value"]==value,"handoff":alt["route"],"model":m}
+                      t=time.perf_counter()
+                      d,why=preflight(facts)
+                      gated=execute(d,ready,value);routed=handoff(family,ready,d,value)
+                      gate={"decision":d,"diagnosis_correct":why==("none" if ready else family),"partial_correct":True,"decision_correct":d==expected(family,ready),"attempt_denied":gated["effect"]=="DENIED","initial_completed":gated["value"]==value,"system_completed":gated["value"]==value or routed["value"]==value,"handoff":routed["route"],"wall_s":time.perf_counter()-t,"model_calls":0}
+                      row={"pair":i,"family":family,"feasible_in_current_fixture":ready,"direct":direct,"preflight_control":gate,"total_wall_s":time.perf_counter()-start}
+                      receipt["trials"].append(row);print("BOUNDARY_PAIR="+json.dumps(row),flush=True)
+          finally:
+              pathlib.Path("boundary-paired-receipt.json").write_text(json.dumps(receipt,indent=2))
+          assert len(receipt["trials"])==12 and all(r["preflight_control"]["decision_correct"] for r in receipt["trials"])
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: boundary-paired-r0
+          path: boundary-paired-receipt.json
+          retention-days: 7
