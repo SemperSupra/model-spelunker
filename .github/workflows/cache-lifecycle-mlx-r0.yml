@@ -1,4 +1,4 @@
-name: Cache lifecycle R0 MLX native restart
+name: Cache lifecycle R1 MLX diagnostic restart
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-mlx-r0.yml']
@@ -106,11 +106,15 @@ jobs:
               t=time.monotonic()
               result=[]
               first=None
+              top=[]
               for token,logits in generate_step(mx.array(ids),model,prompt_cache=cache,max_tokens=n):
                   mx.eval(logits)
                   if first is None:first=time.monotonic()-t
                   result.append(int(token))
-              return dict(tokens=result,wall_s=time.monotonic()-t,first_s=first,input_ids=ids)
+                  v=logits.reshape(-1).astype(mx.float32)
+                  idx=mx.argsort(v)[-2:]
+                  top.append(dict(ids=idx.tolist(),scores=v[idx].tolist()))
+              return dict(tokens=result,wall_s=time.monotonic()-t,first_s=first,input_ids=ids,top2=top)
           if mode=='seed':
               prefix=tok.encode(('amber cedar pixel vector orbit lunar '*50)+str(rep))
               cache=make_prompt_cache(model)
@@ -125,6 +129,7 @@ jobs:
               row.update(seed=seed,offset=offset,target=target,save_s=time.monotonic()-t)
               row['snapshot_bytes']=(base/'state.safetensors').stat().st_size
               row['snapshot_sha256']=hashlib.sha256((base/'state.safetensors').read_bytes()).hexdigest()
+              row['live']=generate(target[offset:],cache,8)
           else:
               seed=json.loads((base/'seed.json').read_text())
               assert row['pid']!=seed['pid']
@@ -142,6 +147,7 @@ jobs:
           PY
           for i in 0 1 2; do
             python trial.py seed "$i"
+            python trial.py cold2 "$i"
             if [ "$i" = 1 ]; then python trial.py restore "$i"; python trial.py cold "$i"
             else python trial.py cold "$i"; python trial.py restore "$i"; fi
           done
@@ -150,9 +156,13 @@ jobs:
           rows=[]
           for i in range(3):
               root=pathlib.Path(f'rep-{i}')
-              row={a:json.loads((root/(a+'.json')).read_text()) for a in ('seed','cold','restore')}
+              row={a:json.loads((root/(a+'.json')).read_text()) for a in ('seed','cold','cold2','restore')}
               c,r=row['cold']['result'],row['restore']['result']
               row['match']=c['tokens']==r['tokens']
+              row['cold_repeat_match']=c['tokens']==row['cold2']['result']['tokens']
+              row['live_restore_match']=row['seed']['live']['tokens']==r['tokens']
+              row['cold_live_match']=c['tokens']==row['seed']['live']['tokens']
+              print('MLX_DIAGNOSTIC',i,{k:row[k] for k in ('match','cold_repeat_match','live_restore_match','cold_live_match')})
               row['suffix_only']=r['input_ids']==c['input_ids'][row['seed']['offset']:] and len(r['input_ids'])<len(c['input_ids'])
               rows.append(row)
           pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='hosted MLX native continuation witness, no physical target or task-goodput equivalence',workflow_sha=os.environ['GITHUB_SHA'],rows=rows),indent=2))
@@ -161,7 +171,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: mlx-cache-lifecycle-r0
+          name: mlx-cache-lifecycle-r1
           path: |
             ${{ runner.temp }}/cache-mlx/receipt.json
             ${{ runner.temp }}/cache-mlx/rep-*/*.json
