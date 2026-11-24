@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qualification workbench — evidence</title>
+<style>
+:root{color-scheme:light dark;font:16px system-ui;--line:#8886}body{max-width:78rem;margin:auto;padding:1.2rem;line-height:1.5}header{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}h1{font-size:1.6rem;margin:.3rem 0}h2{font-size:1.2rem}label{font-weight:600}select,button{font:inherit;padding:.45rem;border:1px solid var(--line);border-radius:.3rem}button:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #287cbe;outline-offset:3px}.summary{display:flex;gap:1rem;flex-wrap:wrap}.summary div{border:1px solid var(--line);padding:.7rem 1rem;min-width:8rem;border-radius:.4rem}.summary strong{display:block;font-size:1.4rem}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;text-align:left}th,td{padding:.65rem;border-bottom:1px solid var(--line)}pre{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid var(--line);padding:1rem}html[data-theme=light]{color-scheme:light}html[data-theme=dark]{color-scheme:dark}.notice{border-left:4px solid #ad7e18;padding:.4rem 1rem}footer{font-size:.85rem}
+</style></head><body>
+<header><h1>Qualification workbench</h1><label>Appearance <select id="theme"><option>system</option><option>light</option><option>dark</option></select></label></header>
+<p class="notice" id="scope">Framework proving only. No operational promotion or execution authority.</p>
+<section aria-label="Campaign summary" class="summary"><div>Total<strong id="total"></strong></div><div>Accepted controls<strong id="accepted"></strong></div><div>Not accepted<strong id="rejected"></strong></div></section>
+<h2>Evidence</h2><label>Filter outcome <select id="filter"><option value="all">All</option><option value="accepted">Accepted</option><option value="rejected">Not accepted</option></select></label>
+<p id="count" role="status"></p>
+<div class="table-wrap"><table><thead><tr><th scope="col">Run</th><th scope="col">Task</th><th scope="col">Outcome</th><th scope="col">Termination</th><th scope="col">Evidence</th></tr></thead><tbody id="rows"></tbody></table></div>
+<section aria-labelledby="detail-label"><h2 id="detail-label">Receipt identity</h2><pre id="detail" tabindex="0">Select a receipt to inspect its identity.</pre></section>
+<footer>Read-only projection of supplied canonical receipts. No network requests or hidden session state.</footer>
+<script type="application/json" id="snapshot">__SNAPSHOT__</script>
+<script>
+"use strict";
+const data=JSON.parse(document.getElementById("snapshot").textContent);
+const by=id=>document.getElementById(id);
+by("total").textContent=data.summary.total;by("accepted").textContent=data.summary.accepted;by("rejected").textContent=data.summary.not_accepted;
+by("theme").addEventListener("change",()=>document.documentElement.dataset.theme=by("theme").value);
+function render(){
+ const f=by("filter").value;const rows=data.runs.filter(r=>f==="all"||(f==="accepted"?r.accepted:!r.accepted));
+ by("rows").replaceChildren();by("count").textContent=rows.length+" receipts";
+ for(const r of rows){const tr=document.createElement("tr");tr.dataset.runId=r.run_id;
+ for(const value of [r.run_id,r.task,r.accepted?"Accepted":"Not accepted",r.termination]){const td=document.createElement("td");td.textContent=value;tr.append(td)}
+ const td=document.createElement("td");const b=document.createElement("button");b.textContent="Inspect";b.setAttribute("aria-label","Inspect "+r.run_id);b.addEventListener("click",()=>{by("detail").textContent=JSON.stringify(r,null,2);by("detail").focus()});td.append(b);tr.append(td);by("rows").append(tr)}
+}
+by("filter").addEventListener("change",render);render();
+</script></body></html>
