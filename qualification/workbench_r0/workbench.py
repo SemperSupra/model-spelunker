@@ -4,6 +4,7 @@ No service, scheduler, registry, live credentials or qualification promotion.
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 import sys
 
@@ -15,11 +16,19 @@ def canonical(x):
 def load(root):
     if not root.is_dir(): raise ValueError("receipt directory missing")
     rows={}
-    for p in sorted(root.glob("*.json")):
+    paths=sorted(root.glob("*.json"))
+    if len(paths)>1000: raise ValueError("receipt directory exceeds R0 bound")
+    for p in paths:
+        if p.is_symlink() or not p.is_file(): raise ValueError("receipt must be a regular non-symlink file")
+        if p.stat().st_size>2_000_000: raise ValueError("receipt exceeds R0 size bound")
         raw=p.read_bytes(); r=json.loads(raw)
-        if r.get("schema_version") not in (1,2): raise ValueError("unsupported receipt schema")
+        if not isinstance(r,dict) or r.get("schema_version")!=2: raise ValueError("unsupported receipt schema")
+        if (r.get("experiment") or {}).get("claim_type")!="framework-proving": raise ValueError("receipt purpose is not admitted by this framework-only viewer")
         rid=r["run_id"]; obs=r["observation"]
-        if not isinstance(rid,str) or type(obs["success"]) is not bool: raise ValueError("invalid receipt fields")
+        if not isinstance(rid,str) or not rid or type(obs["success"]) is not bool: raise ValueError("invalid receipt fields")
+        if type(obs["wall_seconds"]) not in (int,float) or not math.isfinite(obs["wall_seconds"]) or obs["wall_seconds"]<0: raise ValueError("invalid wall duration")
+        if obs["termination_class"] not in ("semantic-success","semantic-failure","timeout-censored","validator-invalid","execution-incomplete","execution-failure","infrastructure-error","candidate-error"): raise ValueError("unknown termination class")
+        if obs["success"]!=(obs["termination_class"]=="semantic-success"): raise ValueError("inconsistent acceptance and termination")
         d="sha256:"+hashlib.sha256(raw).hexdigest()
         row={"run_id":rid,"task":r["task"]["id"],"candidate":r["candidate"]["harness"]["name"],"accepted":obs["success"],"termination":obs["termination_class"],"wall_seconds":obs["wall_seconds"],"receipt_sha256":d,"purpose":"FRAMEWORK_PROVING_ONLY","promotion":"NOT_AUTHORIZED"}
         if rid in rows and rows[rid]!=row: raise ValueError("divergent duplicate run_id")
@@ -50,7 +59,7 @@ def main():
                 result={"output":str(a.output),"scope":result["scope"],"summary":result["summary"]}
         print(canonical(result))
         return 0
-    except (OSError,ValueError,KeyError,TypeError) as e:
+    except (OSError,ValueError,KeyError,TypeError,AttributeError) as e:
         print(canonical({"error":"INVALID_INPUT","detail":str(e)}),file=sys.stderr)
         return 2
 if __name__=="__main__": sys.exit(main())
