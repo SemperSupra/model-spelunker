@@ -57,6 +57,7 @@ jobs:
           held=[task(n) for n in (31,32,33,34)]
           seed={"instruction":"Extract the requested field."}
           class Adapter:
+              propose_new_texts = None
               def evaluate(self,batch,candidate,capture_traces=False):
                   outputs=[]; scores=[]; traces=[]
                   for x in batch:
@@ -73,9 +74,13 @@ jobs:
               best=result.best_candidate
               receipt["candidate_sha256"]=hashlib.sha256(best["instruction"].encode()).hexdigest()
               receipt["optimizer_calls"]=len(calls)
+              receipt["reflection_calls"]=sum(c["role"]=="reflection" for c in calls)
+              receipt["candidate_changed"]=best!=seed
+              if not receipt["reflection_calls"]: raise RuntimeError("no actual reflective proposal; invalid optimizer experiment")
               before=adapter.evaluate(held,seed)
               after=adapter.evaluate(held,best)
               receipt.update(status="OBSERVED",heldout_original=before.scores,heldout_optimized=after.scores)
+              receipt["seed_sha256"]=hashlib.sha256(seed["instruction"].encode()).hexdigest()
           finally:
               receipt["calls"]=calls
               with open("gepa-receipt.json","w") as f: json.dump(receipt,f,indent=2)
