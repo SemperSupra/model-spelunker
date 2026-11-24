@@ -1,4 +1,4 @@
-name: Actor DOE racing and Pareto R0
+name: Actor DOE racing robustness R1
 on:
   pull_request:
     paths:
@@ -23,11 +23,13 @@ jobs:
       - name: Execute independent synthetic controls
         run: |
           "$RUNNER_TEMP/exp/bin/python" qualification/actor_doe_racing_r0/prove.py evidence
+          "$RUNNER_TEMP/exp/bin/python" qualification/actor_doe_racing_r0/robustness.py robustness-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: actor-doe-racing-r0
           path: |
             evidence
+            robustness-evidence
             dependencies.txt
           retention-days: 7
