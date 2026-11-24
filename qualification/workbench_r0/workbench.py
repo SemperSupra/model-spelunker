@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 
 ROOT=Path(__file__).resolve().parent
-CAPABILITIES={"schema_version":1,"scope":"FRAMEWORK_PROVING_ONLY","commands":{"discover":{"purpose":"Find supported interfaces","side_effects":"none"},"status":{"purpose":"Inspect a bounded receipt directory","side_effects":"none"},"evidence":{"purpose":"Resolve one run receipt and exact SHA-256","side_effects":"none"},"render":{"purpose":"Generate a standalone read-only HTML view","side_effects":"writes requested output file"}},"optional_plan_input":"--intent PATH --spec PATH; preview only, never authorization","optional_resource_input":"--resources PATH; exact receipt binding, coverage and unit-qualified metrics","not_supported":["execution","authorization","operational promotion"],"errors":{"2":"invalid input or unknown evidence"}}
+CAPABILITIES={"schema_version":1,"scope":"FRAMEWORK_PROVING_ONLY","commands":{"discover":{"purpose":"Find supported interfaces","side_effects":"none"},"status":{"purpose":"Inspect a bounded receipt directory","side_effects":"none"},"evidence":{"purpose":"Resolve one run receipt and exact SHA-256","side_effects":"none"},"render":{"purpose":"Generate a standalone read-only HTML view","side_effects":"writes requested output file"}},"optional_native_input":"--native-bundles PATH; source-bound native phase observations","optional_plan_input":"--intent PATH --spec PATH; preview only, never authorization","optional_resource_input":"--resources PATH; exact receipt binding, coverage and unit-qualified metrics","not_supported":["execution","authorization","operational promotion"],"errors":{"2":"invalid input or unknown evidence"}}
 
 def canonical(x):
     return json.dumps(x,sort_keys=True,separators=(",",":"),ensure_ascii=False)
@@ -41,6 +41,7 @@ def main():
     p.add_argument("--receipts",type=Path)
     p.add_argument("--intent",type=Path,help="Current synthetic intent revision")
     p.add_argument("--spec",type=Path,help="Proposed experiment specification")
+    p.add_argument("--native-bundles",type=Path,help="Trusted framework-only native task bundle directories")
     p.add_argument("--resources",type=Path,help="Optional framework-only resource sidecar directory")
     p.add_argument("--run-id")
     p.add_argument("--output",type=Path)
@@ -50,6 +51,9 @@ def main():
         else:
             if not a.receipts: raise ValueError("--receipts required")
             result=load(a.receipts)
+            if a.native_bundles:
+                from native_view import attach as attach_native
+                attach_native(result,a.native_bundles)
             if a.resources:
                 from resource_view import attach
                 attach(result,a.resources)
