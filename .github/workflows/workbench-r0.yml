@@ -1,8 +1,9 @@
-name: Workbench three audience vertical slice R0
+name: Workbench resource integration R2
 on:
   pull_request:
     paths:
       - 'qualification/workbench_r0/**'
+      - 'qualification/resource_join_r0/**'
       - '.github/workflows/workbench-r0.yml'
 permissions:
   contents: read
@@ -28,9 +29,14 @@ jobs:
       - name: Actual browser journeys
         if: runner.os == 'Linux'
         run: python qualification/workbench_r0/browser_proof.py evidence
+      - name: Measured resource integration and browser parity
+        if: runner.os == 'Linux'
+        run: python qualification/workbench_r0/resource_proof.py resource-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: workbench-r0-${{ matrix.os }}
-          path: evidence
+          path: |
+            evidence
+            resource-evidence
           retention-days: 7
