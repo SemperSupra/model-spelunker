@@ -12,7 +12,7 @@ jobs:
   proof:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 22
     env:
       OLLAMA_VERSION: '0.34.1'
       OLLAMA_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
@@ -35,7 +35,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p "$OLLAMA_MODELS"
-          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=2048 ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
           for i in $(seq 1 60); do
             if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
             sleep 1
@@ -48,6 +48,14 @@ jobs:
           python -m pip install playwright==1.51.0
           python -m playwright install chromium
           python qualification/workbench_r0/native_proof.py evidence native-evidence
+      - name: Hydrate exact previously exercised Qwen embodiment source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: a0426d62e282ab24199fe10097abb400aeb46c01
+          path: embodiment-reference
+          persist-credentials: false
+      - name: Actual read-only native reasoning-agent evidence interview
+        run: python qualification/workbench_r0/agent_proof.py native-evidence embodiment-reference agent-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -55,4 +63,5 @@ jobs:
           path: |
             evidence
             native-evidence
+            agent-evidence
           retention-days: 7

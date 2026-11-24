@@ -1,4 +1,4 @@
-name: Workbench adaptive loop R4
+name: Workbench adaptive loop and overhead R7
 on:
   pull_request:
     paths:
@@ -39,9 +39,7 @@ jobs:
       - name: Measured adaptive screen and confirmation
         if: runner.os == 'Linux'
         run: |
-          python -m pip install 'git+https://github.com/optuna/optuna.git@0abf066c1e5d9d83987986869daa3c2bb23df519'
-          python -m pip freeze > adaptive-dependencies.txt
-          python qualification/workbench_r0/adaptive_proof.py adaptive-evidence
+          python qualification/workbench_r0/overhead_proof.py adaptive-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
