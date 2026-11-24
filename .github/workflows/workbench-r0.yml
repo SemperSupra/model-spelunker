@@ -1,4 +1,4 @@
-name: Workbench adaptive loop and overhead R7
+name: Workbench overhead and hydration R8
 on:
   pull_request:
     paths:
@@ -16,7 +16,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
@@ -40,6 +40,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           python qualification/workbench_r0/overhead_proof.py adaptive-evidence
+      - name: Paired independent versus shared dependency hydration
+        if: runner.os == 'Linux'
+        run: python qualification/workbench_r0/hydration_proof.py hydration-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -50,4 +53,5 @@ jobs:
             plan-evidence
             adaptive-evidence
             adaptive-dependencies.txt
+            hydration-evidence
           retention-days: 7
