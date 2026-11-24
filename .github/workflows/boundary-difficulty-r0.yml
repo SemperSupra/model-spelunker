@@ -1,0 +1,89 @@
+name: Boundary graded capability envelope R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/boundary-difficulty-r0.yml'
+permissions:
+  contents: read
+jobs:
+  cpu:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Install pinned localhost runtime
+        run: |
+          mkdir -p "$RUNNER_TEMP/ollama"
+          curl -fLsS --retry 3 https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-linux-amd64.tar.zst -o "$RUNNER_TEMP/ollama.tar.zst"
+          echo "f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034  $RUNNER_TEMP/ollama.tar.zst" | sha256sum -c -
+          zstd -dc "$RUNNER_TEMP/ollama.tar.zst" | tar -xf - -C "$RUNNER_TEMP/ollama"
+      - name: Graded finite dependency problems and missing-data twins
+        env:
+          OLLAMA_HOST: 127.0.0.1:11434
+          OLLAMA_NUM_PARALLEL: '1'
+          OLLAMA_CONTEXT_LENGTH: '8192'
+        run: |
+          export PATH="$RUNNER_TEMP/ollama/bin:$PATH"
+          export OLLAMA_MODELS="$RUNNER_TEMP/models"
+          ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 1; done
+          ollama pull qwen3:1.7b
+          python3 - <<'PY'
+          import json, hashlib, random, urllib.request, time, pathlib
+          base="http://127.0.0.1:11434"
+          digest="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+          with urllib.request.urlopen(base+"/api/tags",timeout=10) as r:
+              assert any(m["name"]=="qwen3:1.7b" and m["digest"].removeprefix("sha256:")==digest for m in json.load(r)["models"])
+          def fixture(depth,seed,missing):
+              rng=random.Random(seed)
+              nodes=rng.sample(range(100,999),depth+1)
+              names=["N"+str(n) for n in nodes]
+              val="V"+hashlib.sha256(f"{depth}:{seed}".encode()).hexdigest()[:8]
+              rows={names[i]:{"next":names[i+1]} for i in range(depth)}
+              rows[names[-1]]={"value":val}
+              for n in rng.sample([n for n in range(100,999) if n not in nodes],5):
+                  rows["N"+str(n)]={"value":"VDECOY"+str(n)}
+              if missing: del rows[names[depth//2]]
+              keys=list(rows);rng.shuffle(keys)
+              return {"start":names[0],"records":{k:rows[k] for k in keys}},("UNKNOWN" if missing else val)
+          def solve(f):
+              k=f["start"];seen=set()
+              while k not in seen:
+                  seen.add(k); r=f["records"].get(k)
+                  if r is None: return "UNKNOWN"
+                  if "value" in r: return r["value"]
+                  k=r["next"]
+              return "UNKNOWN"
+          def run(f,seed):
+              instruction="Follow the next links from start until a value is found. If any required record is absent, output UNKNOWN. Return only the exact value or UNKNOWN. Ignore unrelated records. Data: "+json.dumps(f,separators=(",",":"))
+              q={"model":"qwen3:1.7b","messages":[{"role":"user","content":instruction}],"stream":False,"think":False,"options":{"temperature":0,"seed":seed,"num_predict":96,"num_ctx":8192}}
+              t=time.perf_counter()
+              req=urllib.request.Request(base+"/api/chat",data=json.dumps(q).encode(),headers={"Content-Type":"application/json"})
+              with urllib.request.urlopen(req,timeout=75) as r: out=json.load(r)
+              return out["message"].get("content","").strip(),{"wall_s":time.perf_counter()-t,**{k:out.get(k) for k in ("prompt_eval_count","eval_count","prompt_eval_duration","eval_duration","load_duration")}}
+          assert solve({"start":"A","records":{"A":{"next":"A"}}})=="UNKNOWN"
+          assert solve({"start":"A","records":{"A":{"next":"B"},"B":{"value":"TEST"}}})=="TEST"
+          receipt={"model_digest":digest,"scope":"synthetic dependency reasoning, exact oracle, not general model capability or safety refusal","trials":[]}
+          try:
+              for depth in (1,3,6,12):
+                  for seed in (19,37):
+                      for missing in ((False,True) if seed==19 else (True,False)):
+                          f,want=fixture(depth,seed,missing)
+                          t=time.perf_counter(); control=solve(f); solver_s=time.perf_counter()-t
+                          assert control==want
+                          answer,m=run(f,seed)
+                          kind=("EXACT" if answer==want else "FALSE_ABSTENTION" if answer=="UNKNOWN" else "UNSUPPORTED_ANSWER" if missing else "INCORRECT")
+                          row={"depth":depth,"seed":seed,"missing":missing,"fixture":f,"expected":want,"observed":answer,"class":kind,"accepted":kind=="EXACT","solver_accepted":control==want,"solver_s":solver_s,"metrics":m}
+                          receipt["trials"].append(row); print("BOUNDARY_DEPTH="+json.dumps(row),flush=True)
+          finally:
+              pathlib.Path("boundary-difficulty-receipt.json").write_text(json.dumps(receipt,indent=2))
+          assert len(receipt["trials"])==16
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: boundary-difficulty-r0
+          path: boundary-difficulty-receipt.json
+          retention-days: 7
