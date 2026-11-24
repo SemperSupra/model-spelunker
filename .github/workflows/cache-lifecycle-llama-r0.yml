@@ -1,4 +1,4 @@
-name: Cache lifecycle R0 llama.cpp native restart
+name: Cache lifecycle R1 llama.cpp model switch
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-llama-r0.yml']
@@ -31,7 +31,9 @@ jobs:
           cmake --build build --target llama-server -j 2
           curl --fail --location --retry 2 --max-time 120 https://huggingface.co/ggml-org/test-model-stories260K/resolve/main/stories260K-f32.gguf -o model.gguf
           printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
-          sha256sum build/bin/llama-server model.gguf > identities.txt
+          curl --fail --location --retry 2 --max-time 120 https://huggingface.co/ggml-org/stories15M_MOE/resolve/main/stories15M_MOE-F16.gguf -o model-b.gguf
+          printf '%s  model-b.gguf\n' 1240dfc1957df9f3550dd6c1d9e64b466fc2f452d8bc34bd4e45e1a1e2ca6055 | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf model-b.gguf > identities.txt
           cp upstream/LICENSE upstream-license.txt
       - name: Paired cold and restored continuations across process destruction
         shell: bash
@@ -49,10 +51,10 @@ jobs:
               body=None if data is None else json.dumps(data).encode()
               with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=30) as r:
                   return json.load(r)
-          def start():
+          def start(model='model.gguf'):
               log=open(root/'server.log','ab')
               t=time.monotonic()
-              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','512','-np','1','-t','2','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
+              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/model),'-c','512','-np','1','-t','2','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
               log.close()
               for _ in range(120):
                   if p.poll() is not None: raise RuntimeError('server exited')
@@ -87,10 +89,16 @@ jobs:
               finally:stop(p)
               row=dict(rep=i,seed=seed,save=saved,save_s=save_s,bytes=snapshot.stat().st_size,snapshot_sha=digest,old_pid=old,seed_startup_s=startup,target_tokens=tokens)
               rows.append(row);receipt()
+              b,b_start=start('model-b.gguf')
+              try:
+                  row['model_b']=dict(pid=b.pid,startup_s=b_start,completion=completion('An unrelated story about a dog.',8))
+                  assert b.pid!=old and row['model_b']['completion']['timings']['predicted_n']>0
+              finally:stop(b);receipt()
+              assert hashlib.sha256(snapshot.read_bytes()).hexdigest()==digest
               for arm in (['cold','restore'] if i%2==0 else ['restore','cold']):
                   p,startup=start()
                   try:
-                      assert p.pid!=old
+                      assert p.pid not in (old,row['model_b']['pid'])
                       a=dict(pid=p.pid,startup_s=startup)
                       row[arm]=a
                       if arm=='restore':
@@ -109,7 +117,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-lifecycle-r0
+          name: llama-cache-lifecycle-r1
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
