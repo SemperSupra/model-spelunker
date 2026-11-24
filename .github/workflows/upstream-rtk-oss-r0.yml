@@ -1,0 +1,63 @@
+name: RTK OSS native output filter R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/upstream-rtk-oss-r0.yml'
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Build exact Apache-only upstream
+        run: |
+          git clone --quiet https://github.com/rtk-ai/rtk.git "$RUNNER_TEMP/rtk-src"
+          cd "$RUNNER_TEMP/rtk-src"
+          git checkout --quiet --detach d0f0399a5ff8cd1d81325a033f0b2d8864d665f6
+          test "$(git rev-parse HEAD)" = d0f0399a5ff8cd1d81325a033f0b2d8864d665f6
+          cargo --version
+          cargo tree --locked --no-default-features -p rtk > "$GITHUB_WORKSPACE/dependencies.txt"
+          if grep -E 'rtk-engine v|rtk-proxy v' "$GITHUB_WORKSPACE/dependencies.txt"; then exit 1; fi
+          cargo build --locked --no-default-features -p rtk --bin rtk
+      - name: Actual native filtering and critical information check
+        run: |
+          export RTK_BIN="$RUNNER_TEMP/rtk-src/target/debug/rtk"
+          python3 - <<'PY'
+          import subprocess, tempfile, pathlib, os, time, json, hashlib
+          receipt={"source":"d0f0399a5ff8cd1d81325a033f0b2d8864d665f6","edition":"no-default-features Apache-only candidate","scope":"native command-output filtering, no model inference","cases":[]}
+          exe=os.environ["RTK_BIN"]
+          receipt["binary_sha256"]=hashlib.sha256(pathlib.Path(exe).read_bytes()).hexdigest()
+          receipt["version"]=subprocess.check_output([exe,"--version"],text=True).strip()
+          with tempfile.TemporaryDirectory() as d:
+              p=pathlib.Path(d)
+              env={**os.environ,"HOME":str(p/"home"),"XDG_CONFIG_HOME":str(p/"config"),"XDG_DATA_HOME":str(p/"data"),"NO_COLOR":"1","GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}
+              (p/"home").mkdir()
+              def git(*args): subprocess.run(["git",*args],cwd=d,env=env,check=True,stdout=subprocess.DEVNULL)
+              git("init","-q"); git("config","user.email","fixture@example.invalid"); git("config","user.name","Fixture")
+              for i in range(60): (p/f"file-{i:02}.txt").write_text("baseline\n")
+              (p/"critical.txt").write_text("AUTHORITY=DENY\n")
+              git("add",".");git("commit","-qm","fixture")
+              for i in range(60): (p/f"file-{i:02}.txt").write_text("changed\n")
+              (p/"critical.txt").write_text("AUTHORITY=REVIEW_REQUIRED\n")
+              (p/"untracked-critical.txt").write_text("fixture")
+              def call(cmd):
+                  t=time.perf_counter(); x=subprocess.run(cmd,cwd=d,env=env,capture_output=True,timeout=30)
+                  return {"exit":x.returncode,"bytes":len(x.stdout)+len(x.stderr),"wall_s":time.perf_counter()-t,"output":(x.stdout+x.stderr).decode(errors="replace")}
+              for args,markers in [(["status","--short"],["critical.txt","untracked-critical.txt"]),(["diff","--","critical.txt"],["AUTHORITY=DENY","AUTHORITY=REVIEW_REQUIRED"]),(["diff","--exit-code","--","critical.txt"],["AUTHORITY=REVIEW_REQUIRED"])]:
+                  raw=call(["git",*args]); reduced=call([exe,"git",*args])
+                  receipt["cases"].append({"args":args,"raw_exit":raw["exit"],"filtered_exit":reduced["exit"],"raw_bytes":raw["bytes"],"filtered_bytes":reduced["bytes"],"raw_wall_s":raw["wall_s"],"filtered_wall_s":reduced["wall_s"],"raw_markers":{m:m in raw["output"] for m in markers},"filtered_markers":{m:m in reduced["output"] for m in markers}})
+          receipt["status"]="PASS" if all(c["raw_exit"]==c["filtered_exit"] and all(c["raw_markers"].values()) and all(c["filtered_markers"].values()) for c in receipt["cases"]) else "FAIL"
+          pathlib.Path("rtk-oss-receipt.json").write_text(json.dumps(receipt,indent=2))
+          print("RTK_OSS="+json.dumps(receipt))
+          assert receipt["status"]=="PASS"
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: rtk-oss-r0
+          path: |
+            dependencies.txt
+            rtk-oss-receipt.json
+          retention-days: 7
