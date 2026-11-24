@@ -9,7 +9,7 @@ jobs:
   framework:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
@@ -69,6 +69,142 @@ jobs:
               Path("mipro-receipt.json").write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
               print("MIPRO_FRAMEWORK_RECEIPT="+json.dumps(receipt,sort_keys=True))
           PY
+      - name: Local model transport and bounded optimizer proof
+        env:
+          OLLAMA_HOST: 127.0.0.1:11434
+          OLLAMA_NUM_PARALLEL: '1'
+          OLLAMA_CONTEXT_LENGTH: '8192'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ollama" "$RUNNER_TEMP/models"
+          curl -fLsS --retry 3 https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-linux-amd64.tar.zst -o "$RUNNER_TEMP/ollama.tar.zst"
+          echo "f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034  $RUNNER_TEMP/ollama.tar.zst" | sha256sum -c -
+          zstd -dc "$RUNNER_TEMP/ollama.tar.zst" | tar -xf - -C "$RUNNER_TEMP/ollama"
+          export PATH="$RUNNER_TEMP/ollama/bin:$PATH"
+          export OLLAMA_MODELS="$RUNNER_TEMP/models"
+          ollama serve >"$RUNNER_TEMP/ollama.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null
+          ollama pull qwen3:1.7b
+          "$RUNNER_TEMP/mipro/bin/python" - <<'PY'
+          import hashlib, http.client, importlib.metadata, json, time
+          from pathlib import Path
+          import dspy
+          from dspy.clients.engines.base import validate_request
+          from dspy.lm15 import Message, Response, TextPart, Usage
+          from dspy.teleprompt.mipro_optimizer_v2 import MIPROv2
+          MODEL="qwen3:1.7b"
+          DIGEST="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"
+          calls=[]
+          phase="prepare"
+          def local(method, path, payload=None):
+              assert path in ("/api/tags","/api/chat")
+              c=http.client.HTTPConnection("127.0.0.1",11434,timeout=90)
+              try:
+                  c.request(method,path,None if payload is None else json.dumps(payload),{"Content-Type":"application/json"})
+                  r=c.getresponse()
+                  if r.status!=200: raise RuntimeError("local provider HTTP "+str(r.status))
+                  return json.loads(r.read(4*1024*1024))
+              finally:
+                  c.close()
+          def text_parts(parts):
+              if any(not isinstance(p,TextPart) for p in parts):
+                  raise ValueError("non-text request outside smoke envelope")
+              return "".join(p.text for p in parts)
+          class LocalEngine:
+              supported_params={"temperature","max_tokens"}
+              def __init__(self,role):
+                  self.role=role
+              def complete(self,request):
+                  validate_request(request)
+                  if request.tools or request.config.response_format or request.config.reasoning or request.config.cache or request.config.extensions:
+                      raise ValueError("unsupported request outside text-only test contract")
+                  messages=[]
+                  if request.system is not None:
+                      messages.append({"role":"system","content":request.system if isinstance(request.system,str) else text_parts(request.system)})
+                  for m in request.messages:
+                      if m.role not in ("user","assistant","system"):
+                          raise ValueError("unsupported role")
+                      messages.append({"role":m.role,"content":text_parts(m.parts)})
+                  if len(json.dumps(messages).encode())>24000 or len(calls)>=40:
+                      raise RuntimeError("bounded inference budget reached")
+                  temperature=request.config.temperature
+                  maximum=min(request.config.max_tokens or 256,384 if self.role=="proposal" else 96)
+                  entry={"phase":phase,"role":self.role,"status":"ATTEMPTED"}
+                  calls.append(entry)
+                  start=time.monotonic()
+                  try:
+                      out=local("POST","/api/chat",{"model":MODEL,"messages":messages,"stream":False,"think":False,
+                          "options":{"temperature":0 if temperature is None else temperature,"seed":19,"num_predict":maximum,"num_ctx":8192}})
+                      if out.get("model")!=MODEL or not out.get("done"):
+                          raise RuntimeError("invalid local response")
+                      entry.update(status="OBSERVED",**{k:out.get(k) for k in ("prompt_eval_count","eval_count","prompt_eval_duration","eval_duration","load_duration","total_duration")})
+                      return Response(id=None,model=request.model,message=Message.assistant([TextPart(out["message"]["content"])]),
+                          finish_reason="length" if out.get("done_reason")=="length" else "stop",
+                          usage=Usage(input_tokens=out.get("prompt_eval_count"),output_tokens=out.get("eval_count")))
+                  finally:
+                      entry["wall_s"]=time.monotonic()-start
+          def sample(n,shape):
+              color=f"shade{n}"
+              if shape=="standard":
+                  q=f"Record: id=R{n}; COLOR={color}; STATUS=ready. Extract COLOR."
+                  expected=color
+              else:
+                  q=f"STATUS=pending; COLOR={color}; id=R{n}. Extract STATUS."
+                  expected="pending"
+              return dspy.Example(question=q,answer=expected).with_inputs("question")
+          def metric(e,p,trace=None):
+              return getattr(p,"answer",None)==e.answer
+          def program(instruction):
+              return dspy.Predict(dspy.Signature("question -> answer",instructions=instruction))
+          def evaluate(p,items):
+              return [bool(metric(x,p(question=x.question))) for x in items]
+          original="Extract the requested field."
+          strong="Return exactly the value of the requested field, without its name or any other text."
+          train=[sample(n,"standard") for n in (11,12,13)]
+          val=[sample(n,"standard") for n in (21,22)]
+          held=[sample(31,"standard"),sample(32,"standard"),sample(41,"transfer"),sample(42,"transfer")]
+          receipt={"scope":"PUBLIC_SYNTHETIC_MODEL_BACKED_TRANSPORT_PROOF","source":"4e9db7a83e71e4c36315a2402ae7ffd0c6493404",
+              "model_digest":DIGEST,"version":importlib.metadata.version("dspy"),"status":"ERROR",
+              "heldout_shapes":["standard","standard","transfer","transfer"],"candidate_budget":2,"trial_budget":3,"request_cap":40}
+          try:
+              assert any(m["name"]==MODEL and m["digest"].removeprefix("sha256:")==DIGEST for m in local("GET","/api/tags")["models"])
+              task=dspy.LM("local/"+MODEL,model_type="chat",engine=LocalEngine("task"),cache=False,num_retries=0,temperature=0,max_tokens=96)
+              proposer=dspy.LM("local/"+MODEL,model_type="chat",engine=LocalEngine("proposal"),cache=False,num_retries=0,temperature=0,max_tokens=384)
+              student=program(original)
+              with dspy.context(lm=task):
+                  phase="optimizer"
+                  opt=MIPROv2(metric=metric,prompt_model=proposer,task_model=task,
+                      auto=None,num_candidates=2,max_bootstrapped_demos=0,max_labeled_demos=0,
+                      num_threads=1,seed=19,track_stats=True,max_errors=1)
+                  compiled=opt.compile(student,trainset=train,valset=val,num_trials=3,minibatch=False,
+                      program_aware_proposer=False,data_aware_proposer=False,tip_aware_proposer=False,fewshot_aware_proposer=False)
+                  selected=compiled.signature.instructions
+                  assert isinstance(selected,str) and 0<len(selected)<=24000
+                  assert any(c["role"]=="proposal" and c["status"]=="OBSERVED" for c in calls)
+                  Path("mipro-public-candidate.json").write_text(json.dumps({"instruction":selected,"seed":original},indent=2)+"\n")
+                  receipt["candidate_sha256"]=hashlib.sha256(selected.encode()).hexdigest()
+                  receipt["candidate_changed"]=selected!=original
+                  receipt["trial_log_count"]=len(compiled.trial_logs)
+                  # Fixed order documented; do not interpret timing as counterbalanced.
+                  phase="original"
+                  receipt["heldout_original"]=evaluate(program(original),held)
+                  phase="fixed"
+                  receipt["heldout_fixed"]=evaluate(program(strong),held)
+                  phase="optimized"
+                  receipt["heldout_optimized"]=evaluate(compiled,held)
+                  assert len(calls)<=40
+                  receipt["status"]="OBSERVED"
+          except Exception as e:
+              receipt["error_class"]=type(e).__name__
+              raise
+          finally:
+              receipt["calls"]=calls
+              Path("mipro-native-receipt.json").write_text(json.dumps(receipt,sort_keys=True,indent=2)+"\n")
+              print("MIPRO_NATIVE_RECEIPT="+json.dumps(receipt,sort_keys=True))
+          PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -76,5 +212,7 @@ jobs:
           path: |
             mipro-dependencies.txt
             mipro-receipt.json
+            mipro-native-receipt.json
+            mipro-public-candidate.json
           if-no-files-found: ignore
           retention-days: 7
