@@ -1,0 +1,119 @@
+name: Qualification media-fidelity controls R0
+on:
+  pull_request:
+    paths:
+      - 'qualification/media_fidelity_r0/**'
+      - '.github/workflows/qualification-media-fidelity-r0.yml'
+permissions:
+  contents: read
+jobs:
+  proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - run: python qualification/media_fidelity_r0/prove.py proof-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: media-fidelity-r0-${{ matrix.os }}
+          path: proof-evidence
+          retention-days: 7
+  encoded-av:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Resolve codec prerequisites on disposable public runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -q
+            version="$(apt-cache policy ffmpeg | awk '/Candidate:/ {print $2; exit}')"
+            test -n "$version" && test "$version" != "(none)"
+            sudo apt-get install -y --no-install-recommends "ffmpeg=$version"
+          fi
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+      - name: Actual lossless encoded-media validation
+        run: python3 qualification/media_fidelity_r0/encoded_av.py encoded-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: encoded-av-r0-ubuntu
+          path: encoded-evidence
+          retention-days: 7
+  speech-evaluator:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Resolve signed public speech reference dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends 'espeak-ng=1.51+dfsg-12build1' 'python3-pocketsphinx=1:0.1.15-3build3' 'pocketsphinx-en-us=0.8.0+real5prealpha+1-15ubuntu5' ffmpeg
+          /usr/bin/python3 -c 'import pocketsphinx; print(pocketsphinx.get_model_path())'
+      - name: Actual speech synthesis and independent recognition controls
+        run: /usr/bin/python3 qualification/media_fidelity_r0/speech_calibration.py speech-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: speech-evaluator-r0-ubuntu
+          path: speech-evidence
+          retention-days: 7
+  human-speech-reference:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Hydrate public pinned top-level dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends 'python3-pocketsphinx=1:0.1.15-3build3' 'pocketsphinx-en-us=0.8.0+real5prealpha+1-15ubuntu5' ffmpeg python3-venv
+          /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/asr-env"
+          "$RUNNER_TEMP/asr-env/bin/pip" install --disable-pip-version-check 'faster-whisper==1.2.1' 'pyarrow==19.0.1' 'ctranslate2==4.6.0' 'huggingface-hub==0.34.4' 'tokenizers==0.21.4' 'numpy==1.26.4' 'av==14.2.0' 'onnxruntime==1.22.1'
+          "$RUNNER_TEMP/asr-env/bin/pip" check
+          "$RUNNER_TEMP/asr-env/bin/python" -c 'import faster_whisper,ctranslate2; print("reference imports available",ctranslate2.__version__)'
+      - name: Verify public corpus and offline model identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --max-time 120 --retry 2 'https://huggingface.co/datasets/hf-internal-testing/librispeech_asr_dummy/resolve/main/clean/validation-00000-of-00001.parquet' -o "$RUNNER_TEMP/asr.parquet"
+          echo "4e69a06fa5edc90921e5e7e39a7084881f8b3ed9c805c574f4f39c6fde27c603  $RUNNER_TEMP/asr.parquet" | sha256sum -c -
+          "$RUNNER_TEMP/asr-env/bin/python" -c 'import os; from huggingface_hub import snapshot_download; snapshot_download(repo_id="Systran/faster-whisper-tiny.en",revision="2919638eccc5115566830024836f1ce314e8b72a",allow_patterns=["model.bin","config.json","tokenizer.json","vocabulary.txt","README.md"],local_dir=os.environ["RUNNER_TEMP"]+"/asr-model")'
+          echo "1a5afae06a4db91c975c9a9d78be5cc110ee4ea022ad57d55492e4550e936b2a  $RUNNER_TEMP/asr-model/model.bin" | sha256sum -c -
+      - name: Paired recognizer comparison on corpus-aligned speech
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/asr-env/bin/python" qualification/media_fidelity_r0/human_speech_reference.py "$RUNNER_TEMP/asr.parquet" "$RUNNER_TEMP/asr-model" human-asr-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: human-asr-reference-r1-ubuntu
+          path: human-asr-evidence
+          retention-days: 7
