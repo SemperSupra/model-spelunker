@@ -1,7 +1,7 @@
-name: Cache lifecycle R3 OCI external state
+name: Cache lifecycle R5 Compose external state
 on:
   pull_request:
-    paths: ['.github/workflows/cache-lifecycle-oci-r2.yml']
+    paths: ['.github/workflows/cache-lifecycle-oci-r2.yml', 'deploy/cache-lifecycle-r5/**']
 permissions:
   contents: read
 jobs:
@@ -54,23 +54,29 @@ jobs:
           cd "$RUNNER_TEMP/cache-r0"
           python3 - <<'PY'
           import hashlib,json,os,pathlib,subprocess,time,urllib.request
-          import uuid
           root=pathlib.Path.cwd()
           (root/'slots').mkdir()
+          os.environ.update(CACHE_IMAGE='cache-lifecycle-r2:local',CACHE_UID=str(os.getuid()),CACHE_GID=str(os.getgid()),CACHE_MODEL=str(root/'model.gguf'),CACHE_STATE=str(root/'slots'))
+          compose=['docker','compose','-p','cache-lifecycle-r5','-f',str(pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'deploy/cache-lifecycle-r5/compose.yml')]
+          (root/'compose-config.json').write_text(subprocess.check_output(compose+['config','--format','json'],text=True))
           rows=[]
           def receipt():
-              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],scope='OCI lifecycle witness only, base resolved and digest-bound within run, not prelocked across runs, not agent or GPU qualification',rows=rows),indent=2))
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],scope='Compose lifecycle witness only, base resolved and digest-bound within run; not native TrueNAS or Quadlet qualification',rows=rows),indent=2))
           def req(path,data=None):
               body=None if data is None else json.dumps(data).encode()
               with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=30) as r:
                   return json.load(r)
           def start():
               t=time.monotonic()
-              name='cache-r2-'+uuid.uuid4().hex[:12]
-              cid=subprocess.check_output(['docker','run','-d','--name',name,'--read-only','--cap-drop=ALL','--security-opt=no-new-privileges','--user',f'{os.getuid()}:{os.getgid()}','--tmpfs','/tmp:rw,nosuid,nodev,size=64m','-p','127.0.0.1:18081:18081','--mount',f'type=bind,src={root}/model.gguf,dst=/model.gguf,readonly','--mount',f'type=bind,src={root}/slots,dst=/slots','cache-lifecycle-r2:local','-m','/model.gguf','-c','512','-np','1','-t','2','--host','0.0.0.0','--port','18081','--slot-save-path','/slots'],text=True).strip()
+              subprocess.run(compose+['up','-d','--no-build','--force-recreate'],check=True)
+              cid=subprocess.check_output(compose+['ps','-q','inference'],text=True).strip()
+              assert cid
               p=type('Container',(),{'pid':cid})()
               state=json.loads(subprocess.check_output(['docker','inspect',cid],text=True))[0]
-              assert state['HostConfig']['ReadonlyRootfs'] and state['Config']['User']!='0'
+              assert state['Image']==(root/'image-id.txt').read_text().strip()
+              assert state['HostConfig']['ReadonlyRootfs'] and state['Config']['User']==f'{os.getuid()}:{os.getgid()}'
+              assert 'ALL' in state['HostConfig']['CapDrop']
+              assert state['HostConfig']['PortBindings']['18081/tcp'][0]['HostIp']=='127.0.0.1'
               assert len([m for m in state['Mounts'] if m['Destination']=='/slots' and m['RW']])==1
               for _ in range(120):
                   if subprocess.check_output(['docker','inspect','--format','{{.State.Running}}',p.pid],text=True).strip()!='true':
@@ -83,7 +89,7 @@ jobs:
               raise RuntimeError('readiness timeout')
           def stop(p):
               with open(root/'server.log','ab') as log:subprocess.run(['docker','logs',p.pid],stdout=log,stderr=log,check=False)
-              subprocess.run(['docker','rm','-f',p.pid],check=True,stdout=subprocess.DEVNULL)
+              subprocess.run(compose+['down','--timeout','3'],check=True,stdout=subprocess.DEVNULL)
               assert subprocess.run(['docker','inspect',p.pid],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode!=0
           def completion(prompt,n):
               t=time.monotonic()
@@ -129,12 +135,13 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-oci-r3
+          name: llama-cache-compose-r5
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
             ${{ runner.temp }}/cache-r0/image-id.txt
             ${{ runner.temp }}/cache-r0/base-digest.txt
+            ${{ runner.temp }}/cache-r0/compose-config.json
             ${{ runner.temp }}/cache-r0/upstream-license.txt
             ${{ runner.temp }}/cache-r0/server.log
           if-no-files-found: warn
