@@ -1,4 +1,4 @@
-name: Cache lifecycle R6 rootless Quadlet external state
+name: Cache lifecycle R7 corrected rootless Quadlet external state
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-quadlet-r6.yml']
@@ -62,6 +62,10 @@ jobs:
           docker image inspect cache-lifecycle-r2:local --format '{{.Id}}' > image-id.txt
           docker save cache-lifecycle-r2:local -o image.tar
           podman load -i image.tar
+          expected=$(sed 's/^sha256://' image-id.txt)
+          imported=$(podman image inspect "$expected" --format '{{.Id}}')
+          test "${imported#sha256:}" = "$expected"
+          podman tag "$imported" localhost/cache-lifecycle-r2:local
           podman image inspect localhost/cache-lifecycle-r2:local --format '{{.Id}}' > podman-image-id.txt
           test "$(sed 's/^sha256://' image-id.txt)" = "$(sed 's/^sha256://' podman-image-id.txt)"
           rm image.tar
@@ -175,7 +179,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-quadlet-r6
+          name: llama-cache-quadlet-r7
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
