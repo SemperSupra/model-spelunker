@@ -30,17 +30,26 @@ jobs:
   encoded-av:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Actual lossless encoded-media validation
+      - name: Resolve codec prerequisites on disposable public runner
+        shell: bash
         run: |
-          command -v ffmpeg
-          command -v ffprobe
-          python3 qualification/media_fidelity_r0/encoded_av.py encoded-evidence
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -q
+            version="$(apt-cache policy ffmpeg | awk '/Candidate:/ {print $2; exit}')"
+            test -n "$version" && test "$version" != "(none)"
+            sudo apt-get install -y --no-install-recommends "ffmpeg=$version"
+          fi
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+      - name: Actual lossless encoded-media validation
+        run: python3 qualification/media_fidelity_r0/encoded_av.py encoded-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
