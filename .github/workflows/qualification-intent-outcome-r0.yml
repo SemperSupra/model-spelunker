@@ -1,0 +1,29 @@
+name: Qualification intent-outcome controls R0
+on:
+  pull_request:
+    paths:
+      - 'qualification/intent_outcome_r0/**'
+      - '.github/workflows/qualification-intent-outcome-r0.yml'
+permissions:
+  contents: read
+jobs:
+  proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - run: python qualification/intent_outcome_r0/prove.py proof-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: intent-outcome-r0-${{ matrix.os }}
+          path: proof-evidence
+          retention-days: 7
