@@ -1,4 +1,4 @@
-name: Cache lifecycle R5 MLX intermediate prefill screen
+name: Cache lifecycle R6 MLX held-out context screen
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-mlx-r0.yml']
@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        prefill: [16, 64, 256]
+        prefill: [16, 256]
     runs-on: macos-15
     timeout-minutes: 25
     env:
@@ -122,7 +122,7 @@ jobs:
                   top.append(dict(ids=idx.tolist(),scores=v[idx].tolist()))
               return dict(tokens=result,wall_s=time.monotonic()-t,first_s=first,input_ids=ids,top2=top)
           if mode=='seed':
-              prefix=tok.encode(('amber cedar pixel vector orbit lunar '*50)+str(rep))
+              prefix=tok.encode((('violet quartz river copper orbit moss ' if rep%2==0 else 'river silver field harbor willow cloud ')*[23,43,87,129,191,257][rep])+str(rep))
               cache=make_prompt_cache(model)
               seed=generate(prefix,cache,4)
               offsets=[int(c.offset) for c in cache]
@@ -159,7 +159,7 @@ jobs:
               row['result']=generate(ids,cache,8)
           (base/(mode+'.json')).write_text(json.dumps(row,indent=2))
           PY
-          for i in 0 1 2; do
+          for i in 0 1 2 3 4 5; do
             python trial.py seed "$i"
             python trial.py cold2 "$i"
             python trial.py replay "$i"
@@ -169,7 +169,7 @@ jobs:
           python - <<'PY'
           import json,pathlib,os
           rows=[]
-          for i in range(3):
+          for i in range(6):
               root=pathlib.Path(f'rep-{i}')
               row={a:json.loads((root/(a+'.json')).read_text()) for a in ('seed','cold','cold2','restore','replay')}
               c,r=row['cold']['result'],row['restore']['result']
@@ -183,13 +183,13 @@ jobs:
               print('MLX_DIAGNOSTIC',i,{k:row[k] for k in ('match','cold_repeat_match','live_restore_match','cold_live_match','replay_restore_match','replay_scores_match','resident_scores_match')})
               row['suffix_only']=r['input_ids']==c['input_ids'][row['seed']['offset']:] and len(r['input_ids'])<len(c['input_ids'])
               rows.append(row)
-          pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='hosted MLX native continuation witness, no physical target or task-goodput equivalence',workflow_sha=os.environ['GITHUB_SHA'],prefill_step_size=int(os.environ['PREFILL_STEP']),rows=rows),indent=2))
-          assert all(r['match'] and r['suffix_only'] and r['replay_restore_match'] and r['replay_scores_match'] and r['resident_scores_match'] for r in rows)
+          pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='hosted MLX held-out context and vocabulary continuation witness, no physical target or task-goodput equivalence',workflow_sha=os.environ['GITHUB_SHA'],prefill_step_size=int(os.environ['PREFILL_STEP']),rows=rows),indent=2))
+          assert len(rows)==6 and all(r['match'] and r['cold_repeat_match'] and r['suffix_only'] and r['replay_restore_match'] and r['replay_scores_match'] and r['resident_scores_match'] for r in rows)
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: mlx-cache-lifecycle-r5-${{ matrix.prefill }}
+          name: mlx-cache-lifecycle-r6-${{ matrix.prefill }}
           path: |
             ${{ runner.temp }}/cache-mlx/receipt.json
             ${{ runner.temp }}/cache-mlx/rep-*/*.json
