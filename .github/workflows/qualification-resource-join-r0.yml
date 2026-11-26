@@ -1,4 +1,4 @@
-name: Qualification resource receipt join R0
+name: Qualification resource and sensor overhead R1
 on:
   pull_request:
     paths:
@@ -21,4 +21,19 @@ jobs:
         with:
           name: resource-join-r0
           path: evidence
+          retention-days: 7
+  sensor-overhead:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - run: python qualification/resource_join_r0/sensor_overhead.py sensor-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: resource-sensor-overhead-r1
+          path: sensor-evidence
           retention-days: 7
