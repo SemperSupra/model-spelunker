@@ -1,4 +1,4 @@
-name: Cache lifecycle R7 native crash publication recovery
+name: Cache lifecycle R8 bounded actual ENOSPC
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-fault-r2.yml']
@@ -229,14 +229,66 @@ jobs:
               (root/'crash-receipt.json').write_text(json.dumps(dict(scope='process kill and preflight quota refusal only; not power loss or real ENOSPC',workflow_sha=os.environ['GITHUB_SHA'],cases=crash),indent=2))
               assert witness['output_match'] and witness['prefill_reduced']
           assert len(crash)==5
+
+          # Actual ENOSPC: a dedicated capped tmpfs, never fill the runner disk.
+          import errno,shutil
+          pressure=root/'pressure'
+          pressure.mkdir()
+          mount=['sudo','mount','-t','tmpfs','-o',f'size=256k,mode=0700,uid={os.getuid()},gid={os.getgid()},nosuid,nodev,noexec','tmpfs',str(pressure)]
+          subprocess.run(mount,check=True,timeout=15)
+          try:
+              for meta in snapshots.values():
+                  dest=pressure/meta['filename']
+                  shutil.copyfile(root/'slots'/meta['filename'],dest)
+                  with dest.open('rb') as stream:os.fsync(stream.fileno())
+              pointer=pressure/'enospc.json'
+              with pointer.open('x') as out:
+                  json.dump(snapshots['old'],out)
+                  out.flush()
+                  os.fsync(out.fileno())
+              fd=os.open(pressure,os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              stat=os.statvfs(pressure)
+              free=stat.f_bavail*stat.f_frsize
+              payload=(pressure/snapshots['new']['filename']).stat().st_size
+              assert 0<free<payload, (free,payload)
+              # Wrapper reports errno explicitly; quota preflight admits the payload.
+              wrapper="import errno,runpy,sys; sys.argv=sys.argv[1:]\ntry: runpy.run_path(sys.argv[0],run_name='__main__')\nexcept OSError as e:\n print('WRITE_ERRNO='+str(e.errno),flush=True); sys.exit(28 if e.errno==errno.ENOSPC else 1)"
+              proc=subprocess.run([sys.executable,'-c',wrapper,str(writer),str(pressure),'none','enospc',json.dumps(snapshots['new']),str(16*1024*1024)],capture_output=True,text=True,timeout=10)
+              assert proc.returncode==errno.ENOSPC and 'WRITE_ERRNO=28' in proc.stdout
+              assert not (pressure/'enospc-new.bin').exists()
+              actual=json.loads(subprocess.check_output([sys.executable,'-c',reader,str(pointer)],text=True,timeout=5))
+              assert actual==snapshots['old']
+              recovered=root/'slots/enospc-recovered.bin'
+              shutil.copyfile(pressure/actual['filename'],recovered)
+              assert hashlib.sha256(recovered.read_bytes()).hexdigest()==actual['sha256']
+              evidence=dict(scope='actual bounded tmpfs ENOSPC; not physical power-loss',filesystem_capacity_bytes=stat.f_blocks*stat.f_frsize,free_before_write=free,new_payload_bytes=payload,write_errno=28,selected=actual['filename'],previous_generation_hash=actual['sha256'],partial_present=(pressure/'enospc-new.partial').exists())
+              (root/'enospc-receipt.json').write_text(json.dumps(evidence,indent=2))
+          finally:
+              subprocess.run(['sudo','umount',str(pressure)],check=True,timeout=15)
+          for arm in ('cold','restore'):
+              p,_=start()
+              try:
+                  if arm=='restore':
+                      result=req('/slots/0?action=restore',{'filename':recovered.name})
+                      assert result['n_restored']==actual['n_saved']
+                  evidence[arm]=completion(actual['target'],8)
+              finally:stop(p)
+          evidence['output_match']=evidence['cold']['content']==evidence['restore']['content']
+          evidence['prefill_reduced']=evidence['restore']['timings']['prompt_n']<evidence['cold']['timings']['prompt_n']
+          evidence['workflow_sha']=os.environ['GITHUB_SHA']
+          (root/'enospc-receipt.json').write_text(json.dumps(evidence,indent=2))
+          assert evidence['output_match'] and evidence['prefill_reduced']
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-fault-r7
+          name: llama-cache-fault-r8
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/crash-receipt.json
+            ${{ runner.temp }}/cache-r0/enospc-receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
             ${{ runner.temp }}/cache-r0/upstream-license.txt
             ${{ runner.temp }}/cache-r0/server.log
