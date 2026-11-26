@@ -1,4 +1,4 @@
-name: Actor DOE task-conditioned framework R1
+name: Actor DOE paired-statistics framework R2
 on:
   pull_request:
     paths:
@@ -40,9 +40,12 @@ jobs:
         with:
           persist-credentials: false
       - run: python qualification/actor_doe_r0/task_strata_proof.py task-evidence
+      - run: python qualification/actor_doe_r0/paired_stats.py task-evidence/summary.json paired-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: actor-doe-task-strata-r1
-          path: task-evidence
+          path: |
+            task-evidence
+            paired-evidence
           retention-days: 7
