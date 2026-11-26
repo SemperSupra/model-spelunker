@@ -4,7 +4,7 @@ CC BY 4.0 (https://www.openslr.org/12/); repacked dev-clean subset:
 https://huggingface.co/datasets/hf-internal-testing/librispeech_asr_dummy .
 Aligned corpus text is the reference; no fresh human review claimed.
 """
-import hashlib,json,pathlib,random,re,subprocess,sys,tempfile,time,wave
+import hashlib,json,pathlib,random,re,subprocess,sys,tempfile,time,wave,traceback
 from speech_calibration import observe as sphinx_observe,edit_distance,words
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 DATA_SHA="4e69a06fa5edc90921e5e7e39a7084881f8b3ed9c805c574f4f39c6fde27c603"
@@ -99,7 +99,7 @@ def candidate(arm,model_dir):
         else:raise ValueError("unknown arm")
         write(pathlib.Path("result.json"),{"transcript":transcript});return 0
     except Exception as e:
-        print("ASR_ERROR="+type(e).__name__,flush=True);return 2
+        print("ASR_ERROR="+type(e).__name__,flush=True);traceback.print_exc(limit=5);return 2
 def main(data,model,out):
     out.mkdir(parents=True,exist_ok=False)
     commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
@@ -116,12 +116,12 @@ def main(data,model,out):
     rows=[];start=time.monotonic()
     for i,(case,task,arm) in enumerate(jobs):
         d=out/"trials"/str(i);d.mkdir(parents=True)
-        meta=d/"candidate.json";exp=d/"experiment.json";receipt=d/"receipt.json";snap=d/"snapshot"
+        meta=d/"candidate.json";exp=d/"experiment.json";receipt=d/"receipt.json";snap=d/"snapshot";diag=d/"diagnostics.json"
         task_id=json.loads((task/"task.json").read_text())["id"]
         write(meta,{"harness":{"name":"offline-asr-reference","source_commit":commit},"model":{"id":arm},"toolset":["read_file","write_file"],"runtime":runtime})
         write(exp,{"schema_version":2,"id":"human-speech-asr-reference-r1","task":{"id":task_id},"claim_type":"framework-proving","experimental_role":"control","design_block":case["id"],"primary_responses":["acceptance","word_error_rate"]})
         cmd=[sys.executable,str(ROOT/"qualification/run_task.py"),"--task-commit",commit,"--substrate-profile-id","public-linux-asr-reference","--substrate-profile-commit",commit,
-             "--experiment",str(exp),"--snapshot-dir",str(snap),str(task),str(meta),str(receipt),"--",sys.executable,str(pathlib.Path(__file__).resolve()),"--candidate",arm,str(model)]
+             "--experiment",str(exp),"--snapshot-dir",str(snap),"--diagnostics",str(diag),str(task),str(meta),str(receipt),"--",sys.executable,str(pathlib.Path(__file__).resolve()),"--candidate",arm,str(model)]
         p=subprocess.run(cmd,cwd=ROOT,capture_output=True,text=True,encoding="utf-8",timeout=130)
         check(receipt.is_file(),"missing receipt "+p.stderr[-400:])
         raw=receipt.read_bytes();r=json.loads(raw);obs=r["observation"]
@@ -137,6 +137,9 @@ def main(data,model,out):
         expected=norm(case["text"]);actual=norm(transcript) if transcript is not None else None
         edits=edit_distance(expected,actual) if actual is not None and done else None
         check(obs["success"] is (done and actual==expected) and p.returncode==(0 if obs["success"] else 1),"independent transcript check mismatch")
+        detail=json.loads(diag.read_text(encoding="utf-8")) if diag.is_file() else {}
+        if not done:
+            print("ASR_EXECUTION_ERROR="+json.dumps({"arm":arm,"clip_id":case["id"],"stdout_tail":detail.get("candidate_stdout_tail","")[-500:],"stderr_tail":detail.get("candidate_stderr_tail","")[-1600:]}),flush=True)
         rows.append({"clip_id":case["id"],"arm":arm,"duration_seconds":case["duration_seconds"],"reference_words":len(expected),
             "edits":edits,"wer":edits/len(expected) if edits is not None and expected else None,
             "completed":done,"accepted":obs["success"],"transcript":transcript,"reference":case["text"],
