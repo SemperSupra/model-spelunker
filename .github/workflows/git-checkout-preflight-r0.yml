@@ -1,0 +1,29 @@
+name: Exact checkout observation R0
+on:
+  pull_request:
+    paths:
+      - qualification/git_checkout_preflight_r0.py
+      - .github/workflows/git-checkout-preflight-r0.yml
+permissions:
+  contents: read
+jobs:
+  control:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - run: python qualification/git_checkout_preflight_r0.py --self-test --out preflight-receipt.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: git-checkout-preflight-${{ matrix.os }}
+          path: preflight-receipt.json
+          retention-days: 7
