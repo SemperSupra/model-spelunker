@@ -1,4 +1,4 @@
-name: Cache lifecycle R4 MLX prefill-path discrimination
+name: Cache lifecycle R5 MLX intermediate prefill screen
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-mlx-r0.yml']
@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        prefill: [2048, 1]
+        prefill: [16, 64, 256]
     runs-on: macos-15
     timeout-minutes: 25
     env:
@@ -189,7 +189,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: mlx-cache-lifecycle-r4-${{ matrix.prefill }}
+          name: mlx-cache-lifecycle-r5-${{ matrix.prefill }}
           path: |
             ${{ runner.temp }}/cache-mlx/receipt.json
             ${{ runner.temp }}/cache-mlx/rep-*/*.json
