@@ -1,0 +1,144 @@
+name: Cache lifecycle R3 native llama-swap
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-swap-r3.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 120 https://huggingface.co/ggml-org/test-model-stories260K/resolve/main/stories260K-f32.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          curl --fail --location --retry 2 --max-time 120 https://huggingface.co/ggml-org/stories15M_MOE/resolve/main/stories15M_MOE-F16.gguf -o model-b.gguf
+          printf '%s  model-b.gguf\n' 1240dfc1957df9f3550dd6c1d9e64b466fc2f452d8bc34bd4e45e1a1e2ca6055 | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf model-b.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+      - name: Install pinned llama-swap release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          curl --fail --location --max-time 120 --retry 2 https://github.com/mostlygeek/llama-swap/releases/download/v276/llama-swap_276_linux_amd64.tar.gz -o swap.tar.gz
+          printf '%s  swap.tar.gz\n' 37493a0f725e407a3a96cf26927cc04c3e544b9a55a1141e267510901f74aef8 | sha256sum -c -
+          mkdir swap
+          tar -xzf swap.tar.gz -C swap
+          find "$PWD/swap" -type f -name llama-swap -print -quit > swap-path.txt
+          test -s swap-path.txt
+          sha256sum "$(cat swap-path.txt)" >> identities.txt
+      - name: Native router eviction and explicit state restoration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time,urllib.request,shlex
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          def request(port,path,data=None):
+              with urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}'+path,data=None if data is None else json.dumps(data).encode(),headers={'Content-Type':'application/json'}),timeout=90) as r:
+                  raw=r.read()
+                  try:return json.loads(raw)
+                  except json.JSONDecodeError:return raw.decode()
+          def wait(port,path):
+              for _ in range(120):
+                  try:return request(port,path)
+                  except OSError:time.sleep(.25)
+              raise RuntimeError('readiness timeout')
+          def alive(pid):
+              return pathlib.Path(f'/proc/{pid}').exists()
+          models={}
+          for name,port,file in [('a',18081,'model.gguf'),('b',18082,'model-b.gguf')]:
+              script=root/('start-'+name+'.sh')
+              args=[str(root/'build/bin/llama-server'),'-m',str(root/file),'-c','512','-np','1','-t','2','--host','127.0.0.1','--port',str(port),'--slot-save-path',str(root/'slots')]
+              script.write_text('#!/bin/sh\nprintf "%s\\n" "$$" > '+shlex.quote(str(root/(name+'.pid')))+'\nexec '+shlex.join(args)+'\n')
+              script.chmod(0o700)
+              models[name]={'cmd':str(script),'proxy':f'http://127.0.0.1:{port}'}
+          config=root/'swap.json'
+          config.write_text(json.dumps({'healthCheckTimeout':30,'models':models}))
+          log=open(root/'swap.log','wb')
+          p=subprocess.Popen([(root/'swap-path.txt').read_text().strip(),'-config',str(config),'-listen','127.0.0.1:18080'],stdout=log,stderr=log)
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps({'scope':'native llama-swap explicit lifecycle witness; not autonomous save/restore or production admission','workflow_sha':os.environ['GITHUB_SHA'],'rows':rows},indent=2))
+          def completion(port,prompt,model=None,n=8):
+              d={'prompt':prompt,'id_slot':0,'n_predict':n,'temperature':0,'seed':42,'cache_prompt':True}
+              if model:d['model']=model
+              t=time.monotonic()
+              r=request(port,'/completion',d)
+              return {'content':r['content'],'timings':r['timings'],'wall_s':time.monotonic()-t}
+          def pid(name):return int((root/(name+'.pid')).read_text())
+          try:
+              wait(18080,'/health')
+              for i in range(3):
+                  row={'rep':i};rows.append(row)
+                  prefix=('Once upon a time there was a little cat. '*12)+str(i)+' '
+                  seed=completion(18080,prefix,'a',4)
+                  target=prefix+seed['content']+' Then '
+                  row['seed_pid']=pid('a')
+                  t=time.monotonic()
+                  saved=request(18081,'/slots/0?action=save',{'filename':f'session-{i}.bin'})
+                  row['save_s']=time.monotonic()-t
+                  snap=root/'slots'/f'session-{i}.bin'
+                  row['snapshot_sha256']=hashlib.sha256(snap.read_bytes()).hexdigest()
+                  row['b']=completion(18080,'An unrelated story about a dog.','b')
+                  row['b_pid']=pid('b')
+                  assert not alive(row['seed_pid'])
+                  row['cold']=completion(18080,target,'a')
+                  row['cold_pid']=pid('a')
+                  assert not alive(row['b_pid']) and row['cold_pid']!=row['seed_pid']
+                  completion(18080,'An unrelated story about a tree.','b')
+                  assert not alive(row['cold_pid'])
+                  completion(18080,'Initial unrelated warmup.','a',1)
+                  row['restore_pid']=pid('a')
+                  assert row['restore_pid'] not in (row['seed_pid'],row['cold_pid'])
+                  assert hashlib.sha256(snap.read_bytes()).hexdigest()==row['snapshot_sha256']
+                  t=time.monotonic()
+                  restored=request(18081,'/slots/0?action=restore',{'filename':f'session-{i}.bin'})
+                  row['restore_s']=time.monotonic()-t
+                  row['restored']=completion(18080,target,'a')
+                  row['match']=row['cold']['content']==row['restored']['content']
+                  row['reduced']=row['restored']['timings']['prompt_n']<row['cold']['timings']['prompt_n']
+                  row['restored_count']=restored['n_restored']
+                  receipt()
+                  assert row['match'] and row['reduced'] and restored['n_restored']==saved['n_saved']>0
+          finally:
+              p.terminate()
+              try:p.wait(timeout=15)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+              log.close()
+              receipt()
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: llama-cache-swap-r3
+          path: |
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/swap.log
+            ${{ runner.temp }}/cache-r0/swap.json
+          if-no-files-found: warn
+          retention-days: 14
