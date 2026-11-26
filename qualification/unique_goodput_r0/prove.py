@@ -11,6 +11,16 @@ import subprocess
 import sys
 import time
 
+try:
+    import resource
+except ImportError:
+    resource=None
+
+def child_cpu_seconds():
+    if resource is None or not sys.platform.startswith("linux"):return None
+    r=resource.getrusage(resource.RUSAGE_CHILDREN)
+    return r.ru_utime+r.ru_stime
+
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 TASK=ROOT/"qualification/tasks/text-repair-v0"
 PLAN=[("a",1,False),("a",2,True),("a",3,True),("b",1,True),("c",1,False)]
@@ -42,14 +52,15 @@ def trial(out,index,assignment,attempt,expected,commit):
          "--substrate-profile-id","framework-"+sys.platform,"--substrate-profile-commit",commit,
          "--experiment",str(d/"experiment.json"),str(TASK),str(d/"candidate.json"),str(receipt),
          "--",sys.executable,"-c",code]
-    start=time.monotonic()
+    before=child_cpu_seconds();start=time.monotonic()
     p=subprocess.run(cmd,cwd=ROOT,capture_output=True,text=True,timeout=30)
-    elapsed=time.monotonic()-start
+    elapsed=time.monotonic()-start;after=child_cpu_seconds()
+    cpu=after-before if before is not None and after is not None and after>=before else None
     require(receipt.is_file(),"receipt missing "+p.stderr)
     raw=receipt.read_bytes();r=json.loads(raw)
     require(p.returncode==(0 if expected else 1) and r["observation"]["success"] is expected,"unexpected control outcome")
     return {"index":index,"assignment":assignment,"attempt":attempt,"run_id":r["run_id"],"receipt_sha256":sha(raw),
-            "wall_seconds":elapsed,"expected_candidate_digest":digest(meta),"expected_experiment_digest":digest(exp)}
+            "wall_seconds":elapsed,"waited_child_cpu_seconds":cpu,"cpu_scope":"linux getrusage RUSAGE_CHILDREN delta" if cpu is not None else "UNKNOWN","expected_candidate_digest":digest(meta),"expected_experiment_digest":digest(exp)}
 def reduce(rows,raws,elapsed,commit):
     # Plan is fixture-owned, not derived from arriving rows. Deny lost, duplicate or unplanned rows.
     require(number(elapsed) and elapsed>0,"bad campaign elapsed")
@@ -72,6 +83,8 @@ def reduce(rows,raws,elapsed,commit):
         require(r["candidate"]["configuration_digest"]==row["expected_candidate_digest"]==digest(meta),"configuration mismatch")
         require(r["candidate"]["harness"]==meta["harness"] and r["candidate"]["model"]==meta["model"] and r["candidate"]["toolset"]==meta["toolset"],"candidate identity mismatch")
         require(number(row["wall_seconds"]) and row["wall_seconds"]>0,"bad wrapper measurement")
+        cpu=row["waited_child_cpu_seconds"]
+        require((row["cpu_scope"]=="UNKNOWN" and cpu is None) or (row["cpu_scope"]=="linux getrusage RUSAGE_CHILDREN delta" and number(cpu)),"bad CPU measurement scope")
         obs=r["observation"];success=obs["success"]
         require(type(success) is bool and success is expected,"control verdict mismatch")
         require(number(obs["wall_seconds"]) and obs["wall_seconds"]<=row["wall_seconds"]+0.000001,"bad runner measurement")
