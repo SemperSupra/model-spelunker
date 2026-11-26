@@ -1,4 +1,4 @@
-name: Actor DOE screening framework R0
+name: Actor DOE task-conditioned framework R1
 on:
   pull_request:
     paths:
@@ -30,4 +30,19 @@ jobs:
           path: |
             doe-evidence
             dependencies.txt
+          retention-days: 7
+  task-strata:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - run: python qualification/actor_doe_r0/task_strata_proof.py task-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: actor-doe-task-strata-r1
+          path: task-evidence
           retention-days: 7
