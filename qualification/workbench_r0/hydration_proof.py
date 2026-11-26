@@ -22,7 +22,7 @@ def main():
                 manifests.append(inventory.read_text())
                 setup.append({"venv":v,"install":p,"inventory":fr})
             dest=d/("campaign-"+str(i))
-            m=measure([str(py),str(HERE/"adaptive_proof.py"),str(dest)])
+            m=measure([str(py),str(HERE/"adaptive_proof.py"),str(dest),"optuna"])
             s=json.loads((dest/"summary.json").read_text())
             assert s["screen"]["candidate"]=="cheap" and s["accepted"]==12 and s["attempts"]==15
             campaign.append({"measurement":m,"accepted":s["accepted"],"attempts":s["attempts"],"trial_cpu_seconds":s["all_attempt_cpu_seconds"]})

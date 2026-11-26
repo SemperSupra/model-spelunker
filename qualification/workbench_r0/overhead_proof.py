@@ -12,7 +12,7 @@ def main():
     setup=measure([sys.executable,"-m","pip","install","git+https://github.com/optuna/optuna.git@0abf066c1e5d9d83987986869daa3c2bb23df519"])
     with open("adaptive-dependencies.txt","w") as f:
         freeze=measure([sys.executable,"-m","pip","freeze"],stdout=f)
-    campaign=measure([sys.executable,str(HERE/"adaptive_proof.py"),str(out)])
+    campaign=measure([sys.executable,str(HERE/"adaptive_proof.py"),str(out),"optuna"])
     data=json.loads((out/"summary.json").read_text())
     trial_cpu=data["all_attempt_cpu_seconds"]
     remainder=campaign["cpu_seconds"]-trial_cpu

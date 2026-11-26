@@ -1,4 +1,4 @@
-name: Workbench finite selector and hydration R9
+name: Workbench finite selector integration R10
 on:
   pull_request:
     paths:
@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           persist-credentials: false
+      - run: python qualification/workbench_r0/finite_selector.py
       - run: python qualification/workbench_r0/prove.py evidence
       - name: Install browser test dependency
         if: runner.os == 'Linux'
@@ -58,4 +59,19 @@ jobs:
             adaptive-dependencies.txt
             hydration-evidence
             selector-evidence
+          retention-days: 7
+  finite-campaign:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - run: python qualification/workbench_r0/selector_campaign_proof.py finite-campaign-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: finite-campaign-r10
+          path: finite-campaign-evidence
           retention-days: 7

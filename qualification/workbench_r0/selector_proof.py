@@ -3,15 +3,7 @@ Optuna remains a candidate for larger/adaptive searches; no production selection
 """
 import argparse,json,pathlib,random,subprocess,sys,time,resource,math
 HERE=pathlib.Path(__file__).resolve().parent
-def exact(points):
-    # Equal points both nondominated; maximize accepted, minimize measured cost.
-    return sorted(k for k,p in points.items() if not any(q[0]>=p[0] and q[1]<=p[1] and q!=p for q in points.values()))
-def native(points):
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.ERROR)
-    study=optuna.create_study(directions=["maximize","minimize"],sampler=optuna.samplers.GridSampler({"arm":sorted(points)},seed=19))
-    study.optimize(lambda t:points[t.suggest_categorical("arm",sorted(points))],n_trials=len(points))
-    return sorted(t.params["arm"] for t in study.best_trials)
+from finite_selector import exact,native
 def worker(mode,inp,out):
     start=time.monotonic()
     cases=json.loads(inp.read_text())
