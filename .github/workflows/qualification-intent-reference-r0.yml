@@ -29,8 +29,14 @@ jobs:
           curl -fsS http://127.0.0.1:11434/api/version | python3 -c 'import json,sys; assert json.load(sys.stdin)["version"]=="0.34.1"'
           docker exec intent-reference-r0 ollama pull qwen3:1.7b
           curl -fsS http://127.0.0.1:11434/api/tags | python3 -c 'import json,sys; m=[x for x in json.load(sys.stdin)["models"] if x["name"]=="qwen3:1.7b"]; assert len(m)==1 and m[0]["digest"]=="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"'
-      - name: Independent authored judge-interface calibration
-        run: python3 qualification/intent_reference_r0/judge_calibration.py judge-evidence
+      - name: Resolve bounded larger public reference model
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec intent-reference-r0 ollama pull qwen3:4b-instruct
+          curl -fsS http://127.0.0.1:11434/api/tags | python3 -c 'import json,sys; ms=[x for x in json.load(sys.stdin)["models"] if x["name"]=="qwen3:4b-instruct"]; assert len(ms)==1 and len(ms[0]["digest"])==64 and ms[0]["digest"].startswith("0edcdef34593"); print(ms[0]["digest"])'
+      - name: Paired benign judge model crossover
+        run: python3 qualification/intent_reference_r0/judge_calibration.py judge-evidence models
       - name: Retire disposable service
         if: always()
         shell: bash
@@ -42,7 +48,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: judge-calibration-r2
+          name: judge-model-r3
           path: |
             judge-evidence
             image-identity.json
