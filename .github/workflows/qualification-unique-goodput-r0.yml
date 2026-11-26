@@ -27,3 +27,23 @@ jobs:
           name: unique-goodput-r0-${{ matrix.os }}
           path: proof-evidence
           retention-days: 7
+  paired-acceptance:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - run: python qualification/unique_goodput_r0/paired_acceptance.py paired-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: paired-acceptance-r0-${{ matrix.os }}
+          path: paired-evidence
+          retention-days: 7
