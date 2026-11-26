@@ -45,7 +45,7 @@ def prepare(data,out):
         with wave.open(str(p),"rb") as f:
             check((f.getnchannels(),f.getsampwidth(),f.getframerate())==(1,2,16000),"bad PCM")
             sec=f.getnframes()/16000
-        if not 1<=sec<=12:p.unlink();continue
+        if not 1<=sec<=10:p.unlink();continue
         selected.append({"id":r["id"],"text":r["text"],"speaker_id":r["speaker_id"],"chapter_id":r["chapter_id"],
                          "source_audio_sha256":sha(raw),"wav_sha256":sha(p.read_bytes()),"duration_seconds":sec})
         if len(selected)==6:break
