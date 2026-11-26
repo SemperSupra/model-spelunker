@@ -80,3 +80,38 @@ jobs:
           name: speech-evaluator-r0-ubuntu
           path: speech-evidence
           retention-days: 7
+  human-speech-reference:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Hydrate public pinned top-level dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends 'python3-pocketsphinx=1:0.1.15-3build3' 'pocketsphinx-en-us=0.8.0+real5prealpha+1-15ubuntu5' ffmpeg python3-venv
+          /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/asr-env"
+          "$RUNNER_TEMP/asr-env/bin/pip" install --disable-pip-version-check 'faster-whisper==1.2.1' 'pyarrow==19.0.1'
+      - name: Verify public corpus and offline model identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --max-time 120 --retry 2 'https://huggingface.co/datasets/hf-internal-testing/librispeech_asr_dummy/resolve/main/clean/validation-00000-of-00001.parquet' -o "$RUNNER_TEMP/asr.parquet"
+          echo "4e69a06fa5edc90921e5e7e39a7084881f8b3ed9c805c574f4f39c6fde27c603  $RUNNER_TEMP/asr.parquet" | sha256sum -c -
+          "$RUNNER_TEMP/asr-env/bin/python" -c 'import os; from huggingface_hub import snapshot_download; snapshot_download(repo_id="Systran/faster-whisper-tiny.en",revision="2919638eccc5115566830024836f1ce314e8b72a",allow_patterns=["model.bin","config.json","tokenizer.json","vocabulary.txt","README.md"],local_dir=os.environ["RUNNER_TEMP"]+"/asr-model")'
+          echo "1a5afae06a4db91c975c9a9d78be5cc110ee4ea022ad57d55492e4550e936b2a  $RUNNER_TEMP/asr-model/model.bin" | sha256sum -c -
+      - name: Paired recognizer comparison on corpus-aligned speech
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/asr-env/bin/python" qualification/media_fidelity_r0/human_speech_reference.py "$RUNNER_TEMP/asr.parquet" "$RUNNER_TEMP/asr-model" human-asr-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: human-asr-reference-r1-ubuntu
+          path: human-asr-evidence
+          retention-days: 7
