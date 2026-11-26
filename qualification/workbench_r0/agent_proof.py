@@ -71,28 +71,32 @@ try:
     for block in range(2):
         selected=rows[block];decoy=rows[2]
         expect=selected["native_phase"]["request_id"];wrong=decoy["native_phase"]["request_id"]
-        order=["reference","full","compact"] if block==0 else ["compact","full","reference"]
+        order=["reference","json_original","line_original","json_sequential","line_sequential"] if block==0 else ["line_sequential","json_sequential","line_original","json_original","reference"]
         target=rng.choice(["a.txt","b.txt"])
         for arm in order:
             work=temp/f"workbench-agent-{block}-{arm}";work.mkdir()
             (work/"index.txt").write_text("TARGET="+target+"\n")
-            system.write_text(reference_system if arm=="reference" else evidence_system)
+            sequential=arm.endswith("_sequential")
+            system.write_text(reference_system if arm=="reference" else evidence_system + (" Wait for the result of the index read before issuing the second read. The TARGET value is the entire filename; never append an extension or treat a request ID as a filename. After the second successful read, stop using tools and return the exact request_id.\n" if sequential else ""))
             expected=("VALUE="+expect.removeprefix("req-")) if arm=="reference" else expect
             decoy_value=("VALUE="+wrong.removeprefix("req-")) if arm=="reference" else wrong
             for name,row in [(target,selected),("b.txt" if target=="a.txt" else "a.txt",decoy)]:
                 actual=cli("evidence",*args,"--run-id",row["run_id"])
-                payload=actual if arm=="full" else {"run_id":actual["run_id"],"request_id":actual["native_phase"]["request_id"],"scope":actual["purpose"],"receipt_sha256":actual["receipt_sha256"]}
-                text=("VALUE="+actual["native_phase"]["request_id"].removeprefix("req-")) if arm=="reference" else json.dumps(payload,sort_keys=True,separators=(",",":"))
+                payload= {"run_id":actual["run_id"],"request_id":actual["native_phase"]["request_id"],"scope":actual["purpose"],"receipt_sha256":actual["receipt_sha256"]}
+                text=("VALUE="+actual["native_phase"]["request_id"].removeprefix("req-")) if arm=="reference" else "\n".join(f"{k}={payload[k]}" for k in sorted(payload)) if arm.startswith("line_") else json.dumps(payload,sort_keys=True,separators=(",",":"))
                 (work/name).write_text(text+"\n")
             cmd=["timeout","150",str(cell/"native/qwen-code/bin/qwen"),"--prompt",("Use read_file on index.txt. Its TARGET names a second file; read that file using read_file and output only its VALUE. Do not guess." if arm=="reference" else "Read index.txt, then the TARGET file using read_file. Output only the exact request_id from that file. Do not guess."),"--model","qwen3:1.7b","--core-tools","read_file","--approval-mode","default","--max-session-turns","4","--max-tool-calls","4","--max-wall-time","140s","--output-format","json"]
             before=resource.getrusage(resource.RUSAGE_CHILDREN);start=time.monotonic()
             p=subprocess.run(cmd,cwd=work,env=env,capture_output=True,text=True,errors="replace",timeout=160)
             elapsed=time.monotonic()-start;after=resource.getrusage(resource.RUSAGE_CHILDREN)
             lineage=lineage_verdict(p.stdout,work,target);final=classify_final(p.stdout,expected,decoy_value);drift=audit(cfg)
-            good=p.returncode==0 and lineage=="PASS" and verify_selected(p.stdout,expected,decoy_value) and drift["byte_identical"]
-            observations.append({"block":block,"arm":arm,"run_id":selected["run_id"],"input_file_bytes":(work/target).stat().st_size,"wall_seconds":elapsed,"harness_waited_cpu_seconds":after.ru_utime+after.ru_stime-before.ru_utime-before.ru_stime,"server_cpu_seconds":None,"native_token_counts":None,"exit":p.returncode,"lineage":lineage,"final":final,"settings_identical":drift["byte_identical"],"accepted":good,"diagnostics":diagnostics(p.stdout,work),"stdout_sha256":hashlib.sha256(p.stdout.encode()).hexdigest()})
-    assert len(observations)==6
-    summary={"scope":"FRAMEWORK_PROVING_ONLY","harness":"Qwen Code 0.28.3","reference_source":"a0426d62e282ab24199fe10097abb400aeb46c01","model":"qwen3:1.7b","setup_wall_seconds":setup,"observations":observations,"accepted_by_arm":{k:sum(x["accepted"] for x in observations if x["arm"]==k) for k in ("reference","full","compact")},"limitations":"two counterbalanced blocks, reference uses previously successful prompt and VALUE fixture format; same current environment, actual read_file consumption of CLI-derived files, not autonomous CLI discovery/invocation; compact projection is experimental; no inference CPU/token accounting from this harness path; no promotion"}
+            diag=diagnostics(p.stdout,work)
+            events=diag["events"]
+            causal=[x["kind"] for x in events]==["tool_use","tool_result","tool_use","tool_result"] and lineage=="PASS"
+            good=p.returncode==0 and causal and verify_selected(p.stdout,expected,decoy_value) and drift["byte_identical"]
+            observations.append({"block":block,"arm":arm,"run_id":selected["run_id"],"input_file_bytes":(work/target).stat().st_size,"wall_seconds":elapsed,"harness_waited_cpu_seconds":after.ru_utime+after.ru_stime-before.ru_utime-before.ru_stime,"server_cpu_seconds":None,"native_token_counts":None,"exit":p.returncode,"lineage":lineage,"final":final,"settings_identical":drift["byte_identical"],"accepted":good,"causal_sequence":causal,"diagnostics":diag,"stdout_sha256":hashlib.sha256(p.stdout.encode()).hexdigest()})
+    assert len(observations)==10
+    summary={"scope":"FRAMEWORK_PROVING_ONLY","harness":"Qwen Code 0.28.3","reference_source":"a0426d62e282ab24199fe10097abb400aeb46c01","model":"qwen3:1.7b","setup_wall_seconds":setup,"observations":observations,"accepted_by_arm":{k:sum(x["accepted"] for x in observations if x["arm"]==k) for k in ("reference","json_original","line_original","json_sequential","line_sequential")},"limitations":"two counterbalanced blocks, 2x2 compact JSON vs key-value lines and original vs explicit sequential system guidance; same fields and exact expected request_id; separate reference VALUE arm. Strict causal sequencing added, previous lineage and final retained. Actual read_file consumption only, not autonomous CLI invocation. No inference CPU/native tokens or promotion"}
     (out/"summary.json").write_text(json.dumps(summary,indent=2))
     print("AGENT_WORKBENCH="+json.dumps(summary),flush=True)
 finally:

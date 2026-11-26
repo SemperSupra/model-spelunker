@@ -1,4 +1,4 @@
-name: Workbench overhead and hydration R8
+name: Workbench finite selector and hydration R9
 on:
   pull_request:
     paths:
@@ -43,6 +43,9 @@ jobs:
       - name: Paired independent versus shared dependency hydration
         if: runner.os == 'Linux'
         run: python qualification/workbench_r0/hydration_proof.py hydration-evidence
+      - name: Finite Pareto selection overhead comparison
+        if: runner.os == 'Linux'
+        run: python qualification/workbench_r0/selector_proof.py adaptive-evidence/summary.json selector-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -54,4 +57,5 @@ jobs:
             adaptive-evidence
             adaptive-dependencies.txt
             hydration-evidence
+            selector-evidence
           retention-days: 7

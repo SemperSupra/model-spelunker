@@ -12,7 +12,7 @@ jobs:
   proof:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 32
     env:
       OLLAMA_VERSION: '0.34.1'
       OLLAMA_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
@@ -54,7 +54,7 @@ jobs:
           ref: a0426d62e282ab24199fe10097abb400aeb46c01
           path: embodiment-reference
           persist-credentials: false
-      - name: Native agent positive reference and evidence interview diagnostics
+      - name: Native agent 2x2 sequencing and representation interview
         run: python qualification/workbench_r0/agent_proof.py native-evidence embodiment-reference agent-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
