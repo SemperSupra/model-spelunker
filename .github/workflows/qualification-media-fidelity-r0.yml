@@ -96,7 +96,9 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends 'python3-pocketsphinx=1:0.1.15-3build3' 'pocketsphinx-en-us=0.8.0+real5prealpha+1-15ubuntu5' ffmpeg python3-venv
           /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/asr-env"
-          "$RUNNER_TEMP/asr-env/bin/pip" install --disable-pip-version-check 'faster-whisper==1.2.1' 'pyarrow==19.0.1'
+          "$RUNNER_TEMP/asr-env/bin/pip" install --disable-pip-version-check 'faster-whisper==1.2.1' 'pyarrow==19.0.1' 'ctranslate2==4.6.0' 'huggingface-hub==0.34.4' 'tokenizers==0.21.4' 'numpy==1.26.4' 'av==14.2.0' 'onnxruntime==1.22.1'
+          "$RUNNER_TEMP/asr-env/bin/pip" check
+          "$RUNNER_TEMP/asr-env/bin/python" -c 'import faster_whisper,ctranslate2; print("reference imports available",ctranslate2.__version__)'
       - name: Verify public corpus and offline model identity
         shell: bash
         run: |
