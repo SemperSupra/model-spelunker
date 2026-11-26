@@ -1,4 +1,4 @@
-name: Cache lifecycle R2 OCI external state
+name: Cache lifecycle R3 OCI external state
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-oci-r2.yml']
@@ -33,16 +33,20 @@ jobs:
           printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
           sha256sum build/bin/llama-server model.gguf > identities.txt
           cp upstream/LICENSE upstream-license.txt
+          docker pull ubuntu:24.04
+          base=$(docker image inspect ubuntu:24.04 --format '{{index .RepoDigests 0}}')
+          test -n "$base"
+          printf '%s\n' "$base" > base-digest.txt
           cat > Dockerfile <<'DOCKER'
-          FROM ubuntu:24.04
+          ARG BASE
+          FROM ${BASE}
           RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libcurl4t64 ca-certificates && rm -rf /var/lib/apt/lists/*
           COPY build/bin/ /opt/llama/
           ENV LD_LIBRARY_PATH=/opt/llama
           ENTRYPOINT ["/opt/llama/llama-server"]
           DOCKER
-          docker build -t cache-lifecycle-r2:local .
+          docker build --build-arg BASE="$base" -t cache-lifecycle-r2:local .
           docker image inspect cache-lifecycle-r2:local --format '{{.Id}}' > image-id.txt
-          docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}' > base-digest.txt
       - name: Paired cold and restored continuations across process destruction
         shell: bash
         run: |
@@ -55,7 +59,7 @@ jobs:
           (root/'slots').mkdir()
           rows=[]
           def receipt():
-              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],scope='OCI lifecycle witness only, observed base digest not locked, not agent or GPU qualification',rows=rows),indent=2))
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],scope='OCI lifecycle witness only, base resolved and digest-bound within run, not prelocked across runs, not agent or GPU qualification',rows=rows),indent=2))
           def req(path,data=None):
               body=None if data is None else json.dumps(data).encode()
               with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=30) as r:
@@ -125,7 +129,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-oci-r2
+          name: llama-cache-oci-r3
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
