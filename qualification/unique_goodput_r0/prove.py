@@ -21,10 +21,20 @@ def write(p,x):p.write_text(json.dumps(x,indent=2,sort_keys=True)+"\n",encoding=
 def require(ok,msg):
     if not ok:raise ValueError(msg)
 def number(x):return type(x) in (int,float) and math.isfinite(x) and x>=0
-def trial(out,index,assignment,attempt,expected,commit):
-    d=out/str(index);d.mkdir(parents=True)
+def treatment(index,expected):
     meta={"harness":{"name":"scripted-goodput-control"},"model":{"id":"none"},"toolset":["write_file"],"treatment":"valid" if expected else "invalid"}
     exp={"schema_version":2,"id":"unique-goodput-r0","task":{"id":"text-repair-v0"},"claim_type":"framework-proving","experimental_role":"control","design_block":index,"primary_responses":["acceptance","wall_seconds"]}
+    return meta,exp
+
+def task_package_digest():
+    h=hashlib.sha256()
+    for p in sorted(x for x in TASK.rglob("*") if x.is_file()):
+        h.update(p.relative_to(TASK).as_posix().encode("utf-8"));h.update(b"\0");h.update(p.read_bytes());h.update(b"\0")
+    return "sha256:"+h.hexdigest()
+
+def trial(out,index,assignment,attempt,expected,commit):
+    d=out/str(index);d.mkdir(parents=True)
+    meta,exp=treatment(index,expected)
     write(d/"candidate.json",meta);write(d/"experiment.json",exp)
     receipt=d/"receipt.json"
     code="from pathlib import Path; Path('value.txt').write_bytes("+repr(b"READY\n" if expected else b"WRONG\n")+")"
@@ -54,8 +64,13 @@ def reduce(rows,raws,elapsed,commit):
         seen.add(run)
         require(r["task"]["source_commit"]==commit and r["task"]["id"]=="text-repair-v0","source mismatch")
         require(r["experiment"]["claim_type"]=="framework-proving" and r["experiment"]["design_block"]==i,"purpose/block mismatch")
-        require(r["experiment"]["digest"]==row["expected_experiment_digest"],"experiment mismatch")
-        require(r["candidate"]["configuration_digest"]==row["expected_candidate_digest"],"configuration mismatch")
+        # Expected digests are derived from the independent fixed experiment plan,
+        # never trusted merely because the row and receipt agree.
+        meta,exp=treatment(i,expected)
+        require(r["task"]["package_digest"]==task_package_digest(),"task package mismatch")
+        require(r["experiment"]["digest"]==row["expected_experiment_digest"]==digest(exp),"experiment mismatch")
+        require(r["candidate"]["configuration_digest"]==row["expected_candidate_digest"]==digest(meta),"configuration mismatch")
+        require(r["candidate"]["harness"]==meta["harness"] and r["candidate"]["model"]==meta["model"] and r["candidate"]["toolset"]==meta["toolset"],"candidate identity mismatch")
         require(number(row["wall_seconds"]) and row["wall_seconds"]>0,"bad wrapper measurement")
         obs=r["observation"];success=obs["success"]
         require(type(success) is bool and success is expected,"control verdict mismatch")
@@ -94,12 +109,33 @@ def main(out):
     bad=copy.deepcopy(rows);bad[0]["wall_seconds"]=float("nan");cases.append(("unknown_as_number",bad,raws,elapsed,commit))
     bad=copy.deepcopy(rows);bad[0]["expected_experiment_digest"]="sha256:"+"0"*64;cases.append(("experiment_mismatch",bad,raws,elapsed,commit))
     cases.append(("wrong_source",rows,raws,elapsed,"0"*40))
+    def consistent_forgery(name, mutate, row_field=None):
+        altered=copy.deepcopy(rows); changed=list(raws); obj=json.loads(changed[0])
+        val=mutate(obj)
+        if row_field is not None:altered[0][row_field]=val
+        changed[0]=json.dumps(obj,sort_keys=True).encode("utf-8")
+        altered[0]["receipt_sha256"]=sha(changed[0])
+        cases.append((name,altered,changed,elapsed,commit))
+    def forge_experiment(obj):
+        obj["experiment"]["digest"]="sha256:"+"1"*64
+        return obj["experiment"]["digest"]
+    def forge_configuration(obj):
+        obj["candidate"]["configuration_digest"]="sha256:"+"2"*64
+        return obj["candidate"]["configuration_digest"]
+    def forge_package(obj):obj["task"]["package_digest"]="sha256:"+"3"*64
+    def forge_harness(obj):obj["candidate"]["harness"]={"name":"other"}
+    consistent_forgery("self_consistent_experiment",forge_experiment,"expected_experiment_digest")
+    consistent_forgery("self_consistent_config",forge_configuration,"expected_candidate_digest")
+    consistent_forgery("rehashed_wrong_package",forge_package)
+    consistent_forgery("rehashed_wrong_harness",forge_harness)
     cases.append(("impossible_serial_elapsed",rows,raws,0.0000001,commit))
     for name,*args in cases:
         try:reduce(*args)
         except ValueError:continue
         raise RuntimeError("planted accounting fault accepted: "+name)
     s["negative_controls_rejected"]=len(cases)
+    s["plan_digest"]=digest({"assignments":ASSIGNMENTS,"attempts":PLAN})
+    s["provenance_limit"]="Fixed plan consistency only; no authenticated attestation or hostile producer proof."
     write(out/"attempts.json",rows);write(out/"summary.json",s)
     print("UNIQUE_GOODPUT="+json.dumps(s),flush=True)
 if __name__=="__main__":
