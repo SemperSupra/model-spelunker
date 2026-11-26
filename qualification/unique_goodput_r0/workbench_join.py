@@ -59,7 +59,7 @@ def main(evidence,composition,purpose_root,resource_root,wb,out):
     s=json.loads((adaptive/"summary.json").read_text());rows=s["rows"]
     check(s["scope"]=="FRAMEWORK_PROVING_ONLY" and s["promotion_authorized"] is False and len(rows)==15,"adaptive scope/count")
     plan=json.loads((adaptive/"selection-before-confirmation.json").read_text())
-    screen={}
+    screen_rows={}
     all_receipts=[];cpu=0.0;seen=set()
     for row in rows:
         name=f'{row["stage"]}-{row["block"]}-{row["arm"]}'
@@ -71,8 +71,15 @@ def main(evidence,composition,purpose_root,resource_root,wb,out):
         check(row["accepted"] is side["accepted"] and row["cpu_seconds"]==side["metrics"]["cpu_seconds"]["value"],"peer measurement")
         seen.add(r["run_id"]);all_receipts.append(r);cpu+=row["cpu_seconds"]
         if row["stage"]=="screen":
-            acc,cost=screen.get(row["arm"],(0,0.0));screen[row["arm"]]=(acc+int(row["accepted"]),cost+row["cpu_seconds"])
+            screen_rows.setdefault(row["arm"],[]).append(row)
+    # Reproduce the peer's sum operation in original row order. Python 3.12+
+    # sum uses improved floating-point summation; incremental + is not identical.
+    screen={a:(sum(x["accepted"] for x in rs),sum(x["cpu_seconds"] for x in rs)) for a,rs in screen_rows.items()}
     check({k:list(v) for k,v in screen.items()}==plan["screen_scores"],"selection inputs")
+    # Independent high-accuracy check, not a relaxation of the exact selector
+    # or permission to collapse near-equal objective values.
+    for arm,rs in screen_rows.items():
+        check(math.isclose(math.fsum(x["cpu_seconds"] for x in rs),screen[arm][1],rel_tol=1e-12,abs_tol=1e-12),"independent cost total")
     front=selector.exact(screen)
     check(front==plan["pareto"],"selector mismatch")
     eligible=[a for a in front if screen[a][0]==3]
@@ -95,7 +102,7 @@ def main(evidence,composition,purpose_root,resource_root,wb,out):
       "unique_cpu_per_accepted":comp["costs"]["cpu_seconds"]["per_unique_accepted"],
       "adaptive_receipts":len(rows),"adaptive_accepted":s["accepted"],"all_attempt_cpu_seconds":cpu,
       "screen":plan,"confirmation":s["confirmation"],"purpose_conflicts":len(excluded),
-      "unknown_cost_rejected":rejected,"operational_envelopes":[],"promotion_authorized":False,
+      "unknown_cost_rejected":rejected,"score_sum_exact_peer":True,"operational_envelopes":[],"promotion_authorized":False,
       "limitations":"Exact peer proof and read-only render reused, fixed synthetic task and repeated blocks, not distinct semantic holdout or operational selection. Attempt and unique denominators distinct. No authenticated authority."}
     unique.write(out/"summary.json",result);print("WORKBENCH_JOIN="+json.dumps(result,sort_keys=True),flush=True)
 if __name__=="__main__":main(*(pathlib.Path(a).resolve() for a in sys.argv[1:]))
