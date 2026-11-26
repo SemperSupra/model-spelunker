@@ -27,3 +27,23 @@ jobs:
           name: media-fidelity-r0-${{ matrix.os }}
           path: proof-evidence
           retention-days: 7
+  encoded-av:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Actual lossless encoded-media validation
+        run: |
+          command -v ffmpeg
+          command -v ffprobe
+          python3 qualification/media_fidelity_r0/encoded_av.py encoded-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: encoded-av-r0-ubuntu
+          path: encoded-evidence
+          retention-days: 7
