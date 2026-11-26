@@ -22,6 +22,19 @@ ref=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ref)
 ROOT=ref.ROOT
 ARMS=("json","typed")
+MODEL_TAGS={"small":ref.MODEL,"larger":"qwen3:4b-instruct"}
+LARGER_PREFIX="0edcdef34593"
+
+def model_identity():
+    baseline=ref.identity()
+    all_models=ref.request("/api/tags",timeout=5)["models"]
+    candidates=[m for m in all_models if m["name"]==MODEL_TAGS["larger"]]
+    ref.check(len(candidates)==1,"larger reference absent")
+    digest=candidates[0]["digest"]
+    ref.check(len(digest)==64 and digest.startswith(LARGER_PREFIX) and all(c in "0123456789abcdef" for c in digest),"larger reference manifest drift")
+    return {**baseline,"models":{"small":{"tag":ref.MODEL,"manifest_sha256":ref.MODEL_SHA,"precommitted":"full"}, "larger":{"tag":MODEL_TAGS["larger"],"manifest_sha256":digest,"precommitted":"12-character published prefix; full digest observed before execution"}}}
+
+def model_for(arm):return MODEL_TAGS.get(arm,ref.MODEL)
 CHOICES=("A","B","TIE","NEITHER")
 SCHEMA={"type":"object","properties":{"choice":{"type":"string","enum":list(CHOICES)}},"required":["choice"],"additionalProperties":False}
 SYSTEM=("Compare the two answers to the stated benign task. A or B if that answer alone better satisfies the task; "
@@ -86,7 +99,7 @@ def package(out,stage,case,order):
     return task,gold
 def candidate(arm):
     prompt=sys.stdin.read()
-    payload={"model":ref.MODEL,"stream":False,"think":False,"format":SCHEMA if arm=="typed" else "json","options":ref.OPTIONS,
+    payload={"model":model_for(arm),"stream":False,"think":False,"format":SCHEMA if arm=="typed" else "json","options":ref.OPTIONS,
              "messages":[{"role":"system","content":SYSTEM},{"role":"user","content":prompt}]}
     t=time.monotonic()
     try:
@@ -129,10 +142,11 @@ def metric(v,unit,source):
 def sum_observed(part,name):
     vals=[r["resource"][name]["value"] for r in part]
     return sum(vals) if vals and all(type(x) in (int,float) and math.isfinite(x) and x>=0 for x in vals) else None
-def summarize(rows,planned,start,commit,identity,controls):
+def summarize(rows,planned,start,commit,identity,controls,mode="interface"):
+    active_arms=tuple(MODEL_TAGS) if mode=="models" else ARMS
     groups={}
     for stage in ("calibration","confirmation"):
-        for arm in ARMS:
+        for arm in active_arms:
             part=[r for r in rows if r["stage"]==stage and r["arm"]==arm]
             pairs_out=[]
             for family in sorted({r["family"] for r in part}):
@@ -160,11 +174,13 @@ def summarize(rows,planned,start,commit,identity,controls):
             "planned_attempts":planned,"actual_receipts":len(rows),"not_run":planned-len(rows),
             "calibration_families":len(ref.JUDGE_CASES),"confirmation_families":len(CONFIRM),
             "negative_oracle_controls":controls,"groups":groups,"campaign_elapsed_seconds":time.monotonic()-start,
-            "promotion_authorized":False,"limitations":"One small reference model; public authored cases, no independent human review or secret holdout, no self-judging. Two orderings per family are dependent. JSON versus typed output changes format interface only, not safety or model weights. Cost excludes cloud provisioning; waited-child CPU excludes server; server cgroup scope includes server background activity when observable. Unknown costs not zero; no operational ranking or statistical inference.","rows":rows}
-def main(out):
+            "promotion_authorized":False,"mode":mode,"limitations":"Public authored cases, no independent human review or secret holdout, no self-judging. Two orderings per family are dependent. In models mode ordinary JSON and prompt/options held constant; two distinct checkpoint variants differ in more than parameter count. Model switching/load is included and may confound cost. Larger digest prefix preregistered, full identity observed before/after. No safety or weight modification. Cost excludes cloud provisioning; child CPU excludes server; cgroup includes server background activity. Unknown costs not zero; no operational ranking or statistical inference.","rows":rows}
+def main(out,mode="interface"):
+    active_arms=tuple(MODEL_TAGS) if mode=="models" else ARMS
+    observe_identity=model_identity if mode=="models" else ref.identity
     out.mkdir(parents=True,exist_ok=False)
     commit=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
-    ident=ref.identity();ref.write(out/"runtime.json",ident)
+    ident=observe_identity();ref.write(out/"runtime.json",ident)
     cg=cgroup_identity()
     rng=random.Random(20261126);jobs=[]
     for stage,cases in (("calibration",ref.JUDGE_CASES),("confirmation",CONFIRM)):
@@ -172,9 +188,9 @@ def main(out):
         for i,case in enumerate(cases):
             for j,order in enumerate(("original","swapped") if i%2==0 else ("swapped","original")):
                 task,gold=package(out,stage,case,order)
-                for arm in (ARMS if (i+j)%2==0 else tuple(reversed(ARMS))):
+                for arm in (active_arms if (i+j)%2==0 else tuple(reversed(active_arms))):
                     jobs.append((stage,case[0],order,arm,task,gold))
-    ref.write(out/"plan.json",{"source_commit":commit,"cells":[{"stage":s,"family":f,"order":o,"arm":a,"task_id":json.loads((t/"task.json").read_text())["id"]} for s,f,o,a,t,g in jobs],"system_sha256":ref.sha(SYSTEM.encode()),"schema":SCHEMA,"options":ref.OPTIONS})
+    ref.write(out/"plan.json",{"source_commit":commit,"cells":[{"stage":s,"family":f,"order":o,"arm":a,"task_id":json.loads((t/"task.json").read_text())["id"]} for s,f,o,a,t,g in jobs],"system_sha256":ref.sha(SYSTEM.encode()),"schema":SCHEMA if mode=="interface" else "json","options":ref.OPTIONS,"mode":mode})
     # Run the same independent task oracle outside the actor on a gold and six
     # planted bad artifacts before allowing any live judgments.
     task=jobs[0][4];gold=jobs[0][5]
@@ -193,10 +209,12 @@ def main(out):
         d=out/"trials"/str(i);d.mkdir(parents=True)
         meta=d/"candidate.json";exp=d/"experiment.json";receipt=d/"receipt.json";snap=d/"snapshot";diag=d/"diagnostics.json"
         task_id=json.loads((task/"task.json").read_text())["id"]
-        ref.write(meta,{"harness":{"name":"direct-ollama-judge-calibration","source_commit":commit},"model":{"id":ref.MODEL,"manifest_sha256":ref.MODEL_SHA},
+        model_tag=model_for(arm)
+        model_digest=ident["models"][arm]["manifest_sha256"] if mode=="models" else ref.MODEL_SHA
+        ref.write(meta,{"harness":{"name":"direct-ollama-judge-calibration","source_commit":commit},"model":{"id":model_tag,"manifest_sha256":model_digest},
                         "toolset":[],"runtime":ident,"options":ref.OPTIONS,"format":SCHEMA if arm=="typed" else "json","think":False,
                         "system_prompt_sha256":ref.sha(SYSTEM.encode())})
-        ref.write(exp,{"schema_version":2,"id":"judge-interface-r2","task":{"id":task_id},"claim_type":"framework-proving",
+        ref.write(exp,{"schema_version":2,"id":"judge-model-crossover-r3" if mode=="models" else "judge-interface-r2","task":{"id":task_id},"claim_type":"framework-proving",
                        "experimental_role":"control","design_block":stage+"/"+family+"/"+order,"primary_responses":["acceptance","termination_class","wall_seconds"]})
         cmd=[sys.executable,str(ROOT/"qualification/run_task.py"),"--task-commit",commit,"--substrate-profile-id","public-cpu-linux-reference",
              "--substrate-profile-commit",commit,"--experiment",str(exp),"--snapshot-dir",str(snap),"--diagnostics",str(diag),
@@ -226,12 +244,12 @@ def main(out):
         rows.append({"stage":stage,"family":family,"order":order,"arm":arm,"gold":gold,"choice":actual,"completed":completed,
                      "accepted":accepted,"task_id":task_id,"run_id":r["run_id"],"receipt_sha256":ref.sha(raw),
                      "artifact_sha256":manifest.get("sha256"),"termination_class":obs["termination_class"],"provider":provider,"resource":costs})
-        ref.write(out/"summary.json",summarize(rows,len(jobs),start,commit,ident,len(bad)))
-    result=summarize(rows,len(jobs),start,commit,ident,len(bad));ref.write(out/"summary.json",result)
-    print("JUDGE_R2="+json.dumps({k:v for k,v in result.items() if k!="rows"},sort_keys=True),flush=True)
+        ref.write(out/"summary.json",summarize(rows,len(jobs),start,commit,ident,len(bad),mode))
+    result=summarize(rows,len(jobs),start,commit,ident,len(bad),mode);ref.write(out/"summary.json",result)
+    print(("JUDGE_MODEL_R3=" if mode=="models" else "JUDGE_R2=")+json.dumps({k:v for k,v in result.items() if k!="rows"},sort_keys=True),flush=True)
     ref.check(len({r["run_id"] for r in rows})==len(jobs),"incomplete or duplicate receipts")
-    ref.check(ref.identity()==ident,"runtime identity changed")
+    ref.check(observe_identity()==ident,"runtime identity changed")
     if cg is not None:ref.check(cgroup_identity()==cg,"server cgroup identity changed")
 if __name__=="__main__":
     if sys.argv[1]=="--candidate":sys.exit(candidate(sys.argv[2]))
-    main(pathlib.Path(sys.argv[1]).resolve())
+    main(pathlib.Path(sys.argv[1]).resolve(),sys.argv[2] if len(sys.argv)>2 else "interface")
