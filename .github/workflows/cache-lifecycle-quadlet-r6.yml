@@ -1,0 +1,193 @@
+name: Cache lifecycle R6 rootless Quadlet external state
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-quadlet-r6.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Preflight actual rootless Podman and user systemd
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          if ! command -v podman; then sudo apt-get update -qq; sudo apt-get install -y --no-install-recommends podman; fi
+          podman version > podman-version.txt
+          podman info --format json > podman-info.json
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+          systemctl --user show-environment >/dev/null
+          test -x /usr/lib/systemd/user-generators/podman-user-generator || test -x /usr/libexec/podman/quadlet || test -x /usr/lib/podman/quadlet
+          printf 'ROOTLESS_USER_SYSTEMD_PREFLIGHT=PASS\n' > preflight.txt
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 120 https://huggingface.co/ggml-org/test-model-stories260K/resolve/main/stories260K-f32.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+          docker pull ubuntu:24.04
+          base=$(docker image inspect ubuntu:24.04 --format '{{index .RepoDigests 0}}')
+          test -n "$base"
+          printf '%s\n' "$base" > base-digest.txt
+          cat > Dockerfile <<'DOCKER'
+          ARG BASE
+          FROM ${BASE}
+          RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 libcurl4t64 ca-certificates && rm -rf /var/lib/apt/lists/*
+          COPY build/bin/ /opt/llama/
+          ENV LD_LIBRARY_PATH=/opt/llama
+          ENTRYPOINT ["/opt/llama/llama-server"]
+          DOCKER
+          docker build --build-arg BASE="$base" -t cache-lifecycle-r2:local .
+          docker image inspect cache-lifecycle-r2:local --format '{{.Id}}' > image-id.txt
+          docker save cache-lifecycle-r2:local -o image.tar
+          podman load -i image.tar
+          podman image inspect localhost/cache-lifecycle-r2:local --format '{{.Id}}' > podman-image-id.txt
+          test "$(sed 's/^sha256://' image-id.txt)" = "$(sed 's/^sha256://' podman-image-id.txt)"
+          rm image.tar
+      - name: Paired cold and restored continuations across process destruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time,urllib.request
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          config=pathlib.Path.home()/'.config/containers/systemd/cache-lifecycle-r6.container'
+          config.parent.mkdir(parents=True,exist_ok=True)
+          assert not config.exists()
+          unit='cache-lifecycle-r6.service'
+          name='cache-lifecycle-r6'
+          manifest='\n'.join(['[Container]','Image=localhost/cache-lifecycle-r2:local','ContainerName='+name,'PodmanArgs=--pull=never --userns=keep-id --user='+f'{os.getuid()}:{os.getgid()}','ReadOnly=true','DropCapability=ALL','NoNewPrivileges=true','Tmpfs=/tmp:rw,nosuid,nodev,size=64m','PublishPort=127.0.0.1:18081:18081','Volume='+str(root/'model.gguf')+':/model.gguf:ro','Volume='+str(root/'slots')+':/slots:rw','Exec=-m /model.gguf -c 512 -np 1 -t 2 --host 0.0.0.0 --port 18081 --slot-save-path /slots','[Service]','TimeoutStartSec=60','TimeoutStopSec=15',''])
+          (root/'quadlet.container').write_text(manifest)
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],scope='Rootless Quadlet native user systemd lifecycle witness; not production TrueNAS or GPU qualification',rows=rows),indent=2))
+          def req(path,data=None):
+              body=None if data is None else json.dumps(data).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=30) as r:
+                  return json.load(r)
+          def start():
+              t=time.monotonic()
+              assert not config.exists()
+              config.write_text(manifest)
+              subprocess.run(['systemctl','--user','daemon-reload'],check=True)
+              with open(root/'generated-unit.txt','w') as f:subprocess.run(['systemctl','--user','cat',unit],check=True,stdout=f)
+              subprocess.run(['systemctl','--user','start',unit],check=True,timeout=65)
+              cid=subprocess.check_output(['podman','inspect','--format','{{.Id}}',name],text=True).strip()
+              assert cid
+              p=type('Container',(),{'pid':cid})()
+              state=json.loads(subprocess.check_output(['podman','inspect',cid],text=True))[0]
+              assert state['Image'].removeprefix('sha256:')==(root/'image-id.txt').read_text().strip().removeprefix('sha256:')
+              assert state['HostConfig']['ReadonlyRootfs'] and state['Config']['User']==f'{os.getuid()}:{os.getgid()}'
+              assert len([m for m in state['Mounts'] if m['Destination']=='/slots' and m['RW']])==1
+              for _ in range(120):
+                  if subprocess.check_output(['podman','inspect','--format','{{.State.Running}}',p.pid],text=True).strip()!='true':
+                      stop(p);raise RuntimeError('container exited')
+                  try:
+                      req('/health')
+                      return p,time.monotonic()-t
+                  except OSError: time.sleep(.25)
+              stop(p)
+              raise RuntimeError('readiness timeout')
+          def stop(p):
+              with open(root/'server.log','ab') as log:subprocess.run(['podman','logs',p.pid],stdout=log,stderr=log,check=False)
+              subprocess.run(['systemctl','--user','stop',unit],check=True,timeout=30)
+              config.unlink()
+              subprocess.run(['systemctl','--user','daemon-reload'],check=True)
+              assert subprocess.run(['podman','container','exists',p.pid]).returncode==1
+              assert subprocess.run(['systemctl','--user','is-active','--quiet',unit]).returncode!=0
+          def completion(prompt,n):
+              t=time.monotonic()
+              r=req('/completion',dict(prompt=prompt,id_slot=0,n_predict=n,temperature=0,seed=42,cache_prompt=True))
+              return dict(content=r['content'],timings=r['timings'],wall_s=time.monotonic()-t)
+          for i in range(3):
+              prefix=('Once upon a time there was a little cat. '*12)+str(i)+' '
+              p,startup=start()
+              try:
+                  seed=completion(prefix,4)
+                  target=prefix+seed['content']+' Then '
+                  tokens=req('/tokenize',{'content':target})['tokens']
+                  t=time.monotonic()
+                  saved=req('/slots/0?action=save',{'filename':'session.bin'})
+                  save_s=time.monotonic()-t
+                  snapshot=root/'slots/session.bin'
+                  digest=hashlib.sha256(snapshot.read_bytes()).hexdigest()
+                  old=p.pid
+              finally:stop(p)
+              row=dict(rep=i,seed=seed,save=saved,save_s=save_s,bytes=snapshot.stat().st_size,snapshot_sha=digest,old_pid=old,seed_startup_s=startup,target_tokens=tokens)
+              rows.append(row);receipt()
+              assert hashlib.sha256(snapshot.read_bytes()).hexdigest()==digest
+              for arm in (['cold','restore'] if i%2==0 else ['restore','cold']):
+                  p,startup=start()
+                  try:
+                      assert p.pid!=old
+                      assert hashlib.sha256(snapshot.read_bytes()).hexdigest()==digest
+                      a=dict(pid=p.pid,startup_s=startup)
+                      row[arm]=a
+                      if arm=='restore':
+                          t=time.monotonic()
+                          a['restore']=req('/slots/0?action=restore',{'filename':'session.bin'})
+                          a['restore_s']=time.monotonic()-t
+                      a['completion']=completion(target,8)
+                  finally:stop(p);receipt()
+              cold=row['cold']['completion']; warm=row['restore']['completion']
+              row['output_match']=cold['content']==warm['content']
+              row['prefill_reduced']=warm['timings']['prompt_n']<cold['timings']['prompt_n']
+              row['restored_count_matches']=row['restore']['restore']['n_restored']==saved['n_saved']>0
+              receipt()
+          assert all(r['output_match'] and r['prefill_reduced'] and r['restored_count_matches'] for r in rows), 'native cache witness failed'
+          PY
+      - name: Retain native diagnostics and remove fixture-owned unit
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          cd "$RUNNER_TEMP/cache-r0" || exit 0
+          journalctl --user -u cache-lifecycle-r6.service --no-pager > quadlet-journal.txt 2>&1
+          if test -f "$HOME/.config/containers/systemd/cache-lifecycle-r6.container"; then
+            systemctl --user stop cache-lifecycle-r6.service
+            rm -f "$HOME/.config/containers/systemd/cache-lifecycle-r6.container"
+            systemctl --user daemon-reload
+          fi
+          exit 0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: llama-cache-quadlet-r6
+          path: |
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/image-id.txt
+            ${{ runner.temp }}/cache-r0/base-digest.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/server.log
+            ${{ runner.temp }}/cache-r0/podman-version.txt
+            ${{ runner.temp }}/cache-r0/podman-image-id.txt
+            ${{ runner.temp }}/cache-r0/preflight.txt
+            ${{ runner.temp }}/cache-r0/quadlet.container
+            ${{ runner.temp }}/cache-r0/generated-unit.txt
+            ${{ runner.temp }}/cache-r0/quadlet-journal.txt
+          if-no-files-found: warn
+          retention-days: 14
