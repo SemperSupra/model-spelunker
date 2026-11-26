@@ -1,4 +1,4 @@
-name: Actor DOE evidence purpose gate R0
+name: Actor DOE evidence purpose canonical receipt R1
 on:
   pull_request:
     paths:
@@ -9,16 +9,23 @@ permissions:
 jobs:
   proof:
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
           persist-credentials: false
       - run: python qualification/actor_doe_evidence_r0/prove.py evidence
+      - run: python qualification/actor_doe_evidence_r0/canonical_proof.py canonical-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: actor-doe-evidence-r0
-          path: evidence
+          name: actor-doe-evidence-r1-${{ matrix.os }}
+          path: |
+            evidence
+            canonical-evidence
           retention-days: 7

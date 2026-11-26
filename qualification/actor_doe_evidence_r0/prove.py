@@ -26,6 +26,10 @@ def admit(rows,manifest):
         elif entry.get("receipt_digest")!=d: reason="DIGEST_MISMATCH"
         elif entry.get("purpose")!="OPERATIONAL_QUALIFICATION": reason="NON_OPERATIONAL_OR_UNKNOWN"
         elif (r.get("experiment") or {}).get("claim_type")=="framework-proving": reason="PURPOSE_CONFLICT"
+        elif r.get("schema_version")!=2 or (r.get("experiment") or {}).get("claim_type")!="operational-observation": reason="PURPOSE_UNKNOWN_OR_LEGACY"
+        elif type(r.get("observation",{}).get("success")) is not bool: reason="INVALID_OBSERVATION"
+        elif r["observation"]["success"] != (r["observation"].get("termination_class")=="semantic-success"): reason="INVALID_OBSERVATION"
+        elif r["observation"]["success"] and (r["observation"].get("candidate_exit_code")!=0 or r["observation"].get("verifier_exit_code")!=0 or r["observation"].get("timed_out") is not False): reason="INVALID_OBSERVATION"
         else:
             accepted.append(r);continue
         excluded.append({"run_id":rid,"receipt_digest":d,"reason":reason})
