@@ -49,6 +49,23 @@ elif kind=="sequence":
         if arm=="omission" and n==1:continue
         color=blue if arm=="substitution" and n==1 else red
         image(pathlib.Path(f"frame-{n}.ppm"),[(x,4,color)])
+elif kind=="av":
+    # Each isolated stream has a legal event time (window 1 or 2).
+    # The late_audio arm violates only their cross-stream relationship.
+    visual=2 if arm=="valid_alt" else 1
+    acoustic=2 if arm in ("valid_alt","late_audio") else 1
+    for n in range(4):
+        if arm=="missing_frame" and n==2:continue
+        objects=[(1,2,red)]
+        if n==visual:objects.append((8,7,blue))
+        image(pathlib.Path(f"frame-{n}.ppm"),objects)
+    pcm=[]
+    for n in range(4):
+        f=(300 if arm=="wrong_tone" else 400) if n==acoustic and arm!="silent" else 0
+        pcm.extend(round(10000*math.sin(2*math.pi*f*i/8000)) for i in range(2000))
+    with wave.open("audio.wav","wb") as w:
+        w.setparams((1,2,8000,len(pcm),"NONE","not compressed"))
+        w.writeframes(struct.pack("<"+"h"*len(pcm),*pcm))
 '''
 
 VERIFIER=r'''
@@ -90,7 +107,8 @@ def tone(window):
 
 def verify(root):
     try:
-        names={"image":{"image.ppm"},"audio":{"audio.wav"},"sequence":{f"frame-{n}.ppm" for n in range(3)}}[kind]
+        names={"image":{"image.ppm"},"audio":{"audio.wav"},"sequence":{f"frame-{n}.ppm" for n in range(3)},
+               "av":{"audio.wav"}|{f"frame-{n}.ppm" for n in range(4)}}[kind]
         if {p.name for p in root.iterdir()}!=names|{"intent.json"}:return False
         for p in root.iterdir():
             if p.is_symlink() or not p.is_file() or p.stat().st_size>65536:return False
@@ -99,6 +117,23 @@ def verify(root):
             return objects(root/"image.ppm")=={red:(1,2),blue:(8,7)}
         if kind=="sequence":
             return all(objects(root/f"frame-{i}.ppm")=={red:(x,4)} for i,x in enumerate((1,4,7)))
+        if kind=="av":
+            visual=[]
+            for i in range(4):
+                boxes=objects(root/f"frame-{i}.ppm")
+                if boxes=={red:(1,2),blue:(8,7)}:visual.append(i)
+                elif boxes!={red:(1,2)}:return False
+            with wave.open(str(root/"audio.wav"),"rb") as w:
+                if (w.getnchannels(),w.getsampwidth(),w.getframerate(),w.getnframes(),w.getcomptype())!=(1,2,8000,8000,"NONE"):return False
+                pcm=struct.unpack("<8000h",w.readframes(8000))
+            acoustic=[]
+            for i in range(4):
+                window=pcm[i*2000:(i+1)*2000]
+                if all(v==0 for v in window):continue
+                f=tone(window)
+                if f is None or abs(f-400)>4:return False
+                acoustic.append(i)
+            return visual in ([1],[2]) and acoustic in ([1],[2]) and visual==acoustic
         with wave.open(str(root/"audio.wav"),"rb") as w:
             if (w.getnchannels(),w.getsampwidth(),w.getframerate(),w.getnframes(),w.getcomptype())!=(1,2,8000,4000,"NONE"):
                 return False
@@ -116,6 +151,7 @@ TASKS={
     "image":("A 12 by 12 PPM: red 2x2 square at (1,2), blue 2x2 square at (8,7), white background.",["image.ppm"],["good","omission","substitution","spatial"]),
     "audio":("8 kHz mono PCM WAV: 200 Hz tone for 0.25 seconds, then 400 Hz for 0.25 seconds.",["audio.wav"],["good","omission","substitution","order"]),
     "sequence":("Three ordered 12 by 12 PPM frames: a red 2x2 square moves along x=1,4,7 at y=4.",["frame-0.ppm","frame-1.ppm","frame-2.ppm"],["good","omission","substitution","order"]),
+    "av":("Four ordered 12 by 12 PPM frames, one per 0.25 s, red square at (1,2) always, blue square at (8,7) in exactly frame 1 or 2 (zero-based). 8 kHz mono PCM WAV with one 400 Hz event in the same window, silence elsewhere. Either common event time is valid.",["audio.wav"]+[f"frame-{i}.ppm" for i in range(4)],["good","valid_alt","late_audio","silent","wrong_tone","missing_frame"]),
 }
 def write(p,x):p.write_text(json.dumps(x,indent=2,sort_keys=True)+"\n",encoding="utf-8")
 def require(ok,msg):
@@ -151,10 +187,11 @@ def main(out):
         raw=receipt.read_bytes();r=json.loads(raw);obs=r["observation"]
         require(r["task"]["source_commit"]==commit and r["task"]["id"]==task_id,"task identity mismatch")
         require(r["experiment"]["claim_type"]=="framework-proving","wrong purpose")
-        require(obs["success"] is (arm=="good") and p.returncode==(0 if arm=="good" else 1),"wrong media verdict "+kind+"/"+arm)
+        expected=arm in ("good","valid_alt")
+        require(obs["success"] is expected and p.returncode==(0 if expected else 1),"wrong media verdict "+kind+"/"+arm)
         # Candidate completed for every case: these are output-fidelity faults, not transport failures.
         require(obs["candidate_exit_code"]==0 and not obs["timed_out"],"unexpected execution failure")
-        require(obs["verifier_exit_code"]==(0 if arm=="good" else 1),"wrong verifier status")
+        require(obs["verifier_exit_code"]==(0 if expected else 1),"wrong verifier status")
         manifest=json.loads((snap/"snapshot_manifest.json").read_text(encoding="utf-8"))
         for relative,info in manifest["files"].items():
             if info["present"]:
@@ -164,7 +201,7 @@ def main(out):
     require(len({r["run_id"] for r in rows})==len(rows),"duplicate receipts")
     s={"scope":"FRAMEWORK_PROVING_ONLY","source_commit":commit,"actual_receipts":len(rows),
        "known_good_accepted":sum(r["accepted"] for r in rows),"planted_faults_rejected":sum(not r["accepted"] for r in rows),
-       "promotion_authorized":False,"limitations":"Synthetic geometry, tone events and frame sequences only. No natural image/audio/video, TTS/ASR, audiovisual sync, codec, open-ended semantic evaluation or target capability claim.","rows":rows}
+       "promotion_authorized":False,"limitations":"Synthetic geometry, tone events, frame sequences and discrete frame/audio event alignment only. No natural image/audio/video, TTS/ASR, lip sync, codec timing or target capability claim.","rows":rows}
     write(out/"summary.json",s);print("MEDIA_CONTROLS="+json.dumps(s),flush=True)
 if __name__=="__main__":
     main(pathlib.Path(sys.argv[1]).resolve())
