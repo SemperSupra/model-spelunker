@@ -21,6 +21,29 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - run: python qualification/unique_goodput_r0/prove.py proof-evidence
+      - name: Exact existing purpose-gate source
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: e01282cef01c77bb685bf4062f453b9e1cdca998
+          path: peer-purpose
+          persist-credentials: false
+      - name: Exact existing resource-gate source
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: 355195c5ca90673665b32736e7ab70973b2ca531
+          path: peer-resource
+          persist-credentials: false
+      - name: Compose gates against the same actual receipts
+        if: matrix.os == 'ubuntu-24.04'
+        run: python qualification/unique_goodput_r0/composition.py proof-evidence peer-purpose peer-resource composition-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always() && matrix.os == 'ubuntu-24.04'
+        with:
+          name: exact-gate-composition-r0
+          path: composition-evidence
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
