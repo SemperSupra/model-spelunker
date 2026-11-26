@@ -1,4 +1,4 @@
-name: Cache lifecycle R5 native pre-eviction checkpoint
+name: Cache lifecycle R6 native pre-readiness restore
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-swap-r3.yml']
@@ -47,7 +47,13 @@ jobs:
           find "$PWD/swap" -type f -name llama-swap -print -quit > swap-path.txt
           test -s swap-path.txt
           sha256sum "$(cat swap-path.txt)" >> identities.txt
-      - name: Native router eviction hook and explicit state restoration
+      - name: Install native loopback relay for readiness fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v socat; then sudo apt-get update -qq; sudo apt-get install -y --no-install-recommends socat; fi
+          socat -V > "$RUNNER_TEMP/cache-r0/socat-version.txt"
+      - name: Native router eviction and fenced startup restoration
         shell: bash
         run: |
           set -euo pipefail
@@ -71,11 +77,18 @@ jobs:
           hook=root/'stop-a.py'
           hook.write_text("#!/usr/bin/env python3\nimport hashlib,json,os,pathlib,signal,sys,time,urllib.request\nroot=pathlib.Path(__file__).resolve().parent\npid=int(sys.argv[1])\n# This hook is scoped to the isolated fixture process, not a shared server.\nassert int((root/'a.pid').read_text())==pid\narm=root/'arm.json'\ntry:\n    if arm.exists():\n        claim=root/'arm.claim'\n        os.replace(arm,claim)\n        ticket=json.loads(claim.read_text())\n        assert ticket['pid']==pid and type(ticket['rep']) is int and 0<=ticket['rep']<3\n        i=ticket['rep']\n        slots=root/'slots'\n        staging=f'session-{i}.partial'\n        snap=slots/f'session-{i}.bin'\n        assert not snap.exists()\n        t=time.monotonic()\n        request=urllib.request.Request('http://127.0.0.1:18081/slots/0?action=save',data=json.dumps({'filename':staging}).encode(),headers={'Content-Type':'application/json'})\n        with urllib.request.urlopen(request,timeout=2) as res:\n            saved=json.load(res)\n        tmp=slots/staging\n        assert saved['n_saved']>0 and saved['n_written']==tmp.stat().st_size\n        with tmp.open('rb') as f:\n            data=f.read()\n            os.fsync(f.fileno())\n        os.replace(tmp,snap)\n        d=os.open(slots,os.O_RDONLY|os.O_DIRECTORY)\n        try:os.fsync(d)\n        finally:os.close(d)\n        event=dict(pid=pid,rep=i,save_s=time.monotonic()-t,sha256=hashlib.sha256(data).hexdigest(),saved=saved)\n        (root/f'event-{i}.json').write_text(json.dumps(event))\n        claim.unlink()\nfinally:\n    try:os.kill(pid,signal.SIGTERM)\n    except ProcessLookupError:pass\n")
           hook.chmod(0o700)
+          supervisor=root/'start-a.py'
+          supervisor.write_text("#!/usr/bin/env python3\nimport hashlib,json,os,pathlib,signal,socket,subprocess,sys,time,urllib.request\nroot=pathlib.Path(__file__).resolve().parent\n(root/'a.pid').write_text(str(os.getpid()))\nchildren=[]\ndef stop(sig,frame):raise SystemExit(0)\nsignal.signal(signal.SIGTERM,stop)\nsignal.signal(signal.SIGINT,stop)\ndef req(path,data=None):\n    r=urllib.request.Request('http://127.0.0.1:18083'+path,data=None if data is None else json.dumps(data).encode(),headers={'Content-Type':'application/json'})\n    with urllib.request.urlopen(r,timeout=2) as resp:return json.load(resp)\ndef closed():\n    with socket.socket() as sock:\n        sock.settimeout(.2)\n        return sock.connect_ex(('127.0.0.1',18081))!=0\ntry:\n    args=sys.argv[1:]\n    assert closed()\n    children.append(subprocess.Popen(args))\n    for _ in range(100):\n        assert children[0].poll() is None\n        try:\n            req('/health')\n            break\n        except OSError:time.sleep(.1)\n    else:raise RuntimeError('backend readiness timeout')\n    assert closed(), 'relay exposed before restore disposition'\n    ticket=root/'resume.json'\n    if ticket.exists():\n        claim=root/'resume.claim'\n        os.replace(ticket,claim)\n        t=json.loads(claim.read_text())\n        i=t['rep']\n        assert type(i) is int and 0<=i<3 and t['kind'] in ('valid','negative')\n        result=dict(rep=i,kind=t['kind'],pid=os.getpid(),gate_closed=closed(),native_restore_called=False)\n        started=time.monotonic()\n        snap=root/'slots'/f'session-{i}.bin'\n        event=json.loads((root/f'event-{i}.json').read_text())\n        identity_ok=t.get('model_sha')==os.environ['MODEL_SHA'] and t.get('runtime_sha')==os.environ['LLAMA_REV']\n        if not snap.is_file():result['outcome']='cold_missing'\n        elif not identity_ok or hashlib.sha256(snap.read_bytes()).hexdigest()!=t.get('sha256') or t.get('sha256')!=event['sha256']:\n            result['outcome']='cold_rejected'\n        else:\n            result['native_restore_called']=True\n            try:\n                restored=req('/slots/0?action=restore',{'filename':snap.name})\n                if restored['n_restored']!=event['saved']['n_saved']:raise ValueError('token count mismatch')\n                result.update(outcome='restored',restored_count=restored['n_restored'])\n            except Exception:\n                # Native failure may leave partial state. Do not publish readiness.\n                raise RuntimeError('native restore failed; abort this start')\n        result['restore_s']=time.monotonic()-started\n        result['gate_closed_at_commit']=closed()\n        assert result['gate_closed_at_commit']\n        dest=root/f\"ready-{i}-{t['kind']}.json\"\n        tmp=dest.with_suffix('.tmp')\n        tmp.write_text(json.dumps(result))\n        os.replace(tmp,dest)\n        claim.unlink()\n    assert closed()\n    children.append(subprocess.Popen(['socat','TCP-LISTEN:18081,bind=127.0.0.1,reuseaddr,fork','TCP:127.0.0.1:18083']))\n    while all(p.poll() is None for p in children):time.sleep(.05)\n    raise RuntimeError('backend or relay exited')\nfinally:\n    for p in reversed(children):\n        if p.poll() is None:p.terminate()\n    for p in reversed(children):\n        try:p.wait(timeout=2)\n        except subprocess.TimeoutExpired:p.kill();p.wait()\n")
+          supervisor.chmod(0o700)
           models={}
           for name,port,file in [('a',18081,'model.gguf'),('b',18082,'model-b.gguf')]:
               script=root/('start-'+name+'.sh')
               args=[str(root/'build/bin/llama-server'),'-m',str(root/file),'-c','512','-np','1','-t','2','--host','127.0.0.1','--port',str(port),'--slot-save-path',str(root/'slots')]
-              script.write_text('#!/bin/sh\nprintf "%s\\n" "$$" > '+shlex.quote(str(root/(name+'.pid')))+'\nexec '+shlex.join(args)+'\n')
+              if name=='a':
+                  args[args.index('--port')+1]='18083'
+                  script.write_text('#!/bin/sh\nexec '+shlex.join([str(supervisor)]+args)+'\n')
+              else:
+                  script.write_text('#!/bin/sh\nprintf "%s\\n" "$" > '+shlex.quote(str(root/(name+'.pid')))+'\nexec '+shlex.join(args)+'\n')
               script.chmod(0o700)
               models[name]={'cmd':str(script),'proxy':f'http://127.0.0.1:{port}'}
           models['a']['cmdStop']=str(hook)+' ${PID}'
@@ -85,7 +98,7 @@ jobs:
           p=subprocess.Popen([(root/'swap-path.txt').read_text().strip(),'-config',str(config),'-listen','127.0.0.1:18080'],stdout=log,stderr=log)
           rows=[]
           def receipt():
-              (root/'receipt.json').write_text(json.dumps({'scope':'native llama-swap opt-in graceful stop checkpoint; explicit restore, single-client only','workflow_sha':os.environ['GITHUB_SHA'],'rows':rows},indent=2))
+              (root/'receipt.json').write_text(json.dumps({'scope':'native llama-swap opt-in stop checkpoint and pre-readiness restoration, single-client fixture only','workflow_sha':os.environ['GITHUB_SHA'],'rows':rows},indent=2))
           def completion(port,prompt,model=None,n=8):
               d={'prompt':prompt,'id_slot':0,'n_predict':n,'temperature':0,'seed':42,'cache_prompt':True}
               if model:d['model']=model
@@ -118,14 +131,29 @@ jobs:
                   assert not alive(row['b_pid']) and row['cold_pid']!=row['seed_pid']
                   completion(18080,'An unrelated story about a tree.','b')
                   assert not alive(row['cold_pid'])
-                  completion(18080,'Initial unrelated warmup.','a',1)
-                  row['restore_pid']=pid('a')
-                  assert row['restore_pid'] not in (row['seed_pid'],row['cold_pid'])
-                  assert hashlib.sha256(snap.read_bytes()).hexdigest()==row['snapshot_sha256']
-                  t=time.monotonic()
-                  restored=request(18081,'/slots/0?action=restore',{'filename':f'session-{i}.bin'})
-                  row['restore_s']=time.monotonic()-t
+                  ticket=dict(rep=i,kind='valid',sha256=event['sha256'],model_sha=os.environ['MODEL_SHA'],runtime_sha=os.environ['LLAMA_REV'])
+                  (root/'resume.json').write_text(json.dumps(ticket))
                   row['restored']=completion(18080,target,'a')
+                  ready=json.loads((root/f'ready-{i}-valid.json').read_text())
+                  row['restore_ready_event']=ready
+                  row['restore_pid']=pid('a')
+                  assert ready['pid']==row['restore_pid'] and ready['outcome']=='restored' and ready['native_restore_called'] and ready['gate_closed'] and ready['gate_closed_at_commit']
+                  assert row['restore_pid'] not in (row['seed_pid'],row['cold_pid'])
+                  assert not (root/'resume.json').exists() and not (root/'resume.claim').exists()
+                  row['restore_s']=ready['restore_s']
+                  restored={'n_restored':ready['restored_count']}
+                  completion(18080,'Switch to unrelated model.','b')
+                  bad=dict(ticket,kind='negative')
+                  if i==0:bad['sha256']='0'*64
+                  elif i==1:bad['model_sha']='0'*64
+                  else:snap.rename(snap.with_suffix('.backup'))
+                  (root/'resume.json').write_text(json.dumps(bad))
+                  row['negative']=completion(18080,target,'a')
+                  rejected=json.loads((root/f'ready-{i}-negative.json').read_text())
+                  row['negative_ready_event']=rejected
+                  assert rejected['outcome'] in ('cold_rejected','cold_missing') and not rejected['native_restore_called'] and rejected['gate_closed'] and rejected['gate_closed_at_commit']
+                  assert row['negative']['content']==row['cold']['content'] and row['negative']['timings']['prompt_n']==row['cold']['timings']['prompt_n']
+                  if i==2:snap.with_suffix('.backup').rename(snap)
                   row['match']=row['cold']['content']==row['restored']['content']
                   row['reduced']=row['restored']['timings']['prompt_n']<row['cold']['timings']['prompt_n']
                   row['restored_count']=restored['n_restored']
@@ -142,7 +170,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-swap-r5
+          name: llama-cache-swap-r6
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
@@ -150,5 +178,7 @@ jobs:
             ${{ runner.temp }}/cache-r0/swap.log
             ${{ runner.temp }}/cache-r0/swap.json
             ${{ runner.temp }}/cache-r0/event-*.json
+            ${{ runner.temp }}/cache-r0/ready-*.json
+            ${{ runner.temp }}/cache-r0/socat-version.txt
           if-no-files-found: warn
           retention-days: 14
