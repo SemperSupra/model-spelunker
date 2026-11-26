@@ -29,8 +29,8 @@ jobs:
           curl -fsS http://127.0.0.1:11434/api/version | python3 -c 'import json,sys; assert json.load(sys.stdin)["version"]=="0.34.1"'
           docker exec intent-reference-r0 ollama pull qwen3:1.7b
           curl -fsS http://127.0.0.1:11434/api/tags | python3 -c 'import json,sys; m=[x for x in json.load(sys.stdin)["models"] if x["name"]=="qwen3:1.7b"]; assert len(m)==1 and m[0]["digest"]=="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"'
-      - name: Actual benign reference interviews, all outcomes retained
-        run: python3 qualification/intent_reference_r0/prove.py reference-evidence
+      - name: Independent authored judge-interface calibration
+        run: python3 qualification/intent_reference_r0/judge_calibration.py judge-evidence
       - name: Retire disposable service
         if: always()
         shell: bash
@@ -42,8 +42,8 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: intent-reference-r0
+          name: judge-calibration-r2
           path: |
-            reference-evidence
+            judge-evidence
             image-identity.json
           retention-days: 7
