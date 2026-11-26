@@ -1,4 +1,4 @@
-name: Cache lifecycle R1 MLX diagnostic restart
+name: Cache lifecycle R4 MLX prefill-path discrimination
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-mlx-r0.yml']
@@ -7,9 +7,14 @@ permissions:
 jobs:
   native:
     if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        prefill: [2048, 1]
     runs-on: macos-15
     timeout-minutes: 25
     env:
+      PREFILL_STEP: '${{ matrix.prefill }}'
       HF_HUB_DISABLE_TELEMETRY: '1'
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
     steps:
@@ -96,6 +101,7 @@ jobs:
           from mlx_lm.generate import generate_step
           from mlx_lm.models.cache import make_prompt_cache,save_prompt_cache,load_prompt_cache
           mode=sys.argv[1]; rep=int(sys.argv[2])
+          step=int(os.environ['PREFILL_STEP'])
           base=pathlib.Path(f'rep-{rep}')
           base.mkdir(exist_ok=True)
           t=time.monotonic()
@@ -107,7 +113,7 @@ jobs:
               result=[]
               first=None
               top=[]
-              for token,logits in generate_step(mx.array(ids),model,prompt_cache=cache,max_tokens=n):
+              for token,logits in generate_step(mx.array(ids),model,prompt_cache=cache,max_tokens=n,prefill_step_size=step):
                   mx.eval(logits)
                   if first is None:first=time.monotonic()-t
                   result.append(int(token))
@@ -141,6 +147,14 @@ jobs:
                   offsets=[int(c.offset) for c in cache]
                   assert set(offsets)=={seed['offset']}
                   ids=ids[seed['offset']:]
+              elif mode=='replay':
+                  cache=make_prompt_cache(model)
+                  old=seed['seed']
+                  rebuilt=generate(old['input_ids'],cache,len(old['tokens']))
+                  row['rebuild']=rebuilt
+                  assert rebuilt['tokens']==old['tokens']
+                  assert {int(c.offset) for c in cache}=={seed['offset']}
+                  ids=ids[seed['offset']:]
               else:cache=make_prompt_cache(model)
               row['result']=generate(ids,cache,8)
           (base/(mode+'.json')).write_text(json.dumps(row,indent=2))
@@ -148,6 +162,7 @@ jobs:
           for i in 0 1 2; do
             python trial.py seed "$i"
             python trial.py cold2 "$i"
+            python trial.py replay "$i"
             if [ "$i" = 1 ]; then python trial.py restore "$i"; python trial.py cold "$i"
             else python trial.py cold "$i"; python trial.py restore "$i"; fi
           done
@@ -156,22 +171,25 @@ jobs:
           rows=[]
           for i in range(3):
               root=pathlib.Path(f'rep-{i}')
-              row={a:json.loads((root/(a+'.json')).read_text()) for a in ('seed','cold','cold2','restore')}
+              row={a:json.loads((root/(a+'.json')).read_text()) for a in ('seed','cold','cold2','restore','replay')}
               c,r=row['cold']['result'],row['restore']['result']
               row['match']=c['tokens']==r['tokens']
               row['cold_repeat_match']=c['tokens']==row['cold2']['result']['tokens']
               row['live_restore_match']=row['seed']['live']['tokens']==r['tokens']
               row['cold_live_match']=c['tokens']==row['seed']['live']['tokens']
-              print('MLX_DIAGNOSTIC',i,{k:row[k] for k in ('match','cold_repeat_match','live_restore_match','cold_live_match')})
+              row['replay_restore_match']=row['replay']['result']['tokens']==r['tokens']
+              row['replay_scores_match']=row['replay']['result']['top2']==r['top2']
+              row['resident_scores_match']=row['seed']['live']['top2']==r['top2']
+              print('MLX_DIAGNOSTIC',i,{k:row[k] for k in ('match','cold_repeat_match','live_restore_match','cold_live_match','replay_restore_match','replay_scores_match','resident_scores_match')})
               row['suffix_only']=r['input_ids']==c['input_ids'][row['seed']['offset']:] and len(r['input_ids'])<len(c['input_ids'])
               rows.append(row)
-          pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='hosted MLX native continuation witness, no physical target or task-goodput equivalence',workflow_sha=os.environ['GITHUB_SHA'],rows=rows),indent=2))
-          assert all(r['match'] and r['suffix_only'] for r in rows)
+          pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='hosted MLX native continuation witness, no physical target or task-goodput equivalence',workflow_sha=os.environ['GITHUB_SHA'],prefill_step_size=int(os.environ['PREFILL_STEP']),rows=rows),indent=2))
+          assert all(r['match'] and r['suffix_only'] and r['replay_restore_match'] and r['replay_scores_match'] and r['resident_scores_match'] for r in rows)
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: mlx-cache-lifecycle-r1
+          name: mlx-cache-lifecycle-r4-${{ matrix.prefill }}
           path: |
             ${{ runner.temp }}/cache-mlx/receipt.json
             ${{ runner.temp }}/cache-mlx/rep-*/*.json
