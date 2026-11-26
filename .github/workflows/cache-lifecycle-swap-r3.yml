@@ -1,4 +1,4 @@
-name: Cache lifecycle R3 native llama-swap
+name: Cache lifecycle R5 native pre-eviction checkpoint
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-swap-r3.yml']
@@ -47,7 +47,7 @@ jobs:
           find "$PWD/swap" -type f -name llama-swap -print -quit > swap-path.txt
           test -s swap-path.txt
           sha256sum "$(cat swap-path.txt)" >> identities.txt
-      - name: Native router eviction and explicit state restoration
+      - name: Native router eviction hook and explicit state restoration
         shell: bash
         run: |
           set -euo pipefail
@@ -68,6 +68,9 @@ jobs:
               raise RuntimeError('readiness timeout')
           def alive(pid):
               return pathlib.Path(f'/proc/{pid}').exists()
+          hook=root/'stop-a.py'
+          hook.write_text("#!/usr/bin/env python3\nimport hashlib,json,os,pathlib,signal,sys,time,urllib.request\nroot=pathlib.Path(__file__).resolve().parent\npid=int(sys.argv[1])\n# This hook is scoped to the isolated fixture process, not a shared server.\nassert int((root/'a.pid').read_text())==pid\narm=root/'arm.json'\ntry:\n    if arm.exists():\n        claim=root/'arm.claim'\n        os.replace(arm,claim)\n        ticket=json.loads(claim.read_text())\n        assert ticket['pid']==pid and type(ticket['rep']) is int and 0<=ticket['rep']<3\n        i=ticket['rep']\n        slots=root/'slots'\n        staging=f'session-{i}.partial'\n        snap=slots/f'session-{i}.bin'\n        assert not snap.exists()\n        t=time.monotonic()\n        request=urllib.request.Request('http://127.0.0.1:18081/slots/0?action=save',data=json.dumps({'filename':staging}).encode(),headers={'Content-Type':'application/json'})\n        with urllib.request.urlopen(request,timeout=2) as res:\n            saved=json.load(res)\n        tmp=slots/staging\n        assert saved['n_saved']>0 and saved['n_written']==tmp.stat().st_size\n        with tmp.open('rb') as f:\n            data=f.read()\n            os.fsync(f.fileno())\n        os.replace(tmp,snap)\n        d=os.open(slots,os.O_RDONLY|os.O_DIRECTORY)\n        try:os.fsync(d)\n        finally:os.close(d)\n        event=dict(pid=pid,rep=i,save_s=time.monotonic()-t,sha256=hashlib.sha256(data).hexdigest(),saved=saved)\n        (root/f'event-{i}.json').write_text(json.dumps(event))\n        claim.unlink()\nfinally:\n    try:os.kill(pid,signal.SIGTERM)\n    except ProcessLookupError:pass\n")
+          hook.chmod(0o700)
           models={}
           for name,port,file in [('a',18081,'model.gguf'),('b',18082,'model-b.gguf')]:
               script=root/('start-'+name+'.sh')
@@ -75,13 +78,14 @@ jobs:
               script.write_text('#!/bin/sh\nprintf "%s\\n" "$$" > '+shlex.quote(str(root/(name+'.pid')))+'\nexec '+shlex.join(args)+'\n')
               script.chmod(0o700)
               models[name]={'cmd':str(script),'proxy':f'http://127.0.0.1:{port}'}
+          models['a']['cmdStop']=str(hook)+' ${PID}'
           config=root/'swap.json'
           config.write_text(json.dumps({'healthCheckTimeout':30,'models':models}))
           log=open(root/'swap.log','wb')
           p=subprocess.Popen([(root/'swap-path.txt').read_text().strip(),'-config',str(config),'-listen','127.0.0.1:18080'],stdout=log,stderr=log)
           rows=[]
           def receipt():
-              (root/'receipt.json').write_text(json.dumps({'scope':'native llama-swap explicit lifecycle witness; not autonomous save/restore or production admission','workflow_sha':os.environ['GITHUB_SHA'],'rows':rows},indent=2))
+              (root/'receipt.json').write_text(json.dumps({'scope':'native llama-swap opt-in graceful stop checkpoint; explicit restore, single-client only','workflow_sha':os.environ['GITHUB_SHA'],'rows':rows},indent=2))
           def completion(port,prompt,model=None,n=8):
               d={'prompt':prompt,'id_slot':0,'n_predict':n,'temperature':0,'seed':42,'cache_prompt':True}
               if model:d['model']=model
@@ -97,12 +101,16 @@ jobs:
                   seed=completion(18080,prefix,'a',4)
                   target=prefix+seed['content']+' Then '
                   row['seed_pid']=pid('a')
-                  t=time.monotonic()
-                  saved=request(18081,'/slots/0?action=save',{'filename':f'session-{i}.bin'})
-                  row['save_s']=time.monotonic()-t
                   snap=root/'slots'/f'session-{i}.bin'
-                  row['snapshot_sha256']=hashlib.sha256(snap.read_bytes()).hexdigest()
+                  assert not snap.exists()
+                  (root/'arm.json').write_text(json.dumps(dict(pid=row['seed_pid'],rep=i)))
                   row['b']=completion(18080,'An unrelated story about a dog.','b')
+                  event=json.loads((root/f'event-{i}.json').read_text())
+                  assert event['pid']==row['seed_pid'] and event['rep']==i and not (root/'arm.json').exists()
+                  row['checkpoint_event']=event
+                  saved=event['saved'];row['save_s']=event['save_s']
+                  row['snapshot_sha256']=hashlib.sha256(snap.read_bytes()).hexdigest()
+                  assert row['snapshot_sha256']==event['sha256']
                   row['b_pid']=pid('b')
                   assert not alive(row['seed_pid'])
                   row['cold']=completion(18080,target,'a')
@@ -123,6 +131,7 @@ jobs:
                   row['restored_count']=restored['n_restored']
                   receipt()
                   assert row['match'] and row['reduced'] and restored['n_restored']==saved['n_saved']>0
+                  assert len(list((root/'slots').glob('session-*.bin')))==i+1
           finally:
               p.terminate()
               try:p.wait(timeout=15)
@@ -133,12 +142,13 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-swap-r3
+          name: llama-cache-swap-r5
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
             ${{ runner.temp }}/cache-r0/upstream-license.txt
             ${{ runner.temp }}/cache-r0/swap.log
             ${{ runner.temp }}/cache-r0/swap.json
+            ${{ runner.temp }}/cache-r0/event-*.json
           if-no-files-found: warn
           retention-days: 14
