@@ -1,0 +1,67 @@
+name: Native inference workbench integration
+on:
+  pull_request:
+    paths:
+      - 'qualification/workbench_r0/**'
+      - 'qualification/native_phase_task_r0/**'
+      - 'qualification/serving_fanout_r0/streaming/streaming_probe.py'
+      - '.github/workflows/native-phase-task-r0.yml'
+permissions:
+  contents: read
+jobs:
+  proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 32
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_SHA256: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/native-task-models'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Existing pinned Ollama hydration recipe
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" --output "$archive"
+          echo "$OLLAMA_SHA256  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-native"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-native"
+          echo "$RUNNER_TEMP/ollama-native/bin" >> "$GITHUB_PATH"
+      - name: Native inference and canonical receipt join
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull qwen3:1.7b
+          python qualification/native_phase_task_r0/prove.py proof evidence
+      - name: Native evidence browser and CLI parity
+        run: |
+          python -m pip install playwright==1.51.0
+          python -m playwright install chromium
+          python qualification/workbench_r0/native_proof.py evidence native-evidence
+      - name: Hydrate exact previously exercised Qwen embodiment source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: a0426d62e282ab24199fe10097abb400aeb46c01
+          path: embodiment-reference
+          persist-credentials: false
+      - name: Native agent 2x2 sequencing and representation interview
+        run: python qualification/workbench_r0/agent_proof.py native-evidence embodiment-reference agent-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: native-phase-task-r0
+          path: |
+            evidence
+            native-evidence
+            agent-evidence
+          retention-days: 7
