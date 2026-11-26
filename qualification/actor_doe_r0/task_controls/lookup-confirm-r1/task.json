@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "lookup-confirm-r1",
+  "task_class": "repository.capability-discovery",
+  "instruction": "Read index.txt to identify the TARGET filename, then copy its entire content into value.txt. Do not copy the decoy.",
+  "fixture": "fixture",
+  "verifier": "verify.py",
+  "limits": {
+    "wall_seconds": 120
+  },
+  "success": {
+    "kind": "deterministic-final-state"
+  },
+  "demands": {
+    "novelty": "low",
+    "ambiguity": "low",
+    "planning_horizon": "short",
+    "tool_discovery": "low",
+    "recovery_requirement": "low",
+    "context_volume": "small",
+    "environment_uncertainty": "low"
+  },
+  "allowed_write_paths": [
+    "value.txt"
+  ],
+  "projected_tools": [
+    "read_file",
+    "write_file"
+  ]
+}

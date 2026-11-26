@@ -1,0 +1,51 @@
+name: Actor DOE paired-statistics framework R2
+on:
+  pull_request:
+    paths:
+      - 'qualification/actor_doe_r0/**'
+      - '.github/workflows/actor-doe-screen-r0.yml'
+permissions:
+  contents: read
+jobs:
+  proof:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Pinned upstream DOE package
+        run: |
+          python3 -m venv "$RUNNER_TEMP/doe"
+          "$RUNNER_TEMP/doe/bin/pip" install --disable-pip-version-check 'git+https://github.com/relf/pyDOE3.git@b4f56a5b261c7508a0d661af0b0a894eb75955e4'
+          "$RUNNER_TEMP/doe/bin/pip" freeze > dependencies.txt
+      - name: Independent algebraic and synthetic-response controls
+        run: |
+          "$RUNNER_TEMP/doe/bin/python" qualification/actor_doe_r0/prove_screen.py doe-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: actor-doe-r0
+          path: |
+            doe-evidence
+            dependencies.txt
+          retention-days: 7
+  task-strata:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - run: python qualification/actor_doe_r0/task_strata_proof.py task-evidence
+      - run: python qualification/actor_doe_r0/paired_stats.py task-evidence/summary.json paired-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: actor-doe-task-strata-r1
+          path: |
+            task-evidence
+            paired-evidence
+          retention-days: 7
