@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Strict Qwen JSON result oracle; never interpret tool output as final completion."""
 import json
+import math
 
 class InvalidResult(ValueError):
     pass
@@ -18,14 +19,21 @@ def _reject_constant(value):
     raise InvalidResult("non-finite JSON constant")
 
 
+def _finite_float(value):
+    result = float(value)
+    if not math.isfinite(result):
+        raise InvalidResult("non-finite JSON number")
+    return result
+
+
 def _valid_fixture(expected: str, decoy: str) -> bool:
     return isinstance(expected, str) and isinstance(decoy, str) and bool(expected) and bool(decoy) and expected != decoy
 
 
 def extract_final_response(stdout: str) -> str:
     try:
-        messages=json.loads(stdout, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
-    except (json.JSONDecodeError, TypeError) as exc:
+        messages=json.loads(stdout, object_pairs_hook=_unique_object, parse_constant=_reject_constant, parse_float=_finite_float)
+    except (ValueError, TypeError, RecursionError) as exc:
         raise InvalidResult("invalid CLI JSON") from exc
     if not isinstance(messages,list) or any(not isinstance(v,dict) for v in messages):
         raise InvalidResult("batch JSON must be a list of objects")
@@ -85,6 +93,9 @@ def selftest() -> None:
         '[17,{"type":"result","is_error":false,"result":"VALUE=SELECTED"}]',
         '[{"type":"result","is_error":false,"result":"VALUE=SELECTED","metric":NaN}]',
         json.dumps([{"type":"result","is_error":False,"result":["VALUE=SELECTED"]}]),
+        '[{"type":"result","is_error":false,"result":"VALUE=SELECTED","metric":1e999}]',
+        '[{"type":"result","is_error":false,"result":"VALUE=SELECTED","metric":' + '9'*5000 + '}]',
+        b'\xff',
     ]
     for bad in adversarial:
         assert not verify_selected(bad,selected,decoy),"bad assistant final accepted"
