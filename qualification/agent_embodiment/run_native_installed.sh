@@ -38,12 +38,14 @@ python3 qualification/agent_embodiment/qwen_embody.py verify --root "$cell"
 python3 - <<'PY'
 import os,secrets,json
 from pathlib import Path
+from qualification.agent_embodiment.classify_reliability_trial import fixture_fingerprint
 root=Path(os.environ["RUNNER_TEMP"])/"qwen-r18-live"
 cell=Path(os.environ["RUNNER_TEMP"])/"qwen-r18-installed"
 target="a.txt" if secrets.randbelow(2)==0 else "b.txt"
 (root/"task/index.txt").write_text("TARGET="+target+"\n")
 (root/"task/a.txt").write_text("VALUE="+secrets.token_hex(16)+"\n")
 (root/"task/b.txt").write_text("VALUE="+secrets.token_hex(16)+"\n")
+(root/"fixture-before.sha256").write_text(fixture_fingerprint(root/"task"))
 cfg=json.loads((cell/"home/.qwen/settings.json").read_text())
 assert cfg["modelProviders"]["openai"][0]["baseUrl"]=="http://127.0.0.1:11434/v1"
 (cell/"home/.qwen/lean-system.md").write_text(
@@ -76,13 +78,19 @@ sys.path.insert(0,str(Path.cwd()/"qualification/agent_embodiment"))
 from final_oracle import verify_selected,classify_final
 from lineage_oracle import lineage_verdict
 from settings_drift import audit as audit_settings
+from classify_reliability_trial import fixture_fingerprint,execution_identity
 root=Path(os.environ["RUNNER_TEMP"])/"qwen-r18-live"
 cell=Path(os.environ["RUNNER_TEMP"])/"qwen-r18-installed"
+fixture_before=(root/"fixture-before.sha256").read_text()
+fixture_after=fixture_fingerprint(root/"task")
+if fixture_before!=fixture_after:raise ValueError("synthetic fixture changed during execution")
+execution=execution_identity(int(os.environ.get("R25_TRIAL_INDEX","0")))
 target=(root/"task/index.txt").read_text().split("=",1)[1].strip()
 assert target in ("a.txt","b.txt")
 expected=(root/"task"/target).read_text().strip()
 decoy=(root/"task"/("b.txt" if target=="a.txt" else "a.txt")).read_text().strip()
-stdout=(root/"cli.stdout").read_text(errors="replace")
+stdout_bytes=(root/"cli.stdout").read_bytes()
+stdout=stdout_bytes.decode("utf-8",errors="replace")
 lineage=lineage_verdict(stdout,root/"task",target)
 drift=audit_settings(cell/"home/.qwen/settings.json")
 final=classify_final(stdout,expected,decoy)
@@ -93,6 +101,8 @@ receipt={
  "runtime":"OLLAMA_0_34_1_QWEN3_1P7B_32K","source_class":"PUBLIC_SYNTHETIC",
  "installed_settings_sha256":hashlib.sha256((cell/"home/.qwen/settings.json").read_bytes()).hexdigest(),
  "post_run_settings_drift":drift,
+ "execution":execution,"fixture_before_sha256":fixture_before,"fixture_after_sha256":fixture_after,
+ "model_stdout_sha256":hashlib.sha256(stdout_bytes).hexdigest(),
  "cli_exit":int(os.environ["R18_EXIT"]),"tool_lineage_class":lineage,
  "final_answer_class":final,"independent_hidden_oracle":"PASS" if verify_selected(stdout,expected,decoy) else "FAIL",
  "post_run_profile_integrity":"PASS" if drift["byte_identical"] else "FAIL",

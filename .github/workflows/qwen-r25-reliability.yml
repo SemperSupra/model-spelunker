@@ -41,8 +41,11 @@ jobs:
       - name: Exact existing R18 actual Qwen Code and pinned Ollama two-hop treatment
         id: model
         shell: bash
+        env:
+          R25_TRIAL_INDEX: ${{ matrix.trial }}
         run: |
           set -Eeuo pipefail
+          test ! -e "$RUNNER_TEMP/qwen-r18-live/receipt.json"
           set +e
           bash qualification/agent_embodiment/run_native_installed.sh
           rc=$?
@@ -61,7 +64,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: qwen-r25-exact-source-${{ github.run_id }}-trial-${{ matrix.trial }}
+          name: qwen-r25-exact-source-${{ github.run_id }}-attempt-${{ github.run_attempt }}-trial-${{ matrix.trial }}
           path: |
             ${{ runner.temp }}/qwen-r25-trial.json
             ${{ runner.temp }}/qwen-r18-live/receipt.json
