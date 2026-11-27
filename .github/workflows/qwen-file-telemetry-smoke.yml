@@ -1,0 +1,44 @@
+name: Qwen native file telemetry smoke
+on:
+  pull_request:
+    paths:
+      - 'qualification/agent_embodiment/qwen_file_telemetry_probe.py'
+      - '.github/workflows/qwen-file-telemetry-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: python3 -B qualification/agent_embodiment/qwen_file_telemetry_probe.py --self-test
+  native:
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify and extract exact official public Qwen CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 qualification/qwencode_public/kit.py fetch --platform linux-x64 --archive "$RUNNER_TEMP/qwen-telemetry.tar.gz"
+          python3 qualification/qwencode_public/kit.py smoke --platform linux-x64 --archive "$RUNNER_TEMP/qwen-telemetry.tar.gz" --out "$RUNNER_TEMP/qwen-telemetry-native"
+      - name: Real CLI with local synthetic model fixture, telemetry off and on
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo unshare --net -- bash -c 'set -e; ip link set lo up; exec runuser -u "$1" -- env GITHUB_SHA="$2" python3 -B "$3" --binary "$4" --receipt "$5"' _ "$(id -un)" "$GITHUB_SHA" "$GITHUB_WORKSPACE/qualification/agent_embodiment/qwen_file_telemetry_probe.py" "$RUNNER_TEMP/qwen-telemetry-native/qwen-code/bin/qwen" "$RUNNER_TEMP/qwen-file-telemetry-receipt.json"
+      - name: Retain summary only, never raw telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: qwen-file-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qwen-file-telemetry-receipt.json
+          if-no-files-found: ignore
+          retention-days: 7
