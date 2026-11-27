@@ -1,7 +1,7 @@
-name: ISH R12 useful-turn checkpoint and continuation
+name: ISH R13 native bounded retention policy trace
 on:
   pull_request:
-    paths: ['.github/workflows/cache-lifecycle-useful-turn-r12.yml']
+    paths: ['.github/workflows/cache-lifecycle-useful-turn-r12.yml', 'qualification/ish_r13/**']
 permissions:
   contents: read
 jobs:
@@ -34,18 +34,18 @@ jobs:
           printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
           sha256sum build/bin/llama-server model.gguf > identities.txt
           cp upstream/LICENSE upstream-license.txt
-      - name: Useful first turn followed by independently validated continuation
+      - name: Actual useful-session churn under none LRU and measured-value admission
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/cache-r0"
           python3 - <<'PY'
-          import hashlib,json,os,pathlib,subprocess,time,urllib.request
+          import hashlib,itertools,json,os,pathlib,statistics,subprocess,time,urllib.request
           root=pathlib.Path.cwd()
           (root/'slots').mkdir()
           rows=[]
           def receipt():
-              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],model_revision=os.environ['MODEL_REV'],scope='useful first-turn cache and second-turn retrieval; synthetic workload, not agent or hardware equivalence',rows=rows),indent=2))
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],model_revision=os.environ['MODEL_REV'],scope='native synthetic useful-session replay; fixed supplied priors; no production scheduler or actual user workload inference',rows=rows),indent=2))
           def req(path,data=None):
               body=None if data is None else json.dumps(data).encode()
               with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:
@@ -53,7 +53,7 @@ jobs:
           def start():
               log=open(root/'server.log','ab')
               t=time.monotonic()
-              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','8192','-np','1','-t','4','-ngl','0','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
+              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','8192','-np','1','-t','4','-ngl','0','--no-kv-unified','--cache-ram','0','--no-cache-idle-slots','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
               log.close()
               for _ in range(120):
                   if p.poll() is not None: raise RuntimeError('server exited')
@@ -74,87 +74,158 @@ jobs:
               return dict(content=r['content'],tokens=r['tokens'],timings=r['timings'],wall_s=time.monotonic()-t)
           def tokens(text):
               return req('/tokenize',{'content':text,'add_special':False,'parse_special':True})['tokens']
-          def save():
+          PROJECTION_SHA='bb1e8ddbc5f039eddea10cdbead6f77c39cd453a23d6da1fc53ef58110ea448c'
+          projection=(pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'qualification/ish_r13/useful_turn_costs.json').read_bytes()
+          assert hashlib.sha256(projection).hexdigest()==PROJECTION_SHA
+          m=json.loads(projection)
+          assert m['source']==os.environ['LLAMA_REV'] and m['model_sha']==os.environ['MODEL_SHA'] and m['model_revision']==os.environ['MODEL_REV']
+          observations=[dict(zip(m['columns'],r)) for r in m['rows']]
+          costs={}
+          for count in (64,128,256):
+              reps=[r for r in observations if r['inventory_rows']==count]
+              assert len(reps)==3 and len({r['bytes'] for r in reps})==1
+              # Frozen earlier measurements; no current outcome or timing enters the policy.
+              costs[count]=dict(bytes=reps[0]['bytes'],save=statistics.mean(r['save_s'] for r in reps),benefit=statistics.mean(r['cold_request_s']-r['restored_request_s']-r['restore_s'] for r in reps))
+          budget=44*1024**2
+          prior=.5
+          def erase():
+              assert not any(x['is_processing'] for x in req('/slots'))
+              req('/slots/0?action=erase',{})
+          def used():
+              return sum(x.stat().st_size for x in (root/'slots').iterdir() if x.is_file())
+          def durable_save(name,expected_bytes):
+              assert used()+expected_bytes<=budget
               t=time.monotonic()
-              result=req('/slots/0?action=save',{'filename':'turn.partial'})
-              stage=root/'slots/turn.partial'
-              with stage.open('rb') as fp:
+              part=root/'slots'/(name+'.partial')
+              dst=root/'slots'/(name+'.bin')
+              assert not part.exists() and not dst.exists()
+              result=req('/slots/0?action=save',{'filename':part.name})
+              with part.open('rb') as fp:
                   data=fp.read()
                   digest=hashlib.sha256(data).hexdigest()
                   os.fsync(fp.fileno())
-              assert len(data)==result['n_written'] and result['n_saved']>0
-              path=root/'slots/turn.bin'
-              os.replace(stage,path)
+              assert len(data)==result['n_written']==expected_bytes and result['n_saved']>0
+              assert used()<=budget
+              os.replace(part,dst)
               fd=os.open(root/'slots',os.O_RDONLY|os.O_DIRECTORY)
               try:os.fsync(fd)
               finally:os.close(fd)
-              return dict(native=result,bytes=len(data),sha256=digest,wall_s=time.monotonic()-t)
-          for i,count in enumerate([64,128,256]*3):
-              row=dict(rep=i,inventory_rows=count)
-              rows.append(row)
-              pair=[('314159','271828'),('161803','314159'),('271828','161803')][i//3]
-              expected1,expected2=pair
-              row.update(expected1=expected1,expected2=expected2)
+              return dict(filename=dst.name,sha256=digest,n_saved=result['n_saved'],bytes=len(data),wall_s=time.monotonic()-t)
+          def make_first(count,rep):
+              expected1,expected2=[('314159','271828'),('161803','314159'),('271828','161803')][rep]
               lines=[f'Parcel {j:04d} has status archived and category blue.' for j in range(count)]
-              positions=[(0,count),(count//2,count//2+1),(count,0)][i//3]
-              lines.insert(positions[0],f'The special parcel ORCHID has access code {expected1}.')
-              lines.insert(positions[1],f'The special parcel LILAC has access code {expected2}.')
+              p,q=[(0,count),(count//2,count//2+1),(count,0)][rep]
+              lines.insert(p,f'The special parcel ORCHID has access code {expected1}.')
+              lines.insert(q,f'The special parcel LILAC has access code {expected2}.')
               first='<|im_start|>system\nAnswer questions using the supplied inventory. Output only the requested code.<|im_end|>\n<|im_start|>user\nInventory:\n'+'\n'.join(lines)+'\nWhat is the access code of the special parcel ORCHID? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
-              p,st=start()
-              row.update(first_pid=p.pid,first_startup_s=st)
-              try:
-                  first_ids=tokens(first)
-                  first_answer=completion(first_ids,12)
-                  row['first']=first_answer
-                  row['first_task_pass']=first_answer['content'].strip()==expected1
-                  receipt()
-                  assert row['first_task_pass'], 'first useful task failed; cache not admitted'
-                  # Construct next turn from actual validated prior output, not an answer inserted by the oracle.
-                  second=first+first_answer['content']+'<|im_end|>\n<|im_start|>user\nWhat is the access code of the special parcel LILAC? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
-                  target=tokens(second)
-                  shared=0
-                  for x,y in zip(first_ids,target):
-                      if x!=y:break
-                      shared+=1
-                  assert shared==len(first_ids) and len(target)<8192-16
-                  row['target_tokens']=target
-                  row['first_prompt_tokens']=len(first_ids)
-                  row['checkpoint']=save()
-                  receipt()
-                  row['resident']=completion(target,12)
-              finally:stop(p);receipt()
-              checkpoint=row['checkpoint']
-              for arm in (['cold','restored'] if i%2==0 else ['restored','cold']):
+              return first,expected1,expected2
+          def select(policy,resident,count):
+              if policy=='none':return set()
+              options=list(resident)+[count]
+              size=lambda group:sum(costs[c]['bytes'] for c in group)
+              if costs[count]['bytes']>budget:return set(resident)
+              if policy=='lru':
+                  keep=options.copy()
+                  while size(keep)>budget:keep.pop(0)
+                  return set(keep)
+              subsets=(group for n in range(len(options)+1) for group in itertools.combinations(options,n) if size(group)<=budget)
+              def score(group):
+                  return sum(prior*costs[c]['benefit']-(costs[c]['save'] if c==count else 0) for c in group)
+              return set(max(subsets,key=lambda group:(score(group),-size(group),tuple(group))))
+          for rep in range(3):
+              trace=[256,64,128]
+              trace=trace[rep:]+trace[:rep]
+              # All resume in this bounded scenario; policy only receives frozen p=.5, not future outcomes.
+              resume=list(reversed(trace))
+              policy_order=['none','lru','value']
+              policy_order=policy_order[rep:]+policy_order[:rep]
+              row=dict(rep=rep,arrival=trace,resume=resume,policy_order=policy_order,budget_bytes=budget,prior=prior,projection_sha256=PROJECTION_SHA,arms={})
+              rows.append(row)
+              for policy in policy_order:
+                  assert used()==0
+                  begin=time.monotonic()
+                  resident={};sessions={}
+                  arm=dict(sessions=sessions,events=[],peak_snapshot_bytes=0,saves=0,hits=0)
+                  row['arms'][policy]=arm
                   p,st=start()
-                  entry=dict(pid=p.pid,startup_s=st)
-                  row[arm]=entry
-                  assert p.pid!=row['first_pid']
+                  arm['first_pid']=p.pid
+                  arm['first_startup_s']=st
                   try:
-                      if arm=='restored':
-                          t=time.monotonic()
-                          path=root/'slots/turn.bin'
-                          assert hashlib.sha256(path.read_bytes()).hexdigest()==checkpoint['sha256']
-                          restored=req('/slots/0?action=restore',{'filename':path.name})
-                          entry['restore_s']=time.monotonic()-t
-                          entry['restore']=restored
-                          assert restored['n_restored']==checkpoint['native']['n_saved']
-                      entry['completion']=completion(target,12)
+                      for count in trace:
+                          erase()
+                          first,e1,e2=make_first(count,rep)
+                          first_ids=tokens(first)
+                          result=completion(first_ids,12)
+                          assert result['content'].strip()==e1 and result['timings']['cache_n']==0
+                          follow=first+result['content']+'<|im_end|>\n<|im_start|>user\nWhat is the access code of the special parcel LILAC? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+                          target=tokens(follow)
+                          assert target[:len(first_ids)]==first_ids and len(target)<8192-16
+                          sessions[count]=dict(first=result,first_expected=e1,second_expected=e2,target=target)
+                          decision=time.monotonic()
+                          keep=select(policy,resident,count)
+                          removed=[]
+                          for c in list(resident):
+                              if c not in keep:
+                                  (root/'slots'/resident.pop(c)['filename']).unlink()
+                                  removed.append(c)
+                          decision_end=time.monotonic()
+                          if count in keep:
+                              snap=durable_save(f'{rep}-{policy}-{count}',costs[count]['bytes'])
+                              resident[count]=snap
+                              arm['saves']+=1
+                          assert set(resident)==keep
+                          actual=used()
+                          assert actual==sum(v['bytes'] for v in resident.values())<=budget
+                          arm['peak_snapshot_bytes']=max(arm['peak_snapshot_bytes'],actual)
+                          arm['events'].append(dict(kind='suspend',count=count,removed=removed,admitted=count in keep,used_bytes=actual,decision_and_eviction_s=decision_end-decision,snapshot=resident.get(count)))
+                          receipt()
                   finally:stop(p);receipt()
-              cold=row['cold']['completion']; warm=row['restored']['completion']; resident=row['resident']
-              row['second_task_pass']=all(x['content'].strip()==expected2 for x in (cold,warm,resident))
-              row['exact_token_match']=cold['tokens']==warm['tokens']==resident['tokens']
-              row['native_reuse']=cold['timings']['cache_n']==0 and warm['timings']['cache_n']>0 and warm['timings']['prompt_n']<cold['timings']['prompt_n']
-              row['net_s_if_useful_prefix_already_exists']=cold['wall_s']-warm['wall_s']-checkpoint['wall_s']-row['restored']['restore_s']
-              row['first_useful_request_wall_s']=first_answer['wall_s']
-              row['cold_second_request_wall_s']=cold['wall_s']
-              row['restored_second_request_wall_s']=warm['wall_s']
+                  p,st=start()
+                  arm['second_pid']=p.pid
+                  arm['second_startup_s']=st
+                  assert p.pid!=arm['first_pid']
+                  try:
+                      for count in resume:
+                          erase()
+                          s=sessions[count]
+                          hit=count in resident
+                          if hit:
+                              snap=resident[count]
+                              path=root/'slots'/snap['filename']
+                              t=time.monotonic()
+                              assert hashlib.sha256(path.read_bytes()).hexdigest()==snap['sha256']
+                              r=req('/slots/0?action=restore',{'filename':path.name})
+                              s['restore_s']=time.monotonic()-t
+                              assert r['n_restored']==snap['n_saved']
+                          s['second']=completion(s['target'],12)
+                          assert s['second']['content'].strip()==s['second_expected']
+                          assert (s['second']['timings']['cache_n']>0)==hit
+                          if hit:
+                              (root/'slots'/resident.pop(count)['filename']).unlink()
+                              arm['hits']+=1
+                          arm['events'].append(dict(kind='resume',count=count,hit=hit,used_bytes=used()))
+                          receipt()
+                  finally:stop(p);receipt()
+                  assert not resident and used()==0
+                  arm['completed_useful_turns']=2*len(sessions)
+                  arm['total_wall_s']=time.monotonic()-begin
+                  receipt()
+              for count in trace:
+                  baseline=row['arms']['none']['sessions'][count]
+                  for arm in row['arms'].values():
+                      s=arm['sessions'][count]
+                      assert s['first']['tokens']==baseline['first']['tokens'] and s['second']['tokens']==baseline['second']['tokens']
+                      if s.get('restore_s') is not None:assert s['second']['timings']['prompt_n']<baseline['second']['timings']['prompt_n']
+              assert row['arms']['none']['saves']==0 and row['arms']['none']['hits']==0
+              assert all(a['completed_useful_turns']==6 for a in row['arms'].values())
+              row['passed']=True
               receipt()
-          assert len(rows)==9 and all(r['first_task_pass'] and r['second_task_pass'] and r['exact_token_match'] and r['native_reuse'] for r in rows), 'useful multi-turn continuation gate failed'
+          assert len(rows)==3 and all(r.get('passed') for r in rows)
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-useful-turn-r12
+          name: llama-cache-retention-native-r13
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
