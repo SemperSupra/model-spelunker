@@ -1,0 +1,96 @@
+name: ISH R16 native Metal host and disk cache
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-metal-native-r16.yml']
+permissions:
+  contents: read
+jobs:
+  metal:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      METAL_REV: d1447c4a539b86166ae85293d269fbdfada47753
+      MODEL_REV: 73e3e38d981303bc594367cd910ea6eb48349da8
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      VLLM_METAL_BACKEND: mlx
+      GLOO_SOCKET_IFNAME: lo0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install exact released native wheel pair and inspect device
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          mkdir -p "$RUNNER_TEMP/ish-metal/evidence"
+          cd "$RUNNER_TEMP/ish-metal"
+          git init upstream
+          git -C upstream remote add origin https://github.com/vllm-project/vllm-metal.git
+          git -C upstream fetch --depth=1 origin "$METAL_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$METAL_REV"
+          git -C upstream rev-parse HEAD > evidence/source.txt
+          sw_vers > evidence/platform.txt
+          sysctl -n hw.memsize >> evidence/platform.txt
+          python3.12 -m venv venv
+          source venv/bin/activate
+          python -m pip install uv==0.8.22
+          core='vllm-0.34.0+cpu-cp38-abi3-macosx_11_0_arm64.whl'
+          plugin='vllm_metal-0.34.0-cp312-cp312-macosx_15_0_arm64.whl'
+          curl --fail --location --max-time 300 --retry 2 'https://github.com/vllm-project/vllm/releases/download/v0.34.0/vllm-0.34.0%2Bcpu-cp38-abi3-macosx_11_0_arm64.whl' -o "$core"
+          curl --fail --location --max-time 120 --retry 2 "https://github.com/vllm-project/vllm-metal/releases/download/v0.34.0/$plugin" -o "$plugin"
+          printf '%s  %s\n' cd0abe2a9d698bc0bef36ac9aa38da34307c53572ddee60ca35faef280af99d2 "$core" 27141e0134e92358b494b3609df3a3f4be611852a9201b34ad7dbc0cbad8029f "$plugin" | shasum -a 256 -c -
+          uv pip install "./$core" "./$plugin" pytest
+          # Upstream install.sh deliberately overrides the core Torch dependency for Metal.
+          uv pip install -r upstream/vllm_metal/requirements-torch.txt
+          uv pip freeze > evidence/installed.txt
+          (python -m pip check || true) > evidence/dependency-check.txt
+          python - <<'PY'
+          import hashlib,json,os,pathlib,importlib.metadata
+          import mlx.core as mx
+          from huggingface_hub import snapshot_download
+          assert importlib.metadata.version('vllm-metal')=='0.34.0'
+          assert importlib.metadata.version('vllm').startswith('0.34.0')
+          assert 'gpu' in str(mx.default_device()).lower()
+          root=pathlib.Path(snapshot_download('mlx-community/Qwen3-0.6B-4bit',revision=os.environ['MODEL_REV'],local_dir='model',max_workers=2))
+          files=[dict(path=str(p.relative_to(root)),sha256=hashlib.sha256(p.read_bytes()).hexdigest(),bytes=p.stat().st_size) for p in sorted(root.rglob('*')) if p.is_file() and p.suffix in ('.safetensors','.json','.model')]
+          digest=hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert digest=='a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d'
+          pathlib.Path('evidence/model-manifest.json').write_text(json.dumps(files,indent=2))
+          PY
+      - name: Exercise actual upstream native host pool and disk restart oracle
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ish-metal"
+          source venv/bin/activate
+          export QWEN3_MODEL_PATH="$PWD/model"
+          export HF_HUB_OFFLINE=1
+          # Copy only test/benchmark helpers, so the installed native wheel is imported,
+          # rather than the unbuilt upstream Python package in the source checkout.
+          mkdir testbed
+          cp -R upstream/tests upstream/tools testbed/
+          cd testbed
+          python -c 'import vllm_metal; print(vllm_metal.__file__); assert "site-packages" in vllm_metal.__file__'
+          python -m pytest tests/e2e/test_kv_offload_e2e.py -q -s --basetemp "$${{ runner.temp }}/ish-metal/evidence/native" --junitxml "$RUNNER_TEMP/ish-metal/evidence/native.xml"
+          python - <<'PY'
+          import json,pathlib,os
+          root=pathlib.Path('../evidence')
+          receipts=list(root.rglob('restores.json'))
+          assert len(receipts)==1
+          rows=json.loads(receipts[0].read_text())['restores']
+          assert [x['restore'] for x in rows]==['host pool','disk after restart']
+          assert all(x['passed'] and x['restored_tokens']>=992 and x['output']=='EXACT' for x in rows)
+          (root/'receipt.json').write_text(json.dumps(dict(scope='native upstream host pool and disk restore after restart, random public synthetic token prompts; not task goodput or physical target',source=os.environ['METAL_REV'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],restores=rows),indent=2))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-metal-native-r16
+          path: RUNNER_TEMP/ish-metal/evidence/
+          if-no-files-found: warn
+          retention-days: 14
