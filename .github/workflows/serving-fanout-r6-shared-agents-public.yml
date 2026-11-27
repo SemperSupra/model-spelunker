@@ -1,0 +1,148 @@
+name: serving-fanout-r6-r7-one-ollama-2v4-real-agents-public
+on:
+  pull_request:
+    paths:
+      - 'qualification/serving_fanout_r0/shared_actor/**'
+      - '.github/workflows/serving-fanout-r6-shared-agents-public.yml'
+permissions:
+  contents: read
+  packages: read
+concurrency:
+  group: serving-fanout-r6-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  real-shared-model-agent-interview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 29
+    env:
+      HARNESS_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
+      ADMISSION_REF: 'github:SemperSupra/model-spelunker@4f939c4beccb7652b851c4a228d78d804b0e95c7:qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json'
+      UPSTREAM_HARNESS_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_SHA: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_DIGEST_PREFIX: '8f68893c685c'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/model-spelunker-r6-shared-models'
+      CANDIDATE_META: '/tmp/model-spelunker-r6-shared-candidate.json'
+      MODEL_SPELUNKER_MODEL: 'ollama:qwen3:1.7b'
+      MODEL_SPELUNKER_MAX_ITERATIONS: '4'
+      MODEL_SPELUNKER_REASONING_EFFORT: 'none'
+      MODEL_SPELUNKER_TOOL_HINT_MODE: 'none'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Source-only task receipt contract and identity tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest discover -s qualification/serving_fanout_r0/shared_actor -p 'test_*.py' -v
+          python3 -m py_compile qualification/serving_fanout_r0/shared_actor/shared_actor_trial.py
+          test "${#HARNESS_REF}" -gt 90
+      - name: Hydrate pinned admitted OpenWorker harness without modifying authority
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull "$HARNESS_REF" >/dev/null
+          root="$RUNNER_TEMP/openworker"
+          mkdir -p "$root"
+          cid="$(docker create "$HARNESS_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$root/"
+          docker rm "$cid" >/dev/null
+          ARTIFACT_ROOT="$root" python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["ARTIFACT_ROOT"])
+          manifest=json.loads((root/"build-receipt.json").read_text())
+          assert manifest["harness"]["name"]=="openworker"
+          assert manifest["source"]["revision"]==os.environ["UPSTREAM_HARNESS_SHA"]
+          for row in manifest["payload"]["files"]:
+              data=(root/row["path"]).read_bytes()
+              assert len(data)==row["bytes"]
+              assert hashlib.sha256(data).hexdigest()==row["sha256"]
+          print("ADMITTED_HARNESS_PAYLOAD_VERIFIED")
+          PY
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          "$RUNNER_TEMP/openworker-venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$root/wheelhouse"/*.whl
+          "$RUNNER_TEMP/openworker-venv/bin/python" -c 'import coworker; import coworker.engine'
+      - name: Install pinned local Ollama from verified release archive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" --output "$archive"
+          echo "$OLLAMA_SHA  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+      - name: Start one shared Ollama process (two server slots) and bind exact runtime model
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          nohup env OLLAMA_HOST="$OLLAMA_HOST" OLLAMA_MODELS="$OLLAMA_MODELS" OLLAMA_NUM_PARALLEL=2 OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_CONTEXT_LENGTH=8192 ollama serve >"$RUNNER_TEMP/ollama-shared.log" 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+          python3 - <<'PY'
+          import json,os,pathlib,urllib.request
+          url="http://"+os.environ["OLLAMA_HOST"]+"/api/tags"
+          with urllib.request.urlopen(url,timeout=10) as f:
+              rows=json.load(f).get("models",[])
+          model=next((x for x in rows if x.get("name")==os.environ["OLLAMA_MODEL_TAG"]),None)
+          assert model is not None
+          digest=str(model.get("digest","")).removeprefix("sha256:")
+          assert len(digest)==64 and digest.startswith(os.environ["OLLAMA_DIGEST_PREFIX"])
+          task=json.loads(pathlib.Path("qualification/tasks/text-repair-v0/task.json").read_text())
+          profile={
+              "harness":{"name":"openworker","version":os.environ["UPSTREAM_HARNESS_SHA"],
+                         "artifact_ref":os.environ["HARNESS_REF"],
+                         "admission_ref":os.environ["ADMISSION_REF"]},
+              "model":{"provider":"ollama","id":os.environ["OLLAMA_MODEL_TAG"],
+                       "artifact_ref":"ollama-sha256:"+digest},
+              "toolset":task["projected_tools"],
+              "configuration":{"projection":task["projected_tools"],
+                  "parallel_tool_calls":False,"max_tokens":2048,"reasoning_effort":"none",
+                  "max_iterations":4,"ollama_context_length":8192,
+                  "harness_delivery":"prebuilt-admitted-artifact","tool_hint_mode":"none"}
+          }
+          pathlib.Path(os.environ["CANDIDATE_META"]).write_text(json.dumps(profile,indent=2,sort_keys=True)+"\n")
+          print("EXPLORATORY_SHARED_MODEL_DIGEST="+digest)
+          PY
+      - name: Run real independently validated agent tasks sequential and concurrent
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for key in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY GOOGLE_API_KEY OLLAMA_API_KEY; do unset "$key" || true; done
+          python3 qualification/serving_fanout_r0/shared_actor/shared_actor_trial.py --venv "$RUNNER_TEMP/openworker-venv" --outdir "$RUNNER_TEMP/shared-actor-r6"
+          python3 - <<'PY'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ["RUNNER_TEMP"])/"shared-actor-r6"/"shared-actor-summary.json"
+          r=json.loads(p.read_text())
+          assert r["evidence_class"]=="REAL_PUBLIC_CPU_SHARED_SERVER_CONFIGURED_AGENT_SCREEN"
+          assert len(r["phases"])==8
+          assert sum(len(a["tasks"]) for a in r["phases"])==24
+          assert set(a["mode"] for a in r["phases"])=={"serial","parallel","two_waves2","burst4"}
+          assert all(len(a["tasks"])==4 for a in r["phases"] if a["mode"] in ("two_waves2","burst4"))
+          assert all(len(set(t["run_id"] for t in a["tasks"]))==len(a["tasks"]) for a in r["phases"])
+          assert all(t["task"]=="text-repair-v0" for a in r["phases"] for t in a["tasks"])
+          print("CONFIGURED_AGENT_RECEIPTS_RECONCILED; TASK_SUCCESS_READ_FROM_VERIFIER_NOT_WORKFLOW")
+          PY
+      - name: Retain all independent task receipts and summary even on model task failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: serving-fanout-r6-shared-real-agent-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/shared-actor-r6/*-task.json
+            ${{ runner.temp }}/shared-actor-r6/shared-actor-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
