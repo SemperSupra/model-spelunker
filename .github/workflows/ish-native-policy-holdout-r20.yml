@@ -1,0 +1,262 @@
+name: ISH R20 native retention held-out mixed lifecycle
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-native-policy-holdout-r20.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SHARD: '${{ matrix.shard }}'
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
+      MODEL_REV: 6dd44a1fb35d11b5d1b28902876ce3cc9e882d0e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 300 https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/$MODEL_REV/qwen2.5-0.5b-instruct-q4_k_m.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+      - name: Native held-out mixed resume and expiry under bounded retention
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import hashlib,itertools,json,os,pathlib,random,statistics,subprocess,time,urllib.request
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],model_revision=os.environ['MODEL_REV'],scope='native held-out synthetic mixed expiry/resumption; supplied synthetic priors, no learned policy or actual agent-goodput claim',shard=int(os.environ['SHARD']),rows=rows),indent=2))
+          def req(path,data=None):
+              body=None if data is None else json.dumps(data).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:
+                  return json.load(r)
+          def start():
+              log=open(root/'server.log','ab')
+              t=time.monotonic()
+              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','8192','-np','1','-t','4','-ngl','0','--no-kv-unified','--cache-ram','0','--no-cache-idle-slots','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
+              log.close()
+              for _ in range(120):
+                  if p.poll() is not None: raise RuntimeError('server exited')
+                  try:
+                      req('/health')
+                      return p,time.monotonic()-t
+                  except OSError: time.sleep(.25)
+              p.kill();p.wait()
+              raise RuntimeError('readiness timeout')
+          def stop(p):
+              p.terminate()
+              try:p.wait(timeout=10)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+              assert p.poll() is not None
+          def completion(prompt,n):
+              t=time.monotonic()
+              r=req('/completion',dict(prompt=prompt,id_slot=0,n_predict=n,temperature=0,seed=42,cache_prompt=True,return_tokens=True))
+              return dict(content=r['content'],tokens=r['tokens'],timings=r['timings'],wall_s=time.monotonic()-t)
+          def tokens(text):
+              return req('/tokenize',{'content':text,'add_special':False,'parse_special':True})['tokens']
+          PROJECTION_SHA='bb1e8ddbc5f039eddea10cdbead6f77c39cd453a23d6da1fc53ef58110ea448c'
+          projection=(pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'qualification/ish_r13/useful_turn_costs.json').read_bytes()
+          assert hashlib.sha256(projection).hexdigest()==PROJECTION_SHA
+          m=json.loads(projection)
+          assert m['source']==os.environ['LLAMA_REV'] and m['model_sha']==os.environ['MODEL_SHA'] and m['model_revision']==os.environ['MODEL_REV']
+          observations=[dict(zip(m['columns'],r)) for r in m['rows']]
+          costs={}
+          for count in (64,128,256):
+              reps=[r for r in observations if r['inventory_rows']==count]
+              assert len(reps)==3 and len({r['bytes'] for r in reps})==1
+              # Frozen earlier measurements; no current outcome or timing enters the policy.
+              costs[count]=dict(bytes=reps[0]['bytes'],save=statistics.mean(r['save_s'] for r in reps),benefit=statistics.mean(r['cold_request_s']-r['restored_request_s']-r['restore_s'] for r in reps))
+          budget=44*1024**2
+          shard=int(os.environ['SHARD'])
+          assert 0<=shard<4
+          def erase():
+              assert not any(x['is_processing'] for x in req('/slots'))
+              req('/slots/0?action=erase',{})
+          def used():
+              return sum(x.stat().st_size for x in (root/'slots').iterdir() if x.is_file())
+          def durable_save(name,expected_bytes):
+              assert used()+expected_bytes<=budget
+              t=time.monotonic()
+              part=root/'slots'/(name+'.partial')
+              dst=root/'slots'/(name+'.bin')
+              assert not part.exists() and not dst.exists()
+              result=req('/slots/0?action=save',{'filename':part.name})
+              with part.open('rb') as fp:
+                  data=fp.read()
+                  digest=hashlib.sha256(data).hexdigest()
+                  os.fsync(fp.fileno())
+              assert len(data)==result['n_written']==expected_bytes and result['n_saved']>0
+              assert used()<=budget
+              os.replace(part,dst)
+              fd=os.open(root/'slots',os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              return dict(filename=dst.name,sha256=digest,n_saved=result['n_saved'],bytes=len(data),wall_s=time.monotonic()-t)
+          def make_first(count,rep):
+              expected1,expected2=[('314159','271828'),('161803','314159'),('271828','161803')][rep%3]
+              # New, predeclared inventory ordering/placement, no post-result selection.
+              rng=random.Random(20262000+rep*1000+count)
+              order=list(range(count));rng.shuffle(order)
+              lines=[f'Parcel {j:04d} has status archived and category blue.' for j in order]
+              p,q=rng.sample(range(count+1),2)
+              lines.insert(p,f'The special parcel ORCHID has access code {expected1}.')
+              lines.insert(q,f'The special parcel LILAC has access code {expected2}.')
+              first='<|im_start|>system\nAnswer questions using the supplied inventory. Output only the requested code.<|im_end|>\n<|im_start|>user\nInventory:\n'+'\n'.join(lines)+'\nWhat is the access code of the special parcel ORCHID? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+              return first,expected1,expected2
+          def select(policy,resident,count,priors):
+              if policy=='none':return set()
+              options=list(resident)+[count]
+              size=lambda group:sum(costs[c]['bytes'] for c in group)
+              if costs[count]['bytes']>budget:return set(resident)
+              if policy=='lru':
+                  keep=options.copy()
+                  while size(keep)>budget:keep.pop(0)
+                  return set(keep)
+              subsets=(group for n in range(len(options)+1) for group in itertools.combinations(options,n) if size(group)<=budget)
+              def score(group):
+                  return sum(priors[c]*costs[c]['benefit']-(costs[c]['save'] if c==count else 0) for c in group)
+              return set(max(subsets,key=lambda group:(score(group),-size(group),tuple(group))))
+          for rep in range(shard*3,shard*3+3):
+              rng=random.Random(20263000+rep)
+              trace=[64,128,256];rng.shuffle(trace)
+              prior_values=[.25,.5,.75]
+              priors=dict(zip([64,128,256],prior_values[rep%3:]+prior_values[:rep%3]))
+              # Conditioned synthetic sample: at least one expiry and one resume.
+              # Fixed random seed and full plan; policy sees priors, never outcomes.
+              while True:
+                  resume=[c for c in trace if rng.random()<priors[c]]
+                  if 0<len(resume)<len(trace):break
+              rng.shuffle(resume)
+              expire=[c for c in trace if c not in resume]
+              terminal=resume+expire
+              rng.shuffle(terminal)
+              policy_order=list(itertools.permutations(['none','lru','value']))[rep%6]
+              row=dict(rep=rep,arrival=trace,resume=resume,expire=expire,terminal=terminal,policy_order=policy_order,budget_bytes=budget,priors=priors,projection_sha256=PROJECTION_SHA,arms={})
+              rows.append(row)
+              for policy in policy_order:
+                  assert used()==0
+                  begin=time.monotonic()
+                  resident={};sessions={}
+                  arm=dict(sessions=sessions,events=[],peak_snapshot_bytes=0,saves=0,hits=0)
+                  row['arms'][policy]=arm
+                  p,st=start()
+                  arm['first_pid']=p.pid
+                  arm['first_startup_s']=st
+                  try:
+                      for count in trace:
+                          erase()
+                          first,e1,e2=make_first(count,rep)
+                          first_ids=tokens(first)
+                          result=completion(first_ids,12)
+                          assert result['content'].strip()==e1 and result['timings']['cache_n']==0
+                          follow=first+result['content']+'<|im_end|>\n<|im_start|>user\nWhat is the access code of the special parcel LILAC? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+                          target=tokens(follow)
+                          assert target[:len(first_ids)]==first_ids and len(target)<8192-16
+                          sessions[count]=dict(first=result,first_expected=e1,second_expected=e2,target=target)
+                          decision=time.monotonic()
+                          keep=select(policy,resident,count,priors)
+                          removed=[]
+                          for c in list(resident):
+                              if c not in keep:
+                                  (root/'slots'/resident.pop(c)['filename']).unlink()
+                                  removed.append(c)
+                          decision_end=time.monotonic()
+                          if count in keep:
+                              snap=durable_save(f'{rep}-{policy}-{count}',costs[count]['bytes'])
+                              resident[count]=snap
+                              arm['saves']+=1
+                          assert set(resident)==keep
+                          actual=used()
+                          assert actual==sum(v['bytes'] for v in resident.values())<=budget
+                          arm['peak_snapshot_bytes']=max(arm['peak_snapshot_bytes'],actual)
+                          arm['events'].append(dict(kind='suspend',count=count,removed=removed,admitted=count in keep,used_bytes=actual,decision_and_eviction_s=decision_end-decision,snapshot=resident.get(count)))
+                          receipt()
+                  finally:stop(p);receipt()
+                  p,st=start()
+                  arm['second_pid']=p.pid
+                  arm['second_startup_s']=st
+                  assert p.pid!=arm['first_pid']
+                  try:
+                      for count in terminal:
+                          if count in expire:
+                              discarded=count in resident
+                              if discarded:(root/'slots'/resident.pop(count)['filename']).unlink()
+                              arm['events'].append(dict(kind='expire',count=count,discarded=discarded,used_bytes=used()))
+                              receipt();continue
+                          erase()
+                          s=sessions[count]
+                          hit=count in resident
+                          if hit:
+                              snap=resident[count]
+                              path=root/'slots'/snap['filename']
+                              t=time.monotonic()
+                              assert hashlib.sha256(path.read_bytes()).hexdigest()==snap['sha256']
+                              r=req('/slots/0?action=restore',{'filename':path.name})
+                              s['restore_s']=time.monotonic()-t
+                              assert r['n_restored']==snap['n_saved']
+                          s['second']=completion(s['target'],12)
+                          assert s['second']['content'].strip()==s['second_expected']
+                          assert (s['second']['timings']['cache_n']>0)==hit
+                          if hit:
+                              (root/'slots'/resident.pop(count)['filename']).unlink()
+                              arm['hits']+=1
+                          arm['events'].append(dict(kind='resume',count=count,hit=hit,used_bytes=used()))
+                          receipt()
+                  finally:stop(p);receipt()
+                  assert not resident and used()==0
+                  arm['completed_useful_turns']=len(sessions)+sum('second' in s for s in sessions.values())
+                  arm['accepted_unique_sessions']=len(sessions)
+                  arm['required_turns']=len(trace)+len(resume)
+                  assert arm['completed_useful_turns']==arm['required_turns']
+                  arm['total_wall_s']=time.monotonic()-begin
+                  receipt()
+              for count in trace:
+                  baseline=row['arms']['none']['sessions'][count]
+                  for arm in row['arms'].values():
+                      s=arm['sessions'][count]
+                      assert s['first']['tokens']==baseline['first']['tokens']
+                      assert ('second' in s)==('second' in baseline)==(count in resume)
+                      if count in resume:assert s['second']['tokens']==baseline['second']['tokens']
+                      if s.get('restore_s') is not None:assert s['second']['timings']['prompt_n']<baseline['second']['timings']['prompt_n']
+              assert row['arms']['none']['saves']==0 and row['arms']['none']['hits']==0
+              assert all(a['completed_useful_turns']==len(trace)+len(resume) for a in row['arms'].values())
+              row['passed']=True
+              receipt()
+          assert [r['rep'] for r in rows]==list(range(shard*3,shard*3+3)) and all(r.get('passed') for r in rows)
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-native-policy-holdout-r20-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/server.log
+          if-no-files-found: warn
+          retention-days: 14
