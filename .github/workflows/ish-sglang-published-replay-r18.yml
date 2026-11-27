@@ -1,4 +1,4 @@
-name: ISH R18 native simulator published trace replay
+name: ISH R19 native simulator spawn-safe published replay
 on:
   pull_request:
     paths: ['.github/workflows/ish-sglang-published-replay-r18.yml']
@@ -91,55 +91,64 @@ jobs:
           python -c 'from sglang.srt.mem_cache.cpp_utils.native_hash import get_native_hash; get_native_hash([1], None)'
           cat > ../replay.py <<'PY'
           import hashlib,json,math,os,pathlib,sys,time
-          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'ish-sim'
-          upstream=root/'upstream'
-          workload,arm=sys.argv[1:]
-          out=root/'evidence'/f'{workload}-{arm}'
-          out.mkdir()
-          os.environ['SGLANG_SIMULATOR_OUTPUT_DIR']=str(out/'native')
-          os.environ['SGLANG_SIMULATOR_OUTPUT_MODE']='OFFLINE'
-          os.environ['SGLANG_USE_CPU_ENGINE']='1'
-          sys.path[:0]=[str(upstream),str(upstream/'tools/sglang-simulator/test')]
-          from test_simulation_sglang_runner import _write_sim_config,ASSETS
-          from sglang_simulator.dataset import GenericRequest,SimpleDataset
-          from sglang_simulator.simulation.benchmark import BenchmarkConfig
-          os.environ['SGLANG_SIMULATOR_CONFIG_PATH']=str(_write_sim_config(out))
-          from benchmark.simulator.bench_runner import SGLangBenchmarkRunner
-          from sglang.srt.server_args import ServerArgs
-          allrows=[json.loads(l) for l in (root/'traces'/f'{workload}.jsonl').read_text().splitlines()]
-          indexed=[(i,r) for i,r in enumerate(allrows) if 0<r['output_len']<=128][:12]
-          assert len(indexed)==12
-          t0=indexed[0][1]['timestamp']
-          # A bounded chronological smoke subset; no truncation or resampling.
-          dataset=SimpleDataset(reqs=[GenericRequest(token_ids=r['prompt'],input_length=r['prompt_len'],output_length=r['output_len'],custom_params={'created_time':(r['timestamp']-t0)/1000}) for _,r in indexed])
-          kwargs=dict(model_path=str(ASSETS/'qwen3-8b'),load_format='dummy',device='cpu',max_total_tokens=16384,page_size=256,max_running_requests=2,context_length=8192,skip_tokenizer_init=True,disable_radix_cache=arm=='none',enable_hierarchical_cache=arm=='hierarchy')
-          if arm=='hierarchy':kwargs.update(hicache_ratio=2,hicache_storage_backend='file',hicache_storage_prefetch_policy='wait_complete')
-          t=time.monotonic()
-          runner=SGLangBenchmarkRunner(server_args=ServerArgs(**kwargs))
-          try:
-              if arm=='hierarchy':runner.clear_hicache_storage()
-              metrics=runner.benchmark(BenchmarkConfig(request_rate=10,ignore_request_timestamp=False),dataset=dataset)
-              stats=runner.get_request_stats()
-          finally:runner.shutdown()
-          assert metrics is not None
-          ni=sum(r['prompt_len'] for _,r in indexed);no=sum(r['output_len'] for _,r in indexed)
-          result=dict(scope='native simulator scheduler/cache; replay predictor timings MODELED and uncalibrated, no actual model forward',workload=workload,arm=arm,selected_indices=[i for i,_ in indexed],input_tokens=ni,output_tokens=no,source_trace_sha256=hashlib.sha256((root/'traces'/f'{workload}.jsonl').read_bytes()).hexdigest(),metrics=metrics,request_stats=stats,host_execution_wall_s=time.monotonic()-t)
-          (out/'receipt.json').write_text(json.dumps(result,indent=2))
-          assert metrics['completed']==12 and metrics['total_input']==ni and metrics['total_output']==no
-          for k in ('prefix_cache_reused_ratio','kv_cache_device_hit_ratio','kv_cache_host_hit_ratio','kv_cache_storage_hit_ratio'):
-              assert isinstance(metrics[k],(int,float)) and math.isfinite(metrics[k]) and 0<=metrics[k]<=1,(k,metrics[k])
-          assert 0<=metrics['total_new_input']<=ni
-          if arm=='none':assert metrics['prefix_cache_reused_ratio']==0
+          def main():
+              root=pathlib.Path(os.environ['RUNNER_TEMP'])/'ish-sim'
+              upstream=root/'upstream'
+              workload,arm=sys.argv[1:]
+              out=root/'evidence'/f'{workload}-{arm}'
+              out.mkdir()
+              os.environ['SGLANG_SIMULATOR_OUTPUT_DIR']=str(out/'native')
+              os.environ['SGLANG_SIMULATOR_OUTPUT_MODE']='OFFLINE'
+              os.environ['SGLANG_USE_CPU_ENGINE']='1'
+              sys.path[:0]=[str(upstream),str(upstream/'tools/sglang-simulator/test')]
+              from test_simulation_sglang_runner import _write_sim_config,ASSETS
+              from sglang_simulator.dataset import GenericRequest,SimpleDataset
+              from sglang_simulator.simulation.benchmark import BenchmarkConfig
+              os.environ['SGLANG_SIMULATOR_CONFIG_PATH']=str(_write_sim_config(out))
+              from benchmark.simulator.bench_runner import SGLangBenchmarkRunner
+              from sglang.srt.server_args import ServerArgs
+              allrows=[json.loads(l) for l in (root/'traces'/f'{workload}.jsonl').read_text().splitlines()]
+              indexed=[(i,r) for i,r in enumerate(allrows) if 0<r['output_len']<=128][:12]
+              assert len(indexed)==12
+              t0=indexed[0][1]['timestamp']
+              # A bounded chronological smoke subset; no truncation or resampling.
+              dataset=SimpleDataset(reqs=[GenericRequest(token_ids=r['prompt'],input_length=r['prompt_len'],output_length=r['output_len'],custom_params={'created_time':(r['timestamp']-t0)/1000}) for _,r in indexed])
+              kwargs=dict(model_path=str(ASSETS/'qwen3-8b'),load_format='dummy',device='cpu',max_total_tokens=16384,page_size=256,max_running_requests=2,context_length=8192,skip_tokenizer_init=True,disable_radix_cache=arm=='none',enable_hierarchical_cache=arm=='hierarchy')
+              if arm=='hierarchy':kwargs.update(hicache_ratio=2,hicache_storage_backend='file',hicache_storage_prefetch_policy='wait_complete')
+              t=time.monotonic()
+              runner=SGLangBenchmarkRunner(server_args=ServerArgs(**kwargs))
+              try:
+                  if arm=='hierarchy':runner.clear_hicache_storage()
+                  metrics=runner.benchmark(BenchmarkConfig(request_rate=10,ignore_request_timestamp=False),dataset=dataset)
+                  stats=runner.get_request_stats()
+              finally:runner.shutdown()
+              assert metrics is not None
+              ni=sum(r['prompt_len'] for _,r in indexed);no=sum(r['output_len'] for _,r in indexed)
+              result=dict(scope='native simulator scheduler/cache; replay predictor timings MODELED and uncalibrated, no actual model forward',workload=workload,arm=arm,selected_indices=[i for i,_ in indexed],input_tokens=ni,output_tokens=no,source_trace_sha256=hashlib.sha256((root/'traces'/f'{workload}.jsonl').read_bytes()).hexdigest(),metrics=metrics,request_stats=stats,host_execution_wall_s=time.monotonic()-t)
+              (out/'receipt.json').write_text(json.dumps(result,indent=2))
+              assert metrics['completed']==12 and metrics['total_input']==ni and metrics['total_output']==no
+              for k in ('prefix_cache_reused_ratio','kv_cache_device_hit_ratio','kv_cache_host_hit_ratio','kv_cache_storage_hit_ratio'):
+                  assert isinstance(metrics[k],(int,float)) and math.isfinite(metrics[k]) and 0<=metrics[k]<=1,(k,metrics[k])
+              assert 0<=metrics['total_new_input']<=ni
+              if arm=='none':assert metrics['prefix_cache_reused_ratio']==0
+          if __name__=='__main__':
+              main()
           PY
+          python -m py_compile ../replay.py
+          # Spawned worker imports must not create output directories or launch an engine.
+          python -c 'import runpy; runpy.run_path("../replay.py",run_name="__mp_main__")'
           for workload in conversation toolagent synthetic; do
             for arm in none device hierarchy; do
-              python ../replay.py "$workload" "$arm"
+              if python ../replay.py "$workload" "$arm"; then status=0; else status=$?; fi
+              printf '%s %s %s\n' "$workload" "$arm" "$status" >> ../evidence/arm-status.txt
             done
           done
           python - <<'PY'
           import json,os,pathlib
           root=pathlib.Path('../evidence')
           rows=[json.loads(p.read_text()) for p in sorted(root.glob('*-*/receipt.json'))]
+          statuses=[line.split() for line in (root/'arm-status.txt').read_text().splitlines()]
+          assert len(statuses)==9 and all(s[2]=='0' for s in statuses),statuses
           assert len(rows)==9
           summary=[]
           for workload in ('conversation','toolagent','synthetic'):
@@ -154,7 +163,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: ish-sglang-published-replay-r18
+          name: ish-sglang-published-replay-r19
           path: ${{ runner.temp }}/ish-sim/evidence/
           if-no-files-found: warn
           retention-days: 14
