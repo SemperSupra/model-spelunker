@@ -5,6 +5,7 @@ import stat
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from telemetry_identity import IdentityCoverage
 
 CAP = 4 * 1024 * 1024
 MAX_RECORDS = 2048
@@ -52,11 +53,12 @@ def read_capture(path):
         os.close(fd)
 
 
-def inspect_telemetry(path, forbidden):
+def inspect_telemetry(path, forbidden, expected_call_id=None):
     raw = read_capture(path)
     data = raw.decode("utf-8")
     decoder = json.JSONDecoder(object_pairs_hook=unique_object, parse_constant=reject_constant)
     counts = dict.fromkeys(EVENTS, 0)
+    coverage = IdentityCoverage(expected_call_id)
     other = unclassified = pos = count = 0
     marker = any(value.encode() in raw for value in forbidden)
     while pos < len(data):
@@ -81,6 +83,7 @@ def inspect_telemetry(path, forbidden):
             elif isinstance(value, str):
                 marker = marker or any(x in value for x in forbidden)
         attrs = row.get("attributes")
+        coverage.observe(attrs)
         event = attrs.get("event.name") if isinstance(attrs, dict) else None
         if isinstance(event, str):
             if event in counts:
@@ -91,7 +94,7 @@ def inspect_telemetry(path, forbidden):
             unclassified += 1
     return dict(records=count, bytes=len(raw), payload_marker_seen=marker,
                 known_event_counts=counts, other_event_records=other,
-                unclassified_records=unclassified)
+                unclassified_records=unclassified, identity_coverage=coverage.summary())
 
 
 class CaptureTests(unittest.TestCase):

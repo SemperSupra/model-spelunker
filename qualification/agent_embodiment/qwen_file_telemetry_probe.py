@@ -20,7 +20,7 @@ import urllib.request
 from telemetry_capture import CAP, inspect_telemetry
 
 
-def make_handler(fixture, file_marker, answer, seen):
+def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture'):
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -49,8 +49,12 @@ def make_handler(fixture, file_marker, answer, seen):
                 return
             body = json.loads(self.rfile.read(n))
             messages = body.get('messages', [])
-            tool_result = any(m.get('role') == 'tool' and file_marker in json.dumps(m)
-                              for m in messages if isinstance(m, dict))
+            matching = [m for m in messages if isinstance(m, dict) and m.get('role') == 'tool'
+                        and file_marker in json.dumps(m.get('content'))]
+            tool_result = bool(matching)
+            seen['tool_result_marker_records'] += len(matching)
+            if seen['tool_requested']:
+                seen['tool_result_id_matches'] += sum(m.get('tool_call_id') == call_id for m in matching)
             tool_exists = any(isinstance(t, dict) and t.get('function', {}).get('name') == 'read_file'
                               for t in (body.get('tools') or []))
             seen['requests'] += 1
@@ -60,7 +64,7 @@ def make_handler(fixture, file_marker, answer, seen):
             elif tool_exists:
                 seen['tool_requested'] = True
                 message = {'role': 'assistant', 'content': None, 'tool_calls': [{
-                    'id': 'call_fixture', 'type': 'function', 'function': {
+                    'id': call_id, 'type': 'function', 'function': {
                         'name': 'read_file', 'arguments': json.dumps({'file_path': str(fixture)})}}]}
                 reason = 'tool_calls'
             else:
@@ -95,8 +99,10 @@ def trial(binary, root, enabled):
     fixture = task / 'fixture.txt'
     fixture.write_text(file_marker + '\n')
     telemetry = root / 'telemetry.json'
-    seen = dict(requests=0, tool_requested=False, tool_result_seen=False)
-    with http.server.ThreadingHTTPServer(('127.0.0.1', 0), make_handler(fixture, file_marker, answer, seen)) as server:
+    seen = dict(requests=0, tool_requested=False, tool_result_seen=False,
+                tool_result_marker_records=0, tool_result_id_matches=0)
+    call_id = 'call_' + secrets.token_hex(16)
+    with http.server.ThreadingHTTPServer(('127.0.0.1', 0), make_handler(fixture, file_marker, answer, seen, call_id)) as server:
         worker = threading.Thread(target=server.serve_forever, daemon=True)
         worker.start()
         try:
@@ -122,7 +128,7 @@ def trial(binary, root, enabled):
             with (root / 'stdout').open('wb') as out, (root / 'stderr').open('wb') as err:
                 result = subprocess.run(command, cwd=task, env=env, stdout=out, stderr=err, timeout=110)
             elapsed = round(time.monotonic() - start, 3)
-            stats = inspect_telemetry(telemetry, (prompt_marker, file_marker, dummy_key, answer))
+            stats = inspect_telemetry(telemetry, (prompt_marker, file_marker, dummy_key, answer), call_id)
             # Never print or retain raw stdout/stderr, fixture contents or telemetry.
             output = (root / 'stdout').read_bytes()
             return dict(mode='on' if enabled else 'off', cli_exit=result.returncode, seconds=elapsed,
@@ -208,7 +214,8 @@ class ContractTests(unittest.TestCase):
                 inspect_telemetry(p, [])
 
     def test_actual_loopback_fixture(self):
-        seen = dict(requests=0, tool_requested=False, tool_result_seen=False)
+        seen = dict(requests=0, tool_requested=False, tool_result_seen=False,
+                tool_result_marker_records=0, tool_result_id_matches=0)
         with http.server.ThreadingHTTPServer(('127.0.0.1', 0), make_handler(Path('/synthetic.txt'), 'file-marker', 'answer-marker', seen)) as srv:
             t = threading.Thread(target=srv.serve_forever, daemon=True)
             t.start()
@@ -221,9 +228,13 @@ class ContractTests(unittest.TestCase):
                 body = dict(messages=[], tools=[{'function': {'name': 'read_file'}}])
                 reply = json.loads(call(body))
                 self.assertEqual(reply['choices'][0]['finish_reason'], 'tool_calls')
-                body.update(messages=[{'role': 'tool', 'content': 'file-marker'}], stream=True)
+                body.update(messages=[{'role': 'tool', 'content': 'file-marker', 'tool_call_id': 'wrong'}], stream=True)
                 self.assertIn(b'answer-marker', call(body))
-                self.assertEqual(seen, dict(requests=2, tool_requested=True, tool_result_seen=True))
+                self.assertEqual(seen['tool_result_id_matches'], 0)
+                body.update(messages=[{'role': 'tool', 'content': 'file-marker', 'tool_call_id': 'call_fixture'}])
+                self.assertIn(b'answer-marker', call(body))
+                self.assertEqual(seen, dict(requests=3, tool_requested=True, tool_result_seen=True,
+                                           tool_result_marker_records=2, tool_result_id_matches=1))
             finally:
                 srv.shutdown()
                 t.join(5)
