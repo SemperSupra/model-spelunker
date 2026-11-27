@@ -1,0 +1,270 @@
+name: ISH R22 MLX multi-boundary path identity
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-mlx-path-r22.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      PREFILL_STEP: '256'
+      SHARD: '${{ matrix.shard }}'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install previously screened MLX distribution set and acquire exact model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-mlx"
+          cd "$RUNNER_TEMP/cache-mlx"
+          test "$(uname -m)" = arm64
+          python3 -m venv venv
+          source venv/bin/activate
+          cat > requirements.txt <<'LOCK'
+          # Resolved on public macos-15 hosted M1, GHA 45216777799 (2026-11-23).
+          # Exact distribution versions, not per-wheel SHA256; no release reproducibility claim.
+          annotated-doc==0.0.7
+          annotated-types==0.8.0
+          anyio==4.16.0
+          certifi==2026.11.20
+          click==8.5.1
+          filelock==4.3.0
+          fsspec==2026.9.0
+          h11==0.16.0
+          hf-xet==1.8.0
+          httpcore==1.0.9
+          httpx==0.28.1
+          huggingface_hub==1.33.0
+          idna==3.20
+          Jinja2==3.1.6
+          markdown-it-py==4.3.0
+          MarkupSafe==3.0.4
+          mdurl==0.1.2
+          mlx==0.32.4
+          mlx-lm==0.32.2
+          mlx-metal==0.32.4
+          numpy==2.5.5
+          packaging==26.3
+          protobuf==7.36.2
+          pydantic==2.14.4
+          pydantic_core==2.50.5
+          Pygments==2.21.0
+          PyYAML==6.0.4
+          regex==2026.11.19
+          rich==15.0.0
+          safetensors==0.8.0
+          sentencepiece==0.2.3
+          shellingham==1.5.4
+          tokenizers==0.23.3
+          tqdm==4.70.1
+          transformers==5.24.0
+          typer==0.29.2
+          typing-inspection==0.4.5
+          typing_extensions==4.16.0
+          LOCK
+          pip install --no-cache-dir -r requirements.txt
+          pip check
+          pip freeze > installed.txt
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+          import json,hashlib
+          root=Path(snapshot_download('mlx-community/Qwen3-0.6B-4bit',revision='73e3e38d981303bc594367cd910ea6eb48349da8',local_dir='model',max_workers=2))
+          files=[]
+          for p in sorted(root.rglob('*')):
+              if p.is_file() and p.suffix in ('.safetensors','.json','.model'):
+                  files.append(dict(path=str(p.relative_to(root)),sha256=hashlib.sha256(p.read_bytes()).hexdigest(),bytes=p.stat().st_size))
+          h=hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert h=='a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d'
+          Path('model-manifest.json').write_text(json.dumps(files,indent=2))
+          PY
+      - name: Qualify path-bound continuation across successive processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-mlx"
+          source venv/bin/activate
+          cat > trial.py <<'PY'
+          import copy,hashlib,inspect,json,os,pathlib,random,sys,time
+          import mlx.core as mx
+          from mlx_lm import load
+          from mlx_lm.generate import generate_step
+          from mlx_lm.sample_utils import make_sampler
+          from mlx_lm.models.cache import make_prompt_cache,save_prompt_cache,load_prompt_cache
+          mode=sys.argv[1]; rep=int(sys.argv[2]); step=int(os.environ['PREFILL_STEP'])
+          base=pathlib.Path(f'rep-{rep}');base.mkdir(exist_ok=True)
+          def digest(data):return hashlib.sha256(data).hexdigest()
+          def canonical(obj):return json.dumps(obj,sort_keys=True,separators=(',',':')).encode()
+          def read(name):return json.loads((base/name).read_text())
+          def atomic(name,data):
+              dest=base/name;part=base/(name+'.partial')
+              with part.open('wb') as fp:
+                  fp.write(data);fp.flush();os.fsync(fp.fileno())
+              os.replace(part,dest)
+              fd=os.open(base,os.O_RDONLY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+          t=time.monotonic();model,tok=load('model')
+          row=dict(pid=os.getpid(),device=str(mx.default_device()),startup_s=time.monotonic()-t,mode=mode,rep=rep)
+          assert 'gpu' in row['device'].lower()
+          profile=dict(model_manifest=digest(canonical(json.loads(pathlib.Path('model-manifest.json').read_text()))),
+                       installed_sha256=digest(pathlib.Path('installed.txt').read_bytes()),
+                       generate_source=digest(inspect.getsource(generate_step).encode()),
+                       prefill_step=step,sampler='greedy',device=row['device'])
+          def offset(cache):
+              v={int(c.offset) for c in cache};assert len(v)==1;return v.pop()
+          def generate(ids,cache,n):
+              before=offset(cache);t=time.monotonic();out=[];top=[];first=None
+              for token,logits in generate_step(mx.array(ids),model,prompt_cache=cache,max_tokens=n,prefill_step_size=step,sampler=make_sampler(temp=0)):
+                  mx.eval(logits)
+                  if first is None:first=time.monotonic()-t
+                  out.append(int(token))
+                  v=logits.reshape(-1).astype(mx.float32);idx=mx.argsort(v)[-2:]
+                  top.append(dict(ids=idx.tolist(),scores=v[idx].tolist()))
+              after=offset(cache)
+              assert len(out)==n and after==before+len(ids)+n
+              return dict(input_ids=ids,tokens=out,top2=top,offset_before=before,offset_after=after,wall_s=time.monotonic()-t,first_s=first)
+          def witness(q):return {k:q[k] for k in ('input_ids','tokens','top2','offset_before','offset_after')}
+          def journal_hash(history):return digest(canonical([witness(q) for q in history]))
+          def identity(history,boundary):
+              return dict(schema='ish-experimental-path/v1',session=f'public-fixture-{rep}',boundary=boundary,profile=profile,
+                          journal_sha256=journal_hash(history),offset=history[-1]['offset_after'])
+          def save(name,cache,history,boundary):
+              t=time.monotonic()
+              part=base/(name+'.partial.safetensors');dest=base/(name+'.safetensors')
+              save_prompt_cache(str(part),cache)
+              with part.open('rb') as fp:
+                  data=fp.read();os.fsync(fp.fileno())
+              os.replace(part,dest)
+              fd=os.open(base,os.O_RDONLY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              manifest=identity(history,boundary)
+              manifest.update(state_sha256=digest(data),state_bytes=len(data))
+              atomic(name+'.manifest.json',canonical(manifest))
+              return dict(manifest=manifest,save_s=time.monotonic()-t)
+          def validate(manifest,expected,state_hash,state_bytes):
+              return set(manifest)==set(expected)|{'state_sha256','state_bytes'} and all(manifest.get(k)==v for k,v in expected.items()) and manifest.get('state_sha256')==state_hash and manifest.get('state_bytes')==state_bytes
+          def restore(name,history,boundary):
+              t=time.monotonic();manifest=read(name+'.manifest.json');expected=identity(history,boundary)
+              state=base/(name+'.safetensors');raw=state.read_bytes()
+              h=digest(raw);size=len(raw)
+              assert validate(manifest,expected,h,size)
+              # Negative controls exercise the fixture admission predicate BEFORE deserialization.
+              cases={'prefill':lambda m:m['profile'].update(prefill_step=step+1),
+                     'model':lambda m:m['profile'].update(model_manifest='wrong'),
+                     'runtime':lambda m:m['profile'].update(generate_source='wrong'),
+                     'journal':lambda m:m.update(journal_sha256='wrong'),
+                     'session':lambda m:m.update(session='other'),
+                     'boundary':lambda m:m.update(boundary=boundary+1),
+                     'offset':lambda m:m.update(offset=m['offset']+1),
+                     'bytes':lambda m:m.update(state_bytes=size+1),
+                     'state_digest':lambda m:m.update(state_sha256='wrong')}
+              rejected=[]
+              for key,mutation in cases.items():
+                  altered=copy.deepcopy(manifest);mutation(altered)
+                  assert not validate(altered,expected,h,size);rejected.append(key)
+              cache=load_prompt_cache(str(state));assert offset(cache)==expected['offset']
+              return cache,dict(manifest=manifest,restore_s=time.monotonic()-t,rejected=rejected)
+          row['profile']=profile
+          if mode=='live':
+              rng=random.Random(20264400+rep)
+              words=['cedar','amber','marble','delta','fern','canvas','lantern','pebble','meadow','indigo','brass','harbor']
+              length=[71,113,191,317,491,673,887,1093,1327,1583,1861,2111][rep]
+              prefix=tok.encode(' '.join(rng.choice(words) for _ in range(length))+' '+str(rep))
+              # Predeclared two suffixes; the generated tokens themselves are retained in the journal.
+              suffixes=[tok.encode(' Continue',add_special_tokens=False),tok.encode(' Then summarize the preceding text.',add_special_tokens=False)]
+              assert all(suffixes)
+              cache=make_prompt_cache(model);history=[generate(prefix,cache,4)]
+              row['snapshot']=save('boundary0',cache,history,0)
+              for suffix in suffixes:history.append(generate(suffix,cache,8))
+              row['history']=history
+          else:
+              live=read('live.json');history=live['history'];assert row['pid']!=live['pid']
+              if mode=='restore1':
+                  cache,row['admission']=restore('boundary0',history[:1],0)
+                  q=generate(history[1]['input_ids'],cache,8)
+                  row['result']=q;row['match']=witness(q)==witness(history[1])
+                  row['snapshot']=save('boundary1',cache,[history[0],q],1)
+              elif mode=='restore2':
+                  prev=read('restore1.json');assert row['pid']!=prev['pid']
+                  cache,row['admission']=restore('boundary1',[history[0],prev['result']],1)
+                  q=generate(history[2]['input_ids'],cache,8)
+                  row['result']=q;row['match']=witness(q)==witness(history[2])
+              elif mode=='replay2':
+                  t=time.monotonic();cache=make_prompt_cache(model);rebuilt=[]
+                  for q in history[:2]:rebuilt.append(generate(q['input_ids'],cache,len(q['tokens'])))
+                  row['rebuild_s']=time.monotonic()-t
+                  row['rebuilt']=rebuilt
+                  row['rebuild_match']=[witness(q) for q in rebuilt]==[witness(q) for q in history[:2]]
+                  q=generate(history[2]['input_ids'],cache,8)
+                  row['result']=q;row['match']=witness(q)==witness(history[2])
+              else:raise ValueError(mode)
+          atomic(mode+'.json',canonical(row))
+          PY
+          python -m py_compile trial.py
+          : > arm-status.tsv
+          run_mode() {
+            local mode="$1" rep="$2" rc=0
+            python trial.py "$mode" "$rep" || rc=$?
+            printf '%s\t%s\t%s\n' "$rep" "$mode" "$rc" >> arm-status.tsv
+            return "$rc"
+          }
+          start=$((SHARD * 4))
+          for (( i=start; i<start+4; i++ )); do
+            if run_mode live "$i"; then
+              if run_mode restore1 "$i"; then
+                run_mode restore2 "$i" || true
+              else
+                printf '%s\trestore2\tskipped_restore1_failure\n' "$i" >> arm-status.tsv
+              fi
+              run_mode replay2 "$i" || true
+            else
+              for mode in restore1 restore2 replay2; do printf '%s\t%s\tskipped_live_failure\n' "$i" "$mode" >> arm-status.tsv; done
+            fi
+          done
+          python - <<'PY'
+          import json,os,pathlib
+          shard=int(os.environ['SHARD']);modes=('live','restore1','restore2','replay2')
+          statuses={(int(a),b):c for a,b,c in (line.split('\t') for line in pathlib.Path('arm-status.tsv').read_text().splitlines())}
+          rows=[]
+          for i in range(shard*4,shard*4+4):
+              root=pathlib.Path(f'rep-{i}')
+              row=dict(rep=i,arm_status={a:statuses.get((i,a),'missing') for a in modes})
+              for a in modes:
+                  if (root/(a+'.json')).exists():row[a]=json.loads((root/(a+'.json')).read_text())
+              row['complete']=all(row['arm_status'][a]=='0' and a in row for a in modes)
+              if row['complete']:
+                  row['distinct_processes']=len({row[a]['pid'] for a in modes})==4
+                  row['profile_match']=all(row[a]['profile']==row['live']['profile'] for a in modes)
+                  row['reject_count']=sum(len(row[a]['admission']['rejected']) for a in ('restore1','restore2'))
+                  row['passed']=row['distinct_processes'] and row['profile_match'] and row['reject_count']==18 and all(row[a]['match'] for a in modes[1:]) and row['replay2']['rebuild_match']
+              else:row['passed']=False
+              rows.append(row)
+              print('ISH_PATH',i,row['arm_status'],row.get('reject_count'),row['passed'])
+          pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='bounded MLX staged multi-boundary continuation and fixture identity predicate; not production admission, security, full logits, RNG or cold equivalence',workflow_sha=os.environ['GITHUB_SHA'],shard=shard,rows=rows),indent=2))
+          assert len(rows)==4 and all(r['passed'] for r in rows)
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-mlx-path-r22-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/cache-mlx/receipt.json
+            ${{ runner.temp }}/cache-mlx/rep-*/*.json
+            ${{ runner.temp }}/cache-mlx/model-manifest.json
+            ${{ runner.temp }}/cache-mlx/installed.txt
+            ${{ runner.temp }}/cache-mlx/arm-status.tsv
+          if-no-files-found: warn
+          retention-days: 14
