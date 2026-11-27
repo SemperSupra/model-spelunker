@@ -1,4 +1,4 @@
-name: Cache lifecycle R10 native three-session churn
+name: Cache lifecycle R11 paired native checkpoint contention
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-churn-r10.yml']
@@ -34,7 +34,7 @@ jobs:
           printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
           sha256sum build/bin/llama-server model.gguf > identities.txt
           cp upstream/LICENSE upstream-license.txt
-      - name: Three sessions over two native slots with budget and live-neighbor checkpoint
+      - name: Paired no-save idle-save and busy-neighbor save with phase timing
         shell: bash
         run: |
           set -euo pipefail
@@ -46,7 +46,7 @@ jobs:
           (root/'slots').mkdir()
           rows=[]
           def receipt():
-              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],scope='public three-session native slot churn; experimental admission budget; no production tenant authorization',rows=rows),indent=2))
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],scope='native checkpoint contention screen; not proof of internal queue mechanism or production SLO',rows=rows),indent=2))
           def req(path,data=None):
               body=None if data is None else json.dumps(data).encode()
               with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:
@@ -120,88 +120,78 @@ jobs:
               return dict(owner=owner,expected=expected,target=target,shared_prefix_tokens=shared)
           def matches(s,actual):
               return actual['content'].strip()==s['expected'] and actual['tokens']==s['cold']['tokens'] and actual['content']==s['cold']['content']
+          def durable_save(label,session):
+              stage=label+'.partial'; dst=root/'slots'/(label+'.bin')
+              start_t=time.monotonic()
+              saved=req('/slots/0?action=save',{'filename':stage})
+              native_end=time.monotonic()
+              tmp=root/'slots'/stage
+              with tmp.open('rb') as f:
+                  data=f.read()
+                  digest=hashlib.sha256(data).hexdigest()
+                  os.fsync(f.fileno())
+              os.replace(tmp,dst)
+              fd=os.open(root/'slots',os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              end=time.monotonic()
+              assert saved['n_saved']==session['shared_prefix_tokens'] and saved['n_written']==len(data)
+              return dict(filename=dst.name,sha256=digest,bytes=len(data),saved=saved,start_s=start_t,native_end_s=native_end,end_s=end,native_http_s=native_end-start_t,publication_s=end-native_end,total_s=end-start_t)
           for i in range(3):
-              row=dict(rep=i)
+              row=dict(rep=i,arms={})
               rows.append(row)
               p,st=start()
-              row.update(pid=p.pid,startup_s=st)
               try:
-                  ss=[session(k,code,[0,32,64][(i+j)%3]) for j,(k,code) in enumerate(zip(['a','b','c'],['314159','271828','161803']))]
-                  a,b,c=ss
-                  row['sessions']=ss
-                  for s in ss:
-                      erase(0)
-                      s['cold']=complete(s['target'],12,0)
-                      assert s['cold']['content'].strip()==s['expected'] and s['cold']['timings']['cache_n']==0
-                  erase(0);erase(1)
-                  seed=complete(a['target'][:a['shared_prefix_tokens']],1,0)
-                  assert len(seed['tokens'])==1
-                  # Save the idle A slot while B has a real native request in flight.
-                  name=f'rep-{i}-a.bin'
-                  stage=f'rep-{i}-a.partial'
-                  snapshot=root/'slots'/name
-                  with cf.ThreadPoolExecutor(max_workers=1) as pool:
-                      neighbor=pool.submit(complete,b['target'],12,1)
-                      observed=None
-                      until=time.monotonic()+15
-                      while time.monotonic()<until and not neighbor.done():
-                          state=req('/slots')
-                          if next(x for x in state if x['id']==1)['is_processing']:
-                              observed=state;break
-                          time.sleep(.02)
-                      assert observed is not None and not next(x for x in observed if x['id']==0)['is_processing']
-                      begin=time.monotonic()
-                      saved=req('/slots/0?action=save',{'filename':stage})
-                      tmp=root/'slots'/stage
-                      with tmp.open('rb') as stream:
-                          data=stream.read()
-                          os.fsync(stream.fileno())
-                      assert saved['n_saved']==a['shared_prefix_tokens'] and saved['n_written']==len(data)
-                      os.replace(tmp,snapshot)
-                      fd=os.open(root/'slots',os.O_RDONLY|os.O_DIRECTORY)
-                      try:os.fsync(fd)
-                      finally:os.close(fd)
-                      end=time.monotonic()
-                      b_first=neighbor.result(timeout=180)
-                  a.update(filename=name,snapshot_sha=hashlib.sha256(data).hexdigest(),saved=saved,generation=1)
-                  row['checkpoint']=dict(bytes=len(data),wall_s=end-begin,busy_at_request=observed,overlap_s=max(0,min(end,b_first['end_s'])-max(begin,b_first['start_s'])))
-                  assert matches(b,b_first) and row['checkpoint']['overlap_s']>0
-                  # Admit a single persisted generation. C replaces A while B stays resident.
-                  budget=len(data)
+                  a=session('a','314159',[0,32,64][i]); b=session('b','271828',[64,0,32][i])
                   erase(0)
-                  c_first=complete(c['target'],12,0)
-                  assert matches(c,c_first) and c_first['timings']['cache_n']==0
-                  occupied=sum(x.stat().st_size for x in (root/'slots').glob('*.bin'))
-                  assert occupied==budget
-                  row['budget_denial']=dict(capacity_bytes=budget,occupied_bytes=occupied,minimum_positive_required_bytes=1,native_save_called=False,denied=occupied+1>budget)
-                  assert row['budget_denial']['denied']
-                  assert hashlib.sha256(snapshot.read_bytes()).hexdigest()==a['snapshot_sha']
-                  ticket=dict(owner='a',model_sha=os.environ['MODEL_SHA'],runtime_sha=os.environ['LLAMA_REV'],filename=name,sha256=a['snapshot_sha'],generation=1)
-                  def eligible(t):
-                      return t.get('generation')==a['generation'] and guard(a,t)
-                  assert eligible(ticket)
-                  assert not eligible(dict(ticket,generation=0))
-                  assert not eligible(dict(ticket,owner='c'))
-                  erase(0)
-                  restored=req('/slots/0?action=restore',{'filename':name})
-                  assert restored['n_restored']==a['shared_prefix_tokens']
-                  row['restored']=restored
-                  resumed=pair([a,b],{'a':0,'b':1})
-                  row['resume_pair']=resumed
-                  for s in [a,b]:
-                      actual=resumed['results'][s['owner']]
-                      assert matches(s,actual) and actual['timings']['cache_n']>0 and actual['timings']['prompt_n']<s['cold']['timings']['prompt_n']
-                  # Consume only after verified continuation. Old tickets must fail.
-                  snapshot.unlink()
-                  a['generation']=2
-                  assert not eligible(ticket) and not snapshot.exists()
-                  row['consumed_ticket_rejected']=True
-                  erase(0)
-                  c_again=complete(c['target'],12,0)
-                  assert matches(c,c_again) and c_again['timings']['cache_n']==0
-                  row['c_cold_after_budget_refusal']=c_again
-                  row['b_first']=b_first
-                  row['c_first']=c_first
+                  a['cold']=complete(a['target'],12,0)
+                  assert a['cold']['content'].strip()==a['expected']
+                  order=['no_save','idle_save','busy_save']
+                  order=order[i:]+order[:i]
+                  row['order']=order
+                  for arm in order:
+                      erase(0);erase(1)
+                      seed=complete(a['target'][:a['shared_prefix_tokens']],1,0)
+                      assert len(seed['tokens'])==1
+                      entry=dict(arm=arm,seed=seed)
+                      row['arms'][arm]=entry
+                      if arm=='idle_save':
+                          assert not any(x['is_processing'] for x in req('/slots'))
+                          entry['checkpoint']=durable_save(f'{i}-{arm}',a)
+                      if arm=='busy_save':
+                          with cf.ThreadPoolExecutor(max_workers=1) as pool:
+                              future=pool.submit(complete,b['target'],12,1)
+                              until=time.monotonic()+15
+                              observed=None
+                              while time.monotonic()<until and not future.done():
+                                  state=req('/slots')
+                                  if next(x for x in state if x['id']==1)['is_processing']:
+                                      observed=state;break
+                                  time.sleep(.02)
+                              assert observed is not None and not next(x for x in observed if x['id']==0)['is_processing']
+                              entry['busy_at_save_request']=observed
+                              entry['checkpoint']=durable_save(f'{i}-{arm}',a)
+                              entry['b']=future.result(timeout=180)
+                          cp=entry['checkpoint']; out=entry['b']
+                          entry['checkpoint_overlap_s']=max(0,min(cp['end_s'],out['end_s'])-max(cp['start_s'],out['start_s']))
+                          entry['native_response_minus_neighbor_end_s']=cp['native_end_s']-out['end_s']
+                          assert entry['checkpoint_overlap_s']>0
+                      else:entry['b']=complete(b['target'],12,1)
+                      assert entry['b']['content'].strip()==b['expected'] and entry['b']['timings']['cache_n']==0
+                      if 'checkpoint' in entry:
+                          cp=entry['checkpoint']; snap=root/'slots'/cp['filename']
+                          assert hashlib.sha256(snap.read_bytes()).hexdigest()==cp['sha256']
+                          erase(0)
+                          t=time.monotonic()
+                          result=req('/slots/0?action=restore',{'filename':cp['filename']})
+                          entry['restore_s']=time.monotonic()-t
+                          assert result['n_restored']==a['shared_prefix_tokens']
+                          entry['a_restored']=complete(a['target'],12,0)
+                          assert matches(a,entry['a_restored']) and entry['a_restored']['timings']['prompt_n']<a['cold']['timings']['prompt_n']
+                          snap.unlink()
+                      receipt()
+                  base=row['arms']['no_save']['b']
+                  assert all(v['b']['tokens']==base['tokens'] and v['b']['content']==base['content'] for v in row['arms'].values())
                   row['passed']=True
               finally:stop(p);receipt()
           assert len(rows)==3 and all(r.get('passed') for r in rows)
@@ -209,7 +199,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-churn-r10
+          name: llama-cache-churn-r11
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
