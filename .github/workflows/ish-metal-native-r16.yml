@@ -76,7 +76,9 @@ jobs:
           cp -R upstream/tests upstream/tools testbed/
           cd testbed
           python -c 'import vllm_metal; print(vllm_metal.__file__); assert "site-packages" in vllm_metal.__file__'
-          python -m pytest tests/e2e/test_kv_offload_e2e.py -q -s --basetemp "$${{ runner.temp }}/ish-metal/evidence/native" --junitxml "$RUNNER_TEMP/ish-metal/evidence/native.xml"
+          test -d "$RUNNER_TEMP/ish-metal/evidence"
+          python -c 'import os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"ish-metal/evidence/native"; assert p.is_absolute() and p.parent.is_dir() and "$" not in str(p)'
+          python -m pytest tests/e2e/test_kv_offload_e2e.py -q -s --basetemp "$RUNNER_TEMP/ish-metal/evidence/native" --junitxml "$RUNNER_TEMP/ish-metal/evidence/native.xml"
           python - <<'PY'
           import json,pathlib,os
           root=pathlib.Path('../evidence')
@@ -91,6 +93,6 @@ jobs:
         if: always()
         with:
           name: ish-metal-native-r16
-          path: RUNNER_TEMP/ish-metal/evidence/
+          path: ${{ runner.temp }}/ish-metal/evidence/
           if-no-files-found: warn
           retention-days: 14
