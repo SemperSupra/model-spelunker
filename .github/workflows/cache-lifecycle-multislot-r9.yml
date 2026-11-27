@@ -1,0 +1,183 @@
+name: Cache lifecycle R9 two-slot concurrent restore
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-multislot-r9.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
+      MODEL_REV: 6dd44a1fb35d11b5d1b28902876ce3cc9e882d0e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 300 https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/$MODEL_REV/qwen2.5-0.5b-instruct-q4_k_m.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+      - name: Two independent sessions cold versus restored on crossed slots
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import concurrent.futures as cf
+          import hashlib,json,os,pathlib,subprocess,threading,time,urllib.request
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],scope='public native two-slot restart and explicit session mapping; no production tenant authentication claim',rows=rows),indent=2))
+          def req(path,data=None):
+              body=None if data is None else json.dumps(data).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:
+                  return json.load(r)
+          def start():
+              log=open(root/'server.log','ab')
+              t=time.monotonic()
+              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','8192','-np','2','-t','4','-ngl','0','--no-kv-unified','--cache-ram','0','--no-cache-idle-slots','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
+              log.close()
+              for _ in range(120):
+                  if p.poll() is not None:raise RuntimeError('server exited')
+                  try:
+                      req('/health')
+                      slots=req('/slots')
+                      assert {x['id'] for x in slots}=={0,1}
+                      assert all(x['n_ctx']>=2048 and not x['is_processing'] for x in slots)
+                      return p,time.monotonic()-t
+                  except OSError:time.sleep(.25)
+              p.kill();p.wait()
+              raise RuntimeError('readiness timeout')
+          def stop(p):
+              p.terminate()
+              try:p.wait(timeout=10)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+              assert p.poll() is not None
+          def complete(prompt,n,slot):
+              start=time.monotonic()
+              r=req('/completion',dict(prompt=prompt,id_slot=slot,n_predict=n,temperature=0,seed=42,cache_prompt=True,return_tokens=True))
+              end=time.monotonic()
+              return dict(content=r['content'],tokens=r['tokens'],timings=r['timings'],slot_requested=slot,start_s=start,end_s=end,wall_s=end-start)
+          def tokenized(s):
+              return req('/tokenize',{'content':s,'add_special':False,'parse_special':True})['tokens']
+          def pair(sessions,slotmap):
+              barrier=threading.Barrier(3)
+              observations=[]
+              def task(s):
+                  barrier.wait(timeout=10)
+                  return complete(s['target'],12,slotmap[s['owner']])
+              with cf.ThreadPoolExecutor(max_workers=2) as pool:
+                  futures={s['owner']:pool.submit(task,s) for s in sessions}
+                  barrier.wait(timeout=10)
+                  deadline=time.monotonic()+180
+                  while not all(f.done() for f in futures.values()):
+                      observed=req('/slots')
+                      busy=sorted(x['id'] for x in observed if x['is_processing'])
+                      if not observations or observations[-1]['busy']!=busy:
+                          observations.append(dict(t_s=time.monotonic(),busy=busy))
+                      if time.monotonic()>deadline:raise TimeoutError('paired completion deadline')
+                      time.sleep(.04)
+                  output={key:f.result() for key,f in futures.items()}
+              a,b=output.values()
+              overlap=max(0,min(a['end_s'],b['end_s'])-max(a['start_s'],b['start_s']))
+              return dict(results=output,native_slot_observations=observations,simultaneous_native_slots=any(x['busy']==[0,1] for x in observations),client_overlap_s=overlap,makespan_s=max(a['end_s'],b['end_s'])-min(a['start_s'],b['start_s']))
+          def guard(session,ticket):
+              path=root/'slots'/session['filename']
+              return ticket.get('owner')==session['owner'] and ticket.get('model_sha')==os.environ['MODEL_SHA'] and ticket.get('runtime_sha')==os.environ['LLAMA_REV'] and ticket.get('filename')==session['filename'] and ticket.get('sha256')==session['snapshot_sha'] and path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest()==session['snapshot_sha']
+          for i in range(3):
+              row=dict(rep=i,sessions=[])
+              rows.append(row)
+              p,st=start()
+              row['seed_pid']=p.pid
+              row['seed_startup_s']=st
+              try:
+                  for j,owner in enumerate(['a','b']):
+                      expected=[['314159','271828'],['161803','314159'],['271828','161803']][i][j]
+                      lines=[f'Parcel {k:04d} has status archived and category blue.' for k in range(64)]
+                      lines.insert([0,32,64][i],f'The special parcel ORCHID has access code {expected}.')
+                      prefix='<|im_start|>system\nAnswer questions using the supplied inventory. Output only the requested code.<|im_end|>\n<|im_start|>user\nInventory:\n'+'\n'.join(lines)+'\n'
+                      suffix='What is the access code of the special parcel ORCHID? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+                      target=tokenized(prefix+suffix)
+                      shared=0
+                      for a,b in zip(tokenized(prefix),target):
+                          if a!=b:break
+                          shared+=1
+                      assert 0<shared<len(target)<2048
+                      seed=complete(target[:shared],1,j)
+                      assert len(seed['tokens'])==1
+                      filename=f'rep-{i}-{owner}.bin'
+                      saved=req(f'/slots/{j}?action=save',{'filename':filename})
+                      snap=root/'slots'/filename
+                      data=snap.read_bytes()
+                      assert saved['n_saved']==shared and saved['n_written']==len(data)
+                      row['sessions'].append(dict(owner=owner,expected=expected,target=target,shared_prefix_tokens=shared,seed_slot=j,seed=seed,filename=filename,snapshot_sha=hashlib.sha256(data).hexdigest(),saved=saved))
+                  assert row['sessions'][0]['snapshot_sha']!=row['sessions'][1]['snapshot_sha']
+              finally:stop(p);receipt()
+              # Same two clients and same crossed physical slot assignment in each arm.
+              mapping={'a':1,'b':0}
+              row['assignment']=mapping
+              for arm in (['cold','restored'] if i%2==0 else ['restored','cold']):
+                  p,st=start()
+                  evidence=dict(pid=p.pid,startup_s=st)
+                  row[arm]=evidence
+                  assert p.pid!=row['seed_pid']
+                  try:
+                      if arm=='restored':
+                          evidence['restore']={}
+                          evidence['negative_controls']=[]
+                          for session in row['sessions']:
+                              ticket=dict(owner=session['owner'],model_sha=os.environ['MODEL_SHA'],runtime_sha=os.environ['LLAMA_REV'],filename=session['filename'],sha256=session['snapshot_sha'])
+                              other=next(s for s in row['sessions'] if s['owner']!=session['owner'])
+                              for bad in (dict(ticket,owner=other['owner']),dict(ticket,filename=other['filename']),dict(ticket,sha256='0'*64),dict(ticket,model_sha='0'*64),dict(ticket,runtime_sha='0'*40)):
+                                  rejected=not guard(session,bad)
+                                  evidence['negative_controls'].append(rejected)
+                                  assert rejected
+                              assert guard(session,ticket)
+                              slot=mapping[session['owner']]
+                              start_t=time.monotonic()
+                              r=req(f'/slots/{slot}?action=restore',{'filename':session['filename']})
+                              assert r['n_restored']==session['shared_prefix_tokens']
+                              evidence['restore'][session['owner']]=dict(slot=slot,restore=r,wall_s=time.monotonic()-start_t)
+                      evidence.update(pair(row['sessions'],mapping))
+                  finally:stop(p);receipt()
+              row['checks']=[]
+              for s in row['sessions']:
+                  cold=row['cold']['results'][s['owner']]
+                  warm=row['restored']['results'][s['owner']]
+                  check=dict(owner=s['owner'],expected=s['expected'],cold_task_pass=cold['content'].strip()==s['expected'],restored_task_pass=warm['content'].strip()==s['expected'],token_match=cold['tokens']==warm['tokens'] and cold['content']==warm['content'],cold_no_cache=cold['timings']['cache_n']==0,restored_native_reuse=warm['timings']['cache_n']>0 and warm['timings']['prompt_n']<cold['timings']['prompt_n'])
+                  row['checks'].append(check)
+              row['cold_concurrency_observed']=row['cold']['simultaneous_native_slots'] and row['cold']['client_overlap_s']>0
+              row['warm_concurrency_observed']=row['restored']['simultaneous_native_slots'] and row['restored']['client_overlap_s']>0
+              receipt()
+          assert len(rows)==3 and all(len(r['checks'])==2 and all(all(v for k,v in x.items() if k not in ('owner','expected')) for x in r['checks']) and len(r['restored']['negative_controls'])==10 and all(r['restored']['negative_controls']) and r['cold_concurrency_observed'] for r in rows), 'native two-slot restoration or retrieval or cold concurrency gate failed'
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: llama-cache-multislot-r9
+          path: |
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/server.log
+          if-no-files-found: warn
+          retention-days: 14
