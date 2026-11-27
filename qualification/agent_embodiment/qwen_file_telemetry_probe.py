@@ -158,11 +158,31 @@ def trial(binary, root, enabled):
             worker.join(5)
 
 
+def loopback_only(raw):
+    # ip queries rtnetlink in the calling process's network namespace; a sysfs
+    # mount inherited from the outer namespace can expose the wrong inventory.
+    try:
+        links = json.loads(raw)
+    except (ValueError, TypeError):
+        return False
+    if not isinstance(links, list) or len(links) != 1 or not isinstance(links[0], dict):
+        return False
+    link = links[0]
+    flags = link.get('flags')
+    return (link.get('ifname') == 'lo' and link.get('link_type') == 'loopback'
+            and type(link.get('ifindex')) is int and link['ifindex'] > 0
+            and isinstance(flags, list) and all(isinstance(f, str) for f in flags)
+            and 'LOOPBACK' in flags and 'UP' in flags)
+
+
 def native(binary, output):
     # A fresh network namespace is established by the workflow before invocation.
     if not binary.is_file() or not output.parent.is_dir() or output.exists():
         raise ValueError('invalid owned run paths')
-    if set(p.name for p in Path('/sys/class/net').iterdir()) != {'lo'}:
+    inventory = subprocess.run(['ip', '-j', 'link', 'show'], capture_output=True,
+                               check=True, timeout=3,
+                               env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'})
+    if not loopback_only(inventory.stdout):
         raise ValueError('loopback-only namespace required')
     if os.geteuid() == 0:
         raise ValueError('non-root fixture required')
@@ -188,6 +208,15 @@ def native(binary, output):
 
 
 class ContractTests(unittest.TestCase):
+    def test_namespace_inventory(self):
+        lo = dict(ifindex=1, ifname='lo', link_type='loopback', flags=['LOOPBACK', 'UP'])
+        self.assertTrue(loopback_only(json.dumps([lo])))
+        for rows in ([], [lo, dict(lo, ifname='eth0')], [dict(lo, ifname='eth0')],
+                     [dict(lo, flags=['LOOPBACK'])], [dict(lo, link_type='ether')],
+                     [dict(lo, ifindex=True)], [dict(lo, flags='UP')], [None], {}):
+            self.assertFalse(loopback_only(json.dumps(rows)))
+        self.assertFalse(loopback_only('{broken'))
+
     def test_file_parser_and_markers(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / 'trace'
