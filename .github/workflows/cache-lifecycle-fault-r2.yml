@@ -1,0 +1,296 @@
+name: Cache lifecycle R8 bounded actual ENOSPC
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-fault-r2.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 120 https://huggingface.co/ggml-org/test-model-stories260K/resolve/main/stories260K-f32.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+      - name: Paired cold and restored continuations across process destruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time,urllib.request
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],scope='native missing snapshot fallback plus experimental pre-admission guard, not production tenant isolation or native malformed file parser proof',rows=rows),indent=2))
+          def req(path,data=None):
+              body=None if data is None else json.dumps(data).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=30) as r:
+                  return json.load(r)
+          def start():
+              log=open(root/'server.log','ab')
+              t=time.monotonic()
+              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','512','-np','1','-t','2','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
+              log.close()
+              for _ in range(120):
+                  if p.poll() is not None: raise RuntimeError('server exited')
+                  try:
+                      req('/health')
+                      return p,time.monotonic()-t
+                  except OSError: time.sleep(.25)
+              p.kill();p.wait()
+              raise RuntimeError('readiness timeout')
+          def stop(p):
+              p.terminate()
+              try:p.wait(timeout=10)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+              assert p.poll() is not None
+          def completion(prompt,n):
+              t=time.monotonic()
+              r=req('/completion',dict(prompt=prompt,id_slot=0,n_predict=n,temperature=0,seed=42,cache_prompt=True))
+              return dict(content=r['content'],timings=r['timings'],wall_s=time.monotonic()-t)
+          for i in range(3):
+              prefix=('Once upon a time there was a little cat. '*12)+str(i)+' '
+              p,startup=start()
+              try:
+                  seed=completion(prefix,4)
+                  target=prefix+seed['content']+' Then '
+                  tokens=req('/tokenize',{'content':target})['tokens']
+                  t=time.monotonic()
+                  saved=req('/slots/0?action=save',{'filename':'session.bin'})
+                  save_s=time.monotonic()-t
+                  snapshot=root/'slots/session.bin'
+                  digest=hashlib.sha256(snapshot.read_bytes()).hexdigest()
+                  old=p.pid
+              finally:stop(p)
+              row=dict(rep=i,seed=seed,save=saved,save_s=save_s,bytes=snapshot.stat().st_size,snapshot_sha=digest,old_pid=old,seed_startup_s=startup,target_tokens=tokens)
+              rows.append(row);receipt()
+              bad=root/'slots/truncated.bin'
+              bad.write_bytes(snapshot.read_bytes()[:16])
+              expected_identity={'model':os.environ['MODEL_SHA'],'runtime':os.environ['LLAMA_REV'],'tenant':'synthetic-a','sha256':digest}
+              def eligible(path,identity):
+                  return identity==expected_identity and path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest()==identity['sha256']
+              row['admission_negatives']={'truncated':not eligible(bad,expected_identity),'missing':not eligible(root/'slots/absent.bin',expected_identity),'wrong_model':not eligible(snapshot,dict(expected_identity,model='other')),'wrong_runtime':not eligible(snapshot,dict(expected_identity,runtime='other')),'wrong_tenant':not eligible(snapshot,dict(expected_identity,tenant='synthetic-b')),'valid':eligible(snapshot,expected_identity)}
+              assert all(row['admission_negatives'].values())
+              # Native missing-file behavior; do not pass corrupted/untrusted bytes to native parser.
+              p,st=start()
+              try:
+                  try:req('/slots/0?action=restore',{'filename':'absent.bin'})
+                  except urllib.error.HTTPError as e:row['missing_native_http']=e.code
+                  else:raise AssertionError('missing snapshot accepted')
+                  assert row['missing_native_http']>=400
+                  row['fallback']=completion(target,8)
+              finally:stop(p);receipt()
+              for arm in (['cold','restore'] if i%2==0 else ['restore','cold']):
+                  p,startup=start()
+                  try:
+                      assert p.pid!=old
+                      a=dict(pid=p.pid,startup_s=startup)
+                      row[arm]=a
+                      if arm=='restore':
+                          t=time.monotonic()
+                          a['restore']=req('/slots/0?action=restore',{'filename':'session.bin'})
+                          a['restore_s']=time.monotonic()-t
+                      a['completion']=completion(target,8)
+                  finally:stop(p);receipt()
+              cold=row['cold']['completion']; warm=row['restore']['completion']
+              row['output_match']=cold['content']==warm['content']==row['fallback']['content']
+              row['fallback_prefill_full']=row['fallback']['timings']['prompt_n']==cold['timings']['prompt_n']
+              assert row['fallback_prefill_full']
+              row['prefill_reduced']=warm['timings']['prompt_n']<cold['timings']['prompt_n']
+              row['restored_count_matches']=row['restore']['restore']['n_restored']==saved['n_saved']>0
+              receipt()
+          assert all(r['output_match'] and r['prefill_reduced'] and r['restored_count_matches'] for r in rows), 'native cache witness failed'
+
+          # Independent publication cut points on actual native snapshot bytes.
+          # Process death is not a disk power-loss simulation.
+          import sys,select,signal
+          snapshots={}
+          for label,word in [('old','cat'),('new','dog')]:
+              p,_=start()
+              try:
+                  prefix=(f'Once upon a time there was a little {word}. '*12)+label+' '
+                  seed=completion(prefix,4)
+                  target=prefix+seed['content']+' Then '
+                  path=f'{label}-source.bin'
+                  saved=req('/slots/0?action=save',{'filename':path})
+                  data=(root/'slots'/path).read_bytes()
+                  assert len(data)==saved['n_written'] and saved['n_saved']>0
+                  snapshots[label]=dict(filename=path,sha256=hashlib.sha256(data).hexdigest(),n_saved=saved['n_saved'],target=target)
+              finally:stop(p)
+          # A new process, rather than the writer, resolves the committed pointer.
+          reader="import hashlib,json,pathlib,sys; p=pathlib.Path(sys.argv[1]); m=json.loads(p.read_text()); b=p.parent/m['filename']; assert hashlib.sha256(b.read_bytes()).hexdigest()==m['sha256']; print(json.dumps(m))"
+          writer=root/'publisher.py'
+          writer.write_text("""import json,os,pathlib,sys,time,hashlib
+          slots=pathlib.Path(sys.argv[1])
+          cut=sys.argv[2]
+          key=sys.argv[3]
+          meta=json.loads(sys.argv[4])
+          budget=int(sys.argv[5])
+          src=slots/meta['filename']
+          if src.stat().st_size>budget:raise SystemExit(73)
+          dest=slots/(key+'-new.bin')
+          stage=slots/(key+'-new.partial')
+          pointer=slots/(key+'.json')
+          temp=slots/(key+'.partial.json')
+          def pause(at):
+              if at==cut:
+                  print(at,flush=True)
+                  while True:time.sleep(60)
+          def syncdir():
+              fd=os.open(slots,os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+          data=src.read_bytes()
+          assert hashlib.sha256(data).hexdigest()==meta['sha256']
+          with stage.open('xb') as out:
+              out.write(data[:len(data)//2])
+              out.flush()
+              pause('partial')
+              out.write(data[len(data)//2:])
+              out.flush()
+              os.fsync(out.fileno())
+          os.replace(stage,dest)
+          syncdir()
+          pause('payload_committed')
+          meta['filename']=dest.name
+          with temp.open('x') as out:
+              json.dump(meta,out)
+              out.flush()
+              os.fsync(out.fileno())
+          pause('manifest_staged')
+          os.replace(temp,pointer)
+          syncdir()
+          pause('manifest_committed')
+          """)
+          crash=[]
+          for cut in ('partial','payload_committed','manifest_staged','manifest_committed','quota'):
+              slots=root/'slots'
+              pointer=slots/(cut+'.json')
+              with pointer.open('x') as out:
+                  json.dump(snapshots['old'],out)
+                  out.flush()
+                  os.fsync(out.fileno())
+              fd=os.open(slots,os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              budget=1 if cut=='quota' else 16*1024*1024
+              p=subprocess.Popen([sys.executable,str(writer),str(slots),cut,cut,json.dumps(snapshots['new']),str(budget)],stdout=subprocess.PIPE,text=True)
+              if cut=='quota':
+                  assert p.wait(timeout=5)==73
+                  assert not (slots/(cut+'-new.partial')).exists()
+                  assert not (slots/(cut+'-new.bin')).exists()
+              else:
+                  try:
+                      assert select.select([p.stdout],[],[],5)[0]
+                      assert p.stdout.readline().strip()==cut
+                  finally:
+                      if p.poll() is None:p.kill()
+                      p.wait(timeout=5)
+                  assert p.returncode==-signal.SIGKILL
+              actual=json.loads(subprocess.check_output([sys.executable,'-c',reader,str(pointer)],text=True,timeout=5))
+              expected=snapshots['new' if cut=='manifest_committed' else 'old']
+              assert actual['sha256']==expected['sha256'] and actual['target']==expected['target']
+              witness=dict(cut=cut,writer_exit=p.returncode,selected=actual['filename'],sha256=actual['sha256'])
+              crash.append(witness)
+              for arm in ('cold','restore'):
+                  p,_=start()
+                  try:
+                      if arm=='restore':
+                          restored=req('/slots/0?action=restore',{'filename':actual['filename']})
+                          assert restored['n_restored']==expected['n_saved']
+                          witness['restored']=restored
+                      witness[arm]=completion(actual['target'],8)
+                  finally:stop(p)
+              witness['output_match']=witness['cold']['content']==witness['restore']['content']
+              witness['prefill_reduced']=witness['restore']['timings']['prompt_n']<witness['cold']['timings']['prompt_n']
+              (root/'crash-receipt.json').write_text(json.dumps(dict(scope='process kill and preflight quota refusal only; not power loss or real ENOSPC',workflow_sha=os.environ['GITHUB_SHA'],cases=crash),indent=2))
+              assert witness['output_match'] and witness['prefill_reduced']
+          assert len(crash)==5
+
+          # Actual ENOSPC: a dedicated capped tmpfs, never fill the runner disk.
+          import errno,shutil
+          pressure=root/'pressure'
+          pressure.mkdir()
+          mount=['sudo','mount','-t','tmpfs','-o',f'size=256k,mode=0700,uid={os.getuid()},gid={os.getgid()},nosuid,nodev,noexec','tmpfs',str(pressure)]
+          subprocess.run(mount,check=True,timeout=15)
+          try:
+              for meta in snapshots.values():
+                  dest=pressure/meta['filename']
+                  shutil.copyfile(root/'slots'/meta['filename'],dest)
+                  with dest.open('rb') as stream:os.fsync(stream.fileno())
+              pointer=pressure/'enospc.json'
+              with pointer.open('x') as out:
+                  json.dump(snapshots['old'],out)
+                  out.flush()
+                  os.fsync(out.fileno())
+              fd=os.open(pressure,os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              stat=os.statvfs(pressure)
+              free=stat.f_bavail*stat.f_frsize
+              payload=(pressure/snapshots['new']['filename']).stat().st_size
+              assert 0<free<payload, (free,payload)
+              # Wrapper reports errno explicitly; quota preflight admits the payload.
+              wrapper="import errno,runpy,sys; sys.argv=sys.argv[1:]\ntry: runpy.run_path(sys.argv[0],run_name='__main__')\nexcept OSError as e:\n print('WRITE_ERRNO='+str(e.errno),flush=True); sys.exit(28 if e.errno==errno.ENOSPC else 1)"
+              proc=subprocess.run([sys.executable,'-c',wrapper,str(writer),str(pressure),'none','enospc',json.dumps(snapshots['new']),str(16*1024*1024)],capture_output=True,text=True,timeout=10)
+              assert proc.returncode==errno.ENOSPC and 'WRITE_ERRNO=28' in proc.stdout
+              assert not (pressure/'enospc-new.bin').exists()
+              actual=json.loads(subprocess.check_output([sys.executable,'-c',reader,str(pointer)],text=True,timeout=5))
+              assert actual==snapshots['old']
+              recovered=root/'slots/enospc-recovered.bin'
+              shutil.copyfile(pressure/actual['filename'],recovered)
+              assert hashlib.sha256(recovered.read_bytes()).hexdigest()==actual['sha256']
+              evidence=dict(scope='actual bounded tmpfs ENOSPC; not physical power-loss',filesystem_capacity_bytes=stat.f_blocks*stat.f_frsize,free_before_write=free,new_payload_bytes=payload,write_errno=28,selected=actual['filename'],previous_generation_hash=actual['sha256'],partial_present=(pressure/'enospc-new.partial').exists())
+              (root/'enospc-receipt.json').write_text(json.dumps(evidence,indent=2))
+          finally:
+              subprocess.run(['sudo','umount',str(pressure)],check=True,timeout=15)
+          for arm in ('cold','restore'):
+              p,_=start()
+              try:
+                  if arm=='restore':
+                      result=req('/slots/0?action=restore',{'filename':recovered.name})
+                      assert result['n_restored']==actual['n_saved']
+                  evidence[arm]=completion(actual['target'],8)
+              finally:stop(p)
+          evidence['output_match']=evidence['cold']['content']==evidence['restore']['content']
+          evidence['prefill_reduced']=evidence['restore']['timings']['prompt_n']<evidence['cold']['timings']['prompt_n']
+          evidence['workflow_sha']=os.environ['GITHUB_SHA']
+          (root/'enospc-receipt.json').write_text(json.dumps(evidence,indent=2))
+          assert evidence['output_match'] and evidence['prefill_reduced']
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: llama-cache-fault-r8
+          path: |
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/crash-receipt.json
+            ${{ runner.temp }}/cache-r0/enospc-receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/server.log
+          if-no-files-found: warn
+          retention-days: 14
