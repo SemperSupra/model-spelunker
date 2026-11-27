@@ -1,0 +1,164 @@
+name: ISH R12 useful-turn checkpoint and continuation
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-useful-turn-r12.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
+      MODEL_REV: 6dd44a1fb35d11b5d1b28902876ce3cc9e882d0e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 300 https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/$MODEL_REV/qwen2.5-0.5b-instruct-q4_k_m.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+      - name: Useful first turn followed by independently validated continuation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time,urllib.request
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],model_revision=os.environ['MODEL_REV'],scope='useful first-turn cache and second-turn retrieval; synthetic workload, not agent or hardware equivalence',rows=rows),indent=2))
+          def req(path,data=None):
+              body=None if data is None else json.dumps(data).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:
+                  return json.load(r)
+          def start():
+              log=open(root/'server.log','ab')
+              t=time.monotonic()
+              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','8192','-np','1','-t','4','-ngl','0','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
+              log.close()
+              for _ in range(120):
+                  if p.poll() is not None: raise RuntimeError('server exited')
+                  try:
+                      req('/health')
+                      return p,time.monotonic()-t
+                  except OSError: time.sleep(.25)
+              p.kill();p.wait()
+              raise RuntimeError('readiness timeout')
+          def stop(p):
+              p.terminate()
+              try:p.wait(timeout=10)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+              assert p.poll() is not None
+          def completion(prompt,n):
+              t=time.monotonic()
+              r=req('/completion',dict(prompt=prompt,id_slot=0,n_predict=n,temperature=0,seed=42,cache_prompt=True,return_tokens=True))
+              return dict(content=r['content'],tokens=r['tokens'],timings=r['timings'],wall_s=time.monotonic()-t)
+          def tokens(text):
+              return req('/tokenize',{'content':text,'add_special':False,'parse_special':True})['tokens']
+          def save():
+              t=time.monotonic()
+              result=req('/slots/0?action=save',{'filename':'turn.partial'})
+              stage=root/'slots/turn.partial'
+              with stage.open('rb') as fp:
+                  data=fp.read()
+                  digest=hashlib.sha256(data).hexdigest()
+                  os.fsync(fp.fileno())
+              assert len(data)==result['n_written'] and result['n_saved']>0
+              path=root/'slots/turn.bin'
+              os.replace(stage,path)
+              fd=os.open(root/'slots',os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              return dict(native=result,bytes=len(data),sha256=digest,wall_s=time.monotonic()-t)
+          for i,count in enumerate([64,128,256]*3):
+              row=dict(rep=i,inventory_rows=count)
+              rows.append(row)
+              pair=[('314159','271828'),('161803','314159'),('271828','161803')][i//3]
+              expected1,expected2=pair
+              row.update(expected1=expected1,expected2=expected2)
+              lines=[f'Parcel {j:04d} has status archived and category blue.' for j in range(count)]
+              positions=[(0,count),(count//2,count//2+1),(count,0)][i//3]
+              lines.insert(positions[0],f'The special parcel ORCHID has access code {expected1}.')
+              lines.insert(positions[1],f'The special parcel LILAC has access code {expected2}.')
+              first='<|im_start|>system\nAnswer questions using the supplied inventory. Output only the requested code.<|im_end|>\n<|im_start|>user\nInventory:\n'+'\n'.join(lines)+'\nWhat is the access code of the special parcel ORCHID? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+              p,st=start()
+              row.update(first_pid=p.pid,first_startup_s=st)
+              try:
+                  first_ids=tokens(first)
+                  first_answer=completion(first_ids,12)
+                  row['first']=first_answer
+                  row['first_task_pass']=first_answer['content'].strip()==expected1
+                  receipt()
+                  assert row['first_task_pass'], 'first useful task failed; cache not admitted'
+                  # Construct next turn from actual validated prior output, not an answer inserted by the oracle.
+                  second=first+first_answer['content']+'<|im_end|>\n<|im_start|>user\nWhat is the access code of the special parcel LILAC? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+                  target=tokens(second)
+                  shared=0
+                  for x,y in zip(first_ids,target):
+                      if x!=y:break
+                      shared+=1
+                  assert shared==len(first_ids) and len(target)<8192-16
+                  row['target_tokens']=target
+                  row['first_prompt_tokens']=len(first_ids)
+                  row['checkpoint']=save()
+                  receipt()
+                  row['resident']=completion(target,12)
+              finally:stop(p);receipt()
+              checkpoint=row['checkpoint']
+              for arm in (['cold','restored'] if i%2==0 else ['restored','cold']):
+                  p,st=start()
+                  entry=dict(pid=p.pid,startup_s=st)
+                  row[arm]=entry
+                  assert p.pid!=row['first_pid']
+                  try:
+                      if arm=='restored':
+                          t=time.monotonic()
+                          path=root/'slots/turn.bin'
+                          assert hashlib.sha256(path.read_bytes()).hexdigest()==checkpoint['sha256']
+                          restored=req('/slots/0?action=restore',{'filename':path.name})
+                          entry['restore_s']=time.monotonic()-t
+                          entry['restore']=restored
+                          assert restored['n_restored']==checkpoint['native']['n_saved']
+                      entry['completion']=completion(target,12)
+                  finally:stop(p);receipt()
+              cold=row['cold']['completion']; warm=row['restored']['completion']; resident=row['resident']
+              row['second_task_pass']=all(x['content'].strip()==expected2 for x in (cold,warm,resident))
+              row['exact_token_match']=cold['tokens']==warm['tokens']==resident['tokens']
+              row['native_reuse']=cold['timings']['cache_n']==0 and warm['timings']['cache_n']>0 and warm['timings']['prompt_n']<cold['timings']['prompt_n']
+              row['net_s_if_useful_prefix_already_exists']=cold['wall_s']-warm['wall_s']-checkpoint['wall_s']-row['restored']['restore_s']
+              row['first_useful_request_wall_s']=first_answer['wall_s']
+              row['cold_second_request_wall_s']=cold['wall_s']
+              row['restored_second_request_wall_s']=warm['wall_s']
+              receipt()
+          assert len(rows)==9 and all(r['first_task_pass'] and r['second_task_pass'] and r['exact_token_match'] and r['native_reuse'] for r in rows), 'useful multi-turn continuation gate failed'
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: llama-cache-useful-turn-r12
+          path: |
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/server.log
+          if-no-files-found: warn
+          retention-days: 14
