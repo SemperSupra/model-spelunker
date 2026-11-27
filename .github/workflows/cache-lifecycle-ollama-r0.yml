@@ -1,0 +1,94 @@
+name: Cache lifecycle R0 Ollama native baseline
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-ollama-r0.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_ARCHIVE_SHA256: f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Reuse pinned runtime acquisition recipe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-ollama/runtime"
+          cd "$RUNNER_TEMP/cache-ollama"
+          curl --fail --location --max-time 180 --retry 2 "https://github.com/ollama/ollama/releases/download/v$OLLAMA_VERSION/ollama-linux-amd64.tar.zst" -o runtime.tar.zst
+          printf '%s  runtime.tar.zst\n' "$OLLAMA_ARCHIVE_SHA256" | sha256sum -c -
+          zstd -d --stdout runtime.tar.zst | tar -xf - -C runtime
+          echo "$PWD/runtime/bin" >> "$GITHUB_PATH"
+      - name: Compare cold warm unload and reload using native counters
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-ollama"
+          export OLLAMA_MODELS="$PWD/models"
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess,time,urllib.request
+          model=os.environ['OLLAMA_MODEL_TAG']
+          root=pathlib.Path.cwd()
+          rows=[]
+          def req(path,d=None):
+              with urllib.request.urlopen(urllib.request.Request('http://'+os.environ['OLLAMA_HOST']+path,data=None if d is None else json.dumps(d).encode(),headers={'Content-Type':'application/json'}),timeout=180) as r:return json.load(r)
+          log=open('server.log','wb')
+          p=subprocess.Popen(['ollama','serve'],stdout=log,stderr=log)
+          try:
+              for _ in range(60):
+                  try:req('/api/tags');break
+                  except OSError:time.sleep(1)
+              else:raise RuntimeError('readiness')
+              subprocess.run(['ollama','pull',model],check=True,timeout=240)
+              m=next(x for x in req('/api/tags')['models'] if x['name']==model)
+              assert m['digest'].removeprefix('sha256:').startswith('8f68893c685c')
+              def write():
+                  pathlib.Path('receipt.json').write_text(json.dumps(dict(model=m,workflow_sha=os.environ['GITHUB_SHA'],runtime_archive=os.environ['OLLAMA_ARCHIVE_SHA256'],cache_hit_tokens=None,cache_hit_tokens_reason='native generate counters do not establish cache hit semantics',rows=rows),indent=2))
+              def run(prompt):
+                  t=time.monotonic()
+                  r=req('/api/generate',dict(model=model,prompt=prompt,stream=False,raw=True,keep_alive='5m',options=dict(num_predict=8,temperature=0,seed=42,num_ctx=2048)))
+                  return dict(response=r['response'],wall_s=time.monotonic()-t,**{k:r.get(k) for k in ('prompt_eval_count','prompt_eval_duration','eval_count','eval_duration','load_duration','total_duration','done_reason')})
+              def unload():
+                  req('/api/generate',dict(model=model,keep_alive=0))
+                  for _ in range(30):
+                      if not req('/api/ps')['models']:return
+                      time.sleep(.5)
+                  raise RuntimeError('model not unloaded')
+              for i in range(3):
+                  prompt=('The following is a synthetic sequence of letters A B C D. '*18)+str(i)+' Continue:'
+                  unload()
+                  row=dict(rep=i,cold=run(prompt))
+                  rows.append(row);write()
+                  row['warm']=run(prompt);write()
+                  unload()
+                  row['empty_ps_verified']=True
+                  row['reloaded']=run(prompt);write()
+                  row['output_match']=row['cold']['response']==row['warm']['response']==row['reloaded']['response']
+                  write()
+              assert all(x['empty_ps_verified'] and x['output_match'] for x in rows),'baseline continuation mismatch'
+          finally:
+              p.terminate()
+              try:p.wait(timeout=10)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+              log.close()
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ollama-cache-lifecycle-r0
+          path: |
+            ${{ runner.temp }}/cache-ollama/receipt.json
+            ${{ runner.temp }}/cache-ollama/server.log
+          if-no-files-found: warn
+          retention-days: 14

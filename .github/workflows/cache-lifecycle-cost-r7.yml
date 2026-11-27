@@ -1,0 +1,163 @@
+name: Cache lifecycle R9 instruction model priming contract and retrieval
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-cost-r7.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
+      MODEL_REV: 6dd44a1fb35d11b5d1b28902876ce3cc9e882d0e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 300 https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/$MODEL_REV/qwen2.5-0.5b-instruct-q4_k_m.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+      - name: Paired cold and restored continuations across process destruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time,urllib.request
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],workflow_sha=os.environ['GITHUB_SHA'],model_revision=os.environ['MODEL_REV'],scope='instruction-model prompt-only cache, synthetic retrieval oracle, no agent or hardware equivalence',rows=rows),indent=2))
+          def req(path,data=None):
+              body=None if data is None else json.dumps(data).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:
+                  return json.load(r)
+          def start():
+              log=open(root/'server.log','ab')
+              t=time.monotonic()
+              p=subprocess.Popen([str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','8192','-np','1','-t','4','-ngl','0','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')],stdout=log,stderr=log)
+              log.close()
+              for _ in range(120):
+                  if p.poll() is not None: raise RuntimeError('server exited')
+                  try:
+                      req('/health')
+                      return p,time.monotonic()-t
+                  except OSError: time.sleep(.25)
+              p.kill();p.wait()
+              raise RuntimeError('readiness timeout')
+          def stop(p):
+              p.terminate()
+              try:p.wait(timeout=10)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+              assert p.poll() is not None
+          def completion(prompt,n):
+              t=time.monotonic()
+              r=req('/completion',dict(prompt=prompt,id_slot=0,n_predict=n,temperature=0,seed=42,cache_prompt=True,return_tokens=True))
+              return dict(content=r['content'],tokens=r['tokens'],timings=r['timings'],wall_s=time.monotonic()-t)
+          # Zero-generation contract diagnostic, isolated from actual cache trials.
+          p,startup=start()
+          try:
+              zero=completion('Public synthetic cache priming control.',0)
+              (root/'priming-control.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],workflow_sha=os.environ['GITHUB_SHA'],requested=0,actual_tokens=zero['tokens'],content=zero['content'],timings=zero['timings'],zero_contract_pass=zero['tokens']==[] and zero['content']==''),indent=2))
+          finally:stop(p)
+          for i,count in enumerate([64,128,256]*3):
+              expected=['314159','271828','161803'][i//3]
+              lines=[f'Parcel {j:04d} has status archived and category blue.' for j in range(count)]
+              lines.insert([0,count//2,count][i//3],f'The special parcel ORCHID has access code {expected}.')
+              prefix='<|im_start|>system\nAnswer questions using the supplied inventory. Output only the requested code.<|im_end|>\n<|im_start|>user\nInventory:\n'+'\n'.join(lines)+'\n'
+              suffix='What is the access code of the special parcel ORCHID? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+              p,startup=start()
+              try:
+                  tokens=req('/tokenize',{'content':prefix+suffix,'add_special':False,'parse_special':True})['tokens']
+                  prefix_ids=req('/tokenize',{'content':prefix,'add_special':False,'parse_special':True})['tokens']
+                  shared=0
+                  for x,y in zip(prefix_ids,tokens):
+                      if x!=y:break
+                      shared+=1
+                  assert 0<shared<len(tokens)<8192-16
+                  # Explicitly permit exactly one sampled token on this pinned runtime.
+                  # No sampled token is appended to the independently tokenized target.
+                  seed=completion(tokens[:shared],1)
+                  assert isinstance(seed['tokens'],list) and len(seed['tokens'])==1, 'one-token priming contract failed'
+                  target=tokens
+                  t=time.monotonic()
+                  saved=req('/slots/0?action=save',{'filename':'stage.bin'})
+                  stage=root/'slots/stage.bin'
+                  with stage.open('rb') as stream:
+                      data=stream.read()
+                      os.fsync(stream.fileno())
+                  assert len(data)==saved['n_written']
+                  digest=hashlib.sha256(data).hexdigest()
+                  snapshot=root/'slots/session.bin'
+                  os.replace(stage,snapshot)
+                  fd=os.open(root/'slots',os.O_RDONLY|os.O_DIRECTORY)
+                  try:os.fsync(fd)
+                  finally:os.close(fd)
+                  save_s=time.monotonic()-t
+                  old=p.pid
+              finally:stop(p)
+              row=dict(rep=i,inventory_rows=count,expected=expected,shared_prefix_tokens=shared,seed=seed,save=saved,save_s=save_s,bytes=snapshot.stat().st_size,snapshot_sha=digest,old_pid=old,seed_startup_s=startup,target_tokens=tokens)
+              rows.append(row);receipt()
+              for arm in (['cold','restore'] if i%2==0 else ['restore','cold']):
+                  p,startup=start()
+                  try:
+                      assert p.pid!=old
+                      a=dict(pid=p.pid,startup_s=startup)
+                      row[arm]=a
+                      if arm=='restore':
+                          t=time.monotonic()
+                          assert hashlib.sha256(snapshot.read_bytes()).hexdigest()==digest
+                          a['restore']=req('/slots/0?action=restore',{'filename':'session.bin'})
+                          a['restore_s']=time.monotonic()-t
+                      a['completion']=completion(target,12)
+                  finally:stop(p);receipt()
+              cold=row['cold']['completion']; warm=row['restore']['completion']
+              row['output_match']=cold['content']==warm['content'] and cold['tokens']==warm['tokens']
+              row['cold_task_pass']=cold['content'].strip()==expected
+              row['restore_task_pass']=warm['content'].strip()==expected
+              row['prefill_reduced']=warm['timings']['prompt_n']<cold['timings']['prompt_n']
+              row['restored_count_matches']=row['restore']['restore']['n_restored']==saved['n_saved']>0
+              row['cold_prefill_s']=cold['timings']['prompt_ms']/1000
+              row['cache_prefill_s']=warm['timings']['prompt_ms']/1000
+              row['restore_overhead_s']=row['restore']['restore_s']
+              row['saving_benefit_if_resumed_s']=row['cold_prefill_s']-row['cache_prefill_s']-row['restore_overhead_s']
+              benefit=row['saving_benefit_if_resumed_s']
+              row['break_even_resumption_probability']=row['save_s']/benefit if benefit>0 else None
+              row['net_s_if_resumed_once']=benefit-row['save_s']
+              # Priming is sunk only when prefix was already evaluated for useful work.
+              row['cold_seed_wall_s']=seed['wall_s']
+              row['net_s_if_priming_only_for_one_resume']=benefit-row['save_s']-seed['wall_s']
+              receipt()
+          assert len(rows)==9 and all(r['output_match'] and r['prefill_reduced'] and r['restored_count_matches'] for r in rows), 'native cache witness failed'
+          assert all(r['cold_task_pass'] and r['restore_task_pass'] for r in rows), 'retrieval task oracle failed (distinct from cache equivalence)'
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: llama-cache-instruction-r9
+          path: |
+            ${{ runner.temp }}/cache-r0/priming-control.json
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/server.log
+          if-no-files-found: warn
+          retention-days: 14

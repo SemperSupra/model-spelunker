@@ -1,0 +1,169 @@
+name: ISH R19 native simulator spawn-safe published replay
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-sglang-published-replay-r18.yml']
+permissions:
+  contents: read
+jobs:
+  simulator:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      ISH_SGL_SOURCE: 297e54fd105e974cdf401e5b4d20253a22c16f90
+      CUDA_VISIBLE_DEVICES: ""
+      SGLANG_IS_IN_CI: "true"
+      MALLOC_ARENA_MAX: "2"
+      MAX_JOBS: "1"
+      OMP_NUM_THREADS: "2"
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install pinned upstream source and simulator dependencies
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ish-sim/evidence"
+          cd "$RUNNER_TEMP/ish-sim"
+          git init upstream
+          git -C upstream remote add origin https://github.com/sgl-project/sglang.git
+          git -C upstream fetch --depth=1 origin "$ISH_SGL_SOURCE"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$ISH_SGL_SOURCE"
+          git -C upstream rev-parse HEAD > evidence/source.txt
+          df -h > evidence/disk-before.txt
+          python3.12 -m venv venv
+          source venv/bin/activate
+          python -m pip install uv==0.8.22
+          cd upstream
+          bash scripts/ci/utils/install_rust_protoc.sh
+          # AIC 0.10.0 requires NumPy 1.26.4. ml-dtypes >=0.6 requires NumPy 2.
+          # Resolve together rather than silently downgrading NumPy in a second install.
+          uv pip install --python "$RUNNER_TEMP/ish-sim/venv/bin/python" -e python pytest==9.2.0 "./tools/sglang-simulator[aic]" "numpy==1.26.4" "ml-dtypes==0.5.3" "apache-tvm-ffi==0.1.11" "pyarrow==25.0.1" --prerelease allow --index-strategy unsafe-best-match
+          uv pip freeze > ../evidence/installed.txt
+          uv pip check > ../evidence/dependency-check.txt 2>&1
+          python - <<'PY'
+          import importlib.metadata as md, json, pathlib
+          import numpy, ml_dtypes, tvm_ffi
+          from aiconfigurator.sdk import models
+          from sglang_simulator.time_predictor import ReplayTimePredictor
+          assert numpy.__version__=='1.26.4'
+          assert ml_dtypes.__version__=='0.5.3'
+          assert numpy.array([1],dtype=ml_dtypes.bfloat16).astype(numpy.float32)[0]==1
+          names=['numpy','ml-dtypes','apache-tvm-ffi','aiconfigurator','pyarrow','torch','flashinfer-python']
+          pathlib.Path('../evidence/abi.json').write_text(json.dumps(dict(versions={n:md.version(n) for n in names},native_dtype_and_imports='PASS'),indent=2))
+          PY
+          uv pip freeze > ../evidence/installed.txt
+          df -h > ../evidence/disk-after.txt
+      - name: Regenerate exact merged trace adapter outputs
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ish-sim"
+          mkdir -p traces
+          # Reuse the merged deterministic adapter, not a second trace generator.
+          cp "$GITHUB_WORKSPACE/.github/workflows/ish-trace-adapter-r17.yml" adapter.yml
+          python - <<'PY'
+          import hashlib,pathlib,textwrap
+          p=pathlib.Path('adapter.yml')
+          data=p.read_bytes()
+          assert hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()=='514db4d28d4f0d04a429a6e2d22e3bc7c5c2815f'
+          source=data.decode().split("          python3 - <<'PY'\n",1)[1].split("\n          PY\n",1)[0]
+          pathlib.Path('traces/adapter.py').write_text(textwrap.dedent(source)+'\n')
+          PY
+          cd traces
+          TRACE_REV=1d0e4c7587b57b78a1997be370b349b79828c5dd SIM_SOURCE="$ISH_SGL_SOURCE" python adapter.py
+          cp receipt.json ../evidence/adapter-receipt.json
+          printf '%s  %s\n' 6492cea86ce5162fbe7eb3605f2eefaf81764d2020608dbb762de122b064dd1b conversation.jsonl fdf138a7ca3d0cd0dcb47ac0ef6003bb2fb1ddf41441ff0f93966e3e328edb61 toolagent.jsonl e1a910134832d9bc09958b36bba61a36088ea4a39afb6b709529084b2d10ec5d synthetic.jsonl | sha256sum -c -
+      - name: Execute matched native scheduler and cache replay
+        timeout-minutes: 22
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ish-sim/upstream"
+          source ../venv/bin/activate
+          export TORCH_EXTENSIONS_DIR="$RUNNER_TEMP/ish-sim/torch-extensions"
+          python -c 'from sglang.srt.mem_cache.cpp_utils.native_hash import get_native_hash; get_native_hash([1], None)'
+          cat > ../replay.py <<'PY'
+          import hashlib,json,math,os,pathlib,sys,time
+          def main():
+              root=pathlib.Path(os.environ['RUNNER_TEMP'])/'ish-sim'
+              upstream=root/'upstream'
+              workload,arm=sys.argv[1:]
+              out=root/'evidence'/f'{workload}-{arm}'
+              out.mkdir()
+              os.environ['SGLANG_SIMULATOR_OUTPUT_DIR']=str(out/'native')
+              os.environ['SGLANG_SIMULATOR_OUTPUT_MODE']='OFFLINE'
+              os.environ['SGLANG_USE_CPU_ENGINE']='1'
+              sys.path[:0]=[str(upstream),str(upstream/'tools/sglang-simulator/test')]
+              from test_simulation_sglang_runner import _write_sim_config,ASSETS
+              from sglang_simulator.dataset import GenericRequest,SimpleDataset
+              from sglang_simulator.simulation.benchmark import BenchmarkConfig
+              os.environ['SGLANG_SIMULATOR_CONFIG_PATH']=str(_write_sim_config(out))
+              from benchmark.simulator.bench_runner import SGLangBenchmarkRunner
+              from sglang.srt.server_args import ServerArgs
+              allrows=[json.loads(l) for l in (root/'traces'/f'{workload}.jsonl').read_text().splitlines()]
+              indexed=[(i,r) for i,r in enumerate(allrows) if 0<r['output_len']<=128][:12]
+              assert len(indexed)==12
+              t0=indexed[0][1]['timestamp']
+              # A bounded chronological smoke subset; no truncation or resampling.
+              dataset=SimpleDataset(reqs=[GenericRequest(token_ids=r['prompt'],input_length=r['prompt_len'],output_length=r['output_len'],custom_params={'created_time':(r['timestamp']-t0)/1000}) for _,r in indexed])
+              kwargs=dict(model_path=str(ASSETS/'qwen3-8b'),load_format='dummy',device='cpu',max_total_tokens=16384,page_size=256,max_running_requests=2,context_length=8192,skip_tokenizer_init=True,disable_radix_cache=arm=='none',enable_hierarchical_cache=arm=='hierarchy')
+              if arm=='hierarchy':kwargs.update(hicache_ratio=2,hicache_storage_backend='file',hicache_storage_prefetch_policy='wait_complete')
+              t=time.monotonic()
+              runner=SGLangBenchmarkRunner(server_args=ServerArgs(**kwargs))
+              try:
+                  if arm=='hierarchy':runner.clear_hicache_storage()
+                  metrics=runner.benchmark(BenchmarkConfig(request_rate=10,ignore_request_timestamp=False),dataset=dataset)
+                  stats=runner.get_request_stats()
+              finally:runner.shutdown()
+              assert metrics is not None
+              ni=sum(r['prompt_len'] for _,r in indexed);no=sum(r['output_len'] for _,r in indexed)
+              result=dict(scope='native simulator scheduler/cache; replay predictor timings MODELED and uncalibrated, no actual model forward',workload=workload,arm=arm,selected_indices=[i for i,_ in indexed],input_tokens=ni,output_tokens=no,source_trace_sha256=hashlib.sha256((root/'traces'/f'{workload}.jsonl').read_bytes()).hexdigest(),metrics=metrics,request_stats=stats,host_execution_wall_s=time.monotonic()-t)
+              (out/'receipt.json').write_text(json.dumps(result,indent=2))
+              assert metrics['completed']==12 and metrics['total_input']==ni and metrics['total_output']==no
+              for k in ('prefix_cache_reused_ratio','kv_cache_device_hit_ratio','kv_cache_host_hit_ratio','kv_cache_storage_hit_ratio'):
+                  assert isinstance(metrics[k],(int,float)) and math.isfinite(metrics[k]) and 0<=metrics[k]<=1,(k,metrics[k])
+              assert 0<=metrics['total_new_input']<=ni
+              if arm=='none':assert metrics['prefix_cache_reused_ratio']==0
+          if __name__=='__main__':
+              main()
+          PY
+          python -m py_compile ../replay.py
+          # Spawned worker imports must not create output directories or launch an engine.
+          python -c 'import runpy; runpy.run_path("../replay.py",run_name="__mp_main__")'
+          for workload in conversation toolagent synthetic; do
+            for arm in none device hierarchy; do
+              if python ../replay.py "$workload" "$arm"; then status=0; else status=$?; fi
+              printf '%s %s %s\n' "$workload" "$arm" "$status" >> ../evidence/arm-status.txt
+            done
+          done
+          python - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path('../evidence')
+          rows=[json.loads(p.read_text()) for p in sorted(root.glob('*-*/receipt.json'))]
+          statuses=[line.split() for line in (root/'arm-status.txt').read_text().splitlines()]
+          assert len(statuses)==9 and all(s[2]=='0' for s in statuses),statuses
+          assert len(rows)==9
+          summary=[]
+          for workload in ('conversation','toolagent','synthetic'):
+              group=[r for r in rows if r['workload']==workload]
+              assert len(group)==3 and len({tuple(r['selected_indices']) for r in group})==1 and len({(r['input_tokens'],r['output_tokens']) for r in group})==1
+              for r in group:
+                  m=r['metrics']
+                  summary.append(dict(workload=workload,arm=r['arm'],input_tokens=r['input_tokens'],output_tokens=r['output_tokens'],completed=m['completed'],new_input=m['total_new_input'],prefix_reuse=m['prefix_cache_reused_ratio'],device=m['kv_cache_device_hit_ratio'],host=m['kv_cache_host_hit_ratio'],storage=m['kv_cache_storage_hit_ratio'],modeled_ttft_ms=m['mean_ttft_ms']))
+          (root/'receipt.json').write_text(json.dumps(dict(scope='native simulator execution on bounded published surrogate trace; all model and tier latency modeled, not calibrated GPU goodput',source=os.environ['ISH_SGL_SOURCE'],workflow_sha=os.environ['GITHUB_SHA'],summary=summary),indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-sglang-published-replay-r19
+          path: ${{ runner.temp }}/ish-sim/evidence/
+          if-no-files-found: warn
+          retention-days: 14
