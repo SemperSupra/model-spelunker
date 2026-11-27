@@ -19,9 +19,10 @@ import urllib.request
 
 from telemetry_capture import CAP, inspect_telemetry
 from telemetry_verdict import fixture_pass
+from file_access_witness import FileAccessWitness, witness_pass
 
 
-def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture'):
+def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture', witness=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -60,9 +61,13 @@ def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture'):
                               for t in (body.get('tools') or []))
             seen['requests'] += 1
             if tool_result:
+                if witness is not None and seen['tool_requested'] and any(m.get('tool_call_id') == call_id for m in matching):
+                    witness.at_result()
                 seen['tool_result_seen'] = True
                 message, reason = {'role': 'assistant', 'content': answer}, 'stop'
             elif tool_exists:
+                if witness is not None:
+                    witness.before_issue()
                 seen['tool_requested'] = True
                 message = {'role': 'assistant', 'content': None, 'tool_calls': [{
                     'id': call_id, 'type': 'function', 'function': {
@@ -103,7 +108,8 @@ def trial(binary, root, enabled):
     seen = dict(requests=0, tool_requested=False, tool_result_seen=False,
                 tool_result_marker_records=0, tool_result_id_matches=0)
     call_id = 'call_' + secrets.token_hex(16)
-    with http.server.ThreadingHTTPServer(('127.0.0.1', 0), make_handler(fixture, file_marker, answer, seen, call_id)) as server:
+    with FileAccessWitness(fixture) as witness, http.server.ThreadingHTTPServer(
+            ('127.0.0.1', 0), make_handler(fixture, file_marker, answer, seen, call_id, witness)) as server:
         worker = threading.Thread(target=server.serve_forever, daemon=True)
         worker.start()
         try:
@@ -134,6 +140,7 @@ def trial(binary, root, enabled):
             output = (root / 'stdout').read_bytes()
             return dict(mode='on' if enabled else 'off', cli_exit=result.returncode, seconds=elapsed,
                         **seen, final_marker_seen=answer.encode() in output,
+                        file_access_witness=witness.summary(),
                         config_unchanged=before == hashlib.sha256(config_file.read_bytes()).hexdigest(),
                         **stats)
         finally:
@@ -178,8 +185,8 @@ def native(binary, output):
             except Exception as exc:
                 # Bounded type-only diagnostics, not exception payloads or raw logs.
                 rows.append(dict(mode='on' if enabled else 'off', error=type(exc).__name__))
-    good = fixture_pass(rows)
-    receipt = dict(schema='qwen-public-file-telemetry-smoke/v1', native_harness='0.28.3',
+    good = fixture_pass(rows) and all(witness_pass(r.get('file_access_witness')) for r in rows)
+    receipt = dict(schema='qwen-public-file-telemetry-smoke/v2', native_harness='0.28.3',
                    model='SYNTHETIC_LOCAL_HTTP_FIXTURE', source=os.environ.get('GITHUB_SHA', 'UNKNOWN'),
                    raw_payload_retained=False, rows=rows, verdict='PASS' if good else 'FAIL')
     output.write_text(json.dumps(receipt, sort_keys=True) + '\n')
