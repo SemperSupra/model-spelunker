@@ -1,10 +1,9 @@
-name: Cache retention R10 measurement-bound shadow replay
+name: Cache retention R11 robust measurement-bound shadow replay
 on:
   pull_request:
-    paths: ['.github/workflows/cache-retention-shadow-r10.yml']
+    paths: ['.github/workflows/cache-retention-shadow-r10.yml', 'qualification/cache_retention_r11/**']
 permissions:
   contents: read
-  actions: read
 jobs:
   shadow:
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -14,25 +13,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Fetch exact public native measurement artifact (read-only)
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify durable compact projection (no network artifact dependency)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/shadow-r10"
+          cp "$GITHUB_WORKSPACE/qualification/cache_retention_r11/measurements.json" "$RUNNER_TEMP/shadow-r10/measurements.json"
           cd "$RUNNER_TEMP/shadow-r10"
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15178450680/zip" > measurements.zip
-          printf '%s  measurements.zip\n' a33c32bcecca47fac8ed46e3e1a0d9966973949a09c4aa793a25c05d481b6368 | sha256sum -c -
+          printf '%s  measurements.json\n' 99f014fa4153a3194e691477b0253b1b0162e9b72724825d0492084a1a1d02a0 | sha256sum -c -
       - name: Paired bounded synthetic traces using measured held-out costs
         shell: bash
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/shadow-r10"
           python3 - <<'PY'
-          import itertools,json,math,os,random,statistics as st,zipfile
+          import itertools,json,math,os,random,statistics as st,time
           from pathlib import Path
-          with zipfile.ZipFile('measurements.zip') as z:receipt=json.loads(z.read('receipt.json'))
+          receipt=json.loads(Path('measurements.json').read_text())
           rows=receipt['rows']
           assert len(rows)==9 and all(x['output_match'] and x['cold_task_pass'] and x['restore_task_pass'] and x['prefill_reduced'] for x in rows)
           classes=[64,128,256]
@@ -61,33 +58,33 @@ jobs:
                   # Future outcome known only to replay harness, not policy.
                   events.append((start+rng.randrange(2,10),1 if rng.random()<p else 2,i,c,p))
               return sorted(events)
-          def replay(events,budget,policy):
-              resident={}
-              ledger=[]
-              done=set()
-              peak=0
+          def replay(events,budget,policy,estimate_mode,holding_rate):
+              resident={};ledger=[];done=set();peak=0;last_ts=events[0][0];policy_cpu=0.0
               for ts,kind,i,c,p in events:
-                  actual=measurements[c]['held_out']
-                  fit=measurements[c]['fit']
+                  occupied=sum(x['bytes'] for x in resident.values())
+                  holding=holding_rate*(occupied/1024**2)*(ts-last_ts)
+                  last_ts=ts
+                  ledger.append(dict(kind='holding',cost=holding))
+                  actual=measurements[c]['held_out'];fit=measurements[c]['fit']
                   if kind==0:
-                      candidate={'id':i,'class':c,'p':p,'bytes':actual['bytes'],'ts':ts,'value':p*(fit['cold']-fit['restore'])}
+                      estimate={'calibrated':p,'flat':.4,'inverted':1-p,'overconfident':min(1,2*p),'underconfident':p/4}[estimate_mode]
+                      candidate=dict(id=i,bytes=actual['bytes'],ts=ts,value=estimate*(fit['cold']-fit['restore'])-holding_rate*(actual['bytes']/1024**2)*5)
                       kept=set(resident)
+                      t=time.process_time()
                       if candidate['bytes']<=budget and policy=='lru':
-                          while sum(resident[j]['bytes'] for j in kept)+candidate['bytes']>budget:
-                              kept.remove(min(kept,key=lambda j:(resident[j]['ts'],j)))
+                          while sum(resident[j]['bytes'] for j in kept)+candidate['bytes']>budget:kept.remove(min(kept,key=lambda j:(resident[j]['ts'],j)))
                           kept.add(i)
                       elif candidate['bytes']<=budget and policy=='value':
                           options=list(resident.values())+[candidate]
-                          def score(sub):
-                              return sum(x['value']-(fit['save'] if x['id']==i else 0) for x in sub)
+                          def score(sub):return sum(x['value']-(fit['save'] if x['id']==i else 0) for x in sub)
                           feasible=(sub for n in range(len(options)+1) for sub in itertools.combinations(options,n) if sum(x['bytes'] for x in sub)<=budget)
                           best=max(feasible,key=lambda sub:(score(sub),-sum(x['bytes'] for x in sub),tuple(-x['id'] for x in sub)))
                           kept={x['id'] for x in best}
-                      removed=sorted(set(resident)-kept)
-                      for j in removed:del resident[j]
+                      policy_cpu+=time.process_time()-t
+                      for j in set(resident)-kept:del resident[j]
                       admitted=i in kept
                       if admitted:resident[i]=candidate
-                      ledger.append(dict(id=i,kind='evict',saved=admitted,removed=removed,cost=actual['save'] if admitted else 0))
+                      ledger.append(dict(id=i,kind='evict',saved=admitted,cost=actual['save'] if admitted else 0))
                   else:
                       assert i not in done
                       done.add(i)
@@ -95,37 +92,45 @@ jobs:
                       resident.pop(i,None)
                       ledger.append(dict(id=i,kind='resume' if kind==1 else 'expire',hit=hit if kind==1 else False,cost=(actual['restore'] if hit else actual['cold']) if kind==1 else 0))
                   used=sum(x['bytes'] for x in resident.values())
-                  assert used<=budget and used>=0
+                  assert 0<=used<=budget
                   peak=max(peak,used)
               assert not resident and len(done)==36
-              saved=sum(x['saved'] for x in ledger if x['kind']=='evict')
-              resumes=[x for x in ledger if x['kind']=='resume']
-              cost=math.fsum(x['cost'] for x in ledger)
-              # Independent ledger decomposition; no task goodput or latency claim.
-              assert abs(cost-(math.fsum(x['cost'] for x in ledger if x['kind']=='evict')+math.fsum(x['cost'] for x in resumes)))<1e-8
-              return dict(cost_s=cost,peak_bytes=peak,saves=saved,resumes=len(resumes),hits=sum(x['hit'] for x in resumes),ledger=ledger)
+              resumed=[x for x in ledger if x['kind']=='resume']
+              phase=math.fsum(x['cost'] for x in ledger if x['kind']!='holding')
+              holding=math.fsum(x['cost'] for x in ledger if x['kind']=='holding')
+              assert abs(phase+holding-math.fsum(x['cost'] for x in ledger))<1e-8
+              return dict(modeled_total_s=phase+holding,phase_s=phase,holding_cost_s=holding,policy_cpu_s=policy_cpu,peak_bytes=peak,resumes=len(resumed),hits=sum(x['hit'] for x in resumed),saves=sum(x.get('saved',False) for x in ledger))
           results=[]
+          modes=['calibrated','flat','inverted','overconfident','underconfident']
+          rates=[0,.002]
+          budgets=[0,16*1024**2,32*1024**2,64*1024**2]
           for k,regime in enumerate(regimes):
               for seed in range(20):
                   events=trace(3100+seed,regime)
-                  for budget in (0,16*1024**2,32*1024**2,64*1024**2):
-                      arms={policy:replay(events,budget,policy) for policy in ('none','lru','value')}
-                      assert len({x['resumes'] for x in arms.values()})==1
-                      if budget==0:assert len({x['cost_s'] for x in arms.values()})==1 and all(x['saves']==0 for x in arms.values())
-                      results.append(dict(regime=k,seed=seed,budget=budget,arms=arms))
-          assert len(results)==240
+                  for budget in budgets:
+                      for rate in rates:
+                          # identical outcomes/arrival order across all estimation treatments.
+                          baseline={p:replay(events,budget,p,'calibrated',rate) for p in ('none','lru')}
+                          for mode in modes:
+                              arms=dict(baseline,value=replay(events,budget,'value',mode,rate))
+                              assert len({v['resumes'] for v in arms.values()})==1
+                              if not budget:assert len({v['modeled_total_s'] for v in arms.values()})==1 and all(v['saves']==0 for v in arms.values())
+                              results.append(dict(regime=k,seed=seed,budget=budget,holding_rate=rate,estimate=mode,arms=arms))
+          assert len(results)==2400
           summary=[]
-          for k in range(3):
-              for budget in (0,16*1024**2,32*1024**2,64*1024**2):
-                  group=[r for r in results if r['regime']==k and r['budget']==budget]
-                  summary.append(dict(regime=k,budget=budget,means={p:st.mean(r['arms'][p]['cost_s'] for r in group) for p in ('none','lru','value')},value_beats_lru=sum(r['arms']['value']['cost_s']<r['arms']['lru']['cost_s'] for r in group)))
-          Path('shadow-receipt.json').write_text(json.dumps(dict(scope='MODELED synthetic replay; measured phase costs, artificial arrival/expiry probabilities; no policy promotion or measured goodput',source_artifact=15178450680,source_sha256='a33c32bcecca47fac8ed46e3e1a0d9966973949a09c4aa793a25c05d481b6368',workflow_sha=os.environ['GITHUB_SHA'],measurements=measurements,regimes=regimes,summary=summary,traces=results),indent=2))
+          for mode in modes:
+              for rate in rates:
+                  group=[r for r in results if r['estimate']==mode and r['holding_rate']==rate and r['budget']>0]
+                  assert len(group)==180
+                  totals={p:math.fsum(r['arms'][p]['modeled_total_s'] for r in group) for p in ('none','lru','value')}
+                  summary.append(dict(estimate=mode,holding_rate=rate,totals=totals,value_vs_lru_wins=sum(r['arms']['value']['modeled_total_s']<r['arms']['lru']['modeled_total_s'] for r in group),value_vs_none_losses=sum(r['arms']['value']['modeled_total_s']>r['arms']['none']['modeled_total_s'] for r in group),value_policy_cpu_s=math.fsum(r['arms']['value']['policy_cpu_s'] for r in group)))
+          Path('shadow-receipt.json').write_text(json.dumps(dict(scope='MODELED synthetic replay; measured phase-cost projection; assumed prior errors and holding prices, policy CPU observed separately; no task goodput or policy promotion',projection_sha256='99f014fa4153a3194e691477b0253b1b0162e9b72724825d0492084a1a1d02a0',source_artifact=15178450680,source_sha256=receipt['zip_sha256'],workflow_sha=os.environ['GITHUB_SHA'],measurements=measurements,regimes=regimes,summary=summary,traces=results),indent=2))
           print(json.dumps(summary,indent=2))
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: cache-retention-shadow-r10
+          name: cache-retention-shadow-r11
           path: ${{ runner.temp }}/shadow-r10/shadow-receipt.json
           if-no-files-found: warn
           retention-days: 14
