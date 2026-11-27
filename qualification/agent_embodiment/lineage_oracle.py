@@ -7,34 +7,68 @@ Source: pinned Qwen 0.28.3 JsonOutputAdapter / BaseJsonOutputAdapter:
 Do not persist model arguments, file content, or full stdout.
 """
 import json
+import math
 from pathlib import Path
+
+def _unique_object(pairs):
+    obj = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError("duplicate JSON key")
+        obj[key] = value
+    return obj
+
+
+def _reject_constant(value):
+    raise ValueError("non-finite JSON constant")
+
+
+def _finite_float(value):
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError("non-finite JSON number")
+    return result
+
 
 def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
     if target not in ("a.txt", "b.txt"):
         return "INVALID_TARGET"
     try:
-        rows=json.loads(stdout)
-    except (ValueError, TypeError):
+        rows=json.loads(stdout, object_pairs_hook=_unique_object,
+                        parse_constant=_reject_constant, parse_float=_finite_float)
+    except (ValueError, TypeError, RecursionError):
         return "INVALID_JSON"
     if not isinstance(rows,list):
         return "INVALID_JSON"
     requested=[]
     returned=[]
-    root=workdir.resolve()
-    for row in rows:
+    try:
+        root=workdir.resolve()
+    except (OSError, ValueError, RuntimeError):
+        return "INVALID_WORKDIR"
+    final_count=0
+    for index,row in enumerate(rows):
         if not isinstance(row,dict):
             return "INVALID_FRAME"
-        if row.get("type")=="result" and (len(requested)!=2 or len(returned)!=2):
-            return "PREMATURE_FINAL_RESULT"
-        msg=row.get("message")
-        if not isinstance(msg,dict):
+        if row.get("type")=="result":
+            if len(requested)!=2 or len(returned)!=2:
+                return "PREMATURE_FINAL_RESULT"
+            final_count+=1
+            if index!=len(rows)-1:
+                return "NONTERMINAL_FINAL_RESULT"
+        if "message" not in row:
+            if row.get("type") in ("assistant", "user"):
+                return "INVALID_MESSAGE"
             continue
+        msg=row["message"]
+        if not isinstance(msg,dict):
+            return "INVALID_MESSAGE"
         blocks=msg.get("content")
         if not isinstance(blocks,list):
-            continue
+            return "INVALID_CONTENT"
         for item in blocks:
             if not isinstance(item,dict):
-                continue
+                return "INVALID_CONTENT_BLOCK"
             if item.get("type")=="tool_use":
                 if row.get("type")!="assistant":
                     return "INVALID_TOOL_USE_FRAME"
@@ -46,8 +80,11 @@ def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
                 paths=[args.get(k) for k in ("absolute_path","file_path","path") if k in args]
                 if len(paths)!=1 or not isinstance(paths[0],str) or not paths[0]:
                     return "INVALID_ARGS"
-                fp=Path(paths[0])
-                resolved=(fp if fp.is_absolute() else root/fp).resolve()
+                try:
+                    fp=Path(paths[0])
+                    resolved=(fp if fp.is_absolute() else root/fp).resolve()
+                except (OSError, ValueError, RuntimeError):
+                    return "INVALID_PATH"
                 try: relative=resolved.relative_to(root).as_posix()
                 except ValueError: return "OUT_OF_SCOPE"
                 identifier=item.get("id")
@@ -75,6 +112,8 @@ def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
         return "WRONG_READ_SEQUENCE"
     if [i for i in returned]!=[i for i,_ in requested]:
         return "MISSING_OR_MISORDERED_TOOL_RESULT"
+    if final_count!=1:
+        return "MISSING_FINAL_RESULT"
     return "PASS"
 
 def selftest():
@@ -123,8 +162,24 @@ def selftest():
             else:
                 mutant[index]["type"]=role
             assert lineage_verdict(json.dumps(mutant),root,"a.txt")!="PASS","wrong frame producer accepted"
+        malformed=[]
+        sample=make()
+        malformed.append(sample.replace('"type": "assistant"', '"type": "user", "type": "assistant"', 1))
+        malformed.append(sample.replace('"result": "VALUE=GOOD"', '"result": "VALUE=GOOD", "metric": NaN'))
+        malformed.append(sample.replace('"result": "VALUE=GOOD"', '"result": "VALUE=GOOD", "metric": 1e999'))
+        malformed.append(json.dumps(ordered[:-1]))
+        malformed.append(json.dumps(ordered+[ordered[-1]]))
+        malformed.append(json.dumps(ordered+[{"type":"assistant","message":{"content":[]}}]))
+        malformed.append(make(paths=("index.txt", "a.txt\0")))
+        mutant=json.loads(sample)
+        mutant[0]["message"]["content"].append(17)
+        malformed.append(json.dumps(mutant))
+        malformed.append(json.dumps([{"type":"assistant","message":[]}]+ordered))
+        malformed.append("["*1500+"0"+"]"*1500)
+        for value in malformed:
+            assert lineage_verdict(value,root,"a.txt")!="PASS","malformed lineage accepted"
         print(json.dumps({"schema":"qwen-r15-lineage-critic/v1","state":"PASS",
-                          "positive_cases":2,"negative_cases":20,
+                          "positive_cases":2,"negative_cases":20+len(malformed),
                           "source_class":"SYNTHETIC_NO_MODEL"}))
 
 if __name__=="__main__":
