@@ -1,0 +1,199 @@
+name: Cache lifecycle R6 MLX held-out context screen
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-lifecycle-mlx-r0.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        prefill: [16, 256]
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      PREFILL_STEP: '${{ matrix.prefill }}'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install previously screened MLX distribution set and acquire exact model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-mlx"
+          cd "$RUNNER_TEMP/cache-mlx"
+          test "$(uname -m)" = arm64
+          python3 -m venv venv
+          source venv/bin/activate
+          cat > requirements.txt <<'LOCK'
+          # Resolved on public macos-15 hosted M1, GHA 45216777799 (2026-11-23).
+          # Exact distribution versions, not per-wheel SHA256; no release reproducibility claim.
+          annotated-doc==0.0.7
+          annotated-types==0.8.0
+          anyio==4.16.0
+          certifi==2026.11.20
+          click==8.5.1
+          filelock==4.3.0
+          fsspec==2026.9.0
+          h11==0.16.0
+          hf-xet==1.8.0
+          httpcore==1.0.9
+          httpx==0.28.1
+          huggingface_hub==1.33.0
+          idna==3.20
+          Jinja2==3.1.6
+          markdown-it-py==4.3.0
+          MarkupSafe==3.0.4
+          mdurl==0.1.2
+          mlx==0.32.4
+          mlx-lm==0.32.2
+          mlx-metal==0.32.4
+          numpy==2.5.5
+          packaging==26.3
+          protobuf==7.36.2
+          pydantic==2.14.4
+          pydantic_core==2.50.5
+          Pygments==2.21.0
+          PyYAML==6.0.4
+          regex==2026.11.19
+          rich==15.0.0
+          safetensors==0.8.0
+          sentencepiece==0.2.3
+          shellingham==1.5.4
+          tokenizers==0.23.3
+          tqdm==4.70.1
+          transformers==5.24.0
+          typer==0.29.2
+          typing-inspection==0.4.5
+          typing_extensions==4.16.0
+          LOCK
+          pip install --no-cache-dir -r requirements.txt
+          pip check
+          pip freeze > installed.txt
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+          import json,hashlib
+          root=Path(snapshot_download('mlx-community/Qwen3-0.6B-4bit',revision='73e3e38d981303bc594367cd910ea6eb48349da8',local_dir='model',max_workers=2))
+          files=[]
+          for p in sorted(root.rglob('*')):
+              if p.is_file() and p.suffix in ('.safetensors','.json','.model'):
+                  files.append(dict(path=str(p.relative_to(root)),sha256=hashlib.sha256(p.read_bytes()).hexdigest(),bytes=p.stat().st_size))
+          h=hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert h=='a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d'
+          Path('model-manifest.json').write_text(json.dumps(files,indent=2))
+          PY
+      - name: Separate native seed, cold replay and restore processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-mlx"
+          source venv/bin/activate
+          cat > trial.py <<'PY'
+          import hashlib,json,os,pathlib,sys,time
+          import mlx.core as mx
+          from mlx_lm import load
+          from mlx_lm.generate import generate_step
+          from mlx_lm.models.cache import make_prompt_cache,save_prompt_cache,load_prompt_cache
+          mode=sys.argv[1]; rep=int(sys.argv[2])
+          step=int(os.environ['PREFILL_STEP'])
+          base=pathlib.Path(f'rep-{rep}')
+          base.mkdir(exist_ok=True)
+          t=time.monotonic()
+          model,tok=load('model')
+          row=dict(pid=os.getpid(),load_s=time.monotonic()-t,device=str(mx.default_device()))
+          assert 'gpu' in row['device'].lower()
+          def generate(ids,cache,n):
+              t=time.monotonic()
+              result=[]
+              first=None
+              top=[]
+              for token,logits in generate_step(mx.array(ids),model,prompt_cache=cache,max_tokens=n,prefill_step_size=step):
+                  mx.eval(logits)
+                  if first is None:first=time.monotonic()-t
+                  result.append(int(token))
+                  v=logits.reshape(-1).astype(mx.float32)
+                  idx=mx.argsort(v)[-2:]
+                  top.append(dict(ids=idx.tolist(),scores=v[idx].tolist()))
+              return dict(tokens=result,wall_s=time.monotonic()-t,first_s=first,input_ids=ids,top2=top)
+          if mode=='seed':
+              prefix=tok.encode((('violet quartz river copper orbit moss ' if rep%2==0 else 'river silver field harbor willow cloud ')*[23,43,87,129,191,257][rep])+str(rep))
+              cache=make_prompt_cache(model)
+              seed=generate(prefix,cache,4)
+              offsets=[int(c.offset) for c in cache]
+              assert len(set(offsets))==1
+              offset=offsets[0]
+              target=prefix+seed['tokens']+tok.encode(' Continue',add_special_tokens=False)
+              assert len(prefix)<offset<len(target)
+              t=time.monotonic()
+              save_prompt_cache(str(base/'state.safetensors'),cache)
+              row.update(seed=seed,offset=offset,target=target,save_s=time.monotonic()-t)
+              row['snapshot_bytes']=(base/'state.safetensors').stat().st_size
+              row['snapshot_sha256']=hashlib.sha256((base/'state.safetensors').read_bytes()).hexdigest()
+              row['live']=generate(target[offset:],cache,8)
+          else:
+              seed=json.loads((base/'seed.json').read_text())
+              assert row['pid']!=seed['pid']
+              ids=seed['target']
+              if mode=='restore':
+                  t=time.monotonic()
+                  cache=load_prompt_cache(str(base/'state.safetensors'))
+                  row['restore_s']=time.monotonic()-t
+                  offsets=[int(c.offset) for c in cache]
+                  assert set(offsets)=={seed['offset']}
+                  ids=ids[seed['offset']:]
+              elif mode=='replay':
+                  cache=make_prompt_cache(model)
+                  old=seed['seed']
+                  rebuilt=generate(old['input_ids'],cache,len(old['tokens']))
+                  row['rebuild']=rebuilt
+                  assert rebuilt['tokens']==old['tokens']
+                  assert {int(c.offset) for c in cache}=={seed['offset']}
+                  ids=ids[seed['offset']:]
+              else:cache=make_prompt_cache(model)
+              row['result']=generate(ids,cache,8)
+          (base/(mode+'.json')).write_text(json.dumps(row,indent=2))
+          PY
+          for i in 0 1 2 3 4 5; do
+            python trial.py seed "$i"
+            python trial.py cold2 "$i"
+            python trial.py replay "$i"
+            if [ "$i" = 1 ]; then python trial.py restore "$i"; python trial.py cold "$i"
+            else python trial.py cold "$i"; python trial.py restore "$i"; fi
+          done
+          python - <<'PY'
+          import json,pathlib,os
+          rows=[]
+          for i in range(6):
+              root=pathlib.Path(f'rep-{i}')
+              row={a:json.loads((root/(a+'.json')).read_text()) for a in ('seed','cold','cold2','restore','replay')}
+              c,r=row['cold']['result'],row['restore']['result']
+              row['match']=c['tokens']==r['tokens']
+              row['cold_repeat_match']=c['tokens']==row['cold2']['result']['tokens']
+              row['live_restore_match']=row['seed']['live']['tokens']==r['tokens']
+              row['cold_live_match']=c['tokens']==row['seed']['live']['tokens']
+              row['replay_restore_match']=row['replay']['result']['tokens']==r['tokens']
+              row['replay_scores_match']=row['replay']['result']['top2']==r['top2']
+              row['resident_scores_match']=row['seed']['live']['top2']==r['top2']
+              print('MLX_DIAGNOSTIC',i,{k:row[k] for k in ('match','cold_repeat_match','live_restore_match','cold_live_match','replay_restore_match','replay_scores_match','resident_scores_match')})
+              row['suffix_only']=r['input_ids']==c['input_ids'][row['seed']['offset']:] and len(r['input_ids'])<len(c['input_ids'])
+              rows.append(row)
+          pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='hosted MLX held-out context and vocabulary continuation witness, no physical target or task-goodput equivalence',workflow_sha=os.environ['GITHUB_SHA'],prefill_step_size=int(os.environ['PREFILL_STEP']),rows=rows),indent=2))
+          assert len(rows)==6 and all(r['match'] and r['cold_repeat_match'] and r['suffix_only'] and r['replay_restore_match'] and r['replay_scores_match'] and r['resident_scores_match'] for r in rows)
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: mlx-cache-lifecycle-r6-${{ matrix.prefill }}
+          path: |
+            ${{ runner.temp }}/cache-mlx/receipt.json
+            ${{ runner.temp }}/cache-mlx/rep-*/*.json
+            ${{ runner.temp }}/cache-mlx/model-manifest.json
+            ${{ runner.temp }}/cache-mlx/installed.txt
+          if-no-files-found: warn
+          retention-days: 14
