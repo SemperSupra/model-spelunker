@@ -1,4 +1,4 @@
-name: Cache lifecycle R8 instruction model retention and retrieval
+name: Cache lifecycle R9 instruction model priming contract and retrieval
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-cost-r7.yml']
@@ -72,6 +72,12 @@ jobs:
               t=time.monotonic()
               r=req('/completion',dict(prompt=prompt,id_slot=0,n_predict=n,temperature=0,seed=42,cache_prompt=True,return_tokens=True))
               return dict(content=r['content'],tokens=r['tokens'],timings=r['timings'],wall_s=time.monotonic()-t)
+          # Zero-generation contract diagnostic, isolated from actual cache trials.
+          p,startup=start()
+          try:
+              zero=completion('Public synthetic cache priming control.',0)
+              (root/'priming-control.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],workflow_sha=os.environ['GITHUB_SHA'],requested=0,actual_tokens=zero['tokens'],content=zero['content'],timings=zero['timings'],zero_contract_pass=zero['tokens']==[] and zero['content']==''),indent=2))
+          finally:stop(p)
           for i,count in enumerate([64,128,256]*3):
               expected=['314159','271828','161803'][i//3]
               lines=[f'Parcel {j:04d} has status archived and category blue.' for j in range(count)]
@@ -87,9 +93,10 @@ jobs:
                       if x!=y:break
                       shared+=1
                   assert 0<shared<len(tokens)<8192-16
-                  # Exact full-prompt prefix; documented n_predict=0 primes KV without generation.
-                  seed=completion(tokens[:shared],0)
-                  assert seed['tokens']==[]
+                  # Explicitly permit exactly one sampled token on this pinned runtime.
+                  # No sampled token is appended to the independently tokenized target.
+                  seed=completion(tokens[:shared],1)
+                  assert isinstance(seed['tokens'],list) and len(seed['tokens'])==1, 'one-token priming contract failed'
                   target=tokens
                   t=time.monotonic()
                   saved=req('/slots/0?action=save',{'filename':'stage.bin'})
@@ -135,6 +142,9 @@ jobs:
               benefit=row['saving_benefit_if_resumed_s']
               row['break_even_resumption_probability']=row['save_s']/benefit if benefit>0 else None
               row['net_s_if_resumed_once']=benefit-row['save_s']
+              # Priming is sunk only when prefix was already evaluated for useful work.
+              row['cold_seed_wall_s']=seed['wall_s']
+              row['net_s_if_priming_only_for_one_resume']=benefit-row['save_s']-seed['wall_s']
               receipt()
           assert len(rows)==9 and all(r['output_match'] and r['prefill_reduced'] and r['restored_count_matches'] for r in rows), 'native cache witness failed'
           assert all(r['cold_task_pass'] and r['restore_task_pass'] for r in rows), 'retrieval task oracle failed (distinct from cache equivalence)'
@@ -142,8 +152,9 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-instruction-r8
+          name: llama-cache-instruction-r9
           path: |
+            ${{ runner.temp }}/cache-r0/priming-control.json
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
             ${{ runner.temp }}/cache-r0/upstream-license.txt
