@@ -5,6 +5,7 @@ on:
       - 'qualification/agent_embodiment/qwen_file_telemetry_probe.py'
       - 'qualification/agent_embodiment/telemetry_capture.py'
       - 'qualification/agent_embodiment/telemetry_identity.py'
+      - 'qualification/agent_embodiment/telemetry_verdict.py'
       - '.github/workflows/qwen-file-telemetry-smoke.yml'
 permissions:
   contents: read
@@ -21,6 +22,8 @@ jobs:
           python3 -B -O qualification/agent_embodiment/telemetry_identity.py
           python3 -B qualification/agent_embodiment/telemetry_capture.py
           python3 -B -O qualification/agent_embodiment/telemetry_capture.py
+          python3 -B qualification/agent_embodiment/telemetry_verdict.py
+          python3 -B -O qualification/agent_embodiment/telemetry_verdict.py
           python3 -B qualification/agent_embodiment/qwen_file_telemetry_probe.py --self-test
   native:
     needs: contract

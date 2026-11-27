@@ -18,6 +18,7 @@ import unittest
 import urllib.request
 
 from telemetry_capture import CAP, inspect_telemetry
+from telemetry_verdict import fixture_pass
 
 
 def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture'):
@@ -177,10 +178,7 @@ def native(binary, output):
             except Exception as exc:
                 # Bounded type-only diagnostics, not exception payloads or raw logs.
                 rows.append(dict(mode='on' if enabled else 'off', error=type(exc).__name__))
-    good = (len(rows) == 2 and all(r.get('cli_exit') == 0 and r.get('tool_requested') and
-              r.get('tool_result_seen') and r.get('final_marker_seen') and r.get('config_unchanged')
-              and not r.get('payload_marker_seen', True) for r in rows) and
-              rows[0].get('records') == 0 and rows[1].get('records', 0) > 0)
+    good = fixture_pass(rows)
     receipt = dict(schema='qwen-public-file-telemetry-smoke/v1', native_harness='0.28.3',
                    model='SYNTHETIC_LOCAL_HTTP_FIXTURE', source=os.environ.get('GITHUB_SHA', 'UNKNOWN'),
                    raw_payload_retained=False, rows=rows, verdict='PASS' if good else 'FAIL')
