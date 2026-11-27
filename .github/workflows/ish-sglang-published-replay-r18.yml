@@ -67,7 +67,7 @@ jobs:
           cd "$RUNNER_TEMP/ish-sim"
           mkdir -p traces
           # Reuse the merged deterministic adapter, not a second trace generator.
-          git -C "$GITHUB_WORKSPACE" show 908adbd824b09395286f70e49c31127a9d76c09d:.github/workflows/ish-trace-adapter-r17.yml > adapter.yml
+          cp "$GITHUB_WORKSPACE/.github/workflows/ish-trace-adapter-r17.yml" adapter.yml
           python - <<'PY'
           import hashlib,pathlib,textwrap
           p=pathlib.Path('adapter.yml')
