@@ -32,21 +32,21 @@ Immutable measured cost projections are available at [R11](https://github.com/Se
 
 ## Source and dependency triage
 
-- Merged reference fixtures: #381 (native A/B/A), #390 (bounded fault recovery), #402 (concurrent native restore). Their exact historical passing source and receipt identities remain above. #382/#389/#392/#393 remain independent experimental candidates.
+- Merged reference fixtures: #381/#382/#389/#390/#392/#393/#402 (native switching, Ollama residency, Compose, fault recovery, llama-swap, Quadlet, and concurrent restore). Preserve exact historical passing source and receipt identities; none constitutes deployment approval.
 - #383 is a mixed-outcome MLX qualification; retain the failed arm and do not merge as an all-pass result.
 - #394 failed priming parent and #401 successful correction are closed as superseded by merged #418, whose workflow blob is identical to #401. Preserve both original branches and failed/positive historical receipts.
-- #403/#404/#407 contain the evolving native contention/retention and shadow-policy experiments. Keep their scopes separate from the runtime and existing workbench/task accounting (#387/#396).
+- #403/#404/#407 merged: bounded deferral, shadow-retention and native policy experiments and frozen cost projections. Keep their scopes separate from runtime authority and existing workbench/task accounting (#387/#396).
 - Product-specific native deployment, free GPU admission, architecture-specific recurrent state, concurrent authorization, and hardware acceptance remain separate, unqualified gates. No production cache manager, routing or infrastructure mutation is authorized by this index.
 
-## R16–R19 evidence and current bake-off lanes
+## R16–R20 evidence and current bake-off lanes
 
 - [#408](https://github.com/SemperSupra/model-spelunker/pull/408) merged: pinned published Mooncake trace replay; [durable results](ish-mooncake-r16.md). Prefix hashes are not session identifiers; results are modeled.
 - [#409](https://github.com/SemperSupra/model-spelunker/pull/409) merged: corrected SGLang Simulator CPU dependency resolution passed all three upstream tests, including tiered cache accounting. Initial ABI failure retained as negative evidence. Model forward remains simulated.
 - [#410](https://github.com/SemperSupra/model-spelunker/pull/410) merged: both native vLLM-Metal dependency treatments passed host/disk restore, 992/1003 reused, exact output. Stable Torch 2.14.0 has clean metadata and is the next experimental baseline; nightly override retains a known metadata exception.
 - [#413](https://github.com/SemperSupra/model-spelunker/pull/413) merged: actual native llama.cpp RAM pressure and sleep/wake, 15/15 treatments, bounded CPU fixture. [R17 native lifecycle evidence](ish-native-tiers-r17.md).
 - [#414](https://github.com/SemperSupra/model-spelunker/pull/414) merged: deterministic surrogate trace adapter, 192 selected requests and 6,048 pairwise prefix checks; not actual simulator execution.
-- [#416](https://github.com/SemperSupra/model-spelunker/pull/416): bounded published-trace replay through the qualified native simulator. Initial shallow-checkout failure corrected; exact adapter outputs regenerated. Second attempt failed at multiprocessing spawn because the test entrypoint ran again in worker processes. R19 adds main guard, import preflight and per-arm result collection; no simulator replay acceptance yet.
-- [#417](https://github.com/SemperSupra/model-spelunker/pull/417): same-host direct MLX versus Metal. R18 first matched case passed, second failed cold Metal first-answer oracle (016 versus 161). R19 isolates seed-only disk state from later reference work and attempts all cases independently. Preserve quality failures and do not infer engine ranking.
+- [#416](https://github.com/SemperSupra/model-spelunker/pull/416) merged: corrected native SGLang simulator replay completed 108/108 requests and all nine arms. Raw cache attribution verified. Predictor fallback rate 100% in all nine arms; no calibrated latency claim.
+- [#417](https://github.com/SemperSupra/model-spelunker/pull/417) remains mixed/failing: R19 seed-only disk isolation and all-case attempts completed; reps 0 and 2 passed both engines; both cold engines failed the same first-answer oracle in rep 1. Preserve negative evidence; no general engine ranking.
 - [#418](https://github.com/SemperSupra/model-spelunker/pull/418) merged: exact corrected #401 workflow requalified 9/9; #394/#401 superseded and closed, branches retained.
 
 ### R18 verified dependency evidence
@@ -75,6 +75,35 @@ Historical passing archives were independently downloaded and rehashed in R19; s
 Failed/partial paired MLX/Metal run [46076203384](https://github.com/SemperSupra/model-spelunker/actions/runs/46076203384), archive 15235316560 SHA-256 `e90841aae939d9ecdb665195b66c0733a77cb381c519232db5171610c2b568da`. Rep0 both engines answered correctly; Metal disk reuse included state from the intervening resident reference, so its observed 192-token disk reuse is not a fair first-turn-only comparison. Rep1 failed a cold Metal first answer, not a cache restore; remaining cases were not attempted. R19 tests original cases without lowering quality gates, freezes a seed-only disk store before the follow-up, and collects independent outcomes even after failures.
 
 Simulator replay negative controls: [46076199249](https://github.com/SemperSupra/model-spelunker/actions/runs/46076199249), archive 15235727099 `537e2e06e4f998c15d49830efe5327c23d01ab680d17c40dc349428cb1d54c38` (shallow Git history); [46076252100](https://github.com/SemperSupra/model-spelunker/actions/runs/46076252100), archive 15235102668 `b77ccc3e87da4d7ede88add48d241bce8166ce9258ad30e7799bade30e028879` (spawned child reentered script initialization). Corrected run regenerated all three exact adapter output hashes before failure. Neither proves native published-trace scheduling behavior.
+
+### R20 qualification convergence
+
+| Exact passing reference PR | Run | Merge |
+|---|---|---|
+| #382 Ollama residency, no disk persistence claim | 45360972421 | `250e3032b49a66913a5b379087dbfbec34e65b28` |
+| #389 disposable Compose fixture | 45759948573 | `cec637b86c7fc7d80e2fdf4e31b518f9a42bbda9` |
+| #392 llama-swap | 45761914598 | `abd50988961f3e100d06c1464d04385cbd0e7fac` |
+| #393 rootless Quadlet | 45761955015 | `09adfa4242ec8425f74e2a5155911dd79475a7ae` |
+| #403 deferral and deadline refusal | 46031993756 | `ab035003f50c5a2e22782b16207994bf330b359b` |
+| #404 shadow policy with frozen cost projection | 45995266183 | `29dbd8dcd1af24ec670f929297e292965b8ba816` |
+| #407 native retention trace with frozen cost projection | 46032106947 | `8b503e067b208a009afc4fcb6795142198f72480` |
+| #416 native CPU simulator replay | 46077645481 | `5ec685d609a82d367f083893e4d81b5db98b4f22` |
+
+The seven historical reference archives were independently rehashed and their receipt gates examined in R20. Scope remains public synthetic R&D. Merged cost projections are now discoverable at [R11](../qualification/cache_retention_r11/measurements.json) and [R13](../qualification/ish_r13/useful_turn_costs.json).
+
+**Native simulator published traces.** [Run 46077645481](https://github.com/SemperSupra/model-spelunker/actions/runs/46077645481) PASS, exact head `cf6f0a10aabc5688ac4be4faf98b4fe51d459eb4`, tested merge SHA `3d26754848d38b28c29a9f33603e84ac6d40dadd`, archive 15235329641 SHA256 `4dec4c22c93c209a950869eca78873b2e3ff9d5ba64e3643cd4b125f39bf8ce0`. 12 selected requests per workload and three policies, 108 executions, all nine arm statuses 0. Independently reduce native per-request final hit lengths; final device hit length includes promoted host hits, do not sum overlapping fields as disjoint tiers.
+
+| Workload | Input tokens/arm | None new input | Device new input | Hierarchy new input | Device reuse tokens | Additional host reuse tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| Conversation | 49184 | 49184 | 43552 | 43552 | 5632 | 0 |
+| Tool/agent | 62124 | 62124 | 15020 | 15020 | 47104 | 0 |
+| Synthetic | 33905 | 33905 | 31857 | 28273 | 2048 | 3584 |
+
+All input/output counts and tier accounting reconcile across raw 108 request records. Storage hits zero in selected traces (separate upstream storage-tier test passed). All nine arms report zero exact predictor matches and 100% KNN fallback; latency is uncalibrated and must not drive hardware or policy promotion.
+
+**Paired direct MLX/Metal.** [Run 46077441944](https://github.com/SemperSupra/model-spelunker/actions/runs/46077441944) overall FAIL, archive 15236240909 SHA256 `5779b1808fa88a65b08c52f0b41510be6fc46e9fda89076e3260624c0e0b21d0`. All three cases attempted; reps 0/2 pass task and cache gates, rep 1 both cold engines emit 016 instead of 161, so no continuation admitted. Seed-only Metal block reuse 160/205 and 832/877, local compute 45 each; direct MLX submitted suffix 32 for each (not native evaluated-token counter). Preserve quality failure; no general parity or engine ranking.
+
+**Active independent confirmation**: [#421](https://github.com/SemperSupra/model-spelunker/pull/421) 12 new native mixed resume/expire cases in four public Linux shards (run 46079403842), supplied priors, exact frozen prior costs, no learned policy claim. [#422](https://github.com/SemperSupra/model-spelunker/pull/422) 12 new MLX 256-step candidate continuation cases in three public macOS shards (run 46079502908), strict cold/replay/live/restore token and top2 gates, no task or physical acceptance. Neither is accepted until terminal evidence. #383 mixed screen remains open; #417 aggregate quality gate failed. Existing workbench/goodput authorities #387/#396 remain experimental drafts; crossfeed evidence without promoting synthetic continuation into canonical accepted agent work.
 
 For humans and automation, inspect the above PRs, exact run/receipt and source identity before resuming; use existing qualification contracts. The work authority remains [#316](https://github.com/SemperSupra/model-spelunker/issues/316). Use `gh pr checks <number> --repo SemperSupra/model-spelunker` and `gh run view <run-id> --repo SemperSupra/model-spelunker` for current state. Do not replay old one-use admissions or infer success from a queued run.
 
