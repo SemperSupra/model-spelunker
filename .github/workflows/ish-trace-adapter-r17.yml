@@ -1,0 +1,125 @@
+name: ISH R17 published trace adapter
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-trace-adapter-r17.yml']
+permissions:
+  contents: read
+jobs:
+  adapter:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      TRACE_REV: 1d0e4c7587b57b78a1997be370b349b79828c5dd
+      SIM_SOURCE: 297e54fd105e974cdf401e5b4d20253a22c16f90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Construct and independently check synthetic token surrogate traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ish-trace-adapter"
+          cd "$RUNNER_TEMP/ish-trace-adapter"
+          python3 - <<'PY'
+          import hashlib,json,math,os,pathlib,urllib.request
+          root=pathlib.Path.cwd()
+          expected={
+              'conversation':('5a371794b81d7fc7487ec8a02a2c631bcc7fbdf8',3029533,12031),
+              'toolagent':('b765599d1e0828b37f68d481563c385d3c11de54',4415857,23608),
+              'synthetic':('e4838049c0dcfc358a5f24ab08251279475cba94',1136313,3993)}
+          block=512
+          def sha(data):return hashlib.sha256(data).hexdigest()
+          def lcp(a,b):
+              for j,(x,y) in enumerate(zip(a,b)):
+                  if x!=y:return j
+              return min(len(a),len(b))
+          def construct(selected):
+              # Each distinct full prefix ancestry has one unique synthetic token.
+              # Unknown bytes/tails never share a marker with any other request.
+              markers={}; output=[]; paths=[]
+              def marker(key):
+                  if key not in markers:
+                      markers[key]=1000+len(markers)
+                      assert markers[key]<100000, 'surrogate vocabulary bound exceeded'
+                  return markers[key]
+              t0=selected[0][1]['timestamp']
+              for source_index,r in selected:
+                  n=r['input_length'];ids=r['hash_ids']
+                  full=min(n//block,len(ids))
+                  ancestry=[];prompt=[]
+                  for k in ids[:full]:
+                      ancestry.append(k)
+                      prompt.extend([marker(('prefix',tuple(ancestry)))]*block)
+                  if len(prompt)<n:
+                      prompt.extend([marker(('unknown',source_index))]*(n-len(prompt)))
+                  paths.append(tuple(ids[:full]))
+                  output.append(dict(prompt=prompt,prompt_len=n,output_len=r['output_length'],timestamp=r['timestamp']-t0))
+              return output,paths,len(markers)
+          def verify(selected,output,paths):
+              assert len(selected)==len(output)==len(paths)
+              t0=selected[0][1]['timestamp']
+              pairs=0
+              for i,((source_index,r),row) in enumerate(zip(selected,output)):
+                  assert set(row)=={'prompt','prompt_len','output_len','timestamp'}
+                  assert len(row['prompt'])==row['prompt_len']==r['input_length']
+                  assert row['output_len']==r['output_length']>0
+                  assert row['timestamp']==r['timestamp']-t0>=0
+                  assert all(type(x) is int and 1000<=x<100000 for x in row['prompt'])
+                  for j in range(i):
+                      expected_blocks=lcp(paths[i],paths[j])
+                      actual_tokens=lcp(row['prompt'],output[j]['prompt'])
+                      # Unique markers make even partial-block false reuse impossible.
+                      assert actual_tokens==expected_blocks*block,(i,j,actual_tokens,expected_blocks)
+                      pairs+=1
+              return pairs
+          # Negative oracle: shared prefix, divergent next block, and unknown tails.
+          example=[(1,dict(timestamp=10,input_length=1027,output_length=1,hash_ids=[1,2,3])),
+                   (2,dict(timestamp=11,input_length=1027,output_length=1,hash_ids=[1,9,3])),
+                   (3,dict(timestamp=11,input_length=1027,output_length=1,hash_ids=[1,2]))]
+          rows,paths,_=construct(example)
+          assert verify(example,rows,paths)==3
+          assert lcp(rows[0]['prompt'],rows[1]['prompt'])==512
+          assert lcp(rows[0]['prompt'],rows[2]['prompt'])==1024
+          bad=[dict(r,prompt=r['prompt'][:]) for r in rows]
+          bad[1]['prompt'][512]=bad[0]['prompt'][512]
+          try:verify(example,bad,paths)
+          except AssertionError:pass
+          else:raise AssertionError('negative prefix control falsely passed')
+          result=dict(scope='public trace adapter only; synthetic token IDs, no original content, session identity, native simulator execution or measured latency',source=os.environ['TRACE_REV'],sim_source_contract=os.environ['SIM_SOURCE'],workflow_sha=os.environ['GITHUB_SHA'],selection='first 64 eligible chronological held-out requests per trace, positive output, input plus output <=8192; no length clipping',workloads={})
+          for name,(blob,size,num) in expected.items():
+              url=f"https://raw.githubusercontent.com/kvcache-ai/Mooncake/{os.environ['TRACE_REV']}/FAST25-release/traces/{name}_trace.jsonl"
+              with urllib.request.urlopen(url,timeout=60) as response:data=response.read(size+1)
+              assert len(data)==size and hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()==blob
+              raw=[json.loads(l) for l in data.splitlines()]
+              assert len(raw)==num
+              for r in raw:
+                  assert type(r['timestamp']) in (int,float) and math.isfinite(r['timestamp']) and r['timestamp']>=0
+                  assert type(r['input_length']) is int and r['input_length']>0
+                  assert type(r['output_length']) is int and r['output_length']>=0
+                  assert isinstance(r['hash_ids'],list) and all(type(x) is int for x in r['hash_ids'])
+              ordered=sorted(enumerate(raw),key=lambda x:x[1]['timestamp'])
+              heldout=ordered[int(len(ordered)*.7):]
+              eligible=[(i,r) for i,r in heldout if r['output_length']>0 and r['input_length']+r['output_length']<=8192]
+              selected=eligible[:64]
+              assert len(selected)==64
+              rows,paths,nmarkers=construct(selected)
+              pairs=verify(selected,rows,paths)
+              assert pairs==2016
+              encoded=''.join(json.dumps(r,separators=(',',':'))+'\n' for r in rows).encode()
+              assert encoded==''.join(json.dumps(r,separators=(',',':'))+'\n' for r in construct(selected)[0]).encode()
+              (root/(name+'.jsonl')).write_bytes(encoded)
+              # Independent decode from written bytes; exact round trip and dimensions.
+              assert [json.loads(l) for l in encoded.splitlines()]==rows
+              result['workloads'][name]=dict(source_blob=blob,source_sha256=sha(data),heldout=len(heldout),eligible=len(eligible),excluded=len(heldout)-len(eligible),selected=64,source_row_indices=[i for i,_ in selected],timestamp_origin_ms=selected[0][1]['timestamp'],duration_ms=rows[-1]['timestamp'],input_tokens=sum(r['prompt_len'] for r in rows),output_tokens=sum(r['output_len'] for r in rows),unique_synthetic_markers=nmarkers,pairwise_prefix_checks=pairs,output_sha256=sha(encoded))
+          (root/'receipt.json').write_text(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-trace-adapter-r17
+          path: ${{ runner.temp }}/ish-trace-adapter/
+          if-no-files-found: warn
+          retention-days: 14
