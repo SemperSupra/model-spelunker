@@ -1,0 +1,311 @@
+name: ISH R19 paired MLX and Metal isolated seed-state continuation
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-metal-mlx-paired-r18.yml']
+permissions:
+  contents: read
+jobs:
+  metal:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-15
+    timeout-minutes: 55
+    env:
+      TORCH_ARM: declared
+      METAL_REV: d1447c4a539b86166ae85293d269fbdfada47753
+      MODEL_REV: 73e3e38d981303bc594367cd910ea6eb48349da8
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      VLLM_METAL_BACKEND: mlx
+      GLOO_SOCKET_IFNAME: lo0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install exact released native wheel pair and inspect device
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          mkdir -p "$RUNNER_TEMP/ish-metal/evidence"
+          cd "$RUNNER_TEMP/ish-metal"
+          git init upstream
+          git -C upstream remote add origin https://github.com/vllm-project/vllm-metal.git
+          git -C upstream fetch --depth=1 origin "$METAL_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$METAL_REV"
+          git -C upstream rev-parse HEAD > evidence/source.txt
+          sw_vers > evidence/platform.txt
+          sysctl -n hw.memsize >> evidence/platform.txt
+          python3.12 -m venv venv
+          source venv/bin/activate
+          python -m pip install uv==0.8.22
+          core='vllm-0.34.0+cpu-cp38-abi3-macosx_11_0_arm64.whl'
+          plugin='vllm_metal-0.34.0-cp312-cp312-macosx_15_0_arm64.whl'
+          curl --fail --location --max-time 300 --retry 2 'https://github.com/vllm-project/vllm/releases/download/v0.34.0/vllm-0.34.0%2Bcpu-cp38-abi3-macosx_11_0_arm64.whl' -o "$core"
+          curl --fail --location --max-time 120 --retry 2 "https://github.com/vllm-project/vllm-metal/releases/download/v0.34.0/$plugin" -o "$plugin"
+          printf '%s  %s\n' cd0abe2a9d698bc0bef36ac9aa38da34307c53572ddee60ca35faef280af99d2 "$core" 27141e0134e92358b494b3609df3a3f4be611852a9201b34ad7dbc0cbad8029f "$plugin" | shasum -a 256 -c -
+          # Hold the major ABI and test dependencies at their R16 observed versions.
+          uv pip install "./$core" "./$plugin" pytest==9.2.0 numpy==2.3.5 mlx==0.32.4 transformers==5.22.2 "torch==2.14.0"
+          if [ "$TORCH_ARM" = upstream_override ]; then
+            uv pip install -r upstream/vllm_metal/requirements-torch.txt
+          fi
+          uv pip freeze > evidence/installed.txt
+          set +e
+          python -m pip check > evidence/dependency-check.txt 2>&1
+          check_status=$?
+          set -e
+          export CHECK_STATUS="$check_status"
+          python - <<'PY'
+          import importlib.metadata as md, pathlib,os,json
+          import torch, mlx.core as mx, vllm, vllm_metal
+          arm=os.environ['TORCH_ARM']
+          lines=[x.strip() for x in pathlib.Path('evidence/dependency-check.txt').read_text().splitlines() if x.strip()]
+          version=md.version('torch')
+          expected='vllm 0.34.0+cpu has requirement torch==2.14.0; platform_system == "Darwin" or platform_machine == "ppc64le" or platform_machine == "riscv64", but you have torch 2.16.0.dev20261013.'
+          if arm=='declared':
+              assert version=='2.14.0' and os.environ['CHECK_STATUS']=='0',lines
+          else:
+              assert version=='2.16.0.dev20261013' and os.environ['CHECK_STATUS']=='1' and lines==[expected],lines
+          assert 'gpu' in str(mx.default_device()).lower()
+          # MLX is the selected compute backend, not PyTorch MPS.
+          # Some hosted virtual Metal devices are rejected by the MPS backend.
+          assert (torch.tensor([1.,2.],device='cpu')+1).tolist()==[2.,3.]
+          x=mx.array([1.,2.])+1
+          mx.eval(x)
+          assert x.tolist()==[2.,3.]
+          mps_available=torch.backends.mps.is_available()
+          mps_result='UNAVAILABLE'
+          if mps_available:
+              try:
+                  a=torch.tensor([1.,2.],device='mps')+1
+                  mps_result='PASS' if a.cpu().tolist()==[2.,3.] else 'FAIL'
+              except Exception as e:
+                  mps_result='ERROR:'+type(e).__name__
+          pathlib.Path('evidence/abi.json').write_text(json.dumps(dict(arm=arm,torch=version,declared_metadata_clean=os.environ['CHECK_STATUS']=='0',known_upstream_exception=lines if arm=='upstream_override' else [],torch_cpu_operation='PASS',actual_mlx_gpu_operation='PASS',mps_available=mps_available,mps_diagnostic=mps_result,mlx_device=str(mx.default_device())),indent=2))
+          PY
+          python - <<'PY'
+          import hashlib,json,os,pathlib,importlib.metadata
+          import mlx.core as mx
+          from huggingface_hub import snapshot_download
+          assert importlib.metadata.version('vllm-metal')=='0.34.0'
+          assert importlib.metadata.version('vllm').startswith('0.34.0')
+          assert 'gpu' in str(mx.default_device()).lower()
+          root=pathlib.Path(snapshot_download('mlx-community/Qwen3-0.6B-4bit',revision=os.environ['MODEL_REV'],local_dir='model',max_workers=2))
+          files=[dict(path=str(p.relative_to(root)),sha256=hashlib.sha256(p.read_bytes()).hexdigest(),bytes=p.stat().st_size) for p in sorted(root.rglob('*')) if p.is_file() and p.suffix in ('.safetensors','.json','.model')]
+          digest=hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert digest=='a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d'
+          pathlib.Path('evidence/model-manifest.json').write_text(json.dumps(files,indent=2))
+          PY
+      - name: Matched useful-state continuation on direct MLX and native Metal
+        timeout-minutes: 32
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ish-metal"
+          source venv/bin/activate
+          export HF_HUB_OFFLINE=1
+          export QWEN3_MODEL_PATH="$PWD/model"
+          mkdir testbed
+          cp -R upstream/tests upstream/tools testbed/
+          cd testbed
+          cat > paired.py <<'PY'
+          import hashlib,json,os,pathlib,shutil,subprocess,sys,time
+          from transformers import AutoTokenizer
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'ish-metal'
+          out=root/'evidence'
+          model=str(root/'model')
+          tok=AutoTokenizer.from_pretrained(model,local_files_only=True,trust_remote_code=False)
+          def encode(s):return tok.encode(s,add_special_tokens=False)
+          def loadcase(rep):return json.loads((out/f'case-{rep}.json').read_text())
+          def dump(name,obj):
+              (out/name).write_text(json.dumps(obj,indent=2))
+          def case(rep):
+              n=[8,32,64][rep]
+              a,b=[('314','271'),('161','314'),('271','161')][rep]
+              lines=[f'Parcel {i:03d} has status archived and category blue.' for i in range(n)]
+              at=[0,n//2,n][rep]
+              lines.insert(at,f'Parcel ALPHA has access code {a}. Parcel BETA has access code {b}.')
+              user='Inventory:\n'+'\n'.join(lines)+'\nWhat is the access code of parcel ALPHA? Reply only with the three-digit code.'
+              first=encode(tok.apply_chat_template([dict(role='system',content='Answer using the inventory. Output only the requested three-digit code. Do not explain.'),dict(role='user',content=user)],tokenize=False,add_generation_prompt=True,enable_thinking=False))
+              aid,bid=encode(a),encode(b)
+              assert tok.decode(aid)==a and tok.decode(bid)==b
+              suffix=encode('<|im_end|>\n<|im_start|>user\nWhat is the access code of parcel BETA? Reply only with the three-digit code.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n')
+              target=first+aid+suffix
+              assert len(target)+len(bid)<2048
+              return dict(rep=rep,first=first,first_expected=a,first_ids=aid,second=target,second_expected=b,second_ids=bid)
+          mode=sys.argv[1]
+          if mode=='prepare':
+              for rep in range(3):dump(f'case-{rep}.json',case(rep))
+              sys.exit(0)
+          rep=int(sys.argv[2]); c=loadcase(rep)
+          def exact(row,expected):
+              return row['tokens']==expected
+          if mode.startswith('mlx'):
+              import mlx.core as mx
+              from mlx_lm import load
+              from mlx_lm.generate import generate_step
+              from mlx_lm.models.cache import make_prompt_cache,save_prompt_cache,load_prompt_cache
+              from mlx_lm.sample_utils import make_sampler
+              assert 'gpu' in str(mx.default_device()).lower()
+              t=time.monotonic();llm,_=load(model);startup=time.monotonic()-t
+              def run(ids,n,cache):
+                  t=time.monotonic();tokens=[];ttft=None
+                  for token,logprobs in generate_step(mx.array(ids),llm,prompt_cache=cache,max_tokens=n,prefill_step_size=256,sampler=make_sampler(temp=0)):
+                      mx.eval(logprobs)
+                      if ttft is None:ttft=time.monotonic()-t
+                      tokens.append(int(token))
+                  return dict(tokens=tokens,content=tok.decode(tokens),wall_s=time.monotonic()-t,first_s=ttft,submitted_tokens=len(ids))
+              state=root/f'mlx-{rep}.safetensors'
+              if mode=='mlx_seed':
+                  cache=make_prompt_cache(llm)
+                  first=run(c['first'],len(c['first_ids']),cache)
+                  result=dict(pid=os.getpid(),startup_s=startup,first=first)
+                  dump(f'mlx-seed-{rep}.json',result)
+                  assert exact(first,c['first_ids']),first
+                  target=c['first']+first['tokens']+c['second'][len(c['first'])+len(c['first_ids']):]
+                  assert target==c['second']
+                  offsets=[int(x.offset) for x in cache];assert len(set(offsets))==1
+                  offset=offsets[0];assert 0<offset<len(target)
+                  t=time.monotonic();save_prompt_cache(str(state),cache)
+                  with state.open('rb') as fp:
+                      data=fp.read();os.fsync(fp.fileno())
+                  fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY)
+                  try:os.fsync(fd)
+                  finally:os.close(fd)
+                  result.update(offset=offset,save_s=time.monotonic()-t,snapshot_bytes=len(data),snapshot_sha256=hashlib.sha256(data).hexdigest())
+                  result['resident']=run(target[offset:],len(c['second_ids']),cache)
+                  result['resident_task_pass']=exact(result['resident'],c['second_ids'])
+                  dump(f'mlx-seed-{rep}.json',result)
+              else:
+                  old=json.loads((out/f'mlx-seed-{rep}.json').read_text())
+                  assert old['pid']!=os.getpid()
+                  cold=run(c['second'],len(c['second_ids']),make_prompt_cache(llm))
+                  t=time.monotonic()
+                  assert hashlib.sha256(state.read_bytes()).hexdigest()==old['snapshot_sha256']
+                  cache=load_prompt_cache(str(state))
+                  restore_s=time.monotonic()-t
+                  assert all(int(x.offset)==old['offset'] for x in cache)
+                  warm=run(c['second'][old['offset']:],len(c['second_ids']),cache)
+                  result=dict(pid=os.getpid(),startup_s=startup,cold=cold,restore_s=restore_s,restored=warm)
+                  dump(f'mlx-resume-{rep}.json',result)
+                  state.unlink()
+                  assert exact(cold,c['second_ids']) and cold['tokens']==warm['tokens']==old['resident']['tokens']
+              sys.exit(0)
+          if mode=='metal':
+              from tools.check_parity import http_generate,serving
+              from tests.e2e.kv_offload_utils import _parse_counters
+              import urllib.request
+              def counters(url):
+                  with urllib.request.urlopen(url.removesuffix('/v1')+'/metrics',timeout=30) as r:return _parse_counters(r.read().decode())
+              def call(url,ids,n):
+                  before=counters(url); t=time.monotonic()
+                  row=http_generate(url,model,[dict(prompt='',input_ids=ids)],n,top_k=None)[0]
+                  elapsed=time.monotonic()-t;after=counters(url)
+                  return dict(tokens=row['tokens'],content=tok.decode(row['tokens']),wall_s=elapsed,submitted_tokens=len(ids),counters={k:after[k]-before[k] for k in after})
+              def server(label,store):
+                  tier={'type':'fs','root_dir':str(store),'max_size_gib':2}
+                  return serving(model,2048,1,.65,out/f'metal-{rep}-{label}.log',os.environ.copy(),prefix_caching=True,extra_args=['--block-size','16','--num-gpu-blocks-override','192','--kv-offloading-size','1','--kv-transfer-config',json.dumps({'kv_connector_extra_config':{'offload_prompt_only':True,'secondary_tiers':[tier]}})])
+              def wait_written(url,nbytes):
+                  end=time.monotonic()+120
+                  while time.monotonic()<end:
+                      n=counters(url)['disk_write']
+                      if n>=nbytes:return n
+                      time.sleep(.25)
+                  raise TimeoutError('native disk store did not finish')
+              store=root/f'metal-store-{rep}'
+              frozen=root/f'metal-seed-only-{rep}'
+              coldstore=root/f'metal-cold-{rep}'
+              result={}
+              def manifest(path):
+                  files=[]
+                  for f in sorted(path.rglob('*')):
+                      assert not f.is_symlink()
+                      if f.is_file():
+                          files.append(dict(path=str(f.relative_to(path)),bytes=f.stat().st_size,sha256=hashlib.sha256(f.read_bytes()).hexdigest()))
+                  assert files
+                  return files
+              # Separate fresh engine processes for cold, seed/resident and disk restore.
+              t=time.monotonic()
+              with server('cold',coldstore) as url:
+                  result['cold_startup_s']=time.monotonic()-t
+                  result['cold']=call(url,c['second'],len(c['second_ids']))
+                  dump(f'metal-{rep}.json',result)
+                  result['cold_task_pass']=exact(result['cold'],c['second_ids'])
+                  dump(f'metal-{rep}.json',result)
+              t=time.monotonic()
+              with server('seed',store) as url:
+                  result['seed_startup_s']=time.monotonic()-t
+                  result['first']=call(url,c['first'],len(c['first_ids']))
+                  dump(f'metal-{rep}.json',result)
+                  assert exact(result['first'],c['first_ids']),result['first']
+                  assert c['first']+result['first']['tokens']+c['second'][len(c['first'])+len(c['first_ids']):]==c['second']
+                  # Exact native block layout observed in R17: 113770496 / 62 bytes.
+                  t=time.monotonic()
+                  required=(len(c['first'])//16)*1835008
+                  assert required>0
+                  result['disk_written_bytes']=wait_written(url,required)
+                  result['store_wait_s']=time.monotonic()-t
+                  # Freeze the actual first-turn store BEFORE submitting the follow-up.
+                  # No other requests can use the private test server.
+                  t=time.monotonic()
+                  assert not frozen.exists()
+                  original=manifest(store)
+                  shutil.copytree(store,frozen)
+                  assert manifest(store)==original and manifest(frozen)==original
+                  result['seed_only_manifest']=original
+                  result['seed_copy_s']=time.monotonic()-t
+                  result['resident']=call(url,c['second'],len(c['second_ids']))
+                  result['resident_task_pass']=exact(result['resident'],c['second_ids'])
+                  dump(f'metal-{rep}.json',result)
+              assert manifest(frozen)==result['seed_only_manifest']
+              t=time.monotonic()
+              with server('restart',frozen) as url:
+                  result['restart_startup_s']=time.monotonic()-t
+                  result['restored']=call(url,c['second'],len(c['second_ids']))
+                  dump(f'metal-{rep}.json',result)
+                  d=result['restored']['counters']
+                  seed_limit=(len(c['first'])//16)*16
+                  result['seed_prefix_limit']=seed_limit
+                  result['cache_gate']=0<d['external_kv_transfer']<=seed_limit and d['disk_read']>0 and d['local_compute']<result['cold']['counters']['local_compute']
+                  result['cache_equivalence']=result['restored']['tokens']==result['cold']['tokens']==result['resident']['tokens']
+                  result['restored_task_pass']=exact(result['restored'],c['second_ids'])
+                  dump(f'metal-{rep}.json',result)
+              shutil.rmtree(store);shutil.rmtree(coldstore);shutil.rmtree(frozen)
+              assert result['cache_gate'] and result['cache_equivalence'] and result['cold_task_pass'] and result['resident_task_pass'] and result['restored_task_pass']
+          PY
+          python paired.py prepare
+          python - <<'PY'
+          import json,os,pathlib,subprocess,sys
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'ish-metal'
+          out=root/'evidence'; rows=[]
+          def run(mode,rep):
+              return subprocess.run([sys.executable,'paired.py',mode,str(rep)],check=False).returncode
+          def read(name):
+              f=out/name
+              return json.loads(f.read_text()) if f.exists() else None
+          for rep in range(3):
+              rc={}
+              order=['metal','mlx_seed'] if rep==1 else ['mlx_seed','metal']
+              for mode in order:
+                  rc[mode]=run(mode,rep)
+                  if mode=='mlx_seed':
+                      rc['mlx_resume']=run('mlx_resume',rep) if rc[mode]==0 else None
+              c=read(f'case-{rep}.json'); a=read(f'mlx-seed-{rep}.json'); b=read(f'mlx-resume-{rep}.json'); m=read(f'metal-{rep}.json')
+              # Preserve all observed results, including wrong cold first answers.
+              def correct(row,key,expected):
+                  return isinstance(row,dict) and key in row and row[key]['tokens']==expected
+              quality=dict(mlx_first=correct(a,'first',c['first_ids']),mlx_resident=correct(a,'resident',c['second_ids']),mlx_cold=correct(b,'cold',c['second_ids']),mlx_restored=correct(b,'restored',c['second_ids']),metal_first=correct(m,'first',c['first_ids']),metal_cold=correct(m,'cold',c['second_ids']),metal_resident=correct(m,'resident',c['second_ids']),metal_restored=correct(m,'restored',c['second_ids']))
+              # Missing continuation is not a successful cache comparison.
+              checks=dict(mlx_continuation_admitted=rc.get('mlx_resume') is not None,metal_seed_only_observed=bool(m and m.get('seed_only_manifest')),metal_cache_gate=bool(m and m.get('cache_gate')),metal_cache_equivalence=bool(m and m.get('cache_equivalence')))
+              passed=all(v==0 for v in rc.values()) and all(quality.values()) and all(checks.values())
+              rows.append(dict(rep=rep,first_prompt_tokens=len(c['first']),second_prompt_tokens=len(c['second']),returncodes=rc,quality=quality,checks=checks,mlx=a,mlx_resume=b,metal=m,passed=passed))
+              (out/'receipt.json').write_text(json.dumps(dict(scope='same-host same-model native two-turn retrieval; seed-only disk store; all independent reps attempted; task quality failures retained; no physical target or agent-goodput acceptance',source=os.environ['METAL_REV'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],rows=rows),indent=2))
+          assert len(rows)==3 and all(r['passed'] for r in rows),'one or more matched native task/cache gates failed; inspect complete receipt'
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-metal-mlx-paired-r19
+          path: ${{ runner.temp }}/ish-metal/evidence/
+          if-no-files-found: warn
+          retention-days: 14
