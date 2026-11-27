@@ -17,31 +17,7 @@ import time
 import unittest
 import urllib.request
 
-CAP = 4 * 1024 * 1024
-
-
-def inspect_telemetry(path, forbidden):
-    if not path.exists():
-        return dict(records=0, bytes=0, payload_marker_seen=False)
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > CAP:
-        raise ValueError('invalid telemetry file')
-    raw = path.read_bytes()
-    if len(raw) > CAP:
-        raise ValueError('oversize telemetry file')
-    text = raw.decode('utf-8')
-    decoder = json.JSONDecoder()
-    pos = count = 0
-    while pos < len(text):
-        while pos < len(text) and text[pos].isspace():
-            pos += 1
-        if pos == len(text):
-            break
-        row, pos = decoder.raw_decode(text, pos)
-        if not isinstance(row, dict):
-            raise ValueError('invalid telemetry object')
-        count += 1
-    return dict(records=count, bytes=len(raw),
-                payload_marker_seen=any(marker.encode() in raw for marker in forbidden))
+from telemetry_capture import CAP, inspect_telemetry
 
 
 def make_handler(fixture, file_marker, answer, seen):

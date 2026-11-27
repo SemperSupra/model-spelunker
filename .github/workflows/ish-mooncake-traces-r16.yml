@@ -1,0 +1,117 @@
+name: ISH R16 published prefix trace bakeoff
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-mooncake-traces-r16.yml']
+permissions:
+  contents: read
+jobs:
+  replay:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      TRACE_REV: 1d0e4c7587b57b78a1997be370b349b79828c5dd
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify exact published trace bytes and replay prefix policies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ish-trace"
+          cd "$RUNNER_TEMP/ish-trace"
+          python3 - <<'PY'
+          import collections as co, hashlib, heapq, json, math, os, pathlib, urllib.request
+          root=pathlib.Path.cwd()
+          expected={
+              'conversation':('5a371794b81d7fc7487ec8a02a2c631bcc7fbdf8',3029533,12031),
+              'toolagent':('b765599d1e0828b37f68d481563c385d3c11de54',4415857,23608),
+              'synthetic':('e4838049c0dcfc358a5f24ab08251279475cba94',1136313,3993)}
+          block=512
+          result=dict(scope='MODELED contiguous full-prefix-block reuse on public anonymized request traces; no task correctness, session identity, real latency, or GPU claim',source=os.environ['TRACE_REV'],workflow_sha=os.environ['GITHUB_SHA'],workloads={})
+          def replay(rows,capacity,policy,counts):
+              # Resident blocks are keyed by the entire prefix ancestry, not bare hash IDs.
+              cache=co.OrderedDict(); heap=[]; serial=0
+              hits=inputs=covered=0; peak=0; evicted=expired=0
+              ttl={'ttl30':30000,'ttl120':120000}.get(policy)
+              for ts,n,keys in rows:
+                  inputs+=n; covered+=len(keys)*block
+                  if ttl is not None:
+                      while cache and ts-next(iter(cache.values()))>=ttl:
+                          cache.popitem(last=False);expired+=1
+                  hit=0
+                  for k in keys:
+                      if k not in cache:break
+                      hit+=1
+                  hits+=hit*block
+                  if not capacity:continue
+                  # Only full-block candidates; insertion of a child never implies its ancestors are present.
+                  for k in keys:
+                      if k in cache:
+                          cache.move_to_end(k);cache[k]=ts
+                          continue
+                      if policy=='train_freq' and len(cache)>=capacity:
+                          # Frozen training counts; absent keys have score zero.
+                          while heap and heap[0][2] not in cache:heapq.heappop(heap)
+                          worst=heap[0]
+                          score=counts[k]
+                          if score<worst[0]:continue
+                          heapq.heappop(heap); del cache[worst[2]];evicted+=1
+                      elif len(cache)>=capacity:
+                          cache.popitem(last=False);evicted+=1
+                      cache[k]=ts
+                      if policy=='train_freq':
+                          serial+=1;heapq.heappush(heap,(counts[k],serial,k))
+                      peak=max(peak,len(cache))
+                      assert len(cache)<=capacity
+              assert 0<=hits<=covered<=inputs and peak<=capacity
+              return dict(requests=len(rows),input_tokens=inputs,covered_full_tokens=covered,reused_tokens=hits,recomputed_tokens=inputs-hits,hit_fraction=hits/inputs if inputs else 0,peak_blocks=peak,evictions=evicted,expirations=expired)
+          # Negative oracle: an isolated deeper block is not a prefix hit.
+          sample=[(0,1024,[1,2]),(1,512,[3]),(2,1024,[1,2])]
+          assert replay(sample,1,'lru',co.Counter())['reused_tokens']==0
+          assert replay(sample,0,'none',co.Counter())['reused_tokens']==0
+          assert replay([(0,512,[1]),(30000,512,[1])],1,'ttl30',co.Counter())['reused_tokens']==0
+          for name,(blob,size,num) in expected.items():
+              url=f"https://raw.githubusercontent.com/kvcache-ai/Mooncake/{os.environ['TRACE_REV']}/FAST25-release/traces/{name}_trace.jsonl"
+              with urllib.request.urlopen(url,timeout=60) as response: data=response.read(size+1)
+              assert len(data)==size
+              assert hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()==blob
+              raw=[json.loads(l) for l in data.splitlines()]
+              assert len(raw)==num
+              nodes={}; rows=[]; missing=0; extra=0
+              for r in raw:
+                  ts,n,o,ids=(r[k] for k in ('timestamp','input_length','output_length','hash_ids'))
+                  assert type(ts) in (int,float) and math.isfinite(ts) and ts>=0
+                  assert type(n) is int and n>0 and type(o) is int and o>=0 and isinstance(ids,list)
+                  assert all(type(x) is int for x in ids)
+                  # Ignore partial trailing blocks and never infer hashes for unobserved tokens.
+                  count=min(n//block,len(ids));missing+=max(0,n//block-len(ids))*block
+                  extra+=max(0,len(ids)-n//block)
+                  parent=0;keys=[]
+                  for k in ids[:count]:
+                      pair=(parent,k)
+                      if pair not in nodes:nodes[pair]=len(nodes)+1
+                      parent=nodes[pair];keys.append(parent)
+                  rows.append((ts,n,keys))
+              rows.sort(key=lambda r:r[0])
+              # First 70% by time/order trains only frequency policy, holdout starts cold for all.
+              cut=int(len(rows)*.7); fit=rows[:cut]; test=rows[cut:]
+              counts=co.Counter(k for _,_,ks in fit for k in ks)
+              arms=[]
+              for cap in (0,512,2048,8192):
+                  for pol in (['none'] if not cap else ['lru','ttl30','ttl120','train_freq']):
+                      arms.append(dict(capacity_blocks=cap,policy=pol,**replay(test,cap,pol,counts)))
+              assert len({a['input_tokens'] for a in arms})==1
+              result['workloads'][name]=dict(blob_sha1=blob,sha256=hashlib.sha256(data).hexdigest(),bytes=len(data),requests=len(rows),fit_requests=len(fit),heldout_requests=len(test),timestamp_unit='ms',first_test_timestamp=test[0][0],last_train_timestamp=fit[-1][0],uncovered_full_tokens=missing,ignored_extra_hashes=extra,distinct_prefix_nodes=len(nodes),arms=arms)
+              (root/'receipt.json').write_text(json.dumps(result,indent=2))
+              print(name,[(a['policy'],a['capacity_blocks'],round(a['hit_fraction'],4)) for a in arms])
+          assert len(result['workloads'])==3
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-mooncake-traces-r16
+          path: ${{ runner.temp }}/ish-trace/receipt.json
+          if-no-files-found: warn
+          retention-days: 14
