@@ -1,0 +1,91 @@
+name: ISH R17 SGLang Simulator ABI correction
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-sglang-simulator-r16.yml']
+permissions:
+  contents: read
+jobs:
+  simulator:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      ISH_SGL_SOURCE: 297e54fd105e974cdf401e5b4d20253a22c16f90
+      CUDA_VISIBLE_DEVICES: ""
+      SGLANG_IS_IN_CI: "true"
+      MALLOC_ARENA_MAX: "2"
+      MAX_JOBS: "1"
+      OMP_NUM_THREADS: "2"
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install pinned upstream source and simulator dependencies
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ish-sim/evidence"
+          cd "$RUNNER_TEMP/ish-sim"
+          git init upstream
+          git -C upstream remote add origin https://github.com/sgl-project/sglang.git
+          git -C upstream fetch --depth=1 origin "$ISH_SGL_SOURCE"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$ISH_SGL_SOURCE"
+          git -C upstream rev-parse HEAD > evidence/source.txt
+          df -h > evidence/disk-before.txt
+          python3.12 -m venv venv
+          source venv/bin/activate
+          python -m pip install uv==0.8.22
+          cd upstream
+          bash scripts/ci/utils/install_rust_protoc.sh
+          # AIC 0.10.0 requires NumPy 1.26.4. ml-dtypes >=0.6 requires NumPy 2.
+          # Resolve together rather than silently downgrading NumPy in a second install.
+          uv pip install --python "$RUNNER_TEMP/ish-sim/venv/bin/python" -e python pytest==9.2.0 "./tools/sglang-simulator[aic]" "numpy==1.26.4" "ml-dtypes==0.5.3" "apache-tvm-ffi==0.1.11" "pyarrow==25.0.1" --prerelease allow --index-strategy unsafe-best-match
+          uv pip freeze > ../evidence/installed.txt
+          uv pip check > ../evidence/dependency-check.txt 2>&1
+          python - <<'PY'
+          import importlib.metadata as md, json, pathlib
+          import numpy, ml_dtypes, tvm_ffi
+          from aiconfigurator.sdk import models
+          from sglang_simulator.time_predictor import ReplayTimePredictor
+          assert numpy.__version__=='1.26.4'
+          assert ml_dtypes.__version__=='0.5.3'
+          assert numpy.array([1],dtype=ml_dtypes.bfloat16).astype(numpy.float32)[0]==1
+          names=['numpy','ml-dtypes','apache-tvm-ffi','aiconfigurator','pyarrow','torch','flashinfer-python']
+          pathlib.Path('../evidence/abi.json').write_text(json.dumps(dict(versions={n:md.version(n) for n in names},native_dtype_and_imports='PASS'),indent=2))
+          PY
+          uv pip freeze > ../evidence/installed.txt
+          df -h > ../evidence/disk-after.txt
+      - name: Run upstream native CPU cache-tier tests
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ish-sim/upstream"
+          source ../venv/bin/activate
+          export TORCH_EXTENSIONS_DIR="$RUNNER_TEMP/ish-sim/torch-extensions"
+          python -c 'from sglang.srt.mem_cache.cpp_utils.native_hash import get_native_hash; get_native_hash([1], None)'
+          python -m pytest -q -s tools/sglang-simulator/test/test_simulation_sglang_runner.py --junitxml=../evidence/runner.xml
+          python -m pytest -q -s tools/sglang-simulator/test/test_simulation_cache_hit_ratio.py --junitxml=../evidence/cache-tier.xml
+          python - <<'PY'
+          import json,os,pathlib,xml.etree.ElementTree as E
+          out=pathlib.Path('../evidence')
+          runs={}
+          for name in ('runner','cache-tier'):
+              root=E.parse(out/(name+'.xml')).getroot()
+              cases=list(root.iter('testcase'))
+              assert cases and all(not any(x.tag in ('failure','error','skipped') for x in c) for c in cases)
+              runs[name]=[c.attrib.get('name') for c in cases]
+          assert len(runs['cache-tier'])==2
+          (out/'receipt.json').write_text(json.dumps(dict(scope='native upstream simulator scheduling/cache tests, model-forward latency modeled not real inference',source=os.environ['ISH_SGL_SOURCE'],workflow_sha=os.environ['GITHUB_SHA'],tests=runs),indent=2))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-sglang-simulator-r17
+          path: ${{ runner.temp }}/ish-sim/evidence/
+          if-no-files-found: warn
+          retention-days: 14
