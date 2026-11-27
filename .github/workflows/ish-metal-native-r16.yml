@@ -1,4 +1,4 @@
-name: ISH R16 native Metal host and disk cache
+name: ISH R17 Metal Torch compatibility matrix
 on:
   pull_request:
     paths: ['.github/workflows/ish-metal-native-r16.yml']
@@ -7,9 +7,14 @@ permissions:
 jobs:
   metal:
     if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        torch_arm: [declared, upstream_override]
     runs-on: macos-15
     timeout-minutes: 35
     env:
+      TORCH_ARM: '${{ matrix.torch_arm }}'
       METAL_REV: d1447c4a539b86166ae85293d269fbdfada47753
       MODEL_REV: 73e3e38d981303bc594367cd910ea6eb48349da8
       HF_HUB_DISABLE_TELEMETRY: "1"
@@ -43,11 +48,34 @@ jobs:
           curl --fail --location --max-time 300 --retry 2 'https://github.com/vllm-project/vllm/releases/download/v0.34.0/vllm-0.34.0%2Bcpu-cp38-abi3-macosx_11_0_arm64.whl' -o "$core"
           curl --fail --location --max-time 120 --retry 2 "https://github.com/vllm-project/vllm-metal/releases/download/v0.34.0/$plugin" -o "$plugin"
           printf '%s  %s\n' cd0abe2a9d698bc0bef36ac9aa38da34307c53572ddee60ca35faef280af99d2 "$core" 27141e0134e92358b494b3609df3a3f4be611852a9201b34ad7dbc0cbad8029f "$plugin" | shasum -a 256 -c -
-          uv pip install "./$core" "./$plugin" pytest
-          # Upstream install.sh deliberately overrides the core Torch dependency for Metal.
-          uv pip install -r upstream/vllm_metal/requirements-torch.txt
+          # Hold the major ABI and test dependencies at their R16 observed versions.
+          uv pip install "./$core" "./$plugin" pytest==9.2.0 numpy==2.3.5 mlx==0.32.4 transformers==5.22.2 "torch==2.14.0"
+          if [ "$TORCH_ARM" = upstream_override ]; then
+            uv pip install -r upstream/vllm_metal/requirements-torch.txt
+          fi
           uv pip freeze > evidence/installed.txt
-          (python -m pip check || true) > evidence/dependency-check.txt
+          set +e
+          python -m pip check > evidence/dependency-check.txt 2>&1
+          check_status=$?
+          set -e
+          export CHECK_STATUS="$check_status"
+          python - <<'PY'
+          import importlib.metadata as md, pathlib,os,json
+          import torch, mlx.core as mx, vllm, vllm_metal
+          arm=os.environ['TORCH_ARM']
+          lines=[x.strip() for x in pathlib.Path('evidence/dependency-check.txt').read_text().splitlines() if x.strip()]
+          version=md.version('torch')
+          expected='vllm 0.34.0+cpu has requirement torch==2.14.0; platform_system == "Darwin" or platform_machine == "ppc64le" or platform_machine == "riscv64", but you have torch 2.16.0.dev20261013.'
+          if arm=='declared':
+              assert version=='2.14.0' and os.environ['CHECK_STATUS']=='0',lines
+          else:
+              assert version=='2.16.0.dev20261013' and os.environ['CHECK_STATUS']=='1' and lines==[expected],lines
+          assert 'gpu' in str(mx.default_device()).lower()
+          assert torch.backends.mps.is_available()
+          a=torch.tensor([1.,2.],device='mps')+1
+          assert a.cpu().tolist()==[2.,3.]
+          pathlib.Path('evidence/abi.json').write_text(json.dumps(dict(arm=arm,torch=version,declared_metadata_clean=os.environ['CHECK_STATUS']=='0',known_upstream_exception=lines if arm=='upstream_override' else [],actual_mps_operation='PASS',mlx_device=str(mx.default_device())),indent=2))
+          PY
           python - <<'PY'
           import hashlib,json,os,pathlib,importlib.metadata
           import mlx.core as mx
@@ -82,17 +110,17 @@ jobs:
           python - <<'PY'
           import json,pathlib,os
           root=pathlib.Path('../evidence')
-          receipts=list(root.rglob('restores.json'))
+          receipts=sorted({p.resolve() for p in root.rglob('restores.json')})
           assert len(receipts)==1
           rows=json.loads(receipts[0].read_text())['restores']
           assert [x['restore'] for x in rows]==['host pool','disk after restart']
           assert all(x['passed'] and x['restored_tokens']>=992 and x['output']=='EXACT' for x in rows)
-          (root/'receipt.json').write_text(json.dumps(dict(scope='native upstream host pool and disk restore after restart, random public synthetic token prompts; not task goodput or physical target',source=os.environ['METAL_REV'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],restores=rows),indent=2))
+          (root/'receipt.json').write_text(json.dumps(dict(scope='native upstream host pool and disk restore after restart, random public synthetic token prompts; not task goodput or physical target',torch_arm=os.environ['TORCH_ARM'],source=os.environ['METAL_REV'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],restores=rows),indent=2))
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: ish-metal-native-r16
+          name: ish-metal-native-r17-${{ matrix.torch_arm }}
           path: ${{ runner.temp }}/ish-metal/evidence/
           if-no-files-found: warn
           retention-days: 14
