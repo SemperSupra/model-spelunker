@@ -9,11 +9,59 @@ export OLLAMA_NUM_PARALLEL=1 OLLAMA_MAX_LOADED_MODELS=1
 export OLLAMA_MODELS="$RUNNER_TEMP/qwen-r18-models"
 root="$RUNNER_TEMP/qwen-r18-live"
 cell="$RUNNER_TEMP/qwen-r18-installed"
-mkdir -p "$root/ollama" "$root/task" "$OLLAMA_MODELS"
+# Refuse preexisting paths before establishing any cleanup authority.
+for path in "$root" "$cell" "$OLLAMA_MODELS"; do
+  if [[ -e "$path" || -L "$path" ]]; then
+    echo 'FAIL native workcell path already exists' >&2
+    exit 2
+  fi
+done
+mkdir -- "$root" "$OLLAMA_MODELS"
+mkdir -- "$root/ollama" "$root/task"
 ollama_pid=
+# Check only the background child started by this shell, never an arbitrary PID.
+ollama_job_live() {
+  jobs -pr | grep -Fxq -- "$ollama_pid" || jobs -ps | grep -Fxq -- "$ollama_pid"
+}
 cleanup() {
-  if [[ -n "$ollama_pid" ]]; then kill "$ollama_pid" 2>/dev/null || true; wait "$ollama_pid" 2>/dev/null || true; fi
-  if [[ -d "$cell" ]]; then python3 qualification/agent_embodiment/qwen_embody.py remove --root "$cell" || true; fi
+  local original_rc=$? cleanup_rc=0 i
+  trap - EXIT
+  set +e
+  if [[ -n "$ollama_pid" ]]; then
+    if ollama_job_live; then
+      kill -TERM "$ollama_pid" 2>/dev/null || true
+      for ((i=0;i<30;i++)); do
+        ollama_job_live || break
+        sleep 0.1
+      done
+    fi
+    if ollama_job_live; then
+      kill -KILL "$ollama_pid" 2>/dev/null || true
+      for ((i=0;i<30;i++)); do
+        ollama_job_live || break
+        sleep 0.1
+      done
+    fi
+    if ollama_job_live; then
+      cleanup_rc=1
+      echo 'FAIL direct service child still tracked' >&2
+    else
+      # Expected signal termination is not a cleanup error.
+      wait "$ollama_pid" 2>/dev/null || true
+    fi
+  fi
+  if [[ -e "$cell" || -L "$cell" ]]; then
+    python3 qualification/agent_embodiment/qwen_embody.py remove --root "$cell" || cleanup_rc=1
+  fi
+  if [[ -e "$cell" || -L "$cell" ]]; then
+    cleanup_rc=1
+  fi
+  if ((cleanup_rc)); then
+    echo 'FAIL scoped native cleanup; retain evidence for reconciliation' >&2
+    exit 2
+  fi
+  echo 'PASS scoped native cleanup: tracked service child retired; installer path absent'
+  exit "$original_rc"
 }
 trap cleanup EXIT
 curl -fL --silent --show-error --retry 3 --retry-delay 2 https://github.com/ollama/ollama/releases/download/v0.34.1/ollama-linux-amd64.tar.zst -o "$root/ollama.tar.zst"
