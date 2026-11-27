@@ -24,6 +24,8 @@ def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
     for row in rows:
         if not isinstance(row,dict):
             return "INVALID_FRAME"
+        if row.get("type")=="result" and (len(requested)!=2 or len(returned)!=2):
+            return "PREMATURE_FINAL_RESULT"
         msg=row.get("message")
         if not isinstance(msg,dict):
             continue
@@ -49,6 +51,8 @@ def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
                 identifier=item.get("id")
                 if not isinstance(identifier,str) or not identifier:
                     return "MISSING_TOOL_ID"
+                if len(requested)!=len(returned):
+                    return "OVERLAPPING_TOOL_USE"
                 requested.append((identifier,relative))
             elif item.get("type")=="tool_result":
                 identifier=item.get("tool_use_id")
@@ -56,6 +60,8 @@ def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
                     return "INVALID_RESULT_ID"
                 if item.get("is_error") is not False:
                     return "TOOL_RESULT_ERROR"
+                if len(requested)!=len(returned)+1 or requested[-1][0]!=identifier:
+                    return "UNMATCHED_TOOL_RESULT"
                 returned.append(identifier)
     if len(requested)!=2:
         return "WRONG_TOOL_COUNT"
@@ -103,8 +109,11 @@ def selftest():
         for value,target in cases:
             assert lineage_verdict(value,root,target)!="PASS","lineage mutant accepted"
         assert lineage_verdict(make(),root,"../../x")=="INVALID_TARGET"
+        ordered=json.loads(make())
+        for order in ((1,0,2,3,4),(0,2,1,3,4),(0,1,4,2,3),(4,0,1,2,3)):
+            assert lineage_verdict(json.dumps([ordered[i] for i in order]),root,"a.txt")!="PASS","causal-order mutant accepted"
         print(json.dumps({"schema":"qwen-r15-lineage-critic/v1","state":"PASS",
-                          "positive_cases":2,"negative_cases":12,
+                          "positive_cases":2,"negative_cases":16,
                           "source_class":"SYNTHETIC_NO_MODEL"}))
 
 if __name__=="__main__":
