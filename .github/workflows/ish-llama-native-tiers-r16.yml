@@ -1,0 +1,194 @@
+name: ISH R16 native llama RAM and sleep tiers
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-llama-native-tiers-r16.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      MODEL_SHA: 74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db
+      MODEL_REV: 6dd44a1fb35d11b5d1b28902876ce3cc9e882d0e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Build pinned native CPU server and obtain verified public fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-r0"
+          cd "$RUNNER_TEMP/cache-r0"
+          git init upstream
+          git -C upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C upstream checkout --detach FETCH_HEAD
+          test "$(git -C upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S upstream -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build build --target llama-server -j 2
+          curl --fail --location --retry 2 --max-time 300 https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/$MODEL_REV/qwen2.5-0.5b-instruct-q4_k_m.gguf -o model.gguf
+          printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
+          sha256sum build/bin/llama-server model.gguf > identities.txt
+          cp upstream/LICENSE upstream-license.txt
+      - name: Native slot churn and actual sleep-wake with and without durable state
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-r0"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess,time,urllib.request
+          root=pathlib.Path.cwd()
+          (root/'slots').mkdir()
+          rows=[]
+          def receipt():
+              (root/'receipt.json').write_text(json.dumps(dict(scope='native CPU cache lifecycle screen: RAM churn and sleep/wake, synthetic retrieval not production tenant or hardware proof',source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],rows=rows),indent=2))
+          def req(path,data=None):
+              body=None if data is None else json.dumps(data).encode()
+              with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:return json.load(r)
+          def start(rep,arm,ram,sleep):
+              logpath=root/f'{rep}-{arm}.log'
+              log=logpath.open('wb')
+              args=[str(root/'build/bin/llama-server'),'-m',str(root/'model.gguf'),'-c','8192','-np','2','-t','4','-ngl','0','--kv-unified','--cache-ram',str(ram),'--cache-idle-slots' if ram else '--no-cache-idle-slots','--slot-prompt-similarity','0','--sleep-idle-seconds',str(sleep),'--verbose','--host','127.0.0.1','--port','18081','--slot-save-path',str(root/'slots')]
+              t=time.monotonic()
+              p=subprocess.Popen(args,stdout=log,stderr=log)
+              log.close()
+              for _ in range(120):
+                  if p.poll() is not None:raise RuntimeError('server exited')
+                  try:
+                      req('/health')
+                      return p,time.monotonic()-t,logpath
+                  except OSError:time.sleep(.25)
+              p.kill();p.wait();raise RuntimeError('readiness timeout')
+          def stop(p):
+              p.terminate()
+              try:p.wait(timeout=10)
+              except subprocess.TimeoutExpired:p.kill();p.wait()
+          def tokenized(text):return req('/tokenize',{'content':text,'add_special':False,'parse_special':True})['tokens']
+          def complete(prompt,slot):
+              t=time.monotonic()
+              r=req('/completion',dict(prompt=prompt,id_slot=slot,n_predict=12,temperature=0,seed=42,cache_prompt=True,return_tokens=True))
+              return dict(content=r['content'],tokens=r['tokens'],timings=r['timings'],wall_s=time.monotonic()-t,requested_slot=slot)
+          def make(rep,owner):
+              pairs=[('314159','271828'),('161803','314159'),('271828','161803')]
+              first,second=pairs[(rep+owner)%3]
+              labels=['Parcel','Package','Crate']
+              label=labels[owner]
+              lines=[f'{label} {j:04d} has status archived and category blue.' for j in range(64)]
+              p,q=[(0,64),(32,33),(64,0)][rep]
+              lines.insert(p,f'The special {label.lower()} ORCHID has access code {first}.')
+              lines.insert(q,f'The special {label.lower()} LILAC has access code {second}.')
+              prefix='<|im_start|>system\nAnswer questions using the supplied inventory. Output only the requested code.<|im_end|>\n<|im_start|>user\nInventory:\n'+'\n'.join(lines)+'\nWhat is the access code of the special '+label.lower()+' ORCHID? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+              return prefix,first,second,label.lower()
+          def first_turn(rep,owner,slot):
+              prefix,e1,e2,label=make(rep,owner)
+              ids=tokenized(prefix)
+              result=complete(ids,slot)
+              assert result['content'].strip()==e1, (owner,result['content'],e1)
+              follow=prefix+result['content']+'<|im_end|>\n<|im_start|>user\nWhat is the access code of the special '+label+' LILAC? Reply only with the code.<|im_end|>\n<|im_start|>assistant\n'
+              target=tokenized(follow)
+              assert target[:len(ids)]==ids
+              return result,target,e2
+          def rss(pid):
+              # Observed Linux process RSS, not GPU memory or complete cgroup accounting.
+              for line in pathlib.Path(f'/proc/{pid}/status').read_text().splitlines():
+                  if line.startswith('VmRSS:'):return int(line.split()[1])*1024
+              return None
+          def save_snapshot(name):
+              part=root/'slots'/(name+'.partial')
+              path=root/'slots'/(name+'.bin')
+              t=time.monotonic()
+              native=req('/slots/0?action=save',{'filename':part.name})
+              with part.open('rb') as fh:
+                  data=fh.read();digest=hashlib.sha256(data).hexdigest();os.fsync(fh.fileno())
+              assert native['n_written']==len(data) and native['n_saved']>0
+              os.replace(part,path)
+              fd=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              return dict(filename=path.name,sha256=digest,bytes=len(data),n_saved=native['n_saved'],wall_s=time.monotonic()-t)
+          def wait_sleep():
+              t=time.monotonic()
+              while time.monotonic()-t<20:
+                  if req('/props')['is_sleeping']:return time.monotonic()-t
+                  time.sleep(.1)
+              raise TimeoutError('native sleeping state not observed')
+          arms={'ram0':(0,-1),'ram1':(1,-1),'ram64':(64,-1),'sleep_native':(64,2),'sleep_disk':(64,2)}
+          for rep in range(3):
+              row=dict(rep=rep,arms={});rows.append(row)
+              order=list(arms);order=order[rep:]+order[:rep]
+              row['order']=order
+              for arm in order:
+                  ram,sleep=arms[arm]
+                  p,st,log=start(rep,arm,ram,sleep)
+                  entry=dict(pid=p.pid,startup_s=st,ram_mib=ram,sleep_idle_s=sleep)
+                  row['arms'][arm]=entry
+                  try:
+                      a,target,expected=first_turn(rep,0,0)
+                      entry.update(first=a,target_tokens=len(target),rss_awake=rss(p.pid))
+                      if sleep<0:
+                          b,_,_=first_turn(rep,1,1)
+                          c,_,_=first_turn(rep,2,0)
+                          entry['distractors']=[b,c]
+                          # A's original slot has been overwritten, auto placement can
+                          # consult native RAM; no explicit restore in these three arms.
+                          result=complete(target,-1)
+                      else:
+                          if arm=='sleep_disk':entry['snapshot']=save_snapshot(f'{rep}-sleep')
+                          entry['sleep_observed_after_s']=wait_sleep()
+                          entry['rss_sleeping']=rss(p.pid)
+                          assert req('/props')['is_sleeping'] and p.poll() is None
+                          t=time.monotonic()
+                          if arm=='sleep_disk':
+                              snap=entry['snapshot'];f=root/'slots'/snap['filename']
+                              assert hashlib.sha256(f.read_bytes()).hexdigest()==snap['sha256']
+                              restored=req('/slots/0?action=restore',{'filename':f.name})
+                              entry['wake_restore_wall_s']=time.monotonic()-t
+                              entry['native_restore']=restored
+                              assert restored['n_restored']==snap['n_saved']
+                              result=complete(target,0)
+                              f.unlink()
+                          else:result=complete(target,0)
+                          entry['wake_through_result_s']=time.monotonic()-t
+                          assert not req('/props')['is_sleeping'] and p.poll() is None
+                      entry['result']=result
+                      entry['task_pass']=result['content'].strip()==expected
+                      assert entry['task_pass'], (arm,result['content'],expected)
+                  finally:
+                      stop(p)
+                      logs=log.read_text(errors='replace')
+                      entry['native_idle_save_tags']=logs.count('__TEST_TAG_CACHE_IDLE_SLOT__')
+                      entry['native_ram_restore_tags']=logs.count('__TEST_TAG_PROMPT_CACHE_RESTORE__')
+                      entry['oversize_skip_messages']=logs.count('exceeds cache size limit')
+                      entry['sleep_enter_messages']=logs.count('server is entering sleeping state')
+                      entry['sleep_exit_messages']=logs.count('server is exiting sleeping state')
+                      receipt()
+              ref=row['arms']['ram0']['result']
+              for arm,e in row['arms'].items():
+                  assert e['result']['tokens']==ref['tokens'] and e['result']['content']==ref['content']
+              ram=row['arms']['ram64'];small=row['arms']['ram1']
+              assert ram['native_idle_save_tags']>0 and ram['native_ram_restore_tags']>0
+              assert ram['result']['timings']['prompt_n']<ref['timings']['prompt_n']
+              assert small['oversize_skip_messages']>0
+              for arm in ('sleep_native','sleep_disk'):
+                  e=row['arms'][arm]
+                  assert e['sleep_enter_messages']>0 and e['sleep_exit_messages']>0
+              # Native sleep retention is an observation, not assumed to survive.
+              assert row['arms']['sleep_disk']['result']['timings']['prompt_n']<row['arms']['sleep_native']['result']['timings']['prompt_n']
+              row['passed']=True;receipt()
+          assert len(rows)==3 and all(r.get('passed') for r in rows)
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-llama-native-tiers-r16
+          path: |
+            ${{ runner.temp }}/cache-r0/receipt.json
+            ${{ runner.temp }}/cache-r0/identities.txt
+            ${{ runner.temp }}/cache-r0/upstream-license.txt
+            ${{ runner.temp }}/cache-r0/*.log
+          if-no-files-found: warn
+          retention-days: 14
