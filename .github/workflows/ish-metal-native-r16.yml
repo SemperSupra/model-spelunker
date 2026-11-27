@@ -1,4 +1,4 @@
-name: ISH R17 Metal Torch compatibility matrix
+name: ISH R17 Metal backend-specific Torch compatibility matrix
 on:
   pull_request:
     paths: ['.github/workflows/ish-metal-native-r16.yml']
@@ -71,10 +71,21 @@ jobs:
           else:
               assert version=='2.16.0.dev20261013' and os.environ['CHECK_STATUS']=='1' and lines==[expected],lines
           assert 'gpu' in str(mx.default_device()).lower()
-          assert torch.backends.mps.is_available()
-          a=torch.tensor([1.,2.],device='mps')+1
-          assert a.cpu().tolist()==[2.,3.]
-          pathlib.Path('evidence/abi.json').write_text(json.dumps(dict(arm=arm,torch=version,declared_metadata_clean=os.environ['CHECK_STATUS']=='0',known_upstream_exception=lines if arm=='upstream_override' else [],actual_mps_operation='PASS',mlx_device=str(mx.default_device())),indent=2))
+          # MLX is the selected compute backend, not PyTorch MPS.
+          # Some hosted virtual Metal devices are rejected by the MPS backend.
+          assert (torch.tensor([1.,2.],device='cpu')+1).tolist()==[2.,3.]
+          x=mx.array([1.,2.])+1
+          mx.eval(x)
+          assert x.tolist()==[2.,3.]
+          mps_available=torch.backends.mps.is_available()
+          mps_result='UNAVAILABLE'
+          if mps_available:
+              try:
+                  a=torch.tensor([1.,2.],device='mps')+1
+                  mps_result='PASS' if a.cpu().tolist()==[2.,3.] else 'FAIL'
+              except Exception as e:
+                  mps_result='ERROR:'+type(e).__name__
+          pathlib.Path('evidence/abi.json').write_text(json.dumps(dict(arm=arm,torch=version,declared_metadata_clean=os.environ['CHECK_STATUS']=='0',known_upstream_exception=lines if arm=='upstream_override' else [],torch_cpu_operation='PASS',actual_mlx_gpu_operation='PASS',mps_available=mps_available,mps_diagnostic=mps_result,mlx_device=str(mx.default_device())),indent=2))
           PY
           python - <<'PY'
           import hashlib,json,os,pathlib,importlib.metadata
@@ -120,7 +131,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: ish-metal-native-r17-${{ matrix.torch_arm }}
+          name: ish-metal-native-r17b-${{ matrix.torch_arm }}
           path: ${{ runner.temp }}/ish-metal/evidence/
           if-no-files-found: warn
           retention-days: 14
