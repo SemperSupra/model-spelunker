@@ -1,0 +1,283 @@
+name: ISH R21 MLX staged-versus-cold mechanism diagnosis
+on:
+  pull_request:
+    paths: ['.github/workflows/ish-mlx-mechanism-r21.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      PREFILL_STEP: '256'
+      SHARD: '${{ matrix.shard }}'
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install previously screened MLX distribution set and acquire exact model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cache-mlx"
+          cd "$RUNNER_TEMP/cache-mlx"
+          test "$(uname -m)" = arm64
+          python3 -m venv venv
+          source venv/bin/activate
+          cat > requirements.txt <<'LOCK'
+          # Resolved on public macos-15 hosted M1, GHA 45216777799 (2026-11-23).
+          # Exact distribution versions, not per-wheel SHA256; no release reproducibility claim.
+          annotated-doc==0.0.7
+          annotated-types==0.8.0
+          anyio==4.16.0
+          certifi==2026.11.20
+          click==8.5.1
+          filelock==4.3.0
+          fsspec==2026.9.0
+          h11==0.16.0
+          hf-xet==1.8.0
+          httpcore==1.0.9
+          httpx==0.28.1
+          huggingface_hub==1.33.0
+          idna==3.20
+          Jinja2==3.1.6
+          markdown-it-py==4.3.0
+          MarkupSafe==3.0.4
+          mdurl==0.1.2
+          mlx==0.32.4
+          mlx-lm==0.32.2
+          mlx-metal==0.32.4
+          numpy==2.5.5
+          packaging==26.3
+          protobuf==7.36.2
+          pydantic==2.14.4
+          pydantic_core==2.50.5
+          Pygments==2.21.0
+          PyYAML==6.0.4
+          regex==2026.11.19
+          rich==15.0.0
+          safetensors==0.8.0
+          sentencepiece==0.2.3
+          shellingham==1.5.4
+          tokenizers==0.23.3
+          tqdm==4.70.1
+          transformers==5.24.0
+          typer==0.29.2
+          typing-inspection==0.4.5
+          typing_extensions==4.16.0
+          LOCK
+          pip install --no-cache-dir -r requirements.txt
+          pip check
+          pip freeze > installed.txt
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+          import json,hashlib
+          root=Path(snapshot_download('mlx-community/Qwen3-0.6B-4bit',revision='73e3e38d981303bc594367cd910ea6eb48349da8',local_dir='model',max_workers=2))
+          files=[]
+          for p in sorted(root.rglob('*')):
+              if p.is_file() and p.suffix in ('.safetensors','.json','.model'):
+                  files.append(dict(path=str(p.relative_to(root)),sha256=hashlib.sha256(p.read_bytes()).hexdigest(),bytes=p.stat().st_size))
+          h=hashlib.sha256(json.dumps(files,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert h=='a41e0e6d8b353351d9cbe241c261b95ede3702ddf86bfb418d98b845639dcf2d'
+          Path('model-manifest.json').write_text(json.dumps(files,indent=2))
+          PY
+      - name: Separate native seed, cold replay and restore processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/cache-mlx"
+          source venv/bin/activate
+          cat > trial.py <<'PY'
+          import hashlib,inspect,json,os,pathlib,random,sys,time
+          import mlx.core as mx
+          from mlx_lm import load
+          from mlx_lm.generate import generate_step
+          from mlx_lm.sample_utils import make_sampler
+          from mlx_lm.models.cache import make_prompt_cache,save_prompt_cache,load_prompt_cache
+          mode=sys.argv[1]; rep=int(sys.argv[2])
+          step=int(os.environ['PREFILL_STEP'])
+          base=pathlib.Path(f'rep-{rep}')
+          base.mkdir(exist_ok=True)
+          t=time.monotonic()
+          model,tok=load('model')
+          row=dict(pid=os.getpid(),load_s=time.monotonic()-t,device=str(mx.default_device()),generate_source_sha256=hashlib.sha256(inspect.getsource(generate_step).encode()).hexdigest())
+          assert 'gpu' in row['device'].lower()
+          def generate(ids,cache,n):
+              t=time.monotonic()
+              result=[]
+              first=None
+              top=[]
+              for token,logits in generate_step(mx.array(ids),model,prompt_cache=cache,max_tokens=n,prefill_step_size=step,sampler=make_sampler(temp=0)):
+                  mx.eval(logits)
+                  if first is None:first=time.monotonic()-t
+                  result.append(int(token))
+                  v=logits.reshape(-1).astype(mx.float32)
+                  idx=mx.argsort(v)[-2:]
+                  top.append(dict(ids=idx.tolist(),scores=v[idx].tolist()))
+              return dict(tokens=result,wall_s=time.monotonic()-t,first_s=first,input_ids=ids,top2=top)
+          if mode=='seed':
+              rng=random.Random(20264400+rep)
+              words=['cedar','amber','marble','delta','fern','canvas','lantern','pebble','meadow','indigo','brass','harbor']
+              length=[71,113,191,317,491,673,887,1093,1327,1583,1861,2111][rep]
+              prefix=tok.encode(' '.join(rng.choice(words) for _ in range(length))+' '+str(rep))
+              row['fixture_seed']=20264400+rep
+              cache=make_prompt_cache(model)
+              seed=generate(prefix,cache,4)
+              offsets=[int(c.offset) for c in cache]
+              assert len(set(offsets))==1
+              offset=offsets[0]
+              target=prefix+seed['tokens']+tok.encode(' Continue',add_special_tokens=False)
+              assert len(prefix)<offset<len(target)
+              t=time.monotonic()
+              save_prompt_cache(str(base/'state.safetensors'),cache)
+              state=base/'state.safetensors'
+              with state.open('rb') as fp:
+                  data=fp.read();os.fsync(fp.fileno())
+              fd=os.open(base,os.O_RDONLY)
+              try:os.fsync(fd)
+              finally:os.close(fd)
+              row.update(seed=seed,offset=offset,target=target,save_s=time.monotonic()-t)
+              row['snapshot_bytes']=len(data)
+              row['snapshot_sha256']=hashlib.sha256(data).hexdigest()
+              row['live']=generate(target[offset:],cache,8)
+          else:
+              seed=json.loads((base/'seed.json').read_text())
+              assert row['pid']!=seed['pid']
+              ids=seed['target']
+              if mode=='restore':
+                  t=time.monotonic()
+                  assert hashlib.sha256((base/'state.safetensors').read_bytes()).hexdigest()==seed['snapshot_sha256']
+                  cache=load_prompt_cache(str(base/'state.safetensors'))
+                  row['restore_s']=time.monotonic()-t
+                  offsets=[int(c.offset) for c in cache]
+                  assert set(offsets)=={seed['offset']}
+                  ids=ids[seed['offset']:]
+              elif mode=='replay':
+                  cache=make_prompt_cache(model)
+                  old=seed['seed']
+                  rebuilt=generate(old['input_ids'],cache,len(old['tokens']))
+                  row['rebuild']=rebuilt
+                  assert rebuilt['tokens']==old['tokens']
+                  assert {int(c.offset) for c in cache}=={seed['offset']}
+                  ids=ids[seed['offset']:]
+              elif mode in ('forced_bulk','forced_serial'):
+                  cache=make_prompt_cache(model)
+                  offset=seed['offset']
+                  known=ids[:offset]
+                  prefix=seed['seed']['input_ids']
+                  assert known[:len(prefix)]==prefix
+                  assert known[len(prefix):]==seed['seed']['tokens'][:offset-len(prefix)]
+                  # Same target and offset; change only prefill partition.
+                  if mode=='forced_bulk':
+                      sizes=[min(step,offset-i) for i in range(0,offset,step)]
+                  else:
+                      # Leave the last original prompt token, then teacher-force
+                      # the observed generated prefix one token per native call.
+                      end=len(prefix)-1
+                      sizes=[min(step,end-i) for i in range(0,end,step)]+[1]*(offset-end)
+                  assert sum(sizes)==offset and all(n>0 for n in sizes)
+                  pos=0
+                  t=time.monotonic()
+                  for size in sizes:
+                      piece=known[pos:pos+size]
+                      logits=model(mx.array([piece]),cache=cache)
+                      mx.eval(logits,[c.state for c in cache])
+                      pos+=size
+                      assert {int(c.offset) for c in cache}=={pos}
+                  row['forced']=dict(offset=pos,chunks=sizes,wall_s=time.monotonic()-t,input_sha256=hashlib.sha256(json.dumps(known,separators=(',',':')).encode()).hexdigest())
+                  ids=ids[offset:]
+              else:cache=make_prompt_cache(model)
+              row['result']=generate(ids,cache,8)
+          (base/(mode+'.json')).write_text(json.dumps(row,indent=2))
+          PY
+          python -m py_compile trial.py
+          start=$((SHARD * 4))
+          status=0
+          : > arm-status.tsv
+          run_mode() {
+            local mode="$1" rep="$2" rc=0
+            python trial.py "$mode" "$rep" || rc=$?
+            printf '%s\t%s\t%s\n' "$rep" "$mode" "$rc" >> arm-status.tsv
+            if [ "$rc" != 0 ]; then status=1; fi
+            return "$rc"
+          }
+          for (( i=start; i<start+4; i++ )); do
+            if run_mode seed "$i"; then
+              run_mode cold2 "$i" || true
+              run_mode replay "$i" || true
+              if [ "$((i % 2))" = 1 ]; then
+                run_mode restore "$i" || true
+                run_mode cold "$i" || true
+              else
+                run_mode cold "$i" || true
+                run_mode restore "$i" || true
+              fi
+              run_mode forced_bulk "$i" || true
+              run_mode forced_serial "$i" || true
+            else
+              for mode in cold2 replay restore cold forced_bulk forced_serial; do
+                printf '%s\t%s\tskipped_seed_failure\n' "$i" "$mode" >> arm-status.tsv
+              done
+            fi
+          done
+          python - <<'PY'
+          import hashlib,json,pathlib,os
+          rows=[]
+          modes=('seed','cold','cold2','restore','replay','forced_bulk','forced_serial')
+          shard=int(os.environ['SHARD'])
+          statuses={(int(a),b):c for a,b,c in (line.split('\t') for line in pathlib.Path('arm-status.tsv').read_text().splitlines())}
+          for i in range(shard*4,shard*4+4):
+              root=pathlib.Path(f'rep-{i}')
+              row=dict(rep=i,arm_status={a:statuses.get((i,a),'missing') for a in modes})
+              for a in modes:
+                  if (root/(a+'.json')).exists():
+                      row[a]=json.loads((root/(a+'.json')).read_text())
+              row['complete']=all(row['arm_status'][a]=='0' and a in row for a in modes)
+              if row['complete']:
+                  seed=row['seed']
+                  c=row['cold']['result']
+                  live=seed['live']
+                  restore=row['restore']['result']
+                  replay=row['replay']['result']
+                  bulk=row['forced_bulk']['result']
+                  serial=row['forced_serial']['result']
+                  row['cold_repeat_match']=c['tokens']==row['cold2']['result']['tokens'] and c['top2']==row['cold2']['result']['top2']
+                  row['staged_match']=live['tokens']==restore['tokens']==replay['tokens'] and live['top2']==restore['top2']==replay['top2']
+                  row['strict_cold_match']=c['tokens']==restore['tokens']
+                  row['same_input']=c['input_ids']==seed['target']==row['cold2']['result']['input_ids'] and all(q['input_ids']==seed['target'][seed['offset']:] for q in (live,restore,replay,bulk,serial))
+                  expected_hash=hashlib.sha256(json.dumps(seed['target'][:seed['offset']],separators=(',',':')).encode()).hexdigest()
+                  row['forced_input_match']=all(row[a]['forced']['offset']==seed['offset'] and row[a]['forced']['input_sha256']==expected_hash for a in ('forced_bulk','forced_serial'))
+                  row['distinct_processes']=len({row[a]['pid'] for a in modes})==len(modes)
+                  row['same_generate_source']=len({row[a]['generate_source_sha256'] for a in modes})==1
+                  row['comparisons']={}
+                  for a,q in (('forced_bulk',bulk),('forced_serial',serial)):
+                      row['comparisons'][a]=dict(cold_tokens=q['tokens']==c['tokens'],cold_top2=q['top2']==c['top2'],staged_tokens=q['tokens']==live['tokens'],staged_top2=q['top2']==live['top2'])
+                  row['diagnostic_controls_pass']=all(row[k] for k in ('cold_repeat_match','staged_match','same_input','forced_input_match','distinct_processes','same_generate_source'))
+              else:
+                  row['diagnostic_controls_pass']=False
+              print('MLX_MECHANISM',i,row['arm_status'],row.get('strict_cold_match'),row.get('comparisons'),row['diagnostic_controls_pass'])
+              rows.append(row)
+          pathlib.Path('receipt.json').write_text(json.dumps(dict(scope='mechanism experiment on fixed R20 contexts; diagnostic completion distinct from strict cold equivalence, no release qualification or numerical tolerance promotion',workflow_sha=os.environ['GITHUB_SHA'],prefill_step_size=int(os.environ['PREFILL_STEP']),shard=shard,rows=rows),indent=2))
+          assert len(rows)==4 and all(r['diagnostic_controls_pass'] for r in rows)
+          PY
+          test "$status" = 0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: ish-mlx-mechanism-r21-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/cache-mlx/receipt.json
+            ${{ runner.temp }}/cache-mlx/rep-*/*.json
+            ${{ runner.temp }}/cache-mlx/model-manifest.json
+            ${{ runner.temp }}/cache-mlx/installed.txt
+            ${{ runner.temp }}/cache-mlx/arm-status.tsv
+          if-no-files-found: warn
+          retention-days: 14
