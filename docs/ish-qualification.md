@@ -32,22 +32,22 @@ Immutable measured cost projections are available at [R11](https://github.com/Se
 
 ## Source and dependency triage
 
-- Reference mechanisms: #381/#382/#389/#390/#392/#393/#402 are independent experimental source candidates; preserve their exact historical run identities.
+- Merged reference fixtures: #381 (native A/B/A), #390 (bounded fault recovery), #402 (concurrent native restore). Their exact historical passing source and receipt identities remain above. #382/#389/#392/#393 remain independent experimental candidates.
 - #383 is a mixed-outcome MLX qualification; retain the failed arm and do not merge as an all-pass result.
-- #394 is the failed priming parent; #401 is the successful stacked correction. Preserve stack order until an integrated, independently checked source candidate is available. Do not close the parent or flatten away its failure prematurely.
+- #394 failed priming parent and #401 successful correction are closed as superseded by merged #418, whose workflow blob is identical to #401. Preserve both original branches and failed/positive historical receipts.
 - #403/#404/#407 contain the evolving native contention/retention and shadow-policy experiments. Keep their scopes separate from the runtime and existing workbench/task accounting (#387/#396).
 - Product-specific native deployment, free GPU admission, architecture-specific recurrent state, concurrent authorization, and hardware acceptance remain separate, unqualified gates. No production cache manager, routing or infrastructure mutation is authorized by this index.
 
-## R16–R18 evidence and current bake-off lanes
+## R16–R19 evidence and current bake-off lanes
 
 - [#408](https://github.com/SemperSupra/model-spelunker/pull/408) merged: pinned published Mooncake trace replay; [durable results](ish-mooncake-r16.md). Prefix hashes are not session identifiers; results are modeled.
 - [#409](https://github.com/SemperSupra/model-spelunker/pull/409) merged: corrected SGLang Simulator CPU dependency resolution passed all three upstream tests, including tiered cache accounting. Initial ABI failure retained as negative evidence. Model forward remains simulated.
 - [#410](https://github.com/SemperSupra/model-spelunker/pull/410) merged: both native vLLM-Metal dependency treatments passed host/disk restore, 992/1003 reused, exact output. Stable Torch 2.14.0 has clean metadata and is the next experimental baseline; nightly override retains a known metadata exception.
 - [#413](https://github.com/SemperSupra/model-spelunker/pull/413) merged: actual native llama.cpp RAM pressure and sleep/wake, 15/15 treatments, bounded CPU fixture. [R17 native lifecycle evidence](ish-native-tiers-r17.md).
 - [#414](https://github.com/SemperSupra/model-spelunker/pull/414) merged: deterministic surrogate trace adapter, 192 selected requests and 6,048 pairwise prefix checks; not actual simulator execution.
-- [#416](https://github.com/SemperSupra/model-spelunker/pull/416): bounded published-trace replay through the qualified native simulator, cache-disabled/device/hierarchy treatments.
-- [#417](https://github.com/SemperSupra/model-spelunker/pull/417): same-host direct MLX versus Metal useful-state persistence with identical model representation and token IDs.
-- [#418](https://github.com/SemperSupra/model-spelunker/pull/418): exact corrected #401 workflow integration on current main; fresh CI and verified evidence required before closing superseded parent/child PRs.
+- [#416](https://github.com/SemperSupra/model-spelunker/pull/416): bounded published-trace replay through the qualified native simulator. Initial shallow-checkout failure corrected; exact adapter outputs regenerated. Second attempt failed at multiprocessing spawn because the test entrypoint ran again in worker processes. R19 adds main guard, import preflight and per-arm result collection; no simulator replay acceptance yet.
+- [#417](https://github.com/SemperSupra/model-spelunker/pull/417): same-host direct MLX versus Metal. R18 first matched case passed, second failed cold Metal first-answer oracle (016 versus 161). R19 isolates seed-only disk state from later reference work and attempts all cases independently. Preserve quality failures and do not infer engine ranking.
+- [#418](https://github.com/SemperSupra/model-spelunker/pull/418) merged: exact corrected #401 workflow requalified 9/9; #394/#401 superseded and closed, branches retained.
 
 ### R18 verified dependency evidence
 
@@ -59,6 +59,22 @@ Immutable measured cost projections are available at [R11](https://github.com/Se
 | Metal nightly override | Same native cache oracle; exact known metadata exception; MPS unavailable on observed hosted device | [46073426962](https://github.com/SemperSupra/model-spelunker/actions/runs/46073426962) | 15233372973 | d3eb1f12dc6a728283c6b855b927c28c8920d7472a6925c96a8fe02b76c6aa76 |
 
 SGLang corrected install: NumPy 1.26.4, ml-dtypes 0.5.3, TVM-FFI 0.1.11, AIConfigurator 0.10.0, pyarrow 25.0.1. Original failed run [46039609103](https://github.com/SemperSupra/model-spelunker/actions/runs/46039609103) artifact 15220600449 (`8192554ad225d1d93b8a4fdf8e9f9cf80aeeab8e657ba032cbc1c1725c576662`) remains a dependency/ABI negative control. Original Metal override preflight failure [46073127786](https://github.com/SemperSupra/model-spelunker/actions/runs/46073127786) artifact 15233816831 (`04f8948dec717f6e498ec0f15407502769a0a25bec93412112936d90d02e3200`) is a distinct MPS capability negative; not a failure of the native MLX cache path. No production lock, cross-host performance parity or physical target acceptance is implied.
+
+### R19 consolidation and negative evidence
+
+Fresh #418 source head `c81ad5bd53f3eedc1f671bd56ad71e62ce727fc7`, [run 46076206721](https://github.com/SemperSupra/model-spelunker/actions/runs/46076206721) PASS 9/9 retrieval, exact cold/restored output, native reuse and restore-count checks. Archive 15235181948 SHA-256 `7e64a4e1729f7f4dddc31811fceccee262b2cdd5961e324652d12df41d56294d`. Main workflow blob `edb713728ff4e0b977b8b006273b9e95c1acfd64` equals #401; merge `28607d7f9ee015d0b17fa78472c9f6db1726dc46`. No failed source promoted.
+
+| Reconciled source | Passing run | Merge |
+|---|---|---|
+| #381 model switch | 45417743922 | `829093e7447ddb77e93a28c02af4ff4b3acb0a66` |
+| #390 fault and ENOSPC | 45763151642 | `4e822e0f7bc281e3e274b37fa14773f2f71903b4` |
+| #402 concurrent two-slot restore | 45955040001 | `772d602b98f225fdf4944c1e48a4a3140ada14e3` |
+
+Historical passing archives were independently downloaded and rehashed in R19; source paths are independent public synthetic qualification fixtures, not deployed services. No physical worktree cleanup or destructive branch deletion.
+
+Failed/partial paired MLX/Metal run [46076203384](https://github.com/SemperSupra/model-spelunker/actions/runs/46076203384), archive 15235316560 SHA-256 `e90841aae939d9ecdb665195b66c0733a77cb381c519232db5171610c2b568da`. Rep0 both engines answered correctly; Metal disk reuse included state from the intervening resident reference, so its observed 192-token disk reuse is not a fair first-turn-only comparison. Rep1 failed a cold Metal first answer, not a cache restore; remaining cases were not attempted. R19 tests original cases without lowering quality gates, freezes a seed-only disk store before the follow-up, and collects independent outcomes even after failures.
+
+Simulator replay negative controls: [46076199249](https://github.com/SemperSupra/model-spelunker/actions/runs/46076199249), archive 15235727099 `537e2e06e4f998c15d49830efe5327c23d01ab680d17c40dc349428cb1d54c38` (shallow Git history); [46076252100](https://github.com/SemperSupra/model-spelunker/actions/runs/46076252100), archive 15235102668 `b77ccc3e87da4d7ede88add48d241bce8166ce9258ad30e7799bade30e028879` (spawned child reentered script initialization). Corrected run regenerated all three exact adapter output hashes before failure. Neither proves native published-trace scheduling behavior.
 
 For humans and automation, inspect the above PRs, exact run/receipt and source identity before resuming; use existing qualification contracts. The work authority remains [#316](https://github.com/SemperSupra/model-spelunker/issues/316). Use `gh pr checks <number> --repo SemperSupra/model-spelunker` and `gh run view <run-id> --repo SemperSupra/model-spelunker` for current state. Do not replay old one-use admissions or infer success from a queued run.
 
