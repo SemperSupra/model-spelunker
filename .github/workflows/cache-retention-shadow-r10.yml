@@ -1,0 +1,131 @@
+name: Cache retention R10 measurement-bound shadow replay
+on:
+  pull_request:
+    paths: ['.github/workflows/cache-retention-shadow-r10.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  shadow:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Fetch exact public native measurement artifact (read-only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/shadow-r10"
+          cd "$RUNNER_TEMP/shadow-r10"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15178450680/zip" > measurements.zip
+          printf '%s  measurements.zip\n' a33c32bcecca47fac8ed46e3e1a0d9966973949a09c4aa793a25c05d481b6368 | sha256sum -c -
+      - name: Paired bounded synthetic traces using measured held-out costs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/shadow-r10"
+          python3 - <<'PY'
+          import itertools,json,math,os,random,statistics as st,zipfile
+          from pathlib import Path
+          with zipfile.ZipFile('measurements.zip') as z:receipt=json.loads(z.read('receipt.json'))
+          rows=receipt['rows']
+          assert len(rows)==9 and all(x['output_match'] and x['cold_task_pass'] and x['restore_task_pass'] and x['prefill_reduced'] for x in rows)
+          classes=[64,128,256]
+          measurements={}
+          for c in classes:
+              reps=sorted([x for x in rows if x['inventory_rows']==c],key=lambda x:x['rep'])
+              assert len(reps)==3
+              def project(x):
+                  r=dict(bytes=x['bytes'],save=x['save_s'],cold=x['cold_prefill_s'],restore=x['cache_prefill_s']+x['restore_overhead_s'])
+                  assert r['bytes']>0 and all(math.isfinite(r[k]) and r[k]>=0 for k in ('save','cold','restore'))
+                  return r
+              fit=[project(x) for x in reps[:2]]
+              test=project(reps[2])
+              measurements[c]={'fit':{k:st.mean(x[k] for x in fit) for k in fit[0]},'held_out':test,'source_reps':[x['rep'] for x in reps]}
+              assert test['bytes']==measurements[c]['fit']['bytes']
+          # Predeclared probability regimes, not inferred user behavior.
+          regimes=[(.1,.4,.8),(.8,.4,.1),(.4,.8,.1)]
+          def trace(seed,regime):
+              rng=random.Random(seed)
+              events=[]
+              for i in range(36):
+                  c=rng.choice(classes)
+                  p=regime[classes.index(c)]
+                  start=i
+                  events.append((start,0,i,c,p))
+                  # Future outcome known only to replay harness, not policy.
+                  events.append((start+rng.randrange(2,10),1 if rng.random()<p else 2,i,c,p))
+              return sorted(events)
+          def replay(events,budget,policy):
+              resident={}
+              ledger=[]
+              done=set()
+              peak=0
+              for ts,kind,i,c,p in events:
+                  actual=measurements[c]['held_out']
+                  fit=measurements[c]['fit']
+                  if kind==0:
+                      candidate={'id':i,'class':c,'p':p,'bytes':actual['bytes'],'ts':ts,'value':p*(fit['cold']-fit['restore'])}
+                      kept=set(resident)
+                      if candidate['bytes']<=budget and policy=='lru':
+                          while sum(resident[j]['bytes'] for j in kept)+candidate['bytes']>budget:
+                              kept.remove(min(kept,key=lambda j:(resident[j]['ts'],j)))
+                          kept.add(i)
+                      elif candidate['bytes']<=budget and policy=='value':
+                          options=list(resident.values())+[candidate]
+                          def score(sub):
+                              return sum(x['value']-(fit['save'] if x['id']==i else 0) for x in sub)
+                          feasible=(sub for n in range(len(options)+1) for sub in itertools.combinations(options,n) if sum(x['bytes'] for x in sub)<=budget)
+                          best=max(feasible,key=lambda sub:(score(sub),-sum(x['bytes'] for x in sub),tuple(-x['id'] for x in sub)))
+                          kept={x['id'] for x in best}
+                      removed=sorted(set(resident)-kept)
+                      for j in removed:del resident[j]
+                      admitted=i in kept
+                      if admitted:resident[i]=candidate
+                      ledger.append(dict(id=i,kind='evict',saved=admitted,removed=removed,cost=actual['save'] if admitted else 0))
+                  else:
+                      assert i not in done
+                      done.add(i)
+                      hit=i in resident
+                      resident.pop(i,None)
+                      ledger.append(dict(id=i,kind='resume' if kind==1 else 'expire',hit=hit if kind==1 else False,cost=(actual['restore'] if hit else actual['cold']) if kind==1 else 0))
+                  used=sum(x['bytes'] for x in resident.values())
+                  assert used<=budget and used>=0
+                  peak=max(peak,used)
+              assert not resident and len(done)==36
+              saved=sum(x['saved'] for x in ledger if x['kind']=='evict')
+              resumes=[x for x in ledger if x['kind']=='resume']
+              cost=math.fsum(x['cost'] for x in ledger)
+              # Independent ledger decomposition; no task goodput or latency claim.
+              assert abs(cost-(math.fsum(x['cost'] for x in ledger if x['kind']=='evict')+math.fsum(x['cost'] for x in resumes)))<1e-8
+              return dict(cost_s=cost,peak_bytes=peak,saves=saved,resumes=len(resumes),hits=sum(x['hit'] for x in resumes),ledger=ledger)
+          results=[]
+          for k,regime in enumerate(regimes):
+              for seed in range(20):
+                  events=trace(3100+seed,regime)
+                  for budget in (0,16*1024**2,32*1024**2,64*1024**2):
+                      arms={policy:replay(events,budget,policy) for policy in ('none','lru','value')}
+                      assert len({x['resumes'] for x in arms.values()})==1
+                      if budget==0:assert len({x['cost_s'] for x in arms.values()})==1 and all(x['saves']==0 for x in arms.values())
+                      results.append(dict(regime=k,seed=seed,budget=budget,arms=arms))
+          assert len(results)==240
+          summary=[]
+          for k in range(3):
+              for budget in (0,16*1024**2,32*1024**2,64*1024**2):
+                  group=[r for r in results if r['regime']==k and r['budget']==budget]
+                  summary.append(dict(regime=k,budget=budget,means={p:st.mean(r['arms'][p]['cost_s'] for r in group) for p in ('none','lru','value')},value_beats_lru=sum(r['arms']['value']['cost_s']<r['arms']['lru']['cost_s'] for r in group)))
+          Path('shadow-receipt.json').write_text(json.dumps(dict(scope='MODELED synthetic replay; measured phase costs, artificial arrival/expiry probabilities; no policy promotion or measured goodput',source_artifact=15178450680,source_sha256='a33c32bcecca47fac8ed46e3e1a0d9966973949a09c4aa793a25c05d481b6368',workflow_sha=os.environ['GITHUB_SHA'],measurements=measurements,regimes=regimes,summary=summary,traces=results),indent=2))
+          print(json.dumps(summary,indent=2))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: cache-retention-shadow-r10
+          path: ${{ runner.temp }}/shadow-r10/shadow-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
