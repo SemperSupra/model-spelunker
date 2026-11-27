@@ -38,13 +38,27 @@ Immutable measured cost projections are available at [R11](https://github.com/Se
 - #403/#404/#407 contain the evolving native contention/retention and shadow-policy experiments. Keep their scopes separate from the runtime and existing workbench/task accounting (#387/#396).
 - Product-specific native deployment, free GPU admission, architecture-specific recurrent state, concurrent authorization, and hardware acceptance remain separate, unqualified gates. No production cache manager, routing or infrastructure mutation is authorized by this index.
 
-## R16–R17 evidence and current bake-off lanes
+## R16–R18 evidence and current bake-off lanes
 
 - [#408](https://github.com/SemperSupra/model-spelunker/pull/408) merged: pinned published Mooncake trace replay; [durable results](ish-mooncake-r16.md). Prefix hashes are not session identifiers; results are modeled.
-- [#409](https://github.com/SemperSupra/model-spelunker/pull/409): pinned SGLang Simulator CPU. Initial run failed on NumPy/ml-dtypes ABI before cache tests; R17 tests a single compatible resolution. Model forward remains simulated.
-- [#410](https://github.com/SemperSupra/model-spelunker/pull/410): native vLLM-Metal host/disk restore passed, 992/1003 reused, exact output. R17 tests declared Torch versus upstream override; dependency metadata mismatch is not silently waived.
+- [#409](https://github.com/SemperSupra/model-spelunker/pull/409) merged: corrected SGLang Simulator CPU dependency resolution passed all three upstream tests, including tiered cache accounting. Initial ABI failure retained as negative evidence. Model forward remains simulated.
+- [#410](https://github.com/SemperSupra/model-spelunker/pull/410) merged: both native vLLM-Metal dependency treatments passed host/disk restore, 992/1003 reused, exact output. Stable Torch 2.14.0 has clean metadata and is the next experimental baseline; nightly override retains a known metadata exception.
 - [#413](https://github.com/SemperSupra/model-spelunker/pull/413) merged: actual native llama.cpp RAM pressure and sleep/wake, 15/15 treatments, bounded CPU fixture. [R17 native lifecycle evidence](ish-native-tiers-r17.md).
-- Next: published trace adapter to SGLang Simulator; then matched held-out policy/native workload experiments.
+- [#414](https://github.com/SemperSupra/model-spelunker/pull/414) merged: deterministic surrogate trace adapter, 192 selected requests and 6,048 pairwise prefix checks; not actual simulator execution.
+- [#416](https://github.com/SemperSupra/model-spelunker/pull/416): bounded published-trace replay through the qualified native simulator, cache-disabled/device/hierarchy treatments.
+- [#417](https://github.com/SemperSupra/model-spelunker/pull/417): same-host direct MLX versus Metal useful-state persistence with identical model representation and token IDs.
+- [#418](https://github.com/SemperSupra/model-spelunker/pull/418): exact corrected #401 workflow integration on current main; fresh CI and verified evidence required before closing superseded parent/child PRs.
+
+### R18 verified dependency evidence
+
+| Treatment | Scope | Successful run | Artifact ID | ZIP SHA-256 |
+|---|---|---|---|---|
+| SGLang CPU | 3/3 upstream tests, clean 231-package metadata, native NumPy/ml-dtypes ABI check | [46073122270](https://github.com/SemperSupra/model-spelunker/actions/runs/46073122270) | 15233624401 | 3a241ab35a095d52fd8709e05126ab44c0272b48b4efac9675bf6c686e38ee7e |
+| Metal stable | Torch 2.14.0, clean metadata, exact native host/disk restore | [46073127786](https://github.com/SemperSupra/model-spelunker/actions/runs/46073127786) (declared job only) | 15234161342 | ebc1181b523cd6bc812bd5429e980fc4437e2cc5fe6993285a28e3a979e0a9a4 |
+| Metal stable repeat | Same native cache oracle; actual MLX GPU computation | [46073426962](https://github.com/SemperSupra/model-spelunker/actions/runs/46073426962) | 15233822606 | 73466d78dd3f05f808afd25ab3ca28b511739b04c3e7ebece073a1e1572b20c1 |
+| Metal nightly override | Same native cache oracle; exact known metadata exception; MPS unavailable on observed hosted device | [46073426962](https://github.com/SemperSupra/model-spelunker/actions/runs/46073426962) | 15233372973 | d3eb1f12dc6a728283c6b855b927c28c8920d7472a6925c96a8fe02b76c6aa76 |
+
+SGLang corrected install: NumPy 1.26.4, ml-dtypes 0.5.3, TVM-FFI 0.1.11, AIConfigurator 0.10.0, pyarrow 25.0.1. Original failed run [46039609103](https://github.com/SemperSupra/model-spelunker/actions/runs/46039609103) artifact 15220600449 (`8192554ad225d1d93b8a4fdf8e9f9cf80aeeab8e657ba032cbc1c1725c576662`) remains a dependency/ABI negative control. Original Metal override preflight failure [46073127786](https://github.com/SemperSupra/model-spelunker/actions/runs/46073127786) artifact 15233816831 (`04f8948dec717f6e498ec0f15407502769a0a25bec93412112936d90d02e3200`) is a distinct MPS capability negative; not a failure of the native MLX cache path. No production lock, cross-host performance parity or physical target acceptance is implied.
 
 For humans and automation, inspect the above PRs, exact run/receipt and source identity before resuming; use existing qualification contracts. The work authority remains [#316](https://github.com/SemperSupra/model-spelunker/issues/316). Use `gh pr checks <number> --repo SemperSupra/model-spelunker` and `gh run view <run-id> --repo SemperSupra/model-spelunker` for current state. Do not replay old one-use admissions or infer success from a queued run.
 
