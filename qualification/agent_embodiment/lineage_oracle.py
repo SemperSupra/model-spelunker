@@ -36,6 +36,8 @@ def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
             if not isinstance(item,dict):
                 continue
             if item.get("type")=="tool_use":
+                if row.get("type")!="assistant":
+                    return "INVALID_TOOL_USE_FRAME"
                 if item.get("name")!="read_file":
                     return "UNEXPECTED_TOOL"
                 args=item.get("input")
@@ -55,6 +57,8 @@ def lineage_verdict(stdout: str, workdir: Path, target: str) -> str:
                     return "OVERLAPPING_TOOL_USE"
                 requested.append((identifier,relative))
             elif item.get("type")=="tool_result":
+                if row.get("type")!="user":
+                    return "INVALID_TOOL_RESULT_FRAME"
                 identifier=item.get("tool_use_id")
                 if not isinstance(identifier,str) or not identifier:
                     return "INVALID_RESULT_ID"
@@ -112,8 +116,15 @@ def selftest():
         ordered=json.loads(make())
         for order in ((1,0,2,3,4),(0,2,1,3,4),(0,1,4,2,3),(4,0,1,2,3)):
             assert lineage_verdict(json.dumps([ordered[i] for i in order]),root,"a.txt")!="PASS","causal-order mutant accepted"
+        for index, role in ((0,"user"),(1,"assistant"),(0,None),(1,None)):
+            mutant=json.loads(make())
+            if role is None:
+                del mutant[index]["type"]
+            else:
+                mutant[index]["type"]=role
+            assert lineage_verdict(json.dumps(mutant),root,"a.txt")!="PASS","wrong frame producer accepted"
         print(json.dumps({"schema":"qwen-r15-lineage-critic/v1","state":"PASS",
-                          "positive_cases":2,"negative_cases":16,
+                          "positive_cases":2,"negative_cases":20,
                           "source_class":"SYNTHETIC_NO_MODEL"}))
 
 if __name__=="__main__":
