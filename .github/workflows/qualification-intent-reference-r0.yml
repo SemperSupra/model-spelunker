@@ -1,0 +1,55 @@
+name: Qualification intent native reference R0
+on:
+  pull_request:
+    paths:
+      - 'qualification/intent_reference_r0/**'
+      - '.github/workflows/qualification-intent-reference-r0.yml'
+permissions:
+  contents: read
+jobs:
+  native-reference:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      IMAGE: ollama/ollama@sha256:0c0a83210471fb50226bcdc2d6611d20ab13ae87e024cc304c94a6a5765c5e65
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verified public CPU model runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          docker image inspect "$IMAGE" --format '{{json .RepoDigests}}' | tee image-identity.json
+          docker run -d --rm --name intent-reference-r0 --cpus 2 -p 127.0.0.1:11434:11434 -e OLLAMA_NUM_PARALLEL=1 "$IMAGE"
+          for i in $(seq 1 40); do if curl -fsS http://127.0.0.1:11434/api/version; then break; fi; sleep 1; done
+          curl -fsS http://127.0.0.1:11434/api/version | python3 -c 'import json,sys; assert json.load(sys.stdin)["version"]=="0.34.1"'
+          docker exec intent-reference-r0 ollama pull qwen3:1.7b
+          curl -fsS http://127.0.0.1:11434/api/tags | python3 -c 'import json,sys; m=[x for x in json.load(sys.stdin)["models"] if x["name"]=="qwen3:1.7b"]; assert len(m)==1 and m[0]["digest"]=="8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7"'
+      - name: Resolve bounded larger public reference model
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec intent-reference-r0 ollama pull qwen3:4b-instruct
+          curl -fsS http://127.0.0.1:11434/api/tags | python3 -c 'import json,sys; ms=[x for x in json.load(sys.stdin)["models"] if x["name"]=="qwen3:4b-instruct"]; assert len(ms)==1 and len(ms[0]["digest"])==64 and ms[0]["digest"].startswith("0edcdef34593"); print(ms[0]["digest"])'
+      - name: Paired benign judge model crossover
+        run: python3 qualification/intent_reference_r0/judge_calibration.py judge-evidence models
+      - name: Retire disposable service
+        if: always()
+        shell: bash
+        run: |
+          if docker container inspect intent-reference-r0 >/dev/null 2>&1; then
+            docker rm -f intent-reference-r0
+          fi
+          ! docker container inspect intent-reference-r0 >/dev/null 2>&1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: judge-model-r3
+          path: |
+            judge-evidence
+            image-identity.json
+          retention-days: 7
