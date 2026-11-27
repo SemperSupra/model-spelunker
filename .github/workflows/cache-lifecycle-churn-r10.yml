@@ -1,4 +1,4 @@
-name: Cache lifecycle R11 paired native checkpoint contention
+name: ISH R13 checkpoint deferral and deadline refusal
 on:
   pull_request:
     paths: ['.github/workflows/cache-lifecycle-churn-r10.yml']
@@ -34,7 +34,7 @@ jobs:
           printf '%s  model.gguf\n' "$MODEL_SHA" | sha256sum -c -
           sha256sum build/bin/llama-server model.gguf > identities.txt
           cp upstream/LICENSE upstream-license.txt
-      - name: Paired no-save idle-save and busy-neighbor save with phase timing
+      - name: Native immediate save vs idle deferral vs deadline refusal
         shell: bash
         run: |
           set -euo pipefail
@@ -46,7 +46,7 @@ jobs:
           (root/'slots').mkdir()
           rows=[]
           def receipt():
-              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],scope='native checkpoint contention screen; not proof of internal queue mechanism or production SLO',rows=rows),indent=2))
+              (root/'receipt.json').write_text(json.dumps(dict(source=os.environ['LLAMA_REV'],model_sha=os.environ['MODEL_SHA'],model_revision=os.environ['MODEL_REV'],workflow_sha=os.environ['GITHUB_SHA'],scope='native bounded checkpoint deferral and deadline refusal; not a real-time guarantee or production scheduler',rows=rows),indent=2))
           def req(path,data=None):
               body=None if data is None else json.dumps(data).encode()
               with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:18081'+path,data=body,headers={'Content-Type':'application/json'}),timeout=180) as r:
@@ -146,7 +146,7 @@ jobs:
                   erase(0)
                   a['cold']=complete(a['target'],12,0)
                   assert a['cold']['content'].strip()==a['expected']
-                  order=['no_save','idle_save','busy_save']
+                  order=['immediate','deferred','expired']
                   order=order[i:]+order[:i]
                   row['order']=order
                   for arm in order:
@@ -155,43 +155,57 @@ jobs:
                       assert len(seed['tokens'])==1
                       entry=dict(arm=arm,seed=seed)
                       row['arms'][arm]=entry
-                      if arm=='idle_save':
-                          assert not any(x['is_processing'] for x in req('/slots'))
-                          entry['checkpoint']=durable_save(f'{i}-{arm}',a)
-                      if arm=='busy_save':
-                          with cf.ThreadPoolExecutor(max_workers=1) as pool:
-                              future=pool.submit(complete,b['target'],12,1)
-                              until=time.monotonic()+15
-                              observed=None
-                              while time.monotonic()<until and not future.done():
-                                  state=req('/slots')
-                                  if next(x for x in state if x['id']==1)['is_processing']:
-                                      observed=state;break
-                                  time.sleep(.02)
-                              assert observed is not None and not next(x for x in observed if x['id']==0)['is_processing']
-                              entry['busy_at_save_request']=observed
-                              entry['checkpoint']=durable_save(f'{i}-{arm}',a)
-                              entry['b']=future.result(timeout=180)
-                          cp=entry['checkpoint']; out=entry['b']
-                          entry['checkpoint_overlap_s']=max(0,min(cp['end_s'],out['end_s'])-max(cp['start_s'],out['start_s']))
-                          entry['native_response_minus_neighbor_end_s']=cp['native_end_s']-out['end_s']
-                          assert entry['checkpoint_overlap_s']>0
-                      else:entry['b']=complete(b['target'],12,1)
+                      label=f'r13-{i}-{arm}'
+                      with cf.ThreadPoolExecutor(max_workers=1) as pool:
+                          future=pool.submit(complete,b['target'],12,1)
+                          until=time.monotonic()+15
+                          observed=None
+                          while time.monotonic()<until and not future.done():
+                              state=req('/slots')
+                              if next(x for x in state if x['id']==1)['is_processing']:
+                                  observed=state;break
+                              time.sleep(.02)
+                          assert observed is not None and not next(x for x in observed if x['id']==0)['is_processing']
+                          entry['busy_at_decision']=observed
+                          decision=time.monotonic()
+                          entry['decision_s']=decision
+                          # Keep A's slot reserved while waiting; only the test harness can issue requests.
+                          if arm=='immediate':
+                              entry['checkpoint']=durable_save(label,a)
+                              entry['disposition']='saved'
+                          elif arm=='deferred':
+                              deadline=decision+15
+                              out=future.result(timeout=15)
+                              state=req('/slots')
+                              assert not any(x['is_processing'] for x in state)
+                              assert time.monotonic()<deadline
+                              entry['idle_observation']=state
+                              entry['checkpoint']=durable_save(label,a)
+                              entry['disposition']='saved'
+                          else:
+                              # Deterministic expired admission negative; do not start native save.
+                              deadline=decision-0.001
+                              assert time.monotonic()>deadline
+                              entry['disposition']='expired_no_save'
+                              entry['native_save_called']=False
+                          entry['disposition_elapsed_s']=time.monotonic()-decision
+                          entry['b']=future.result(timeout=180)
                       assert entry['b']['content'].strip()==b['expected'] and entry['b']['timings']['cache_n']==0
+                      erase(0)
                       if 'checkpoint' in entry:
-                          cp=entry['checkpoint']; snap=root/'slots'/cp['filename']
+                          cp=entry['checkpoint']
+                          snap=root/'slots'/cp['filename']
                           assert hashlib.sha256(snap.read_bytes()).hexdigest()==cp['sha256']
-                          erase(0)
-                          t=time.monotonic()
-                          result=req('/slots/0?action=restore',{'filename':cp['filename']})
-                          entry['restore_s']=time.monotonic()-t
-                          assert result['n_restored']==a['shared_prefix_tokens']
-                          entry['a_restored']=complete(a['target'],12,0)
-                          assert matches(a,entry['a_restored']) and entry['a_restored']['timings']['prompt_n']<a['cold']['timings']['prompt_n']
+                          assert req('/slots/0?action=restore',{'filename':cp['filename']})['n_restored']==a['shared_prefix_tokens']
+                          entry['a_after']=complete(a['target'],12,0)
+                          assert matches(a,entry['a_after']) and entry['a_after']['timings']['prompt_n']<a['cold']['timings']['prompt_n']
                           snap.unlink()
+                      else:
+                          assert not (root/'slots'/(label+'.bin')).exists()
+                          entry['a_after']=complete(a['target'],12,0)
+                          assert matches(a,entry['a_after']) and entry['a_after']['timings']['cache_n']==0
                       receipt()
-                  base=row['arms']['no_save']['b']
-                  assert all(v['b']['tokens']==base['tokens'] and v['b']['content']==base['content'] for v in row['arms'].values())
+                  assert len({tuple(v['b']['tokens']) for v in row['arms'].values()})==1
                   row['passed']=True
               finally:stop(p);receipt()
           assert len(rows)==3 and all(r.get('passed') for r in rows)
@@ -199,7 +213,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: llama-cache-churn-r11
+          name: llama-cache-deferral-r13
           path: |
             ${{ runner.temp }}/cache-r0/receipt.json
             ${{ runner.temp }}/cache-r0/identities.txt
