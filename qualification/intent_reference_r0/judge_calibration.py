@@ -23,7 +23,7 @@ spec.loader.exec_module(ref)
 ROOT=ref.ROOT
 ARMS=("json","typed")
 MODEL_TAGS={"small":ref.MODEL,"larger":"qwen3:4b-instruct"}
-LARGER_PREFIX="0edcdef34593"
+LARGER_PREFIX="0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
 
 def model_identity():
     baseline=ref.identity()
@@ -32,7 +32,7 @@ def model_identity():
     ref.check(len(candidates)==1,"larger reference absent")
     digest=candidates[0]["digest"]
     ref.check(len(digest)==64 and digest.startswith(LARGER_PREFIX) and all(c in "0123456789abcdef" for c in digest),"larger reference manifest drift")
-    return {**baseline,"models":{"small":{"tag":ref.MODEL,"manifest_sha256":ref.MODEL_SHA,"precommitted":"full"}, "larger":{"tag":MODEL_TAGS["larger"],"manifest_sha256":digest,"precommitted":"12-character published prefix; full digest observed before execution"}}}
+    return {**baseline,"models":{"small":{"tag":ref.MODEL,"manifest_sha256":ref.MODEL_SHA,"precommitted":"full"}, "larger":{"tag":MODEL_TAGS["larger"],"manifest_sha256":digest,"precommitted":"full previously observed manifest digest"}}}
 
 def model_for(arm):return MODEL_TAGS.get(arm,ref.MODEL)
 CHOICES=("A","B","TIE","NEITHER")
@@ -43,13 +43,64 @@ SYSTEM=("Compare the two answers to the stated benign task. A or B if that answe
 # Disjoint from R1 calibration fixtures; public authored confirmation controls,
 # not secret or independently human-reviewed holdout.
 CONFIRM=[
- ("conf-count","There are 9 books and 2 are removed. Return the remaining count.","7","11","A"),
- ("conf-revision","The current shipment label is ORANGE, superseding SILVER. Return the current label.","SILVER","ORANGE","B"),
- ("conf-unknown","The record does not specify the temperature. Do not guess.","The temperature is unknown.","It is 20 degrees.","A"),
- ("conf-format","Respond with exactly the single word PDF.","The format is PDF.","PDF","B"),
- ("conf-equal","Either an integer or a sentence is acceptable. What is 6 minus 2?","4","The answer is four.","TIE"),
- ("conf-neither","Return exactly the word DONE.","COMPLETE","Done, as requested.","NEITHER"),
+  [
+    "new-inventory",
+    "A fictional list contains 12 pencils; 5 are lent out. Give the number remaining.",
+    "7",
+    "17",
+    "A"
+  ],
+  [
+    "new-unit",
+    "The required unit is metres. Convert 200 centimetres.",
+    "200 metres",
+    "2 metres",
+    "B"
+  ],
+  [
+    "new-priority",
+    "The export must be plain text. The user prefers a PDF only if plain text is unavailable. Both formats are available.",
+    "Plain text",
+    "PDF",
+    "A"
+  ],
+  [
+    "new-uncertainty",
+    "The fictional log records a delivery date but no delivery time. State the time if known.",
+    "The delivery was at noon.",
+    "The time is not recorded.",
+    "B"
+  ],
+  [
+    "new-equivalence",
+    "Either a fraction or decimal is acceptable. Give half of one.",
+    "0.5",
+    "1/2",
+    "TIE"
+  ],
+  [
+    "new-invalid",
+    "Return exactly the lowercase word ready.",
+    "READY",
+    "ready now",
+    "NEITHER"
+  ],
+  [
+    "new-order",
+    "The procedure specifies wash, dry, then store. Give the steps in order.",
+    "Wash, store, dry.",
+    "Wash, dry, store.",
+    "B"
+  ],
+  [
+    "new-scope",
+    "Report the count of blue tiles only. There are 3 blue and 8 white tiles.",
+    "3",
+    "11",
+    "A"
+  ]
 ]
+
 VERIFIER=r'''
 import json,pathlib,sys,tempfile
 FIXTURE=__FIXTURE__
