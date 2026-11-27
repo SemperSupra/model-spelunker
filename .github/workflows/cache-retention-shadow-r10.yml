@@ -1,4 +1,4 @@
-name: Cache retention R11 robust measurement-bound shadow replay
+name: ISH R12 conservative retention screen and confirmation
 on:
   pull_request:
     paths: ['.github/workflows/cache-retention-shadow-r10.yml', 'qualification/cache_retention_r11/**']
@@ -58,7 +58,7 @@ jobs:
                   # Future outcome known only to replay harness, not policy.
                   events.append((start+rng.randrange(2,10),1 if rng.random()<p else 2,i,c,p))
               return sorted(events)
-          def replay(events,budget,policy,estimate_mode,holding_rate):
+          def replay(events,budget,policy,estimate_mode,holding_rate,surcharge,margin=0):
               resident={};ledger=[];done=set();peak=0;last_ts=events[0][0];policy_cpu=0.0
               for ts,kind,i,c,p in events:
                   occupied=sum(x['bytes'] for x in resident.values())
@@ -67,16 +67,19 @@ jobs:
                   ledger.append(dict(kind='holding',cost=holding))
                   actual=measurements[c]['held_out'];fit=measurements[c]['fit']
                   if kind==0:
-                      estimate={'calibrated':p,'flat':.4,'inverted':1-p,'overconfident':min(1,2*p),'underconfident':p/4}[estimate_mode]
+                      estimate={'calibrated':p,'flat':.4,'inverted':1-p,'overconfident':min(1,2*p),'underconfident':p/4,'unknown':None}[estimate_mode]
+                      busy_cost=surcharge if i%3==0 else 0
+                      if estimate is None:estimate=0 if policy=='robust' else .4
+                      elif policy=='robust':estimate=max(0,estimate-margin)
                       candidate=dict(id=i,bytes=actual['bytes'],ts=ts,value=estimate*(fit['cold']-fit['restore'])-holding_rate*(actual['bytes']/1024**2)*5)
                       kept=set(resident)
                       t=time.process_time()
                       if candidate['bytes']<=budget and policy=='lru':
                           while sum(resident[j]['bytes'] for j in kept)+candidate['bytes']>budget:kept.remove(min(kept,key=lambda j:(resident[j]['ts'],j)))
                           kept.add(i)
-                      elif candidate['bytes']<=budget and policy=='value':
+                      elif candidate['bytes']<=budget and policy in ('value','robust'):
                           options=list(resident.values())+[candidate]
-                          def score(sub):return sum(x['value']-(fit['save'] if x['id']==i else 0) for x in sub)
+                          def score(sub):return sum(x['value']-(fit['save']+busy_cost if x['id']==i else 0) for x in sub)
                           feasible=(sub for n in range(len(options)+1) for sub in itertools.combinations(options,n) if sum(x['bytes'] for x in sub)<=budget)
                           best=max(feasible,key=lambda sub:(score(sub),-sum(x['bytes'] for x in sub),tuple(-x['id'] for x in sub)))
                           kept={x['id'] for x in best}
@@ -84,7 +87,7 @@ jobs:
                       for j in set(resident)-kept:del resident[j]
                       admitted=i in kept
                       if admitted:resident[i]=candidate
-                      ledger.append(dict(id=i,kind='evict',saved=admitted,cost=actual['save'] if admitted else 0))
+                      ledger.append(dict(id=i,kind='evict',saved=admitted,cost=actual['save']+busy_cost if admitted else 0))
                   else:
                       assert i not in done
                       done.add(i)
@@ -100,37 +103,64 @@ jobs:
               holding=math.fsum(x['cost'] for x in ledger if x['kind']=='holding')
               assert abs(phase+holding-math.fsum(x['cost'] for x in ledger))<1e-8
               return dict(modeled_total_s=phase+holding,phase_s=phase,holding_cost_s=holding,policy_cpu_s=policy_cpu,peak_bytes=peak,resumes=len(resumed),hits=sum(x['hit'] for x in resumed),saves=sum(x.get('saved',False) for x in ledger))
-          results=[]
-          modes=['calibrated','flat','inverted','overconfident','underconfident']
-          rates=[0,.002]
+          modes=['calibrated','flat','inverted','overconfident','underconfident','unknown']
+          margins=[.1,.25,.5]
           budgets=[0,16*1024**2,32*1024**2,64*1024**2]
-          for k,regime in enumerate(regimes):
-              for seed in range(20):
-                  events=trace(3100+seed,regime)
-                  for budget in budgets:
-                      for rate in rates:
-                          # identical outcomes/arrival order across all estimation treatments.
-                          baseline={p:replay(events,budget,p,'calibrated',rate) for p in ('none','lru')}
-                          for mode in modes:
-                              arms=dict(baseline,value=replay(events,budget,'value',mode,rate))
-                              assert len({v['resumes'] for v in arms.values()})==1
-                              if not budget:assert len({v['modeled_total_s'] for v in arms.values()})==1 and all(v['saves']==0 for v in arms.values())
-                              results.append(dict(regime=k,seed=seed,budget=budget,holding_rate=rate,estimate=mode,arms=arms))
-          assert len(results)==2400
+          # Surcharge is an assumed sensitivity treatment, not a measurement of contention.
+          rates=[0,.002]; surcharges=[0,4]
+          def cases(seeds,selected=None):
+              result=[]
+              for k,regime in enumerate(regimes):
+                  for seed in seeds:
+                      events=trace(seed,regime)
+                      for budget in budgets:
+                          for rate in rates:
+                              for surcharge in surcharges:
+                                  baseline={p:replay(events,budget,p,'calibrated',rate,surcharge) for p in ('none','lru')}
+                                  for mode in modes:
+                                      arms=dict(baseline,value=replay(events,budget,'value',mode,rate,surcharge))
+                                      for margin in (margins if selected is None else [selected]):
+                                          arms[f'robust-{margin}']=replay(events,budget,'robust',mode,rate,surcharge,margin)
+                                      assert len({v['resumes'] for v in arms.values()})==1
+                                      assert all(v['peak_bytes']<=budget for v in arms.values())
+                                      if budget==0:assert all(v['saves']==0 for v in arms.values()) and len({v['modeled_total_s'] for v in arms.values()})==1
+                                      if mode=='unknown':
+                                          assert all(v['saves']==0 for p,v in arms.items() if p.startswith('robust-'))
+                                      result.append(dict(regime=k,seed=seed,budget=budget,holding_rate=rate,surcharge_s=surcharge,estimate=mode,arms=arms))
+              return result
+          screen=cases(range(6100,6110))
+          assert len(screen)==2880
+          # Select only using screening events, not confirmation outcomes.
+          # Worst scenario mean regret relative to the best of none/LRU/value on each trace.
+          def score(margin):
+              groups={}
+              key=f'robust-{margin}'
+              for r in screen:
+                  if not r['budget']:continue
+                  arms=r['arms']; reference=min(arms[p]['modeled_total_s'] for p in ('none','lru','value'))
+                  regret=(arms[key]['modeled_total_s']-reference)/max(1,reference)
+                  g=(r['regime'],r['budget'],r['holding_rate'],r['surcharge_s'],r['estimate'])
+                  groups.setdefault(g,[]).append(regret)
+              return max(st.mean(v) for v in groups.values()),st.mean(x for v in groups.values() for x in v)
+          scores={m:score(m) for m in margins}
+          selected=min(margins,key=lambda m:(scores[m],m))
+          confirmation=cases(range(7100,7110),selected)
+          assert len(confirmation)==2880 and not {r['seed'] for r in screen}&{r['seed'] for r in confirmation}
           summary=[]
+          key=f'robust-{selected}'
           for mode in modes:
-              for rate in rates:
-                  group=[r for r in results if r['estimate']==mode and r['holding_rate']==rate and r['budget']>0]
+              for surcharge in surcharges:
+                  group=[r for r in confirmation if r['estimate']==mode and r['surcharge_s']==surcharge and r['budget']>0]
                   assert len(group)==180
-                  totals={p:math.fsum(r['arms'][p]['modeled_total_s'] for r in group) for p in ('none','lru','value')}
-                  summary.append(dict(estimate=mode,holding_rate=rate,totals=totals,value_vs_lru_wins=sum(r['arms']['value']['modeled_total_s']<r['arms']['lru']['modeled_total_s'] for r in group),value_vs_none_losses=sum(r['arms']['value']['modeled_total_s']>r['arms']['none']['modeled_total_s'] for r in group),value_policy_cpu_s=math.fsum(r['arms']['value']['policy_cpu_s'] for r in group)))
-          Path('shadow-receipt.json').write_text(json.dumps(dict(scope='MODELED synthetic replay; measured phase-cost projection; assumed prior errors and holding prices, policy CPU observed separately; no task goodput or policy promotion',projection_sha256='99f014fa4153a3194e691477b0253b1b0162e9b72724825d0492084a1a1d02a0',source_artifact=15178450680,source_sha256=receipt['zip_sha256'],workflow_sha=os.environ['GITHUB_SHA'],measurements=measurements,regimes=regimes,summary=summary,traces=results),indent=2))
-          print(json.dumps(summary,indent=2))
+                  totals={p:math.fsum(r['arms'][p]['modeled_total_s'] for r in group) for p in ('none','lru','value',key)}
+                  summary.append(dict(estimate=mode,surcharge_s=surcharge,totals=totals,robust_vs_lru_wins=sum(r['arms'][key]['modeled_total_s']<r['arms']['lru']['modeled_total_s'] for r in group),robust_vs_none_losses=sum(r['arms'][key]['modeled_total_s']>r['arms']['none']['modeled_total_s'] for r in group),robust_vs_value_wins=sum(r['arms'][key]['modeled_total_s']<r['arms']['value']['modeled_total_s'] for r in group)))
+          Path('shadow-receipt.json').write_text(json.dumps(dict(scope='MODELED sensitivity; measured phase costs, supplied synthetic priors/holding/surcharge; no production admission or observed goodput',projection_sha256='99f014fa4153a3194e691477b0253b1b0162e9b72724825d0492084a1a1d02a0',source_artifact=15178450680,source_sha256=receipt['zip_sha256'],workflow_sha=os.environ['GITHUB_SHA'],selection_scores=scores,selected_margin=selected,screen=screen,confirmation=confirmation,summary=summary),indent=2))
+          print(json.dumps(dict(selected_margin=selected,selection_scores=scores,summary=summary),indent=2))
           PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: cache-retention-shadow-r11
+          name: cache-retention-shadow-r12
           path: ${{ runner.temp }}/shadow-r10/shadow-receipt.json
           if-no-files-found: warn
           retention-days: 14
