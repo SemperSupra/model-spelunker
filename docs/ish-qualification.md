@@ -38,12 +38,13 @@ Immutable measured cost projections are available at [R11](https://github.com/Se
 - #403/#404/#407 contain the evolving native contention/retention and shadow-policy experiments. Keep their scopes separate from the runtime and existing workbench/task accounting (#387/#396).
 - Product-specific native deployment, free GPU admission, architecture-specific recurrent state, concurrent authorization, and hardware acceptance remain separate, unqualified gates. No production cache manager, routing or infrastructure mutation is authorized by this index.
 
-## Next independent bake-off lanes
+## R16–R17 evidence and current bake-off lanes
 
-- [#408](https://github.com/SemperSupra/model-spelunker/pull/408): pinned published Mooncake trace replay. Prefix hashes are not session identifiers; all latency/retention results are modeled.
-- [#409](https://github.com/SemperSupra/model-spelunker/pull/409): pinned native SGLang Simulator CPU tests. Scheduler/cache behavior is executed, model forward is simulated.
-- [#410](https://github.com/SemperSupra/model-spelunker/pull/410): pinned vLLM-Metal host/disk restore on hosted Apple Silicon; exact task/hardware equivalence not assumed.
-- Next native llama.cpp cache pressure and idle-slot comparison; then matched held-out policy/native workload experiments.
+- [#408](https://github.com/SemperSupra/model-spelunker/pull/408) merged: pinned published Mooncake trace replay; [durable results](ish-mooncake-r16.md). Prefix hashes are not session identifiers; results are modeled.
+- [#409](https://github.com/SemperSupra/model-spelunker/pull/409): pinned SGLang Simulator CPU. Initial run failed on NumPy/ml-dtypes ABI before cache tests; R17 tests a single compatible resolution. Model forward remains simulated.
+- [#410](https://github.com/SemperSupra/model-spelunker/pull/410): native vLLM-Metal host/disk restore passed, 992/1003 reused, exact output. R17 tests declared Torch versus upstream override; dependency metadata mismatch is not silently waived.
+- [#413](https://github.com/SemperSupra/model-spelunker/pull/413) merged: actual native llama.cpp RAM pressure and sleep/wake, 15/15 treatments, bounded CPU fixture. [R17 native lifecycle evidence](ish-native-tiers-r17.md).
+- Next: published trace adapter to SGLang Simulator; then matched held-out policy/native workload experiments.
 
 For humans and automation, inspect the above PRs, exact run/receipt and source identity before resuming; use existing qualification contracts. The work authority remains [#316](https://github.com/SemperSupra/model-spelunker/issues/316). Use `gh pr checks <number> --repo SemperSupra/model-spelunker` and `gh run view <run-id> --repo SemperSupra/model-spelunker` for current state. Do not replay old one-use admissions or infer success from a queued run.
 
