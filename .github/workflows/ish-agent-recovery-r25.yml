@@ -1,4 +1,4 @@
-name: ISH R25 canonical agent at native recovery boundary
+name: ISH R28 causally bound agent recovery
 on:
   pull_request:
     paths:
@@ -14,10 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         rep: [0, 1, 2]
+        task: [text-repair-v0, validation-discovery-v0]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       REP: '${{ matrix.rep }}'
+      TASK: '${{ matrix.task }}'
       HARNESS_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
       UPSTREAM_HARNESS_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
       OLLAMA_VERSION: '0.34.1'
@@ -35,6 +37,8 @@ jobs:
       - name: Compile experiment fixture and verify canonical entrypoints exist
         run: |
           python3 -m py_compile qualification/serving_fanout_r0/ish_agent_recovery_r25/prove.py
+          python3 qualification/serving_fanout_r0/ish_agent_recovery_r25/prove.py --self-test
+          python3 "qualification/tasks/$TASK/verify.py" --self-test
           test -f qualification/run_task.py
           test -f qualification/tasks/text-repair-v0/verify.py
           test -f qualification/adapters/local_openai_route.py
@@ -130,11 +134,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 qualification/serving_fanout_r0/ish_agent_recovery_r25/prove.py "$REP" "$RUNNER_TEMP/ish-agent-r25" "$RUNNER_TEMP/openworker-venv"
+          python3 qualification/serving_fanout_r0/ish_agent_recovery_r25/prove.py "$REP" "$RUNNER_TEMP/ish-agent-r25" "$RUNNER_TEMP/openworker-venv" "$TASK"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: ish-agent-recovery-r25-${{ matrix.rep }}
+          name: ish-agent-recovery-r28-${{ matrix.task }}-${{ matrix.rep }}
           path: |
             ${{ runner.temp }}/ish-r25-model-identity.json
             ${{ runner.temp }}/ish-r25-server.sha256
