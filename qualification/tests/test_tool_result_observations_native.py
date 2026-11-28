@@ -16,11 +16,13 @@ import hashlib
 import importlib.util
 import inspect
 import io
+import itertools
 import json
 import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -34,6 +36,7 @@ NATIVE_AVAILABLE = importlib.util.find_spec("coworker") is not None
 if OPTIONS.require_native and not NATIVE_AVAILABLE:
     raise SystemExit("Native observation test requires the admitted OpenWorker artifact")
 if NATIVE_AVAILABLE:
+    import coworker.engine as native_engine
     from coworker.engine import TurnEngine as RealTurnEngine
     from coworker.providers import AssistantTurn, ModelCapabilities, ProviderClient, ToolCall
     import openworker_projected as ow
@@ -106,6 +109,11 @@ class NativeToolObservationTests(unittest.TestCase):
         delegate = ScriptedProvider(copy.deepcopy(responses))
         engines = []
         real_registry_for = ow.registry_for
+        # Exact e492443... engine uses time.time() only at its six message-append
+        # sites. Give each arm identical increasing timestamps while preserving
+        # full raw-history equality. Replace this module binding, never Python's
+        # shared time.time or the provider/asyncio duration clocks.
+        message_clock = SimpleNamespace(time=mock.Mock(side_effect=itertools.count(1700000000.0)))
 
         def registry_factory(workspace):
             registry = real_registry_for(workspace)
@@ -140,6 +148,7 @@ class NativeToolObservationTests(unittest.TestCase):
                  mock.patch.object(ow, "ProviderRouter", return_value=delegate), \
                  mock.patch.object(ow, "registry_for", side_effect=registry_factory), \
                  mock.patch.object(ow, "TurnEngine", side_effect=engine_factory), \
+                 mock.patch.object(native_engine, "time", message_clock), \
                  mock.patch.object(ow, "ToolResultObserver",
                                    ow.ToolResultObserver if enabled else NoObservation), \
                  contextlib.redirect_stdout(output):
@@ -158,10 +167,12 @@ class NativeToolObservationTests(unittest.TestCase):
         return {"requests": delegate.requests, "messages": copy.deepcopy(engine.messages),
                 "summary": summaries[0], "exit_code": exit_code,
                 "output": self.target.read_bytes() if self.target.exists() else None,
+                "message_clock_calls": message_clock.time.call_count,
                 "remaining_responses": len(delegate.responses)}
 
     def assert_parity(self, before, after):
-        for key in ("requests", "messages", "exit_code", "output", "remaining_responses"):
+        for key in ("requests", "messages", "message_clock_calls", "exit_code",
+                    "output", "remaining_responses"):
             # Failure diagnostics must not print actor arguments, content, or paths.
             self.assertTrue(before[key] == after[key], f"observer changed {key}")
         for key in ("tool_calls", "approvals", "approval_count", "event_counts",
@@ -215,6 +226,33 @@ class NativeToolObservationTests(unittest.TestCase):
             {"index": 1, "tool": "unknown", "status": "error", "error_type": "unknown"}])
         self.observations["missing-native-audit"] = observation
 
+    def test_full_transcript_parity_rejects_mutations_after_last_provider_request(self):
+        captured = self.execute([
+            self.tool("write_file", {"path": self.target.name, "content": CANARY}, 1),
+            self.stopped(),
+        ], enabled=True, limit=1)
+        self.assertEqual(len(captured["requests"]), 1)
+        self.assertEqual(captured["remaining_responses"], 1)
+        self.assert_parity(captured, copy.deepcopy(captured))
+        tool_index = next(i for i, message in enumerate(captured["messages"])
+                          if message.get("role") == "tool")
+        tool_message = captured["messages"][tool_index]
+        self.assertIn("approval_grant", tool_message["_display"])
+        mutations = {
+            "content": lambda m: m.__setitem__("content", "synthetic changed result"),
+            "call-id": lambda m: m.__setitem__("tool_call_id", "mutated-call"),
+            "sidecar": lambda m: m["_display"].__setitem__("approval_grant", "deny"),
+            "timestamp": lambda m: m.__setitem__("ts", m["ts"] + 0.25),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(mutation=name):
+                altered = copy.deepcopy(captured)
+                mutate(altered["messages"][tool_index])
+                # Requests stay identical: the terminal result was produced at
+                # the iteration cap and has never been sent to the provider.
+                with self.assertRaisesRegex(AssertionError, "observer changed messages"):
+                    self.assert_parity(captured, altered)
+
 
 if __name__ == "__main__":
     program = unittest.main(argv=[sys.argv[0], *TEST_ARGS], verbosity=2, exit=False)
@@ -228,6 +266,7 @@ if __name__ == "__main__":
             "harness_source_revision": EXPECTED_SOURCE,
             "engine_git_blob": EXPECTED_ENGINE_BLOB,
             "native_required": OPTIONS.require_native,
+            "message_clock": "fixture-scoped-increasing-append-timestamps",
             "tests_run": result.testsRun, "tests_skipped": len(result.skipped),
             "failures": len(result.failures), "errors": len(result.errors),
             "observations": NativeToolObservationTests.observations,
