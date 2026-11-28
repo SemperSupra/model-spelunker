@@ -24,7 +24,7 @@ jobs:
       OLLAMA_SHA: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
       OLLAMA_MODEL_TAG: 'qwen3:1.7b'
       OLLAMA_HOST: '127.0.0.1:11434'
-      OLLAMA_MODELS: '${{ runner.temp }}/ish-r25-models'
+      OLLAMA_MODELS: '/tmp/ish-r25-models'
       MODEL_MANIFEST_SHA: '8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7'
       LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
       PYTHONDONTWRITEBYTECODE: '1'
