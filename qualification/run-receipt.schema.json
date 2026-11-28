@@ -318,6 +318,17 @@
               "type": "integer",
               "minimum": 0
             },
+            "provider_finish_reason_counts": {
+              "description": "Counts of observed provider finish reasons; absence means unobserved.",
+              "type": "object",
+              "propertyNames": {
+                "minLength": 1
+              },
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
             "request_message_bytes_total": {
               "type": "number",
               "minimum": 0

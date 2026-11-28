@@ -1,0 +1,155 @@
+name: OpenWorker required-output completion guard R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/openworker-completion-guard-r0.yml'
+      - 'qualification/serving_fanout_r0/completion_guard_r0/**'
+permissions:
+  contents: read
+  packages: read
+jobs:
+  pilot:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        rep: [0, 1, 2]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      REP: '${{ matrix.rep }}'
+      HARNESS_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
+      UPSTREAM_HARNESS_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      OLLAMA_VERSION: '0.34.1'
+      OLLAMA_SHA: 'f361dc3992ec07e4ad429f4bb2d10d4663ba2c295f9a9a688c7d52f4ba650034'
+      OLLAMA_MODEL_TAG: 'qwen3:1.7b'
+      OLLAMA_HOST: '127.0.0.1:11434'
+      OLLAMA_MODELS: '/tmp/completion-guard-r0-models'
+      MODEL_MANIFEST_SHA: '8f68893c685c3ddff2aa3fffce2aa60a30bb2da65ca488b61fff134a4d1730e7'
+      LLAMA_REV: a6ac41c757c066941766164439f6876f2deaab04
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Verify treatment isolation and unchanged canonical task oracles
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+          python3 -m py_compile qualification/serving_fanout_r0/completion_guard_r0/prove.py
+          python3 qualification/serving_fanout_r0/completion_guard_r0/prove.py --self-test
+          python3 -m unittest qualification.test_completion_guard
+          python3 -m unittest qualification.test_run_receipt_finish_counts
+          python3 qualification/tasks/text-repair-v0/verify.py --self-test
+          python3 qualification/tasks/validation-discovery-v0/verify.py --self-test
+          test -f qualification/run_task.py
+          test -f qualification/adapters/local_openai_route.py
+      - name: Hydrate pinned admitted OpenWorker harness without modifying authority
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull "$HARNESS_REF" >/dev/null
+          root="$RUNNER_TEMP/openworker"
+          mkdir -p "$root"
+          cid="$(docker create "$HARNESS_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$root/"
+          docker rm "$cid" >/dev/null
+          ARTIFACT_ROOT="$root" python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["ARTIFACT_ROOT"])
+          manifest=json.loads((root/"build-receipt.json").read_text())
+          assert manifest["harness"]["name"]=="openworker"
+          assert manifest["source"]["revision"]==os.environ["UPSTREAM_HARNESS_SHA"]
+          for row in manifest["payload"]["files"]:
+              data=(root/row["path"]).read_bytes()
+              assert len(data)==row["bytes"]
+              assert hashlib.sha256(data).hexdigest()==row["sha256"]
+          print("ADMITTED_HARNESS_PAYLOAD_VERIFIED")
+          PY
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          "$RUNNER_TEMP/openworker-venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$root/wheelhouse"/*.whl
+          "$RUNNER_TEMP/openworker-venv/bin/python" -c 'import coworker; import coworker.engine'
+      - name: Verify guard integration on the real pinned engine before model work
+        run: |
+          "$RUNNER_TEMP/openworker-venv/bin/python" qualification/tests/test_completion_guard_native.py --require-native
+          "$RUNNER_TEMP/openworker-venv/bin/python" qualification/serving_fanout_r0/completion_guard_r0/prove.py --provider-self-test
+      - name: Install pinned local Ollama from verified release archive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/ollama-linux-amd64.tar.zst"
+          curl --fail --location --silent --show-error --retry 3 "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-amd64.tar.zst" --output "$archive"
+          echo "$OLLAMA_SHA  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/ollama-runtime"
+          zstd -d --stdout "$archive" | tar -xf - -C "$RUNNER_TEMP/ollama-runtime"
+          echo "$RUNNER_TEMP/ollama-runtime/bin" >> "$GITHUB_PATH"
+      - name: Resolve pinned public weight blob without using Ollama as inference backend
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$OLLAMA_MODELS"
+          ollama serve >"$RUNNER_TEMP/completion-guard-r0-hydration.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://$OLLAMA_HOST/api/tags" >/dev/null
+          ollama pull "$OLLAMA_MODEL_TAG"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ['OLLAMA_MODELS'])
+          manifest=root/'manifests/registry.ollama.ai/library/qwen3/1.7b'
+          raw=manifest.read_bytes()
+          assert hashlib.sha256(raw).hexdigest()==os.environ['MODEL_MANIFEST_SHA']
+          m=json.loads(raw)
+          layers=[x for x in m['layers'] if x['mediaType']=='application/vnd.ollama.image.model']
+          assert len(layers)==1
+          layer=layers[0]
+          d=layer['digest']
+          assert d.startswith('sha256:') and len(d)==71 and all(c in '0123456789abcdef' for c in d[7:])
+          blob=root/'blobs'/d.replace(':','-')
+          with blob.open('rb') as fp:
+              assert fp.read(4)==b'GGUF'
+              fp.seek(0)
+              assert hashlib.file_digest(fp,'sha256').hexdigest()==d[7:]
+          assert blob.stat().st_size==layer['size']
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write(f'COMPLETION_GUARD_MODEL={blob}\nCOMPLETION_GUARD_MODEL_BLOB_DIGEST={d}\n')
+          pathlib.Path(os.environ['RUNNER_TEMP'],'completion-guard-r0-model-identity.json').write_text(json.dumps({'manifest_sha256':os.environ['MODEL_MANIFEST_SHA'],'weight_blob':d,'bytes':layer['size']}))
+          PY
+      - name: Build exact native llama.cpp server
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "$RUNNER_TEMP"
+          git init completion-guard-r0-upstream
+          git -C completion-guard-r0-upstream remote add origin https://github.com/ggml-org/llama.cpp.git
+          git -C completion-guard-r0-upstream fetch --depth=1 origin "$LLAMA_REV"
+          git -C completion-guard-r0-upstream checkout --detach FETCH_HEAD
+          test "$(git -C completion-guard-r0-upstream rev-parse HEAD)" = "$LLAMA_REV"
+          cmake -S completion-guard-r0-upstream -B completion-guard-r0-build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=ON
+          cmake --build completion-guard-r0-build --target llama-server -j 2
+          echo "COMPLETION_GUARD_SERVER=$RUNNER_TEMP/completion-guard-r0-build/bin/llama-server" >> "$GITHUB_ENV"
+          sha256sum "$RUNNER_TEMP/completion-guard-r0-build/bin/llama-server" > "$RUNNER_TEMP/completion-guard-r0-server.sha256"
+      - name: Paired resident control and completion-guard treatments
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 qualification/serving_fanout_r0/completion_guard_r0/prove.py --rep "$REP" --out "$RUNNER_TEMP/completion-guard-r0-results" --venv "$RUNNER_TEMP/openworker-venv"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: openworker-completion-guard-r0-${{ matrix.rep }}
+          path: |
+            ${{ runner.temp }}/completion-guard-r0-model-identity.json
+            ${{ runner.temp }}/completion-guard-r0-server.sha256
+            ${{ runner.temp }}/completion-guard-r0-results/summary.json
+            ${{ runner.temp }}/completion-guard-r0-results/*/*/*.json
+            ${{ runner.temp }}/completion-guard-r0-results/*/*/snapshot/*
+          if-no-files-found: warn
+          retention-days: 14
+

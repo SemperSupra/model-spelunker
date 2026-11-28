@@ -24,6 +24,7 @@ from typing import Any, Optional
 import aisuite as ai
 
 from local_openai_route import resolve_local_openai_route
+from completion_guard import CompletionGuard
 
 from coworker.engine import ApprovalOutcome, PermissionRequest, TurnEngine
 from coworker.permissions import Mode, PermissionEngine
@@ -421,6 +422,9 @@ async def run(instruction: str) -> int:
     allowed_targets = parse_allowed_write_targets(workspace)
     registry = registry_for(workspace)
     projected_set = set(registry.names())
+    completion_guard = CompletionGuard.from_environment(
+        os.environ, workspace, allowed_targets, projected_set
+    )
     permissions = PermissionEngine(
         workspace_root=workspace,
         mode=Mode.CUSTOM,
@@ -491,11 +495,30 @@ async def run(instruction: str) -> int:
     async for event in engine.run(instruction):
         event_type = str(event.type)
         counts[event_type] += 1
+        payload = dict(event.data or {})
+        steering = completion_guard.observe(
+            event_type,
+            payload,
+            observations=provider.provider_observations,
+            calls_started=provider.model_calls_started,
+            call_limit=MAX_ITERATIONS,
+            protocol_fault=bool(
+                provider.unprojected_tool_calls or provider.stripped_stray_tool_markup
+            ),
+        )
+        if steering is not None:
+            # The pinned engine yields ASSISTANT_MESSAGE before checking its
+            # steering queue. Continue the same loop and original total budget.
+            engine.queue_steering(steering)
+            print(
+                "MODEL_SPELUNKER_COMPLETION_GUARD="
+                + json.dumps(completion_guard.summary(), sort_keys=True),
+                flush=True,
+            )
         if event_type not in {
             "EventType.REASONING_DELTA",
             "EventType.ASSISTANT_DELTA",
         }:
-            payload = dict(event.data or {})
             compact = {"type": event_type}
             for key in ("tool_calls", "status", "error", "error_type", "iterations", "usage"):
                 if key in payload:
@@ -513,6 +536,7 @@ async def run(instruction: str) -> int:
         "model_settings": MODEL_SETTINGS,
         "tool_hint_mode": os.environ.get("MODEL_SPELUNKER_TOOL_HINT_MODE", "none"),
         "max_iterations": MAX_ITERATIONS,
+        "completion_guard": completion_guard.summary(),
         "projection": registry.names(),
         "tool_calls": tool_names(engine.messages, projected_set),
         "approval_count": len(approvals),
@@ -543,6 +567,14 @@ async def run(instruction: str) -> int:
         + json.dumps(summary["mobile_actions"], sort_keys=True),
         flush=True,
     )
+    if completion_guard.nudges:
+        # Repeat the final projection near the summary so a bounded diagnostic
+        # tail retains it; the earlier marker still survives a later timeout.
+        print(
+            "MODEL_SPELUNKER_COMPLETION_GUARD="
+            + json.dumps(completion_guard.summary(), sort_keys=True),
+            flush=True,
+        )
     print("OPENWORKER_SUMMARY=" + json.dumps(summary, sort_keys=True), flush=True)
     print("MODEL_SPELUNKER_USAGE=" + json.dumps(usage_summary, sort_keys=True), flush=True)
     print(f"MODEL_SPELUNKER_TOOL_CALLS={len(summary['tool_calls'])}", flush=True)
