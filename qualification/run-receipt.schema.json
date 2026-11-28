@@ -464,6 +464,91 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 12
+            },
+            "tool_result_observations": {
+              "description": "Bounded filesystem-tool observations from one valid OpenWorker summary; absence means unobserved or unusable. Counts describe events, not unique calls. Source and receipt bindings are witnesses, not native-event authentication. The runner enforces contiguous indices and count conservation.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "version",
+                "limit",
+                "event_count",
+                "finished_audit_count",
+                "omitted_count",
+                "results"
+              ],
+              "properties": {
+                "version": {
+                  "const": "openworker-tool-results-v1"
+                },
+                "limit": {
+                  "type": "integer",
+                  "const": 24
+                },
+                "event_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "finished_audit_count": {
+                  "description": "Independent finished-audit count; may differ from event_count.",
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "omitted_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "results": {
+                  "type": "array",
+                  "maxItems": 24,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "index",
+                      "tool",
+                      "status",
+                      "error_type"
+                    ],
+                    "properties": {
+                      "index": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 24
+                      },
+                      "tool": {
+                        "type": "string",
+                        "enum": ["list_files", "read_file", "write_file", "unknown"]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["ok", "error", "denied", "interrupted", "unknown"]
+                      },
+                      "error_type": {
+                        "type": "string",
+                        "enum": [
+                          "FileNotFoundError", "PermissionError", "IsADirectoryError",
+                          "NotADirectoryError", "OSError", "TypeError", "ValueError", "KeyError",
+                          "RuntimeError", "TimeoutError", "UnicodeDecodeError", "unknown"
+                        ]
+                      }
+                    },
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {"error_type": {"not": {"const": "unknown"}}}
+                        },
+                        "then": {
+                          "properties": {
+                            "tool": {"not": {"const": "unknown"}},
+                            "status": {"const": "error"}
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
             }
           }
         },
@@ -706,6 +791,29 @@
           "experiment",
           "resources"
         ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "observation": {
+            "required": ["workload"],
+            "properties": {
+              "workload": {"required": ["tool_result_observations"]}
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidate": {
+            "properties": {
+              "harness": {
+                "properties": {"name": {"const": "openworker"}}
+              }
+            }
+          }
+        }
       }
     }
   ]

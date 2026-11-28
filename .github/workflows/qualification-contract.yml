@@ -234,6 +234,9 @@ jobs:
       - name: Validate emitted finish-reason observations against receipt schema
         run: python -m unittest qualification.test_run_receipt_finish_counts -v
 
+      - name: Validate canonical bounded tool-result retention
+        run: python -m unittest qualification.test_run_task_tool_results -v
+
       - name: Self-test OpenRouter generation provenance projection
         run: PYTHONPATH=. python qualification/test_run_task_openrouter_metadata.py
 
@@ -487,3 +490,42 @@ jobs:
           assert good1["candidate"]["configuration_digest"] == good2["candidate"]["configuration_digest"]
           print("PASS repeated reps create distinct receipts and failed evidence is preserved")
           PY
+
+  tool-result-retention-portability:
+    name: Bounded tool-result receipts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04-arm, macos-15]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install schema validator
+        run: python -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+      - name: Exercise actual canonical runner with synthetic observations
+        shell: python
+        run: |
+          import os, pathlib, subprocess, sys
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'tool-result-retention'
+          subprocess.run([
+              sys.executable, '-m', 'qualification.test_run_task_tool_results',
+              '--evidence-dir', str(evidence),
+          ], check=True)
+      - name: Retain source and synthetic receipt witnesses
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tool-result-retention-${{ matrix.os }}
+          path: ${{ runner.temp }}/tool-result-retention/
+          if-no-files-found: warn
+          retention-days: 14

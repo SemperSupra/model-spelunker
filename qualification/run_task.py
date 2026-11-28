@@ -428,7 +428,7 @@ def tool_action_summary(stdout: str) -> dict[str, object]:
         return {}
     try:
         summary = json.loads(raw)
-    except json.JSONDecodeError:
+    except (ValueError, RecursionError):
         return {}
     if not isinstance(summary, dict):
         return {}
@@ -465,6 +465,85 @@ def tool_action_summary(stdout: str) -> dict[str, object]:
         output["write_approvals_granted"] = allowed
         output["write_approvals_denied"] = denied
     return output
+
+
+TOOL_RESULT_SUMMARY_MAX_BYTES = 65536
+
+
+def tool_result_summary(stdout: str, harness_name: object) -> dict[str, object]:
+    """Retain the bounded filesystem-result format, never the raw summary.
+
+    This is a candidate/source-bound observation, not authentication of native
+    events. Exactly one summary is required; duplicate markers/keys, unsupported
+    formats and inconsistent counts stay absent rather than becoming zero.
+    Existing tool-call/approval projections deliberately keep their semantics.
+    """
+    if harness_name != "openworker":
+        return {}
+    prefix = "OPENWORKER_SUMMARY="
+    raw = None
+    for line in stdout.splitlines():
+        if line.startswith(prefix):
+            if raw is not None:
+                return {}
+            raw = line[len(prefix):]
+    if raw is None or len(raw) > TOOL_RESULT_SUMMARY_MAX_BYTES:
+        return {}
+
+    def distinct_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("ambiguous summary key")
+            result[key] = value
+        return result
+
+    def reject_constant(value: str) -> None:
+        raise ValueError("non-JSON summary constant")
+
+    try:
+        if len(raw.encode("utf-8")) > TOOL_RESULT_SUMMARY_MAX_BYTES:
+            return {}
+        summary = json.loads(raw, object_pairs_hook=distinct_keys, parse_constant=reject_constant)
+    except (ValueError, RecursionError, UnicodeError):
+        return {}
+    observation = summary.get("tool_result_observations") if isinstance(summary, dict) else None
+    if not isinstance(observation, dict):
+        return {}
+    if observation.get("version") != "openworker-tool-results-v1":
+        return {}
+    if type(observation.get("limit")) is not int or observation["limit"] != 24:
+        return {}
+    counts = {key: observation.get(key) for key in
+              ("event_count", "finished_audit_count", "omitted_count")}
+    if any(type(value) is not int or value < 0 for value in counts.values()):
+        return {}
+    rows = observation.get("results")
+    if (not isinstance(rows, list) or len(rows) != min(counts["event_count"], 24)
+            or counts["omitted_count"] != counts["event_count"] - len(rows)):
+        return {}
+    tools = {"list_files", "read_file", "write_file", "unknown"}
+    statuses = {"ok", "error", "denied", "interrupted", "unknown"}
+    errors = {
+        "FileNotFoundError", "PermissionError", "IsADirectoryError",
+        "NotADirectoryError", "OSError", "TypeError", "ValueError", "KeyError",
+        "RuntimeError", "TimeoutError", "UnicodeDecodeError", "unknown",
+    }
+    results = []
+    for index, row in enumerate(rows, 1):
+        if not isinstance(row, dict) or type(row.get("index")) is not int or row["index"] != index:
+            return {}
+        for key, allowed in (("tool", tools), ("status", statuses), ("error_type", errors)):
+            if not isinstance(row.get(key), str) or row[key] not in allowed:
+                return {}
+        if row["error_type"] != "unknown" and (row["tool"] == "unknown" or row["status"] != "error"):
+            return {}
+        results.append({key: row[key] for key in ("index", "tool", "status", "error_type")})
+    if sum(row["error_type"] != "unknown" for row in results) > counts["finished_audit_count"]:
+        return {}
+    return {"tool_result_observations": {
+        "version": "openworker-tool-results-v1", "limit": 24, **counts, "results": results,
+    }}
 
 
 def model_call_start_summary(stdout: str) -> dict[str, object]:
@@ -924,6 +1003,7 @@ def main() -> int:
         workload = workload_summary(provider_rounds)
         workload.update(model_call_start_summary(stdout))
         workload.update(tool_action_summary(stdout))
+        workload.update(tool_result_summary(stdout, (candidate.get("harness") or {}).get("name")))
 
         evidence = {
             "candidate_exit_code": candidate_exit,
