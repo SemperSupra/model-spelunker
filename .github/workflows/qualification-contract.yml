@@ -231,6 +231,9 @@ jobs:
       - name: Self-test run failure attribution
         run: PYTHONPATH=. python qualification/test_run_task_failure_attribution.py
 
+      - name: Validate emitted finish-reason observations against receipt schema
+        run: python -m unittest qualification.test_run_receipt_finish_counts -v
+
       - name: Self-test OpenRouter generation provenance projection
         run: PYTHONPATH=. python qualification/test_run_task_openrouter_metadata.py
 
