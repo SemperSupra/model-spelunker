@@ -1,0 +1,68 @@
+name: OpenWorker bounded tool-result observation contract
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/openworker-tool-result-observations.yml'
+      - 'qualification/adapters/openworker_projected.py'
+      - 'qualification/adapters/tool_result_observations.py'
+      - 'qualification/test_tool_result_observations.py'
+      - 'qualification/tests/test_tool_result_observations_native.py'
+permissions:
+  contents: read
+  packages: read
+jobs:
+  native-observations:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      HARNESS_REF: 'ghcr.io/sempersupra/model-spelunker-harness-openworker@sha256:e8c9da992ee4c1ce3934e6e9874c3129c4b00cec38428ed9cf1fe47190a9fe83'
+      UPSTREAM_HARNESS_SHA: '5bc10d928e0b64aae74313349a3b17bd19643ae2'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Verify bounded projection and privacy
+        run: python3 -m unittest qualification.test_tool_result_observations -v
+      - name: Hydrate existing admitted harness without source build or model
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+          docker pull "$HARNESS_REF" >/dev/null
+          artifact_root="$RUNNER_TEMP/openworker"
+          mkdir -p "$artifact_root"
+          cid="$(docker create "$HARNESS_REF" /artifact/noop)"
+          docker cp "$cid:/artifact/." "$artifact_root/"
+          docker rm "$cid" >/dev/null
+          ARTIFACT_ROOT="$artifact_root" python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          root = pathlib.Path(os.environ["ARTIFACT_ROOT"])
+          admission = json.loads(pathlib.Path("qualification/harness-artifacts/openworker-5bc10d928e0b-linux-x64.admission-v2.json").read_text())
+          raw = (root / "build-receipt.json").read_bytes()
+          assert admission["artifact"]["ref"] == os.environ["HARNESS_REF"]
+          assert "sha256:" + hashlib.sha256(raw).hexdigest() == admission["artifact"]["build_receipt_digest"]
+          manifest = json.loads(raw)
+          assert manifest["harness"]["name"] == "openworker"
+          assert manifest["source"]["revision"] == os.environ["UPSTREAM_HARNESS_SHA"]
+          for row in manifest["payload"]["files"]:
+              data = (root / row["path"]).read_bytes()
+              assert len(data) == row["bytes"]
+              assert hashlib.sha256(data).hexdigest() == row["sha256"]
+          print("ADMITTED_HARNESS_PAYLOAD_VERIFIED")
+          PY
+          python3 -m venv "$RUNNER_TEMP/openworker-venv"
+          "$RUNNER_TEMP/openworker-venv/bin/pip" install --disable-pip-version-check --no-index --no-deps "$artifact_root/wheelhouse"/*.whl
+      - name: Prove actual pinned engine parity with scripted provider and tool outcomes
+        run: |
+          "$RUNNER_TEMP/openworker-venv/bin/python" qualification/tests/test_tool_result_observations_native.py --require-native --receipt "$RUNNER_TEMP/tool-result-observations/native-contract.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: openworker-tool-result-observation-contract
+          path: ${{ runner.temp }}/tool-result-observations/native-contract.json
+          if-no-files-found: warn
+          retention-days: 14

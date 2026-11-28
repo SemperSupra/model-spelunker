@@ -2,14 +2,10 @@ name: OpenWorker Tool-Use Hint Discriminator
 
 # Narrow two-actor prompt treatment. The model/task/harness/ABI/venue remain
 # identical; only task-neutral tool-use guidance differs. No support inheritance.
+# Historical hypothesis closed: https://github.com/SemperSupra/model-spelunker/pull/161#issuecomment-6081872169
+# Preserve the recipe for explicitly authorized dispatch, not automatic adapter CI.
+# Trigger cleanup authority: https://github.com/SemperSupra/model-spelunker/issues/139#issuecomment-7240866928
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/openworker-tool-hint-discriminator.yml'
-      - '.github/workflows/openworker-prebuilt-ollama-qualification.yml'
-      - 'qualification/adapters/openworker_projected.py'
-      - 'qualification/adapters/tool_hint.py'
-      - 'qualification/test_tool_hint.py'
   workflow_dispatch:
 
 permissions:
