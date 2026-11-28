@@ -8,6 +8,7 @@ on:
       - 'qualification/agent_embodiment/telemetry_verdict.py'
       - 'qualification/agent_embodiment/file_access_witness.py'
       - 'qualification/agent_embodiment/process_read_witness.py'
+      - 'qualification/agent_embodiment/native_decoy_control.py'
       - '.github/workflows/qwen-file-telemetry-smoke.yml'
 permissions:
   contents: read
@@ -30,6 +31,8 @@ jobs:
           python3 -B -O qualification/agent_embodiment/file_access_witness.py
           python3 -B qualification/agent_embodiment/process_read_witness.py
           python3 -B -O qualification/agent_embodiment/process_read_witness.py
+          python3 -B qualification/agent_embodiment/native_decoy_control.py --self-test
+          python3 -B -O qualification/agent_embodiment/native_decoy_control.py --self-test
           python3 -B qualification/agent_embodiment/qwen_file_telemetry_probe.py --self-test
   native:
     needs: contract
@@ -54,6 +57,11 @@ jobs:
             sudo apt-get install --no-install-recommends -y strace
           fi
           /usr/bin/strace --version
+      - name: Native traced and independent decoy controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B qualification/agent_embodiment/native_decoy_control.py --receipt "$RUNNER_TEMP/qwen-traced-decoy-receipt.json"
       - name: Real CLI with local synthetic model fixture, telemetry off and on
         shell: bash
         run: |
@@ -65,5 +73,13 @@ jobs:
         with:
           name: qwen-file-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/qwen-file-telemetry-receipt.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Retain decoy summary only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: qwen-traced-decoy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qwen-traced-decoy-receipt.json
           if-no-files-found: ignore
           retention-days: 7
