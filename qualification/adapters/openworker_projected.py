@@ -33,6 +33,7 @@ from coworker.tools import ToolRegistry
 
 from android_mobile_tools import mobile_action_log, mobile_tool_functions
 from tool_hint import apply_tool_hint, synthetic_read_provenance
+from tool_result_observations import ToolResultObserver
 
 
 MODEL = os.environ.get("MODEL_SPELUNKER_MODEL", "ollama:qwen3:1.7b")
@@ -476,6 +477,7 @@ async def run(instruction: str) -> int:
         )
         return ApprovalOutcome.ONCE if allowed else ApprovalOutcome.DENY
 
+    tool_results = ToolResultObserver(projected_set)
     engine = TurnEngine(
         provider=provider,
         registry=registry,
@@ -484,6 +486,7 @@ async def run(instruction: str) -> int:
         approver=approver,
         max_iterations=MAX_ITERATIONS,
         model_settings=MODEL_SETTINGS,
+        audit_sink=tool_results.audit,
     )
 
     counts: Counter[str] = Counter()
@@ -491,6 +494,7 @@ async def run(instruction: str) -> int:
     async for event in engine.run(instruction):
         event_type = str(event.type)
         counts[event_type] += 1
+        tool_results.observe_event(event_type, event.data or {})
         if event_type not in {
             "EventType.REASONING_DELTA",
             "EventType.ASSISTANT_DELTA",
@@ -521,6 +525,7 @@ async def run(instruction: str) -> int:
         "unprojected_tool_calls": provider.unprojected_tool_calls,
         "stripped_stray_tool_markup": provider.stripped_stray_tool_markup,
         "event_counts": dict(counts),
+        "tool_result_observations": tool_results.snapshot(),
         "target_exists": bool(allowed_targets and all(t.is_file() for t in allowed_targets)),
     }
     # Synthetic task only: keep read provenance as a strict three-boolean
