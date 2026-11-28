@@ -1,17 +1,42 @@
 #!/usr/bin/env python3
 """Strict Qwen JSON result oracle; never interpret tool output as final completion."""
 import json
+import math
 
 class InvalidResult(ValueError):
     pass
 
+def _unique_object(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise InvalidResult("duplicate JSON key")
+        value[key] = item
+    return value
+
+
+def _reject_constant(value):
+    raise InvalidResult("non-finite JSON constant")
+
+
+def _finite_float(value):
+    result = float(value)
+    if not math.isfinite(result):
+        raise InvalidResult("non-finite JSON number")
+    return result
+
+
+def _valid_fixture(expected: str, decoy: str) -> bool:
+    return isinstance(expected, str) and isinstance(decoy, str) and bool(expected) and bool(decoy) and expected != decoy
+
+
 def extract_final_response(stdout: str) -> str:
     try:
-        messages=json.loads(stdout)
-    except (json.JSONDecodeError, TypeError) as exc:
+        messages=json.loads(stdout, object_pairs_hook=_unique_object, parse_constant=_reject_constant, parse_float=_finite_float)
+    except (ValueError, TypeError, RecursionError) as exc:
         raise InvalidResult("invalid CLI JSON") from exc
-    if not isinstance(messages,list):
-        raise InvalidResult("batch JSON must be a list")
+    if not isinstance(messages,list) or any(not isinstance(v,dict) for v in messages):
+        raise InvalidResult("batch JSON must be a list of objects")
     results=[v for v in messages if isinstance(v,dict) and v.get("type")=="result"]
     if len(results)!=1:
         raise InvalidResult("missing/duplicate final result")
@@ -22,11 +47,13 @@ def extract_final_response(stdout: str) -> str:
 
 def verify_selected(stdout: str, expected: str, decoy: str) -> bool:
     try:
-        return extract_final_response(stdout)==expected and expected!=decoy
+        return _valid_fixture(expected, decoy) and extract_final_response(stdout)==expected
     except InvalidResult:
         return False
 
 def classify_final(stdout: str, expected: str, decoy: str) -> str:
+    if not _valid_fixture(expected, decoy):
+        return "INVALID_OR_MISSING_RESULT"
     try:
         result=extract_final_response(stdout)
     except InvalidResult:
@@ -62,7 +89,13 @@ def selftest() -> None:
         json.dumps([{"type":"result","is_error":False,"result":selected}]*2),
         json.dumps({"type":"result","is_error":False,"result":selected}),
         "not JSON",
+        '[{"type":"result","is_error":true,"is_error":false,"result":"VALUE=SELECTED"}]',
+        '[17,{"type":"result","is_error":false,"result":"VALUE=SELECTED"}]',
+        '[{"type":"result","is_error":false,"result":"VALUE=SELECTED","metric":NaN}]',
         json.dumps([{"type":"result","is_error":False,"result":["VALUE=SELECTED"]}]),
+        '[{"type":"result","is_error":false,"result":"VALUE=SELECTED","metric":1e999}]',
+        '[{"type":"result","is_error":false,"result":"VALUE=SELECTED","metric":' + '9'*5000 + '}]',
+        b'\xff',
     ]
     for bad in adversarial:
         assert not verify_selected(bad,selected,decoy),"bad assistant final accepted"
@@ -70,7 +103,10 @@ def selftest() -> None:
     assert classify_final(payload(decoy),selected,decoy)=="DECOY_IN_FINAL"
     assert classify_final(payload(""),selected,decoy)=="EMPTY_FINAL"
     assert classify_final("not JSON",selected,decoy)=="INVALID_OR_MISSING_RESULT"
-    print(json.dumps({"schema":"qwen-r12-strict-final-oracle/v1","state":"PASS","positives":1,"negatives":len(adversarial)}))
+    for expected, other, final in ((selected, selected, selected), ("", decoy, ""), (selected, "", selected)):
+        assert not verify_selected(payload(final),expected,other)
+        assert classify_final(payload(final),expected,other)=="INVALID_OR_MISSING_RESULT"
+    print(json.dumps({"schema":"qwen-r12-strict-final-oracle/v1","state":"PASS","positives":1,"negatives":len(adversarial)+3}))
 
 if __name__=="__main__":
     selftest()
