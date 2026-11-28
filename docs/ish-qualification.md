@@ -135,7 +135,41 @@ Value-aware faster than LRU in 7/12 paired cases. Aggregate lifecycle reduction 
 
 Projection optimistic by approximately 11.5% relative to observed phase savings. Actual write costs 2.867517/2.119702 s versus projected 1.370235/1.107765 s for LRU/value-aware. Full-minus-phase residual -1.185846/-0.084160 s. This is a bounded native synthetic CPU audit, not SGLang GPU calibration or a general error bound.
 
-**Multi-boundary continuation.** [#426](https://github.com/SemperSupra/model-spelunker/pull/426), head `0910b9745e4310ce4c77072872fea6f294c7f562`, [run 46082159775](https://github.com/SemperSupra/model-spelunker/actions/runs/46082159775) initiated on three public macOS shards. Twelve fixed contexts, four execution modes each, 216 planned rejection checks. Verify every receipt, journal, profile and path check against exact source before accepting. Fixture-level rejection is not production authorization or security qualification. Pending terminal reconciliation at this checkpoint.
+**Multi-boundary continuation.** [#426](https://github.com/SemperSupra/model-spelunker/pull/426), head `0910b9745e4310ce4c77072872fea6f294c7f562`, [run 46082159775](https://github.com/SemperSupra/model-spelunker/actions/runs/46082159775) initiated on three public macOS shards. Twelve fixed contexts, four execution modes each, 216 planned rejection checks. Verify every receipt, journal, profile and path check against exact source before accepting. Fixture-level rejection is not production authorization or security qualification. Terminal reconciliation completed; see R23 below.
+
+### R23 multi-boundary recovery and architecture-aware qualification
+
+**Native multi-boundary continuation.** [#426](https://github.com/SemperSupra/model-spelunker/pull/426), exact head `0910b9745e4310ce4c77072872fea6f294c7f562`, [run 46082159775](https://github.com/SemperSupra/model-spelunker/actions/runs/46082159775), all 3 public macOS jobs SUCCESS. Tested merge SHA `890987b6b6090d3e733cc39d8364d454cd5bc162`; consolidated main commit `fe328dc5cf0d811f45b70034d9de444699470984`; identical workflow blob `30d72c9f42f3a54941b188c30c944416cbfb297f`. All three ZIP digests, 48 process records, 24 manifest/journal joins, exact staged continuation token/top-two witnesses, offsets and 216 reported fixture rejection labels independently reconciled; see [DLE checkpoint](https://github.com/SemperSupra/model-spelunker/issues/316#issuecomment-7230322588). Twelve contexts, initial input 95–2645 tokens, one exact profile. Raw checkpoint payloads were not uploaded: independent snapshot-byte verification is not established. The in-job native hash check is distinct from the independently verified receipt archive.
+
+| Aggregate phase (12 cases) | Second-boundary restore (s) | Staged reconstruction (s) |
+|---|---:|---:|
+| Admission / rebuild | 1.757134 | 30.239729 |
+| Subsequent generation | 10.795824 | 3.407184 |
+| Combined | 12.552958 | 33.646913 |
+
+Second-boundary snapshot publication total 3.456642 s; startup and save excluded from combined row. Do not infer deferred work is absent from API return. No universal cold equivalence, full-logit/RNG, power-loss, authentication or agent-goodput claim.
+
+**Phase attribution.** [#428](https://github.com/SemperSupra/model-spelunker/pull/428), head `c0935f609d297a2f29c1346915ce7169f8b1dfa9`, [run 46083904518](https://github.com/SemperSupra/model-spelunker/actions/runs/46083904518) queued at readback. Fixed 12 contexts, 60 planned native processes, six predeclared permutations of restore/lazy, restore/explicit evaluation and staged replay; separate startup, recover, materialize, first-token and generation phases. Terminal results reconciled in R24 below; no causal explanation of the generation penalty established. Retain all adverse outcomes.
+
+**Hybrid source audit.** Exact upstream [llama.cpp a6ac41c](https://github.com/ggml-org/llama.cpp/tree/a6ac41c757c066941766164439f6876f2deaab04): hybrid-memory source blob `a93e256b05a72012d032597425ecbbbe49384b97`, recurrent source `bab6276f65d26cc0ef3d1c6fdafac7c1d08714f4`, Qwen35 source `5b05fc63fdd977c6ca67d5cc6f4964f8850f2b93`, server context `89f884e6548c7fb7282f0e922bd3eacf06322b29`. Native hybrid state writes/reads both attention and recurrent components; server slot files append recurrent checkpoints. Recurrent rollback cannot be presumed equivalent to KV prefix truncation. [Qwen3.5 base model card](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base) documents the hybrid architecture. Proposed public CPU fixture and exact quant digest recorded in #316 R23 claim. Workflow write blocked by a tool safety check; reserved branch `exp/ish-hybrid-r23-316` verified unchanged from `fe328dc5cf0d811f45b70034d9de444699470984`; no job launched and no empirical hybrid result. Existing lifecycle and workbench authorities notified: [#306](https://github.com/SemperSupra/model-spelunker/issues/306#issuecomment-7230339647), [#387](https://github.com/SemperSupra/model-spelunker/pull/387#issuecomment-7230340010).
+
+### R24 recovery phase attribution
+
+[#428](https://github.com/SemperSupra/model-spelunker/pull/428), source `c0935f609d297a2f29c1346915ce7169f8b1dfa9`, [run 46083904518](https://github.com/SemperSupra/model-spelunker/actions/runs/46083904518), three public macOS jobs SUCCESS. Tested merge `cec99d5c2b3f425e0e9e89b2cb2bd8ac3b9849e3`, consolidated main `8ead3c594ae985f66cf16b921cca2e6ec48c9363`, identical workflow blob `6601367808b6b4dcfdb92af9583e4a3bbd048a6a`. [Independent audit and archive digests](https://github.com/SemperSupra/model-spelunker/issues/316#issuecomment-7230429055): 60 mode records, 12 predeclared recovery orders, 36 journal/manifest joins, 324 reported rejection labels, exact staged token/top-two/offset witnesses and phase sums. Raw snapshots not independently available.
+
+| Aggregate seconds, 12 cases | Lazy restore | Eager restore | Journal replay |
+|---|---:|---:|---:|
+| Recovery | 3.027729 | 3.733625 | 34.896784 |
+| Explicit materialization | 0.000036 | 0.566060 | 0 |
+| Generation | 11.468599 | 12.135512 | 4.234987 |
+| Combined | 14.496364 | 16.435197 | 39.131771 |
+| Including startup | 29.360363 | 32.668465 | 54.701771 |
+
+Snapshot publication total 7.535409 s, excluded from these totals. Both restore modes beat replay 12/12; eager beats lazy 4/12. Explicit materialization does not explain or eliminate the generation penalty. Retain lazy restoration as the bounded experimental baseline; no general hardware, production or agent-goodput claim.
+
+## Deferred roadmap: Inference State Images (ISI)
+
+[Owner decision](https://github.com/SemperSupra/model-spelunker/issues/316#issuecomment-7230422551): retain ISI as future work within ISH, outside the current critical path. Candidate capabilities: precompute shared system/way-of-working/tool contexts, cumulative foundation/organization/role/project layers, immutable base state and independent session extensions, RAM/disk/cold bake-off, content-addressed identity and invalidation, optional OCI/Foundry distribution, modular attention reuse research, and accepted-agent goodput. Images are rebuildable derivatives of DLE-authoritative context; no arbitrary cache concatenation, authorization by cache possession, or private context in public CI. No implementation or new product/registry authorized in this wave. Current work remains native recovery, architecture-aware state contracts, accepted-agent goodput and separately admitted hardware qualification.
 
 For humans and automation, inspect the above PRs, exact run/receipt and source identity before resuming; use existing qualification contracts. The work authority remains [#316](https://github.com/SemperSupra/model-spelunker/issues/316). Use `gh pr checks <number> --repo SemperSupra/model-spelunker` and `gh run view <run-id> --repo SemperSupra/model-spelunker` for current state. Do not replay old one-use admissions or infer success from a queued run.
 
