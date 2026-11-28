@@ -5,8 +5,10 @@ on:
       - '.github/workflows/openworker-tool-result-observations.yml'
       - 'qualification/adapters/openworker_projected.py'
       - 'qualification/adapters/tool_result_observations.py'
+      - 'qualification/adapters/tool_repeat_limit.py'
       - 'qualification/test_tool_result_observations.py'
       - 'qualification/tests/test_tool_result_observations_native.py'
+      - 'qualification/tests/test_openworker_loopback_native.py'
 permissions:
   contents: read
   packages: read
@@ -25,6 +27,8 @@ jobs:
           persist-credentials: false
       - name: Verify bounded projection and privacy
         run: python3 -m unittest qualification.test_tool_result_observations -v
+      - name: Verify finite loopback protocol and witness controls
+        run: python3 qualification/tests/test_openworker_loopback_native.py --self-test
       - name: Hydrate existing admitted harness without source build or model
         shell: bash
         env:
@@ -59,10 +63,21 @@ jobs:
       - name: Prove actual pinned engine parity with scripted provider and tool outcomes
         run: |
           "$RUNNER_TEMP/openworker-venv/bin/python" qualification/tests/test_tool_result_observations_native.py --require-native --receipt "$RUNNER_TEMP/tool-result-observations/native-contract.json"
+      - name: Prepare independent receipt validator
+        run: |
+          python3 -m venv "$RUNNER_TEMP/loopback-controller"
+          "$RUNNER_TEMP/loopback-controller/bin/pip" install --disable-pip-version-check --no-input jsonschema==4.25.1
+      - name: Prove actual adapter CLI and terminal repeat policy through loopback SSE
+        run: |
+          "$RUNNER_TEMP/loopback-controller/bin/python" qualification/tests/test_openworker_loopback_native.py \
+            --require-native --native-python "$RUNNER_TEMP/openworker-venv/bin/python" \
+            --evidence-dir "$RUNNER_TEMP/tool-result-observations/loopback"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: openworker-tool-result-observation-contract
-          path: ${{ runner.temp }}/tool-result-observations/native-contract.json
+          path: |
+            ${{ runner.temp }}/tool-result-observations/native-contract.json
+            ${{ runner.temp }}/tool-result-observations/loopback/
           if-no-files-found: warn
           retention-days: 14

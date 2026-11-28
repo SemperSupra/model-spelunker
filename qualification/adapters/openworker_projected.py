@@ -34,6 +34,7 @@ from coworker.tools import ToolRegistry
 from android_mobile_tools import mobile_action_log, mobile_tool_functions
 from tool_hint import apply_tool_hint, synthetic_read_provenance
 from tool_result_observations import ToolResultObserver
+from tool_repeat_limit import ToolRepeatLimit, ToolRepeatLimitError
 
 
 MODEL = os.environ.get("MODEL_SPELUNKER_MODEL", "ollama:qwen3:1.7b")
@@ -60,8 +61,12 @@ if _extra_body_raw:
 class CapabilityEnforcingProvider(ProviderClient):
     """Keep one proposed tool call when the declared model is non-parallel."""
 
-    def __init__(self, delegate: ProviderClient) -> None:
+    def __init__(
+        self, delegate: ProviderClient, *, repeat_limit: ToolRepeatLimit | None = None
+    ) -> None:
         self.delegate = delegate
+        self.repeat_limit = repeat_limit
+        self._repeat_rejection_reported = False
         self.suppressed_batches: list[dict[str, Any]] = []
         self.unprojected_tool_calls: list[dict[str, Any]] = []
         self.stripped_stray_tool_markup = 0
@@ -282,6 +287,50 @@ class CapabilityEnforcingProvider(ProviderClient):
         )
         return replace(turn, tool_calls=[kept])
 
+    def _ensure_repeat_limit_open(self) -> None:
+        if self.repeat_limit is not None:
+            self.repeat_limit.ensure_open()
+
+    def _finalize(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: Optional[list[dict[str, Any]]],
+        turn: AssistantTurn,
+        started: float,
+        first_event_at: float | None,
+    ) -> AssistantTurn:
+        turn = self._enforce(model, turn, tools=tools)
+        rejection = None
+        if self.repeat_limit is not None:
+            try:
+                self.repeat_limit.check(
+                    turn.tool_calls or [], call_index=self.model_calls_started
+                )
+            except ToolRepeatLimitError as exc:
+                rejection = exc
+                if not self._repeat_rejection_reported:
+                    self._repeat_rejection_reported = True
+                    print(
+                        "OPENWORKER_EVENT=" + json.dumps(
+                            {"type": "EventType.ERROR", **self.repeat_limit.rejection},
+                            sort_keys=True,
+                        ),
+                        flush=True,
+                    )
+        # A valid over-limit response still consumed a model call. Retain its
+        # ordinary provider observation, without inventing a dispatched tool.
+        # Non-JSON arguments cannot be represented by that observation safely.
+        if rejection is None or rejection.reason != "REPEAT_LIMIT_INVALID_ARGUMENTS":
+            self._observe(
+                requested_model=model, messages=messages, tools=tools, turn=turn,
+                started=started, first_event_at=first_event_at,
+            )
+        if rejection is not None:
+            raise rejection
+        return turn
+
     def complete(
         self,
         *,
@@ -290,6 +339,7 @@ class CapabilityEnforcingProvider(ProviderClient):
         tools: Optional[list[dict[str, Any]]] = None,
         **settings: Any,
     ) -> AssistantTurn:
+        self._ensure_repeat_limit_open()
         started = time.monotonic()
         self._mark_model_call_started(
             requested_model=model,
@@ -302,16 +352,14 @@ class CapabilityEnforcingProvider(ProviderClient):
             tools=tools,
             **settings,
         )
-        turn = self._enforce(model, turn, tools=tools)
-        self._observe(
-            requested_model=model,
+        return self._finalize(
+            model=model,
             messages=messages,
             tools=tools,
             turn=turn,
             started=started,
             first_event_at=None,
         )
-        return turn
 
     def stream(
         self,
@@ -321,6 +369,7 @@ class CapabilityEnforcingProvider(ProviderClient):
         tools: Optional[list[dict[str, Any]]] = None,
         **settings: Any,
     ):
+        self._ensure_repeat_limit_open()
         started = time.monotonic()
         first_event_at: float | None = None
         self._mark_model_call_started(
@@ -343,12 +392,11 @@ class CapabilityEnforcingProvider(ProviderClient):
             if chunk.turn is None:
                 yield chunk
             else:
-                turn = self._enforce(model, chunk.turn, tools=tools)
-                self._observe(
-                    requested_model=model,
+                turn = self._finalize(
+                    model=model,
                     messages=messages,
                     tools=tools,
-                    turn=turn,
+                    turn=chunk.turn,
                     started=started,
                     first_event_at=first_event_at,
                 )
@@ -454,7 +502,10 @@ async def run(instruction: str) -> int:
         delegate = ProviderRouter(secrets=None, default_provider="openai")
         engine_model = MODEL
 
-    provider = CapabilityEnforcingProvider(delegate)
+    repeat_limit = ToolRepeatLimit.from_environment(projected_set, os.environ)
+    provider = CapabilityEnforcingProvider(
+        delegate, repeat_limit=repeat_limit if repeat_limit.limit else None
+    )
 
     approvals: list[dict[str, Any]] = []
 
@@ -495,6 +546,11 @@ async def run(instruction: str) -> int:
         event_type = str(event.type)
         counts[event_type] += 1
         tool_results.observe_event(event_type, event.data or {})
+        if event_type == "EventType.ERROR" and repeat_limit.rejection is not None:
+            # The provider already emitted the first bounded terminal reason.
+            # The native engine catches the typed exception and emits a generic
+            # error; do not duplicate or replace the original policy outcome.
+            continue
         if event_type not in {
             "EventType.REASONING_DELTA",
             "EventType.ASSISTANT_DELTA",
@@ -528,6 +584,8 @@ async def run(instruction: str) -> int:
         "tool_result_observations": tool_results.snapshot(),
         "target_exists": bool(allowed_targets and all(t.is_file() for t in allowed_targets)),
     }
+    if repeat_limit.limit:
+        summary["tool_repeat_limit"] = repeat_limit.limit
     # Synthetic task only: keep read provenance as a strict three-boolean
     # allowlist. Never emit arbitrary paths, file contents, or model arguments.
     if os.environ.get("MODEL_SPELUNKER_TASK_ID") == "boundary-bugfix-v0":
@@ -560,7 +618,9 @@ async def run(instruction: str) -> int:
         + json.dumps(public_observations, sort_keys=True),
         flush=True,
     )
-    return 0
+    # Native TurnEngine can catch a provider exception and end normally. A
+    # terminal policy refusal must still veto acceptance of earlier valid output.
+    return 1 if repeat_limit.rejection is not None else 0
 
 
 def main() -> int:
