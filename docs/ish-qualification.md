@@ -224,7 +224,48 @@ These lifecycle sums exclude build/hydration and are not concurrent campaign mak
 
 The independent receipt-contract correction was integrated separately in [#436](https://github.com/SemperSupra/model-spelunker/pull/436), merge `ff20d9c3056a7f603b2d0658beb0bb93959d9e2a`. The schema now accepts the runner's existing optional `provider_finish_reason_counts` and `provider_finish_reason_unknown_count`; six focused positive/negative tests are part of contract CI. [Merged disposition and checks](https://github.com/SemperSupra/model-spelunker/issues/139#issuecomment-7240801230). This changes no historical receipt, task, verifier or runtime behavior.
 
-The independent methodology candidates address [bounded per-tool result observations (#438)](https://github.com/SemperSupra/model-spelunker/pull/438) and [immutable native-build reuse (#437)](https://github.com/SemperSupra/model-spelunker/pull/437) using standard public cloud jobs. [Continuation claim and ownership](https://github.com/SemperSupra/model-spelunker/issues/139#issuecomment-7240693617); current qualification outcomes remain in that DLE and the linked PRs. Neither candidate establishes local serving performance. Hardware transfer still requires the private census, actual serving-host profile and the same task/oracle/receipt semantics; local deployment is a separate workstream.
+The independent methodology prerequisites are now merged: [bounded per-tool result observations (#438)](https://github.com/SemperSupra/model-spelunker/pull/438), [immutable native-build reuse (#437)](https://github.com/SemperSupra/model-spelunker/pull/437), and [canonical bounded tool-result retention (#440)](https://github.com/SemperSupra/model-spelunker/pull/440). The original #437 [run 46156066266](https://github.com/SemperSupra/model-spelunker/actions/runs/46156066266) qualified one producer and two consumers for exact native payload/dependency/CLI reuse, without inference. The #440 [acceptance record](https://github.com/SemperSupra/model-spelunker/issues/139#issuecomment-7242231239) joins 33 synthetic receipts across Windows, ARM Linux and macOS to exact source bytes; the first Windows CRLF boundary remains preserved. These are method prerequisites, not local serving-performance results.
+
+## Native adapter and fixed-inference transfer — 2026-11-28
+
+### Native CLI, SDK, tool outcomes and terminal repeat policy
+
+[#441](https://github.com/SemperSupra/model-spelunker/pull/441) is integrated as `c8d103ace3c9821a102096b91047069a25c613b5`. [Run 46168253363](https://github.com/SemperSupra/model-spelunker/actions/runs/46168253363) tested merge `9bc4334b82aa1b05cd939a52e3d28a2c4d4f96d9`, whose tree equals reviewed head `a638909af65c715526ae85e32dcca8f688bcd6a6`. Four preserved native parity methods, five protocol/witness controls and two actual CLI/SDK/HTTP/SSE cases passed without skips. [Independent original-archive acceptance](https://github.com/SemperSupra/model-spelunker/issues/139#issuecomment-7242797566) joins native/project source, receipts, HTTP/SSE bytes, full fixture snapshots and unchanged external verifiers.
+
+| Native scripted case | HTTP requests / model starts | Actual native tool starts | Candidate / verifier exit | Canonical acceptance |
+|---|---:|---:|---:|---|
+| Unprojected call, denied write, allowed write | 4 / 4 | 1 | 0 / 0 | Accepted, with the expected three tool outcomes |
+| Third equivalent write after correct output | 3 / 3 | 2 | 1 / 0 | Rejected as candidate-error |
+
+The repeat proof independently verifies the output before sending response three, then observes one `REPEAT_LIMIT_EXCEEDED` event at call index three, no fourth request and no fabricated third tool result. All four initial files remain unchanged. The new policy is **opt-in and disabled by default**; limit two means two total attempts per projected tool name and canonical JSON argument object over one task, after existing normalization. Native CLI termination is observed; post-refusal complete/stream resubmission is separately covered by protocol controls. Native `engine.retry()` execution, autonomous task quality and OS containment are not established.
+
+The original 35,296-byte artifact is **15272254108**, ZIP SHA-256 `f95bae8a067cf4302606e91ab5944c5daa4c5f85bbb170379dbc04382b2d0be3`. Its three scripted repeat responses report 33 input / 21 output tokens while canonical admitted-turn usage is 22 / 14. Preserve this accounting difference; it is not measured model consumption or token savings. The [bounded usage-coverage follow-up](https://github.com/SemperSupra/model-spelunker/issues/139#issuecomment-7242846374) requires explicit normalized-value provenance and missingness, without double counting or silently changing existing totals.
+
+### One fixed inference case after same-run native transfer
+
+[#442](https://github.com/SemperSupra/model-spelunker/pull/442) remains a **frozen draft**, head `72a5a0e01ef65e882be54ea75f86c9a0ee6a07fd`. [Run 46168856093](https://github.com/SemperSupra/model-spelunker/actions/runs/46168856093), tested merge `f59aa56212c8eced89e84c7db4bacc180fa1a6ca`, completed one producer and one fresh consumer. It composes #437's packaging, same-run/attempt identity, immutable artifact ID/digest, dependency and fault gates unchanged. The separate case/pair evidence adds inference acceptance; the original native archive manifest retains its CLI-only scope.
+
+Both sides used the existing admitted OpenWorker artifact, pinned llama.cpp `a6ac41c757c066941766164439f6876f2deaab04`, and the same 1,359,279,776-byte Qwen3 1.7B GGUF. Both produced the externally verified `text-repair-v0` result with two model calls and one successful write, no engine errors, and clean shutdown of a server still running before the owned stop. The exact transferred server SHA-256 is `ce07f5b3edb54ce0bd16ea4b37c2f32b07c34ca33ce2e22a44cd3f309a91cffb`. Nine consumer corruption/replay/configuration controls rejected their faults. Seven new focused test methods and the seven existing artifact methods passed in each job.
+
+| Observed interval, seconds | Producer | Consumer |
+|---|---:|---:|
+| Native compilation | 266.664668 | No compilation |
+| Harness and model preparation, including hydration teardown | 39.926667 | 39.854667 |
+| Native readiness | 1.662448 | 2.550594 |
+| Canonical runner, including its verifier | 6.709300 | 8.540179 |
+| Assigned-runner job interval | 332.590097 | 60.313994 |
+
+The producer interval includes payload upload; both job intervals exclude provisioning, queue wait and final evidence upload. Consumer download/action transition was 1.309270 seconds; payload admission, dependency/CLI checks and fault controls took 0.803449 seconds. These stages overlap the job totals and must not be added twice. The producer used an AMD EPYC 9V74 and the consumer an Intel Xeon Platinum 8573C under the same admitted Ubuntu image/dependency profile. These are descriptive observations, not a causal speedup comparison, reliability estimate or tail-latency result.
+
+| Original artifact | ID | ZIP SHA-256 |
+|---|---:|---|
+| Exact transfer payload and producer case | 15273600007 | 18b71bd2f44177bc253f5016d8645e92b93a5f9d775e9b85906e39015da2c5ec |
+| Producer evidence | 15273230805 | e20e643019bc51939adfa6c7062998a544afc4a60e6e49f221ffc5acdf8631e5 |
+| Consumer evidence | 15272901724 | 889627a54f6c9b6855a24a474c388f2f76a31bcda08651854fad8d76683f31bc |
+
+The cloud task override is explicitly **240 seconds**, with a 300-second outer runner envelope, four model turns, `max_tokens=256` per response and repeat policy disabled. It does not change the task package's 120-second default or any local baseline. Effective configuration and template hashes are source-bound runtime attestations: raw `/props` and `diagnostics.raw` were not uploaded. The receipt's full `evidence_digest` preimage therefore cannot be independently reconstructed from these archives, although source/configuration/task/launch joins and the external output oracle can be checked. Model weights and harness wheelhouse are identified by runtime pinned-integrity checks rather than copied into the evidence archives.
+
+The [independent acceptance record in #316](https://github.com/SemperSupra/model-spelunker/issues/316#issuecomment-7242970129) verifies the original archives, complete native inventory and dependency graphs, source/receipt/snapshot bindings and unchanged external oracle replay. Keep the experiment draft/unmerged under that issue's instruction. Hardware transfer still requires the private census, an admitted workcell and serving route, exact model/runtime profile, and the same task/oracle/receipt semantics. This Ubuntu x64 CPU result is not a BigMac arm64 or TrueNAS GPU deployment qualification. Prior #431/#433/#435 negatives and the ISI deferral remain unchanged.
 
 ## Deferred roadmap: Inference State Images (ISI)
 
