@@ -1,0 +1,192 @@
+name: Native CPU fixed inference reuse R0
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-inference-reuse-r0.yml'
+      - 'qualification/serving_fanout_r0/native_inference_reuse_r0/**'
+permissions:
+  contents: read
+  packages: read
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  producer:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      manifest_sha256: ${{ steps.produce.outputs.manifest_sha256 }}
+      tar_sha256: ${{ steps.produce.outputs.tar_sha256 }}
+    steps:
+      - name: Start measured job interval
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,pathlib,time
+          pathlib.Path(os.environ['RUNNER_TEMP'],'native-inference-clock.json').write_text(json.dumps({
+            'job_started_s':time.monotonic(),'job_started_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}))
+          PY
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Check independent admission and oracle faults
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+          python3 -m unittest discover -s qualification/serving_fanout_r0/native_build_reuse_r0 -p 'test_*.py' -v
+          python3 -m unittest discover -s qualification/serving_fanout_r0/native_inference_reuse_r0 -p 'test_*.py' -v
+      - name: Produce the existing exact native CPU artifact
+        id: produce
+        run: |
+          python3 qualification/serving_fanout_r0/native_build_reuse_r0/proof.py produce \
+            --work "$RUNNER_TEMP/native-inference-build" \
+            --out "$RUNNER_TEMP/native-inference-evidence/build" \
+            --clock "$RUNNER_TEMP/native-inference-clock.json"
+      - name: Authenticate read-only admitted artifact pull
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+      - name: Hydrate exact public model and admitted harness
+        run: |
+          python3 qualification/serving_fanout_r0/native_inference_reuse_r0/proof.py prepare \
+            --out "$RUNNER_TEMP/native-inference-setup"
+      - name: Run one producer task with the packaged native files
+        env:
+          MANIFEST_SHA256: ${{ steps.produce.outputs.manifest_sha256 }}
+        run: |
+          python3 qualification/serving_fanout_r0/native_inference_reuse_r0/proof.py case \
+            --role producer --setup "$RUNNER_TEMP/native-inference-setup" \
+            --server "$RUNNER_TEMP/native-inference-build/payload/bin/llama-server" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --out "$RUNNER_TEMP/native-inference-evidence/case"
+      - name: Stage the exact payload and producer result together
+        run: |
+          mkdir "$RUNNER_TEMP/native-inference-transfer"
+          cp "$RUNNER_TEMP/native-inference-evidence/build/native-build-reuse.tar" \
+            "$RUNNER_TEMP/native-inference-evidence/build/manifest.json" \
+            "$RUNNER_TEMP/native-inference-evidence/build/producer.json" \
+            "$RUNNER_TEMP/native-inference-transfer/"
+          cp "$RUNNER_TEMP/native-inference-evidence/case/case.json" \
+            "$RUNNER_TEMP/native-inference-transfer/producer-case.json"
+      - name: Transfer one immutable same-run artifact
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-inference-reuse-r0-payload
+          path: ${{ runner.temp }}/native-inference-transfer/*
+          if-no-files-found: error
+          retention-days: 3
+      - name: Record complete producer job interval
+        if: always()
+        env:
+          NATIVE_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          NATIVE_ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,time
+          root=pathlib.Path(os.environ['RUNNER_TEMP']); out=root/'native-inference-evidence';out.mkdir(exist_ok=True)
+          clock=json.loads((root/'native-inference-clock.json').read_text())
+          (out/'job-final.json').write_text(json.dumps({'job_interval_through_payload_upload_s':time.monotonic()-clock['job_started_s'],
+            'artifact_id':os.environ.get('NATIVE_ARTIFACT_ID'),'artifact_digest':os.environ.get('NATIVE_ARTIFACT_DIGEST'),
+            'excludes':'runner provisioning, queue wait and final evidence upload'},indent=2))
+          PY
+      - name: Preserve producer evidence including failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-inference-reuse-r0-producer-evidence
+          path: |
+            ${{ runner.temp }}/native-inference-evidence/**/*.json
+            ${{ runner.temp }}/native-inference-evidence/**/*.txt
+            ${{ runner.temp }}/native-inference-evidence/**/*.log
+            ${{ runner.temp }}/native-inference-evidence/case/snapshot/*
+            ${{ runner.temp }}/native-inference-setup/setup.json
+            ${{ runner.temp }}/native-inference-setup/*.log
+          if-no-files-found: warn
+          retention-days: 14
+  consumer:
+    needs: producer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NATIVE_ARTIFACT_ID: ${{ needs.producer.outputs.artifact_id }}
+      NATIVE_ARTIFACT_DIGEST: ${{ needs.producer.outputs.artifact_digest }}
+      EXPECTED_MANIFEST_SHA256: ${{ needs.producer.outputs.manifest_sha256 }}
+      EXPECTED_TAR_SHA256: ${{ needs.producer.outputs.tar_sha256 }}
+    steps:
+      - name: Start measured job interval
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,pathlib,time
+          pathlib.Path(os.environ['RUNNER_TEMP'],'native-inference-clock.json').write_text(json.dumps({
+            'job_started_s':time.monotonic(),'job_started_utc':datetime.datetime.now(datetime.timezone.utc).isoformat()}))
+          PY
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          persist-credentials: false
+      - name: Check independent transfer and oracle faults
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input jsonschema==4.25.1
+          python3 -m unittest discover -s qualification/serving_fanout_r0/native_build_reuse_r0 -p 'test_*.py' -v
+          python3 -m unittest discover -s qualification/serving_fanout_r0/native_inference_reuse_r0 -p 'test_*.py' -v
+      - name: Start download interval
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,time
+          path=pathlib.Path(os.environ['RUNNER_TEMP'],'native-inference-clock.json')
+          clock=json.loads(path.read_text());clock['download_started_s']=time.monotonic();path.write_text(json.dumps(clock))
+          PY
+      - name: Download the exact same-run immutable artifact ID
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          artifact-ids: ${{ needs.producer.outputs.artifact_id }}
+          path: ${{ runner.temp }}/native-inference-download
+          digest-mismatch: error
+      - name: Apply unchanged native payload and dependency admission
+        run: |
+          python3 qualification/serving_fanout_r0/native_build_reuse_r0/proof.py consume \
+            --archive "$RUNNER_TEMP/native-inference-download/native-build-reuse.tar" \
+            --manifest-sha256 "$EXPECTED_MANIFEST_SHA256" --tar-sha256 "$EXPECTED_TAR_SHA256" \
+            --consumer 1 --out "$RUNNER_TEMP/native-inference-evidence/native-consumer" \
+            --clock "$RUNNER_TEMP/native-inference-clock.json"
+      - name: Authenticate read-only admitted artifact pull
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin >/dev/null
+      - name: Independently hydrate the same exact public model and harness
+        run: |
+          python3 qualification/serving_fanout_r0/native_inference_reuse_r0/proof.py prepare \
+            --out "$RUNNER_TEMP/native-inference-setup"
+      - name: Run one consumer task and join accepted fixed-case evidence
+        run: |
+          python3 qualification/serving_fanout_r0/native_inference_reuse_r0/proof.py case \
+            --role consumer --setup "$RUNNER_TEMP/native-inference-setup" \
+            --server "$RUNNER_TEMP/native-inference-evidence/native-consumer/payload/bin/llama-server" \
+            --manifest-sha256 "$EXPECTED_MANIFEST_SHA256" \
+            --out "$RUNNER_TEMP/native-inference-evidence/case" \
+            --producer-case "$RUNNER_TEMP/native-inference-download/producer-case.json"
+      - name: Record complete consumer job interval
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,time
+          root=pathlib.Path(os.environ['RUNNER_TEMP']);out=root/'native-inference-evidence';out.mkdir(exist_ok=True)
+          clock=json.loads((root/'native-inference-clock.json').read_text())
+          (out/'job-final.json').write_text(json.dumps({'job_interval_before_evidence_upload_s':time.monotonic()-clock['job_started_s'],
+            'artifact_id':os.environ.get('NATIVE_ARTIFACT_ID'),'artifact_digest':os.environ.get('NATIVE_ARTIFACT_DIGEST'),
+            'excludes':'runner provisioning, queue wait and final evidence upload'},indent=2))
+          PY
+      - name: Preserve consumer evidence including failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-inference-reuse-r0-consumer-evidence
+          path: |
+            ${{ runner.temp }}/native-inference-evidence/**/*.json
+            ${{ runner.temp }}/native-inference-evidence/**/*.txt
+            ${{ runner.temp }}/native-inference-evidence/**/*.log
+            ${{ runner.temp }}/native-inference-evidence/case/snapshot/*
+            ${{ runner.temp }}/native-inference-setup/setup.json
+            ${{ runner.temp }}/native-inference-setup/*.log
+          if-no-files-found: warn
+          retention-days: 14
