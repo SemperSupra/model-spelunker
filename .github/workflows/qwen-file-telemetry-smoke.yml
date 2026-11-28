@@ -7,6 +7,7 @@ on:
       - 'qualification/agent_embodiment/telemetry_identity.py'
       - 'qualification/agent_embodiment/telemetry_verdict.py'
       - 'qualification/agent_embodiment/file_access_witness.py'
+      - 'qualification/agent_embodiment/process_read_witness.py'
       - '.github/workflows/qwen-file-telemetry-smoke.yml'
 permissions:
   contents: read
@@ -27,6 +28,8 @@ jobs:
           python3 -B -O qualification/agent_embodiment/telemetry_verdict.py
           python3 -B qualification/agent_embodiment/file_access_witness.py
           python3 -B -O qualification/agent_embodiment/file_access_witness.py
+          python3 -B qualification/agent_embodiment/process_read_witness.py
+          python3 -B -O qualification/agent_embodiment/process_read_witness.py
           python3 -B qualification/agent_embodiment/qwen_file_telemetry_probe.py --self-test
   native:
     needs: contract
@@ -42,6 +45,15 @@ jobs:
           set -euo pipefail
           python3 qualification/qwencode_public/kit.py fetch --platform linux-x64 --archive "$RUNNER_TEMP/qwen-telemetry.tar.gz"
           python3 qualification/qwencode_public/kit.py smoke --platform linux-x64 --archive "$RUNNER_TEMP/qwen-telemetry.tar.gz" --out "$RUNNER_TEMP/qwen-telemetry-native"
+      - name: Establish syscall tracing prerequisite
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -x /usr/bin/strace; then
+            sudo apt-get update -qq
+            sudo apt-get install --no-install-recommends -y strace
+          fi
+          /usr/bin/strace --version
       - name: Real CLI with local synthetic model fixture, telemetry off and on
         shell: bash
         run: |

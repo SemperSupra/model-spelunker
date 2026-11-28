@@ -20,9 +20,10 @@ import urllib.request
 from telemetry_capture import CAP, inspect_telemetry
 from telemetry_verdict import fixture_pass
 from file_access_witness import FileAccessWitness, witness_pass
+from process_read_witness import inspect_trace, process_read_pass
 
 
-def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture', witness=None):
+def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture', witness=None, trace_window=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -62,12 +63,16 @@ def make_handler(fixture, file_marker, answer, seen, call_id='call_fixture', wit
             seen['requests'] += 1
             if tool_result:
                 if witness is not None and seen['tool_requested'] and any(m.get('tool_call_id') == call_id for m in matching):
+                    if trace_window is not None:
+                        trace_window.append((time.time_ns(), time.monotonic_ns()))
                     witness.at_result()
                 seen['tool_result_seen'] = True
                 message, reason = {'role': 'assistant', 'content': answer}, 'stop'
             elif tool_exists:
                 if witness is not None:
                     witness.before_issue()
+                    if trace_window is not None:
+                        trace_window.append((time.time_ns(), time.monotonic_ns()))
                 seen['tool_requested'] = True
                 message = {'role': 'assistant', 'content': None, 'tool_calls': [{
                     'id': call_id, 'type': 'function', 'function': {
@@ -108,8 +113,10 @@ def trial(binary, root, enabled):
     seen = dict(requests=0, tool_requested=False, tool_result_seen=False,
                 tool_result_marker_records=0, tool_result_id_matches=0)
     call_id = 'call_' + secrets.token_hex(16)
+    trace_window = []
+    trace_prefix = root / 'syscall-trace'
     with FileAccessWitness(fixture) as witness, http.server.ThreadingHTTPServer(
-            ('127.0.0.1', 0), make_handler(fixture, file_marker, answer, seen, call_id, witness)) as server:
+            ('127.0.0.1', 0), make_handler(fixture, file_marker, answer, seen, call_id, witness, trace_window)) as server:
         worker = threading.Thread(target=server.serve_forever, daemon=True)
         worker.start()
         try:
@@ -126,7 +133,9 @@ def trial(binary, root, enabled):
                        QWEN_TELEMETRY_ENABLED='true' if enabled else 'false',
                        QWEN_TELEMETRY_OUTFILE=str(telemetry), QWEN_TELEMETRY_LOG_PROMPTS='false',
                        QWEN_TELEMETRY_INCLUDE_SENSITIVE_SPAN_ATTRIBUTES='false')
-            command = ['prlimit', f'--fsize={CAP}', '--', 'timeout', '-k', '5s', '90s', str(binary),
+            command = ['prlimit', f'--fsize={CAP}', '--', 'timeout', '-k', '5s', '90s',
+                       '/usr/bin/strace', '-qq', '-ff', '-yy', '-s', '0', '-ttt', '-T',
+                       '-e', 'trace=read,pread64,readv,preadv,preadv2', '-o', str(trace_prefix), '--', str(binary),
                        '--prompt', 'Use read_file to read fixture.txt. Marker: ' + prompt_marker,
                        '--model', 'qwen3:1.7b', '--core-tools', 'read_file', '--approval-mode', 'default',
                        '--max-session-turns', '4', '--max-tool-calls', '4', '--max-wall-time', '75s',
@@ -141,6 +150,7 @@ def trial(binary, root, enabled):
             return dict(mode='on' if enabled else 'off', cli_exit=result.returncode, seconds=elapsed,
                         **seen, final_marker_seen=answer.encode() in output,
                         file_access_witness=witness.summary(),
+                        process_read_witness=inspect_trace(trace_prefix, fixture, trace_window),
                         config_unchanged=before == hashlib.sha256(config_file.read_bytes()).hexdigest(),
                         **stats)
         finally:
@@ -185,8 +195,9 @@ def native(binary, output):
             except Exception as exc:
                 # Bounded type-only diagnostics, not exception payloads or raw logs.
                 rows.append(dict(mode='on' if enabled else 'off', error=type(exc).__name__))
-    good = fixture_pass(rows) and all(witness_pass(r.get('file_access_witness')) for r in rows)
-    receipt = dict(schema='qwen-public-file-telemetry-smoke/v2', native_harness='0.28.3',
+    good = fixture_pass(rows) and all(witness_pass(r.get('file_access_witness')) and
+                                     process_read_pass(r.get('process_read_witness')) for r in rows)
+    receipt = dict(schema='qwen-public-file-telemetry-smoke/v3', native_harness='0.28.3',
                    model='SYNTHETIC_LOCAL_HTTP_FIXTURE', source=os.environ.get('GITHUB_SHA', 'UNKNOWN'),
                    raw_payload_retained=False, rows=rows, verdict='PASS' if good else 'FAIL')
     output.write_text(json.dumps(receipt, sort_keys=True) + '\n')
